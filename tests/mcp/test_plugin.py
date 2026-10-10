@@ -4,13 +4,13 @@ import json
 import re
 from pathlib import Path
 
-from decider._tooling.mcp import Policy, build_server
-from decider._tooling.mcp._editor import EditorBridge
+from decikit._tooling.mcp import Policy, build_server
+from decikit._tooling.mcp._editor import EditorBridge
 from tests.mcp.test_mcp import _tools
 
 ROOT = Path(__file__).resolve().parents[2]
-PLUGIN = ROOT / "plugins" / "decider"
-SKILL = PLUGIN / "skills" / "decider"
+PLUGIN = ROOT / "plugins" / "decikit"
+SKILL = PLUGIN / "skills" / "decikit"
 REFERENCES = SKILL / "references"
 
 
@@ -39,20 +39,20 @@ def test_marketplace_names_the_plugin_directory():
 
 def test_plugin_manifest_has_the_required_fields_and_no_pinned_version():
     plugin = _json(PLUGIN / ".claude-plugin" / "plugin.json")
-    assert plugin["name"] == "decider"
+    assert plugin["name"] == "decikit"
     assert {"description", "author", "repository", "license"} <= set(plugin)
     assert "version" not in plugin
 
 
-def test_mcp_server_runs_decider_mcp_with_fastmcp():
-    server = _json(PLUGIN / ".mcp.json")["mcpServers"]["decider"]
-    assert [server["command"], *server["args"]][-2:] == ["decider", "mcp"]
+def test_mcp_server_runs_decikit_mcp_with_fastmcp():
+    server = _json(PLUGIN / ".mcp.json")["mcpServers"]["decikit"]
+    assert [server["command"], *server["args"]][-2:] == ["decikit", "mcp"]
     assert "fastmcp>=4.0.10" in server["args"]
 
 
 def test_skill_is_named_and_described_for_triggering():
     meta = _frontmatter(SKILL / "SKILL.md")
-    assert meta["name"] == "decider"
+    assert meta["name"] == "decikit"
     assert all(word in meta["description"] for word in ("flow", "scorecard", "VS Code"))
 
 

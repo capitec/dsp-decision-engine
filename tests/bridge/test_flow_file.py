@@ -3,14 +3,14 @@ import sys
 
 import pytest
 
-from decider.config import JsonFileStore
-from decider._tooling.bridge.bridge import Bridge
-from decider._tooling.bridge.loading import components
-from decider._tooling.bridge.run import main, node_path
+from decikit.config import JsonFileStore
+from decikit._tooling.bridge.bridge import Bridge
+from decikit._tooling.bridge.loading import components
+from decikit._tooling.bridge.run import main, node_path
 
 STEPS = """\
-from decider import param, step
-from decider._tooling.bridge.run import node_path
+from decikit import param, step
+from decikit._tooling.bridge.run import node_path
 
 SEEN = []
 

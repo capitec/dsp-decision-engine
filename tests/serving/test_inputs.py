@@ -1,5 +1,4 @@
 """Serving real-world inputs: warm-up with dates and lists, JSON date coercion, code_path precedence, entry points."""
-import asyncio
 import datetime as dt
 import io
 import json
@@ -10,14 +9,14 @@ import polars as pl
 import pytest
 from typing_extensions import TypedDict
 
-from decider import Engine, flow, frame_step
-from decider.ops import Struct
-from decider.config import JsonFileStore
-from decider.exceptions import DeciderError, ParamsError
-from decider.serving import RequestHandler
-from decider.serving._handler import _dates, construct_handler_from_settings
-from decider.serving._parse import coerce_record, dummy, has_date
-from decider.serving._servers.starlette import create_app
+from decikit import Engine, flow, frame_step
+from decikit.ops import Struct
+from decikit.config import JsonFileStore
+from decikit.exceptions import DecikitError, ParamsError
+from decikit.serving import RequestHandler
+from decikit.serving._handler import _dates, construct_handler_from_settings
+from decikit.serving._parse import coerce_record, dummy, has_date
+from decikit.serving._servers.starlette import create_app
 
 from test_serving import _request
 
@@ -54,7 +53,7 @@ def test_raw_json_with_date_strings_is_scored_and_dates_come_back_iso(tmp_path):
     handler.stage()
     handler.activate()
     body = json.dumps(RECORD).encode()
-    out = json.loads(asyncio.run(handler.process_fn(body, "application/json", "application/json")).content)
+    out = json.loads(handler.process_fn(body, "application/json", "application/json").content)
     assert (out["due_day"], out["decision_date"]) == (4, "2026-01-31")
     status, body = _request(create_app(handler), "POST", "/invocations", body)
     assert status == 200 and json.loads(body)["due_day"] == 4
@@ -132,7 +131,7 @@ def test_a_frame_step_reading_typed_dicts_gets_their_dates_from_json(tmp_path):
     handler.stage()
     handler.activate()
     body = b'{"accounts": [{"opened_date": "2019-05-01", "balance": 1.0}, {"opened_date": "2021-01-01"}]}'
-    assert json.loads(asyncio.run(handler.process_fn(body, "application/json", "application/json")).content)[
+    assert json.loads(handler.process_fn(body, "application/json", "application/json").content)[
         "oldest_year"] == 2019
 
 
@@ -146,7 +145,7 @@ def test_a_date_is_coerced_when_an_untyped_frame_step_reads_it_before_a_typed_st
     handler.stage()
     handler.activate()
     body = b'{"decision_date": "2026-01-31", "tenure": 1}'
-    assert json.loads(asyncio.run(handler.process_fn(body, "application/json", "application/json")).content)[
+    assert json.loads(handler.process_fn(body, "application/json", "application/json").content)[
         "due_day"] == 1
 
 
@@ -156,7 +155,7 @@ def second(history: list[float]) -> float:
 
 def test_a_warm_up_that_fails_on_synthetic_inputs_suggests_a_sample_request(tmp_path):
     sample = tmp_path / "sample_request.json"
-    with pytest.raises(DeciderError, match=r"IndexError.*'history': \[1\.0\].*sample_request\.json"):
+    with pytest.raises(DecikitError, match=r"IndexError.*'history': \[1\.0\].*sample_request\.json"):
         _handler(tmp_path, flow(second, name="g"), sample_request=str(sample)).stage()
     sample.write_text('{"history": [1.0, 2.0]}')
     _handler(tmp_path, flow(second, name="g"), sample_request=str(sample)).stage()
@@ -165,7 +164,7 @@ def test_a_warm_up_that_fails_on_synthetic_inputs_suggests_a_sample_request(tmp_
 def test_a_failing_sample_request_is_named_in_the_error(tmp_path):
     sample = tmp_path / "sample_request.json"
     sample.write_text('{"history": []}')
-    with pytest.raises(DeciderError, match="Fix .*sample_request.json"):
+    with pytest.raises(DecikitError, match="Fix .*sample_request.json"):
         _handler(tmp_path, flow(second, name="g"), sample_request=str(sample)).stage()
 
 
@@ -183,7 +182,7 @@ def test_invalid_params_still_raise_params_error_from_warm_up(tmp_path):
 
 
 PIPELINE = '''
-from decider import flow
+from decikit import flow
 def {name}(x: float) -> float:
     return x
 def build():
@@ -193,7 +192,7 @@ def build():
 
 def test_code_path_wins_over_an_earlier_path_entry_and_the_pipeline_file_is_reported(
         tmp_path, monkeypatch, capsys):
-    from decider._settings import get_settings
+    from decikit._settings import get_settings
 
     settings = get_settings()
 
@@ -224,7 +223,7 @@ def test_code_path_wins_over_an_earlier_path_entry_and_the_pipeline_file_is_repo
 ])
 def test_a_dotted_handler_in_a_package_is_used_and_a_missing_one_falls_back(
         tmp_path, monkeypatch, handler_path, expected):
-    from decider._settings import get_settings
+    from decikit._settings import get_settings
 
     settings = get_settings()
 
@@ -232,7 +231,7 @@ def test_a_dotted_handler_in_a_package_is_used_and_a_missing_one_falls_back(
     package.mkdir()
     (package / "__init__.py").write_text("")
     (package / "pipeline.py").write_text(PIPELINE.format(name="mine"))
-    (package / "inference.py").write_text("from decider.serving import RequestHandler\n\n"
+    (package / "inference.py").write_text("from decikit.serving import RequestHandler\n\n"
                                           "class Handler(RequestHandler):\n    pass\n")
     store = JsonFileStore(basepath=str(tmp_path / "configs"))
     store.create_version({"params": {}})
@@ -248,8 +247,8 @@ def test_a_dotted_handler_in_a_package_is_used_and_a_missing_one_falls_back(
         sys.modules.pop(name, None)
 
 
-def test_python_dash_m_decider_runs_the_cli():
-    result = subprocess.run([sys.executable, "-m", "decider", "--help"], capture_output=True, text=True)
+def test_python_dash_m_decikit_runs_the_cli():
+    result = subprocess.run([sys.executable, "-m", "decikit", "--help"], capture_output=True, text=True)
     assert result.returncode == 0 and "build" in result.stdout
 
 
@@ -262,9 +261,25 @@ ARROW = "application/vnd.apache.arrow.stream"
 
 def test_an_arrow_ipc_body_is_scored_and_comes_back_as_arrow(tmp_path):
     handler = _handler(tmp_path, flow(total, name="s"))
-    asyncio.run(handler.init_fn())
+    handler.init_fn()
     buf = io.BytesIO()
     pl.DataFrame({"a": [1.0, 2.0], "b": [2.0, 3.0]}).write_ipc_stream(buf)
     status, body = _request(create_app(handler), "POST", "/invocations", buf.getvalue(), ARROW, ARROW)
     assert status == 200
     assert pl.read_ipc_stream(body)["total"].to_list() == [3.0, 5.0]
+
+
+def newest_year(accounts: list[Dated], opened: list[dt.date]) -> int:
+    return max(max(a["opened_date"] for a in accounts), max(opened)).year
+
+
+def test_a_json_array_converts_dates_nested_in_lists_like_a_single_record(tmp_path):
+    handler = _handler(tmp_path, lambda: flow(newest_year, name="n"))
+    handler.stage()
+    handler.activate()
+    one = {"accounts": [{"opened_date": "2019-05-01"}], "opened": ["2020-01-01", "2021-02-02"]}
+    two = {"accounts": [{"opened_date": "2024-05-01"}], "opened": ["2020-01-01"]}
+    run = lambda body: json.loads(handler.process_fn(json.dumps(body).encode(), "application/json",
+                                                     "application/json").content)
+    assert run(one)["newest_year"] == 2021
+    assert [r["newest_year"] for r in run([one, two])] == [2021, 2024]

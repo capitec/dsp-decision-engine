@@ -5,18 +5,18 @@ describes, and update it as decisions change.
 
 ## What it proposes
 
-decider today has one engine with three modes (`interpreted`, `stepped`, `fused`), chosen by a string from a
+The decider toolkit today has one engine with three modes (`interpreted`, `stepped`, `fused`), chosen by a string from a
 closed dict, and two entry points (`run` for a frame, `score` for a dict). The rework makes engines a
 registry of pydantic settings documents that anyone can extend, adds a lazy polars engine for large batches,
 collapses `score` into `run`, and leaves room for optional polars-native step bodies if they prove worth it:
 
 - `Engine` becomes a registry root (`BaseRegistryModule`), like `ConfigStore`. The three modes become
   `InterpretedEngine`, `SteppedEngine` and `FusedEngine` under a `NumbaEngine` base, keeping their string
-  aliases. Settings for `decider serve` name an engine document, not a mode string. The numba engine itself
+  aliases. Settings for `decikit serve` name an engine document, not a mode string. The numba engine itself
   does not change.
 - `run` dispatches on its input: a dict takes today's `score` path, a `DataFrame` the current engine, a
   `LazyFrame` the polars engine. `score` is removed. `Step.run` uses the default engine set with
-  `decider.engine(...)`; when nothing is set, that default is fused.
+  `decikit.engine(...)`; when nothing is set, that default is fused.
 - `PolarsEngine` is lazy: `run(LazyFrame) -> LazyFrame`. It is built as a host first: the fused pipeline runs
   inside `map_batches` per batch, split only at frame steps, which gives streaming, larger-than-memory
   batches and composition with the caller's own plan. Native polars expressions come later, only if a

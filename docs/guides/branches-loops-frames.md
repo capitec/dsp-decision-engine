@@ -10,7 +10,7 @@ The examples build on each other; run them top to bottom.
 
 ```python
 import polars as pl
-from decider import branch, flow, param, step
+from decikit import branch, flow, param, step
 
 def eligible(age: int, bureau_score: float) -> bool:
     return age >= 18 and bureau_score >= 600
@@ -165,7 +165,7 @@ shape: (2, 3)
 Only the names in `modifies` leave the branch. Anything else an arm or the condition writes stays inside: a later step cannot read it, and emitting it by bare name is an error. `emit("name@path")` still outputs it for inspection, with nulls on the rows that took another arm.
 
 ```python
-from decider.exceptions import WiringError
+from decikit.exceptions import WiringError
 
 def factor(bureau_score: float) -> float:
     return bureau_score / 200.0
@@ -224,7 +224,7 @@ branch 'x' needs modifies=[...]: the names its arms may change
 
 ### A branch that reads what it modifies
 
-A condition that reads an input column while an arm writes that same name is refused. The condition would see the input column, the steps after the arm would see the arm's value, and decider will not guess which one you meant:
+A condition that reads an input column while an arm writes that same name is refused. The condition would see the input column, the steps after the arm would see the arm's value, and the decider toolkit will not guess which one you meant:
 
 ```python
 def owes(balance: float) -> bool:
@@ -252,7 +252,7 @@ Compute the flag in an earlier step under a different name (and branch on that c
 `loop(condition, body, carries=[...], max_iterations=n, name=...)` checks `condition` on every row before each iteration and runs `body` on the rows where it holds. `carries` lists the names each iteration updates: the condition and body see the latest values, the body must write every one of them, and they are all that leaves the loop.
 
 ```python
-from decider import loop
+from decikit import loop
 
 def unpaid(balance: float) -> bool:
     return balance > 0.0
@@ -397,7 +397,7 @@ In fused mode a branch or loop whose every step is a plain scalar function compi
 Some work needs the whole frame at once: a join against a lookup table, a group-by, a window, a model that scores a batch. `@frame_step` makes a `DataFrame -> DataFrame` function a step. Declare the columns it reads and writes; arguments after the frame are params like any step's.
 
 ```python
-from decider import frame_step, missing_as
+from decikit import frame_step, missing_as
 
 HISTORY = pl.DataFrame({"client_id": [1, 2, 3], "prior_defaults": [2, 0, 1]})
 
@@ -484,7 +484,7 @@ Declare both `reads` and `writes` when you can. Wiring errors then surface when 
 `each(column, child, name=...)` runs a child flow on every item of a list-of-structs column. The child's steps read the item's fields like any request fields, and their outputs are added to each item as new fields. The enriched list is written back to the column, or to `output=` if given.
 
 ```python
-from decider import each
+from decikit import each
 
 def heavy(weight: float = missing_as(0.0), heavy_kg: float = param(20.0)) -> bool:
     return weight > heavy_kg

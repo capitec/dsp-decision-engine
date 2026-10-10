@@ -5,7 +5,7 @@ import json
 import polars as pl
 import pytest
 
-from decider.lab.data import LoadError, read, scan
+from decikit.lab.data import LoadError, read, scan
 
 
 def _loans() -> pl.DataFrame:

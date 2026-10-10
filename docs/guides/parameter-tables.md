@@ -10,7 +10,7 @@ An initiation fee is a percentage of the loan amount, capped, with the percentag
 
 ```python
 import polars as pl
-from decider import ParamTable, flow, param_table
+from decikit import ParamTable, flow, param_table
 
 
 def initiation_fee(amount: float,
@@ -61,8 +61,8 @@ Pass a params document with other rows. A compiled executable reuses its kernel 
 
 ```python
 import polars as pl
-from decider import ParamTable, flow, param_table
-from decider.lab.testing import no_recompile
+from decikit import ParamTable, flow, param_table
+from decikit.lab.testing import no_recompile
 
 
 def initiation_fee(amount: float,
@@ -128,8 +128,8 @@ In a project the rows go in `configs/<version>/params.json`, and a new config ve
 
 ```python
 import polars as pl
-from decider import ParamTable, flow, param_table
-from decider.exceptions import ParamsError
+from decikit import ParamTable, flow, param_table
+from decikit.exceptions import ParamsError
 
 
 def base_rate(score: int, ladder: ParamTable = param_table({"floor": int, "rate": float}, required=True)) -> float:
@@ -168,7 +168,7 @@ pricing/base_rate: param 'ladder' is required but missing; expected a list of ro
 
 ```python
 import polars as pl
-from decider import ParamTable, flow, param_table
+from decikit import ParamTable, flow, param_table
 
 CAPS = {"term": int, "max_amount": float}
 
@@ -211,14 +211,20 @@ shape: (3, 4)
 
 `parameters()` reports the shared table once, with `used_by` listing every step that reads it. Steps sharing a key must declare the same columns: two different declarations are an `IRError` when the flow is built (`shared param 'term_caps' is declared ... by limits/term_cap and ... by limits/headroom`). Declaring the schema once, as `CAPS` above, keeps them in step.
 
+## Rows read from a config document
+
+When a table's default rows come from a config document (a rate card read by `build`), declare where with `param_table(columns, default=rows, seeded_from="rate_card")`. A params document that sets the same table replaces the document's rows, so editing the document would seem to do nothing. Staging a config version (`decikit build`, a server's start, `RequestHandler.stage()`) therefore warns with `ShadowedTableWarning`, naming the table, the document and the params key. Rows passed per call (`run(df, params=...)`, experiments) are never checked.
+
+Three ways to switch it off: `warnings.filterwarnings("ignore", category=ShadowedTableWarning)`; the setting `DECIKIT_BUILD__WARN_SHADOWED_TABLES=false`; or, for a table the params document is meant to replace, `param_table(..., seeded_from="rate_card", allow_override=True)`.
+
 ## What the step receives
 
 The argument is a namedtuple with one field per column, in declaration order. Each field is a read-only numpy array (`int64`, `float64` or `bool`), indexed by row: `bands.rate[i]`, `len(bands.floor)`. It is the same object shape in every mode, which is why the loop compiles. Iterate with `range(len(...))` over one column; `for row in bands` iterates the columns, not the rows.
 
-Calling the function directly, outside decider, passes the default table, so a unit test of the bare function still works:
+Calling the function directly, outside the decider toolkit, passes the default table, so a unit test of the bare function still works:
 
 ```python
-from decider import ParamTable, param_table
+from decikit import ParamTable, param_table
 
 
 def show(x: float, bands: ParamTable = param_table({"floor": float, "rate": float},
@@ -235,7 +241,7 @@ Params_ParamSpec ('floor', 'rate') ndarray float64 False
 0.15
 ```
 
-Testing through decider (`flow(...).run`, or the handler in a project) is still the test that proves the table wires and validates.
+Testing through the decider toolkit (`flow(...).run`, or the handler in a project) is still the test that proves the table wires and validates.
 
 ## Column types
 
@@ -252,7 +258,7 @@ Code a product or channel as an int, or use a decision table, which matches stri
 Rows are checked when the params document arrives, before any record runs. Each error names the step, the param, the row and the column, and ends with the shape the table expects. `parameters().validate(document)` returns them without running anything:
 
 ```python
-from decider import ParamTable, flow, param_table
+from decikit import ParamTable, flow, param_table
 
 
 def base_rate(score: int, ladder: ParamTable = param_table({"floor": int, "rate": float}, required=True)) -> float:
@@ -281,7 +287,7 @@ pricing/base_rate: param 'ladder': row 0, column 'floor': Input should be a vali
 pricing/base_rate: param 'ladder': Input should be a valid list (got {'floor': 600, 'rate': 0.1}); expected a list of rows like [{"floor": int, "rate": float}, ...]
 ```
 
-`run` and `score` raise the same messages as a `ParamsError` (`invalid params (affects 3 rows):` followed by the list). In a served project, `decider build` and `RequestHandler.stage` validate the version's params document, so a bad row stops the version from being staged and the active version keeps serving.
+`run` and `score` raise the same messages as a `ParamsError` (`invalid params (affects 3 rows):` followed by the list). In a served project, `decikit build` and `RequestHandler.stage` validate the version's params document, so a bad row stops the version from being staged and the active version keeps serving.
 
 ## Parameter table or decision table
 

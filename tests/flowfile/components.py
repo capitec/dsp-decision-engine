@@ -1,5 +1,5 @@
 """Step functions referenced by name from the flowfile test fixtures."""
-from decider import missing_as, param, step
+from decikit import missing_as, param, step
 
 
 def eligible(score: float) -> bool:

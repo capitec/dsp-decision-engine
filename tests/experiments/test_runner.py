@@ -1,17 +1,18 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 
 import polars as pl
 import pytest
 
-from decider import flow
-from decider.lab.experiments import Experiment, ExperimentDef, RunStatus, run, start
-from decider.lab.experiments._experiments import ScenarioStatus
-from decider.lab.diff._revisions import resolve
-from decider.lab.experiments.callbacks import Callback
-from decider.lab.experiments.metrics import Divergence, ValueCounts
-from decider.lab.experiments import JobStatus
+from decikit import flow
+from decikit.lab.experiments import Experiment, ExperimentDef, RunStatus, run, start
+from decikit.lab.experiments._experiments import ScenarioStatus
+from decikit.lab.diff._revisions import resolve
+from decikit.lab.experiments.callbacks import Callback
+from decikit.lab.experiments.metrics import Divergence, ValueCounts
+from decikit.lab.experiments import JobStatus
 
 LIMIT_03 = {"demo": {"approved": {"limit": 0.3}}}
 
@@ -157,7 +158,7 @@ def test_out_dir_gets_each_scenarios_output_batches_and_the_result(pipeline, fra
 
 def test_a_plain_python_caller_runs_a_json_definition_end_to_end(tmp_path, monkeypatch):
     (tmp_path / "credit.py").write_text(
-        "from decider import flow, param\n"
+        "from decikit import flow, param\n"
         "def ratio(income, debt):\n"
         "    return debt / income if income > 0 else 1.0\n"
         "def approved(ratio, limit=param(0.4)):\n"
@@ -183,7 +184,7 @@ def test_a_plain_python_caller_runs_a_json_definition_end_to_end(tmp_path, monke
 
 def test_run_given_a_path_reads_the_input_relative_to_the_definition_file(tmp_path, monkeypatch):
     (tmp_path / "credit.py").write_text(
-        "from decider import flow\n"
+        "from decikit import flow\n"
         "def ratio(income, debt):\n"
         "    return debt / income if income > 0 else 1.0\n"
         "pipeline = flow(ratio, name='credit')\n"
@@ -206,31 +207,46 @@ def test_resolve_turns_head_symbols_into_a_sha():
     assert sha and len(sha) == 40 and all(c in "0123456789abcdef" for c in sha)
 
 
-def test_a_revision_scenario_runs_the_checked_out_code_even_with_the_live_module_imported():
-    # Building the experiment imports the live pipeline under the same name the revision's
-    # checkout would load it by. The file's last commit added a flat $50 fee to `ratio`.
-    import example_projects.experiments.credit_pipeline as live
-
-    fee = subprocess.run(["git", "log", "-1", "--format=%H", "--", live.__file__],
-                         capture_output=True, text=True, check=True).stdout.strip()
+def test_a_revision_scenario_runs_the_checked_out_code_even_with_the_live_module_imported(tmp_path, monkeypatch):
+    # Building the experiment imports the live module under the same name the revision's checkout
+    # would load it by. The second commit adds a flat $50 fee to `ratio`.
+    source = (
+        "from decikit import flow, param\n"
+        "def ratio(income: float, debt: float) -> float:\n"
+        "    return (debt + {fee}) / income if income > 0 else 1.0\n"
+        "def approved(ratio: float, limit: float = param(0.35)) -> bool:\n"
+        "    return ratio <= limit\n"
+        "def build():\n"
+        "    return flow(ratio, approved, name='credit')\n"
+    )
+    git = ["git", "-c", "user.name=t", "-c", "user.email=t@t"]
+    subprocess.run(git + ["init", "-q"], cwd=tmp_path, check=True)
+    for fee in ("0.0", "50.0"):
+        (tmp_path / "credit_rev.py").write_text(source.format(fee=fee))
+        subprocess.run(git + ["add", "."], cwd=tmp_path, check=True)
+        subprocess.run(git + ["commit", "-q", "-m", f"fee {fee}"], cwd=tmp_path, check=True)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.delitem(sys.modules, "credit_rev", raising=False)
+    import credit_rev as live
 
     frame = pl.DataFrame({"income": [1000.0, 2000.0, 1500.0, 800.0], "debt": [350.0, 900.0, 700.0, 300.0]})
     exp = Experiment("version-drift", live.build(), frame, batch_size=3)
-    exp.def_.flow.entry = "example_projects.experiments.credit_pipeline:build"
+    exp.def_.flow.entry = "credit_rev:build"
     result = (exp
-              .scenario("previous", revision=f"{fee}^")
+              .scenario("previous", revision="HEAD^")
               .metric(Divergence(column="approved"), Divergence(name="ratio", column="ratio", nodes="credit/ratio"))
               .run())
 
     assert result.status is RunStatus.COMPLETED, result.scenarios
-    assert result.scenarios[1].revision.resolved == resolve(f"{fee}^")
+    assert result.scenarios[1].revision.resolved == resolve("HEAD^")
     assert result.summaries["divergence"]["previous"].changed == 1  # the fee pushes one record over the limit
     assert result.summaries["ratio"]["previous"].changed == 4       # and changes every ratio
 
 
 def test_start_runs_a_definition_file_in_the_background(tmp_path, monkeypatch):
     (tmp_path / "credit_bg.py").write_text(
-        "from decider import flow\n"
+        "from decikit import flow\n"
         "def ratio(income, debt):\n"
         "    return debt / income if income > 0 else 1.0\n"
         "pipeline = flow(ratio, name='credit')\n"

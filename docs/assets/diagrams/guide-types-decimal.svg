@@ -11,7 +11,7 @@
   <rect x="30" y="50" width="280" height="90" rx="10" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
   <text x="170" y="80" text-anchor="middle" font-size="15" font-weight="600" fill="#7c2d00">in a step</text>
   <text x="170" y="104" text-anchor="middle" font-size="15" fill="#7c2d00" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">Currency('1000.5000')</text>
-  <text x="170" y="126" text-anchor="middle" font-size="14" fill="#7c2d00">a decider Decimal object</text>
+  <text x="170" y="126" text-anchor="middle" font-size="14" fill="#7c2d00">a decikit Decimal object</text>
 
   <rect x="360" y="50" width="280" height="90" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
   <text x="500" y="80" text-anchor="middle" font-size="15" font-weight="600" fill="#134e4a">in a kernel</text>

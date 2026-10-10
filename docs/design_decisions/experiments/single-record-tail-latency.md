@@ -18,4 +18,4 @@ The full `score()` path of the previous engine (400 inputs, 633 outputs, a p50 o
 - Not explained: about 95% of the slowest 1% of calls at ambient load show no signal in any counter. Not tested: full saturation, cgroup `cpu.max` throttling (a periodic freeze), `perf` tracing.
 
 ## Decision
-Kernels are `nogil=True` unconditionally; no GC setting and no `sched_setaffinity` call; judge a shared host by its median under load as well as its max. Reserved cores are a deployment concern (cpuset or cgroup, excluding other processes), not something decider sets. See [engine](../decisions/engine.md) and [stage a version while serving](stage-a-version-while-serving.md) for the swap cost.
+Kernels are `nogil=True` unconditionally; no GC setting and no `sched_setaffinity` call; judge a shared host by its median under load as well as its max. Reserved cores are a deployment concern (cpuset or cgroup, excluding other processes), not something the decider toolkit sets. See [engine](../decisions/engine.md) and [stage a version while serving](stage-a-version-while-serving.md) for the swap cost.

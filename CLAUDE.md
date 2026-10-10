@@ -1,8 +1,8 @@
-# decider
+# decikit
 
 Use `uv` for everything: `uv run pytest`, `uv run python`. Python 3.10+.
 
-To learn the API as a user: `uv run decider guide` (`decider/GUIDE.md`) and the
+To learn the API as a user: `uv run decikit guide` (`decikit/GUIDE.md`) and the
 docstrings. Every Python example in `GUIDE.md` runs in `tests/test_guide.py`;
 keep it that way.
 
@@ -47,7 +47,7 @@ Read an area's decision file before changing that area. `docs/design_specs/`
 
 ## Layout
 
-- `decider/` is the package. Its layout, the layer map and where a new feature
+- `decikit/` is the package. Its layout, the layer map and where a new feature
   goes: `docs/architecture/package-layout.md`. The code is the truth where they
   differ.
 - `_engine/` imports nothing from `steps/trees|tables|scorecard`, `config/` or
@@ -73,7 +73,7 @@ Read an area's decision file before changing that area. `docs/design_specs/`
 - Serving kernels are `nogil=True`. `fastmath` is off by default.
 - Kernels use CPython-equal `round(x, n)` and `x ** n`; int64 still wraps silently. Money
   is `Currency` / `Decimal[p, s]`: an int64 mantissa with the scale in the type, half-even
-  operators, `decider.ops.decimal.round` for other modes. Running totals accumulate in float64.
+  operators, `decikit.ops.decimal.round` for other modes. Running totals accumulate in float64.
 - Compile-time failures and steps compiled modes refuse fall back to Python per
   step (with a warning; `Engine(strict_compile=True)` raises). Runtime errors
   always propagate.

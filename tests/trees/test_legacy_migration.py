@@ -3,7 +3,7 @@ import polars as pl
 import pydantic
 import pytest
 
-from decider.steps.trees import TreeConfig
+from decikit.steps.trees import TreeConfig
 
 V1 = {
     "formatVersion": 1,

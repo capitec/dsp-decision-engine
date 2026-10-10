@@ -8,14 +8,14 @@ The user-side guide for flow files is [flow files](../../guides/flow-files.md); 
 
 | File | Role |
 |---|---|
-| `decider/steps/expr/__init__.py` | `parse`, `Expr` (`dependencies`, `evaluate`), the admitted grammar, `ExprError` |
-| `decider/steps/expr/_postfix.py` | `to_postfix` (an `Expr` as opcode rows) and `evaluate`, the njit stack machine |
-| `decider/steps/trees/_condition.py` | `expr_condition`: a boolean expression compiled into a one-output tree |
-| `decider/steps/flowfile/_schema.py` | The pydantic models of a flow file: `RootDoc` and one model per node kind |
-| `decider/steps/flowfile/_load.py` | `load_flow`, `read_flow`, `components` |
-| `decider/steps/_composites.py` | `COMPOSITES`, the constructor for each composite node kind, shared with `decider ids` |
+| `decikit/steps/expr/__init__.py` | `parse`, `Expr` (`dependencies`, `evaluate`), the admitted grammar, `ExprError` |
+| `decikit/steps/expr/_postfix.py` | `to_postfix` (an `Expr` as opcode rows) and `evaluate`, the njit stack machine |
+| `decikit/steps/trees/_condition.py` | `expr_condition`: a boolean expression compiled into a one-output tree |
+| `decikit/steps/flowfile/_schema.py` | The pydantic models of a flow file: `RootDoc` and one model per node kind |
+| `decikit/steps/flowfile/_load.py` | `load_flow`, `read_flow`, `components` |
+| `decikit/steps/_composites.py` | `COMPOSITES`, the constructor for each composite node kind, shared with `decikit ids` |
 
-`load_flow` is exported from `decider` itself.
+`load_flow` is exported from `decikit` itself.
 
 ## The expression grammar
 
@@ -41,7 +41,7 @@ Every refusal names the construct and its position:
 "'gold'": str literal 'gold' is not admitted (only numbers are) at line 1, column 1 of "'gold'"
 ```
 
-`ExprError` subclasses both `DeciderError` and `ValueError`, so a computed feature's error surfaces as an ordinary pydantic validation error when a tree document loads.
+`ExprError` subclasses both `DecikitError` and `ValueError`, so a computed feature's error surfaces as an ordinary pydantic validation error when a tree document loads.
 
 `Expr` is a frozen dataclass of the source and the validated `ast` node. `dependencies()` returns every free name (call targets excluded), which is how a tree knows the input columns a computed feature reads. `evaluate(names)` walks the `ast` in Python; comparisons and `and`/`or`/`not` give bools, the way a kernel's 1.0/0.0 does. The Python tree walker uses `evaluate`; the compiled walker uses the postfix form.
 
@@ -270,7 +270,7 @@ steps:
 
 ```python
 # flowproj/credit_components.py
-from decider import step
+from decikit import step
 
 
 def surplus(income: float, expenses: float) -> float:
@@ -304,14 +304,14 @@ for n in iter_nodes(to_ir(pipe)):
 The IR is what the hand-written pipeline would give, with the `expr` condition as a tree named `affordable_when` and the subflow as a named sequence:
 
 ```text
-  SequenceNode  credit                       decider.steps:SequentialStep
+  SequenceNode  credit                       decikit.steps:SequentialStep
   CallNode      credit/surplus               credit_components:surplus
-  BranchNode    credit/affordable            decider.steps:BranchStep
-  CallNode      credit/affordable/affordable_when decider.steps.trees:TreeConfig
-  SequenceNode  credit/affordable/pricing    decider.steps:SequentialStep
+  BranchNode    credit/affordable            decikit.steps:BranchStep
+  CallNode      credit/affordable/affordable_when decikit.steps.trees:TreeConfig
+  SequenceNode  credit/affordable/pricing    decikit.steps:SequentialStep
   CallNode      credit/affordable/pricing/offer credit_components:offer
   CallNode      credit/affordable/no_offer   credit_components:_zero
-  CallNode      credit/risk_tree             decider.steps.trees:TreeConfig
+  CallNode      credit/risk_tree             decikit.steps.trees:TreeConfig
 ```
 
 `offer` is an intermediate (the tree reads it), so it is kept with `.emit("offer")` to show it:
@@ -344,4 +344,4 @@ Also deliberately not built: a `FlowConfig(ConfigurableStep)` that could live in
 
 The flow file is modelled on the granting-decisioning service's `flow.yaml` (a tree of `step`/`subflow`/`when`/`loop` nodes). Two problems there shaped this one: subflows were copy-pasted between flow variants, so `flow: name` loads a shared file by reference, and `when`/`loop` took free-text expressions, so conditions here are a column, a component, or the closed `expr` grammar.
 
-Serving reads a flow file directly: with `DECIDER_API__PIPELINE=flow.yaml`, `RequestHandler.pipeline_fn` calls `load_flow(self.pipeline, documents=config)` with the active config version, so `step:` names resolve to that version's documents. The [serving page](../serving.md) covers versions and activation.
+Serving reads a flow file directly: with `DECIKIT_API__PIPELINE=flow.yaml`, `RequestHandler.pipeline_fn` calls `load_flow(self.pipeline, documents=config)` with the active config version, so `step:` names resolve to that version's documents. The [serving page](../serving.md) covers versions and activation.

@@ -1,0 +1,30 @@
+{
+  "type": "adjustment_stack",
+  "name": "apply_behaviour_score_adjustments",
+  "target": "behaviour_score",
+  "set_id": "AS-07-2026.09",
+  "base_field": "behaviour_score_raw",
+  "unadjusted_output": "behaviour_score_unadjusted",
+  "adjustments": [
+    {
+      "adjustment_id": "ADJ-07-001",
+      "kind": "score_shift",
+      "target": "behaviour_score",
+      "effect": {
+        "op": "add",
+        "value": -15.0
+      },
+      "scope": {
+        "channel_code": 5
+      },
+      "stack_position": 1,
+      "owner": "Model Risk",
+      "approval_reference": "MRC-2026-041",
+      "rationale": "Partner-originated channel running worse than model prediction in early life",
+      "effective_from": "2026-01-01",
+      "effective_to": null,
+      "review_date": "2026-12-31",
+      "tighten_only": true
+    }
+  ]
+}

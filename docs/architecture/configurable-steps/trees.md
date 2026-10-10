@@ -8,21 +8,21 @@ Using trees (writing documents, retuning thresholds, reading `path_output`) is c
 
 | File | Role |
 |---|---|
-| `decider/steps/trees/__init__.py` | `TreeConfig`: fields, `to_ir`, and `_python` (the fallback row function for regex, case folding and trimming) |
-| `decider/steps/trees/schema/document.py` | `TreeDocument` (the discriminated union of formats), `detect_format`, `load_document` |
-| `decider/steps/trees/schema/v3.py` | `V3TreeDocument`: positioned nodes and edges, as the editor saves them; `to_flat_rules()` |
-| `decider/steps/trees/schema/flat.py` | `FlatRuleDocument`, `PrioritizedFlatRuleDocument`: rules that nest their branches |
-| `decider/steps/trees/schema/tree.py` | `Tree`, `Node`, `Rule`, `TreeOutput`: the one model every format normalises into |
-| `decider/steps/trees/schema/nodes.py` | Node kinds (`LeafNode`, `UnaryNode`, `CasesRanges`, `CasesStringMatch`, `CasesIsIn`, `CompositeNode`) and `arity` |
-| `decider/steps/trees/schema/conditions.py` | Features, thresholds and the eleven unary conditions; range validation |
-| `decider/steps/trees/schema/_output_types.py` | Custom categorical and struct output types, flattened into plain columns |
-| `decider/steps/trees/_encode.py` | `encode`: `Tree` to `Program` (inputs, params, outputs, consts, arrays); feature kind inference |
-| `decider/steps/trees/_walker.py` | `walk`, the compiled walker, and its helpers |
-| `decider/steps/trees/_reference.py` | `reference`, the Python walker |
-| `decider/steps/trees/_trace.py` | Path counting and enumeration for `trace_output` |
-| `decider/steps/trees/_routes.py` | `path_columns`: `Route`, `Visit`, and unfolding a tree so every route ends at its own leaf |
-| `decider/steps/trees/_condition.py` | `expr_condition`, covered on the [expressions and flow files page](expr-and-flowfile.md) |
-| `decider/steps/trees/_ops.py` | The six comparison opcodes (`LT, LE, EQ, GT, GE, NE`), shared with tables |
+| `decikit/steps/trees/__init__.py` | `TreeConfig`: fields, `to_ir`, and `_python` (the fallback row function for regex, case folding and trimming) |
+| `decikit/steps/trees/schema/document.py` | `TreeDocument` (the discriminated union of formats), `detect_format`, `load_document` |
+| `decikit/steps/trees/schema/v3.py` | `V3TreeDocument`: positioned nodes and edges, as the editor saves them; `to_flat_rules()` |
+| `decikit/steps/trees/schema/flat.py` | `FlatRuleDocument`, `PrioritizedFlatRuleDocument`: rules that nest their branches |
+| `decikit/steps/trees/schema/tree.py` | `Tree`, `Node`, `Rule`, `TreeOutput`: the one model every format normalises into |
+| `decikit/steps/trees/schema/nodes.py` | Node kinds (`LeafNode`, `UnaryNode`, `CasesRanges`, `CasesStringMatch`, `CasesIsIn`, `CompositeNode`) and `arity` |
+| `decikit/steps/trees/schema/conditions.py` | Features, thresholds and the eleven unary conditions; range validation |
+| `decikit/steps/trees/schema/_output_types.py` | Custom categorical and struct output types, flattened into plain columns |
+| `decikit/steps/trees/_encode.py` | `encode`: `Tree` to `Program` (inputs, params, outputs, consts, arrays); feature kind inference |
+| `decikit/steps/trees/_walker.py` | `walk`, the compiled walker, and its helpers |
+| `decikit/steps/trees/_reference.py` | `reference`, the Python walker |
+| `decikit/steps/trees/_trace.py` | Path counting and enumeration for `trace_output` |
+| `decikit/steps/trees/_routes.py` | `path_columns`: `Route`, `Visit`, and unfolding a tree so every route ends at its own leaf |
+| `decikit/steps/trees/_condition.py` | `expr_condition`, covered on the [expressions and flow files page](expr-and-flowfile.md) |
+| `decikit/steps/trees/_ops.py` | The six comparison opcodes (`LT, LE, EQ, GT, GE, NE`), shared with tables |
 
 ## From document to row node
 
@@ -366,7 +366,7 @@ The answers are the same in every mode; only the speed differs. `Engine(strict_c
 
 ### String outputs are `Literal` indices
 
-A kernel cannot write strings. A tree's `String` output column is declared `Literal["refer", "approve", "decline", "manual"]` (its distinct values, in leaf order), the walker returns the index, `-1` for null, and the engine decodes the index after the kernel (`decider/_engine/compile/outputs.py`). `path_output` and `trace_output` are `Literal` outputs too. A column that is null on every leaf still needs one choice, so it is declared `Literal[""]`.
+A kernel cannot write strings. A tree's `String` output column is declared `Literal["refer", "approve", "decline", "manual"]` (its distinct values, in leaf order), the walker returns the index, `-1` for null, and the engine decodes the index after the kernel (`decikit/_engine/compile/outputs.py`). `path_output` and `trace_output` are `Literal` outputs too. A column that is null on every leaf still needs one choice, so it is declared `Literal[""]`.
 
 Decoding is per reader: `score()` indexes a cached object array (about 0.1 µs a row), and `run()` gathers from a cached polars `String` column. A tree with 8192 leaves, each with its own String value, in fused mode, saw `score` fall from 639 to 14 µs when the choices table stopped being rebuilt per call.
 
@@ -404,7 +404,7 @@ print(ref((0.30, 4000.0, 7000.0, "web"), P(0.45), (), visited.append), visited)
 ('refer', None, 'refer', 'dti>channel>surplus>refer') ['dti', 'channel', 'surplus', 'refer']
 ```
 
-The interpreted runner passes its own `visit`, which records a `NodeVisited` event per node with a row count and lets a session stop on a node: `session.break_at("loan_tree#surplus")` uses the locators `TreeConfig.nodes` lists. A tree runs as a single row node, so a node breakpoint pauses after the tree has run, with per-node row counts available in the session's events. The [debug page](../engine/debug.md) and [trace page](../engine/trace.md) cover sessions and trace events.
+The interpreted runner passes its own `visit`, which records a `NodeVisited` event per node with a row count and lets a session stop on a node: `session.break_at("loan_tree#surplus")` uses the locators `TreeConfig.nodes` lists. A tree runs as a single row node, so a node breakpoint pauses after the tree has run, with per-node row counts available in the session's events. The exception is a `mode: "all"` tree of more than `part_outputs` outputs (128 unless set; rules times columns, plus any `path_output` or `trace_output`): it runs as row nodes `<name>/part_0`, `<name>/part_1`, ... of whole rules, because compile time grows with the square of the outputs one call returns. A node breakpoint `rules#<id>` pauses after the part that reached the node, and a tree with params stays one node. The [debug page](../engine/debug.md) and [trace page](../engine/trace.md) cover sessions and trace events.
 
 `TreeConfig.to_ir` builds the reference once and attaches the encoder's arrays to it (`ref.arrays = p.arrays`). The node holds the reference, and the reference keeps the arrays alive for as long as the node exists.
 
@@ -415,9 +415,9 @@ From `benchmarks/tree_walk.py` (a 127-node tree over 18 features with a String, 
 | Tree | Engine | ns/row | `score` p50 | `score` p99 |
 |---|---|---|---|---|
 | numeric | decider2 fused | 748 | 209 µs | 375 µs |
-| numeric | decider fused | 592 | 58 µs | 78 µs |
+| numeric | decikit fused | 592 | 58 µs | 78 µs |
 | string-gated | decider2 fused | 614 | 257 µs | 326 µs |
-| string-gated | decider fused | 689 | 101 µs | 117 µs |
+| string-gated | decikit fused | 689 | 101 µs | 117 µs |
 
 The string-gated run adds a `starts_with` node on a `channel` column in front of the same tree. decider2's batch time includes decoding its String column.
 

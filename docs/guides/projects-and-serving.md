@@ -1,13 +1,13 @@
 # Projects and serving
 
-A pipeline in a notebook becomes a service in four commands. `decider template` writes a project, `decider build` checks a config version and warms its kernels, and `decider serve` answers `POST /invocations` over HTTP. The pipeline's code lives in the project's Python package; its params and its tree, table and scorecard documents live in versioned config folders, so policy changes ship as a new config version without a code release.
+A pipeline in a notebook becomes a service in four commands. `decikit template` writes a project, `decikit build` checks a config version and warms its kernels, and `decikit serve` answers `POST /invocations` over HTTP. The pipeline's code lives in the project's Python package; its params and its tree, table and scorecard documents live in versioned config folders, so policy changes ship as a new config version without a code release.
 
 This guide walks through that path with a real project, then covers config versions, the request handler, request and response formats, errors, and reusing another project. How the server and the store are built inside is on the [serving](../architecture/serving.md) and [config store](../architecture/config-store.md) architecture pages.
 
 ## Starting a project
 
 ```bash
-$ decider template credit_risk
+$ decikit template credit_risk
 created credit_risk/README.md
 created credit_risk/__init__.py
 created credit_risk/configs/0.0.0/params.json
@@ -19,12 +19,12 @@ created credit_risk/sample_request.json
 created credit_risk/tests/test_pipeline.py
 ```
 
-`decider template NAME [DIRECTORY]` refuses a directory that exists and is not empty, and a name that cannot be a Python package. The project directory is itself the package, so `import credit_risk` resolves to it and two projects on one path never shadow each other's `pipeline.py`.
+`decikit template NAME [DIRECTORY]` refuses a directory that exists and is not empty, and a name that cannot be a Python package. The project directory is itself the package, so `import credit_risk` resolves to it and two projects on one path never shadow each other's `pipeline.py`.
 
 <div class="diagram" markdown>
-![The files of a project and what reads them: pipeline.py and the configs folders feed decider build, which validates and warms the kernels into numba's disk cache; inference.py and .env feed decider serve, whose workers stage and activate the latest version and answer POST /invocations and GET /ping](../assets/diagrams/guide-serving-project.svg)
+![The files of a project and what reads them: pipeline.py and the configs folders feed decikit build, which validates and warms the kernels into numba's disk cache; inference.py and .env feed decikit serve, whose workers stage and activate the latest version and answer POST /invocations and GET /ping](../assets/diagrams/guide-serving-project.svg)
 
-*`decider build` and `decider serve` stage a version the same way; build stops there.*
+*`decikit build` and `decikit serve` stage a version the same way; build stops there.*
 </div>
 
 `pipeline.py` holds the steps and a `build()` function:
@@ -32,7 +32,7 @@ created credit_risk/tests/test_pipeline.py
 ```python
 from datetime import date
 
-from decider import flow, missing_as, param
+from decikit import flow, missing_as, param
 
 
 def debt_ratio(income: float, debt: float = missing_as(0.0)) -> float:
@@ -62,14 +62,14 @@ The other files:
 | `sample_request.json` | `{"income": 1000.0, "debt": 250.0, "applied_on": "2026-01-15"}`, used by the tests and to warm kernels |
 | `tests/test_pipeline.py` | tests that score raw JSON bytes through the handler, as the server does |
 | `conftest.py` | puts the project's parent directory on `sys.path` for plain `pytest` |
-| `.env` | the settings `decider build` and `decider serve` read |
+| `.env` | the settings `decikit build` and `decikit serve` read |
 
 `.env`:
 
 ```text
-DECIDER_API__PIPELINE=credit_risk.pipeline:build
-DECIDER_API__HANDLER=credit_risk.inference:Handler
-DECIDER_CONFIG__BASEPATH=configs
+DECIKIT_API__PIPELINE=credit_risk.pipeline:build
+DECIKIT_API__HANDLER=credit_risk.inference:Handler
+DECIKIT_CONFIG__BASEPATH=configs
 ```
 
 The tests pass straight away:
@@ -83,27 +83,27 @@ The warning is a `FallbackWarning`: `month_end` reads a `date`, which no numba k
 
 ## Building a version
 
-`decider build [VERSION]` does what a server worker does at startup and then stops. It imports the pipeline, reads the version (the latest by default), loads its documents, validates its params document, and scores `sample_request.json` through both the single-record and the frame path, which compiles every kernel into numba's disk cache. It also records the CPU it built for in `decider-cpu-target.json`:
+`decikit build [VERSION]` does what a server worker does at startup and then stops. It imports the pipeline, reads the version (the latest by default), loads its documents, validates its params document, and scores `sample_request.json` through both the single-record and the frame path, which compiles every kernel into numba's disk cache. It also records the CPU it built for in `decikit-cpu-target.json`:
 
 ```bash
-$ decider build
-decider: pipeline credit_risk.pipeline:build from /…/credit_risk/pipeline.py
-decider: handler credit_risk.inference:Handler from /…/credit_risk/inference.py
+$ decikit build
+decikit: pipeline credit_risk.pipeline:build from /…/credit_risk/pipeline.py
+decikit: handler credit_risk.inference:Handler from /…/credit_risk/inference.py
 built config version 0.0.0 (pipeline credit_risk.pipeline:build, mode fused)
 ```
 
-The first two lines say which files were imported, so a pipeline picked up from the wrong project shows before it serves wrong answers. A version that fails stops the build with exit code 1 and `config version 0.1.0 failed to build: ParamsError: ...`. Run `decider build` in CI and on the image the server runs on; `decider serve` warns when it starts on a CPU other than the one recorded, because numba's cache then misses and every worker compiles at startup.
+The first two lines say which files were imported, so a pipeline picked up from the wrong project shows before it serves wrong answers. A version that fails stops the build with exit code 1 and `config version 0.1.0 failed to build: ParamsError: ...`. Run `decikit build` in CI and on the image the server runs on; `decikit serve` warns when it starts on a CPU other than the one recorded, because numba's cache then misses and every worker compiles at startup.
 
 Without a `sample_request.json`, staging warms with a synthetic record (1.0 for numbers, `False`, `2000-01-01` for dates). If that record makes your pipeline fail, the error says so and asks for a representative sample request.
 
 ## Serving
 
 ```bash
-$ decider serve --workers 1 --port 60777 --host 127.0.0.1
+$ decikit serve --workers 1 --port 60777 --host 127.0.0.1
 INFO:     Started server process [3922280]
 INFO:     Waiting for application startup.
-decider: pipeline credit_risk.pipeline:build from /…/credit_risk/pipeline.py
-decider: handler credit_risk.inference:Handler from /…/credit_risk/inference.py
+decikit: pipeline credit_risk.pipeline:build from /…/credit_risk/pipeline.py
+decikit: handler credit_risk.inference:Handler from /…/credit_risk/inference.py
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://127.0.0.1:60777 (Press CTRL+C to quit)
 ```
@@ -120,32 +120,63 @@ $ curl -s -d @sample_request.json -H 'content-type: application/json' localhost:
 
 Each worker process imports the pipeline and the handler, then stages and activates the store's latest version before `/ping` answers 200. Until then both routes answer 503 with `{"message": "Server is initializing, please try again shortly."}`. The routes follow the SageMaker container convention.
 
-`decider serve` options (each also a setting):
+`decikit serve` options (each also a setting):
 
 | Option | Setting | Default |
 |---|---|---|
-| `--host` | `DECIDER_SERVE__HOST` | `0.0.0.0` |
-| `--port` | `DECIDER_SERVE__PORT` | `8080` |
-| `--workers` | `DECIDER_SERVE__WORKERS` | 2 × CPUs + 1 |
-| `--mode` | `DECIDER_API__MODE` | `fused` (also `stepped`, `interpreted`) |
-| `--server` | `DECIDER_SERVE__SERVER` | `starlette` (uvicorn); `sanic` needs `decider[serve-sanic]` |
+| `--host` | `DECIKIT_SERVE__HOST` | `0.0.0.0` |
+| `--port` | `DECIKIT_SERVE__PORT` | `8080` |
+| `--workers` | `DECIKIT_SERVE__WORKERS` | 2 × CPUs + 1 |
+| `--mode` | `DECIKIT_API__MODE` | `fused` (also `stepped`, `interpreted`) |
+| `--server` | `DECIKIT_SERVE__SERVER` | `starlette` (uvicorn); `sanic` needs `decikit[serve-sanic]` |
 
-The starlette server needs `pip install 'decider[serve-starlette]'`.
+The starlette server needs `pip install 'decikit[serve-starlette]'`.
+
+### Container image
+
+`docker/Dockerfile` builds an image that serves with sanic as a non-root user. Run the commands from a checkout of the repository. They were tested with podman; docker needs BuildKit for `--build-context` and the bind mount in the project stage, and was not tested.
+
+```bash
+podman build -t decider:latest -f docker/Dockerfile .                          # library only, no project
+podman run --rm -p 8080:8080 -v $PWD/my-project:/opt/ml/model/code:ro,Z decider:latest   # project mounted
+```
+
+To bake a project in, so that `decikit build` runs while the image is built (a bad config or a missing document fails the build, not the first request):
+
+```bash
+podman build --target project --build-context app=/path/to/my-project \
+    --build-arg PIPELINE=my_pkg.pipeline:build -t my-app -f docker/Dockerfile .
+```
+
+or, from your own Dockerfile on top of the library image (`bake` installs `requirements.txt` if there is one, then runs `decikit build`):
+
+```dockerfile
+FROM decider:latest
+COPY . /opt/ml/model/code
+ENV DECIKIT_API__PIPELINE=my_pkg.pipeline:build
+RUN bake
+```
+
+- A baked image keeps numba's disk cache for your step functions, which skips their compilation at start (measured: 16 s instead of 35 s to `/ping` for one worker of `examples/loan-granting-pricing`, 39 s instead of 119 s for `examples/transaction-fraud`). The fused kernels are still built in every worker at start, so wait for `GET /ping` before sending traffic.
+- The image compiles for a generic x86-64 CPU (`CPU_TARGET=generic`, the default), so the baked cache hits on any x86-64 host; per record that measured the same as code for the build machine's CPU. `--build-arg CPU_TARGET=host` compiles for the build machine instead: on another CPU model `decikit serve` then warns and every worker compiles at start, 2 to 3 times slower to `/ping`.
+- Rootless podman: the mounted folder must be readable by "others", or add `--userns=keep-id`.
+- The header of `docker/Dockerfile` lists every build argument and variable. `docker/smoke.sh` builds, runs and checks each example under `examples/`.
 
 ### Settings
 
-Settings are `DECIDER_*` environment variables, with `__` between nested names. A `.env` file in the current directory fills in whatever the real environment does not set. There are no other flags; `decider --help` lists every command.
+Settings are `DECIKIT_*` environment variables, with `__` between nested names. A `.env` file in the current directory fills in whatever the real environment does not set. There are no other flags; `decikit --help` lists every command.
 
 | Variable | Meaning | Default |
 |---|---|---|
-| `DECIDER_API__CODE_PATH` | the project directory; it and its parent go first on `sys.path` | `.` |
-| `DECIDER_API__PIPELINE` | `package.module:function` returning the pipeline, or a `.yaml`/`.yml`/`.json` [flow file](flow-files.md) | `pipeline:build` |
-| `DECIDER_API__HANDLER` | `package.module:Class` of the handler; if the module does not exist, plain `RequestHandler` is used | `inference:Handler` |
-| `DECIDER_API__MODE` | `interpreted`, `stepped` or `fused` | `fused` |
-| `DECIDER_CONFIG__TYPE` | the config store type | `file:json` |
-| `DECIDER_CONFIG__BASEPATH` | the `JsonFileStore` folder | `configs` |
+| `DECIKIT_API__CODE_PATH` | the project directory; it and its parent go first on `sys.path` | `.` |
+| `DECIKIT_API__PIPELINE` | `package.module:function` returning the pipeline, or a `.yaml`/`.yml`/`.json` [flow file](flow-files.md) | `pipeline:build` |
+| `DECIKIT_API__HANDLER` | `package.module:Class` of the handler; if the module does not exist, plain `RequestHandler` is used | `inference:Handler` |
+| `DECIKIT_API__MODE` | `interpreted`, `stepped` or `fused` | `fused` |
+| `DECIKIT_CONFIG__TYPE` | the config store type | `file:json` |
+| `DECIKIT_CONFIG__BASEPATH` | the `JsonFileStore` folder | `configs` |
+| `DECIKIT_BUILD__WARN_SHADOWED_TABLES` | `false` stops the `ShadowedTableWarning` that staging a version (`decikit build`, a server's start) gives when its params document sets a `param_table(..., seeded_from=...)` | `true` |
 
-If the handler module exists but has no class of that name, startup fails with `inference.py has no 'Handler'; define class Handler(RequestHandler) there, or point DECIDER_API__HANDLER at the module:class that holds your handler`.
+If the handler module exists but has no class of that name, startup fails with `inference.py has no 'Handler'; define class Handler(RequestHandler) there, or point DECIKIT_API__HANDLER at the module:class that holds your handler`.
 
 ## Requests and responses
 
@@ -194,11 +225,11 @@ The response holds the request's input columns plus every output of the pipeline
 Through the handler in-process, with raw bytes as the server would see them:
 
 ```python
-import asyncio, sys, warnings
+import sys, warnings
 from pathlib import Path
-from decider import FallbackWarning
-from decider.config import JsonFileStore
-from decider.serving import RequestHandler
+from decikit import FallbackWarning
+from decikit.config import JsonFileStore
+from decikit.serving import RequestHandler
 
 warnings.filterwarnings("ignore", category=FallbackWarning)
 sys.path.insert(0, str(Path("..").resolve()))       # the parent of the credit_risk package
@@ -209,7 +240,7 @@ handler.activate()
 
 
 def call(body: bytes, accept="application/json", content_type="application/json"):
-    response = asyncio.run(handler.process_fn(body, accept, content_type))
+    response = handler.process_fn(body, accept, content_type)
     return response.media_type, response.content.decode()
 
 
@@ -232,11 +263,11 @@ print(call(b'income,debt,applied_on\n1000,250,2026-01-15\n', accept="application
 
 ### One record at a time
 
-Send a single decision as a JSON object, not as a one-element array or a CSV. The object takes the single-record path: the record goes straight into one-row arrays and comes back as a dict. In Python the same rule holds: `executable.score(record_dict, params)` takes a dict (never keyword arguments) and costs about a fifth of `run` on a one-row frame, which builds a frame, exports it through Arrow and assembles an output frame (the figure `decider guide` gives). The measured breakdown of a served request is in `docs/design_decisions/experiments/serving-latency-budget.md`. Arrow IPC costs more to encode and decode than a typical pipeline takes to run, so keep it for batches.
+Send a single decision as a JSON object, not as a one-element array or a CSV. The object takes the single-record path: the record goes straight into one-row arrays and comes back as a dict. In Python the same rule holds: `executable.score(record_dict, params)` takes a dict (never keyword arguments) and costs about a fifth of `run` on a one-row frame, which builds a frame, exports it through Arrow and assembles an output frame (the figure `decikit guide` gives). The measured breakdown of a served request is in `docs/design_decisions/experiments/serving-latency-budget.md`. Arrow IPC costs more to encode and decode than a typical pipeline takes to run, so keep it for batches.
 
 ### Error responses
 
-A `DeciderError` becomes a JSON body `{"message": ...}` with the error's HTTP status. These were returned by the server above:
+A `DecikitError` becomes a JSON body `{"message": ...}` with the error's HTTP status. These were returned by the server above:
 
 | Request | Status | Body |
 |---|---|---|
@@ -252,7 +283,7 @@ A `DeciderError` becomes a JSON body `{"message": ...}` with the error's HTTP st
 
 `debt: null` is fine because `debt` is declared `missing_as(0.0)`.
 
-Errors that are not `DeciderError`s are not translated. A string where a number is expected (`"income": "lots"`) raised `ValueError: could not convert string to float: 'lots'`, and `"income": 0` raised `ZeroDivisionError: division by zero in step credit_risk/debt_ratio`. Both came back as status 500 with the plain-text body `Internal Server Error`, and the traceback went to the server log. Validate types at the edge (an `input_fn` override) and guard divisions in the step (`debt / income if income > 0 else 1.0`) when you need a structured error.
+Errors that are not `DecikitError`s are not translated. A string where a number is expected (`"income": "lots"`) raised `ValueError: could not convert string to float: 'lots'`, and `"income": 0` raised `ZeroDivisionError: division by zero in step credit_risk/debt_ratio`. Both came back as status 500 with the plain-text body `Internal Server Error`, and the traceback went to the server log. Validate types at the edge (an `input_fn` override) and guard divisions in the step (`debt / income if income > 0 else 1.0`) when you need a structured error.
 
 A `ParamsError` (a bad params document) has status 500. It surfaces when a version is staged, not per request.
 
@@ -263,7 +294,7 @@ A config store holds immutable versions. `JsonFileStore(basepath="configs")` kee
 ```python
 import json, shutil
 from pathlib import Path
-from decider.config import JsonFileStore, Version, VersionPart
+from decikit.config import JsonFileStore, Version, VersionPart
 
 shutil.copytree("credit_risk/configs", "store_demo")
 store = JsonFileStore(basepath="store_demo")
@@ -316,10 +347,9 @@ stateDiagram-v2
 ```
 
 ```python
-import asyncio
-from decider.config import JsonFileStore
-from decider.exceptions import DeciderError
-from decider.serving import RequestHandler
+from decikit.config import JsonFileStore
+from decikit.exceptions import DecikitError
+from decikit.serving import RequestHandler
 
 store = JsonFileStore(basepath="store_demo")
 handler = RequestHandler(store, "credit_risk.pipeline:build")
@@ -327,7 +357,7 @@ body = b'{"income": 1000, "debt": 350, "applied_on": "2026-01-15"}'
 
 
 def call(body):
-    return asyncio.run(handler.process_fn(body, "application/json", "application/json")).content.decode()
+    return handler.process_fn(body, "application/json", "application/json").content.decode()
 
 
 try:
@@ -345,7 +375,7 @@ print(call(body))
 bad = store.create_version({"params": {"credit_risk": {"approved": {"limit": 1.5}}}})
 try:
     handler.stage(bad.version)
-except DeciderError as e:
+except DecikitError as e:
     print(type(e).__name__, e._STATUS_CODE, e)
 print("still serving", handler.active)
 ```
@@ -364,16 +394,16 @@ credit_risk/approved: param 'limit': Input should be less than or equal to 1 (go
 still serving 0.0.0
 ```
 
-`limit` is declared `param(0.4, ge=0.0, le=1.0)`, so a version with `1.5` never gets staged. A running `decider serve` stages the latest version once, at startup; to serve a new version, restart the workers (after `decider build`), or call `stage()` and `activate()` from your own code.
+`limit` is declared `param(0.4, ge=0.0, le=1.0)`, so a version with `1.5` never gets staged. A running `decikit serve` stages the latest version once, at startup; to serve a new version, restart the workers (after `decikit build`), or call `stage()` and `activate()` from your own code.
 
-A store of your own (a database, an object store) is a `ConfigStore` subclass implementing `versions`, `read` and `_write`, named by `DECIDER_CONFIG__TYPE`; see [extending decider](extending.md).
+A store of your own (a database, an object store) is a `ConfigStore` subclass implementing `versions`, `read` and `_write`, named by `DECIKIT_CONFIG__TYPE`; see [extending the decider toolkit](extending.md).
 
 ## Documents in a version
 
 Each argument of `build` names a key of the config version; that document is loaded with `ConfigurableStep.load` and passed in. A version holding `params.json` and `risk.json`:
 
 ```python
-from decider import flow
+from decikit import flow
 
 
 def build(risk):                       # configs/<version>/risk.json, already loaded as a TreeConfig
@@ -384,22 +414,22 @@ A missing document is an error naming it (`the config version has no 'risk' docu
 
 ## Changing request handling
 
-Override any `*_fn` method in `inference.py`'s `Handler`. `input_fn(data, content_type)` parses the body, `output_fn(output, accept)` formats the result, `process_fn` does both around scoring, `warm_fn(executable, params)` warms a staged version, `pipeline_fn(config)` builds the pipeline from a version, and `init_fn` / `shutdown_fn` run at server start and stop.
+Override any `*_fn` method in `inference.py`'s `Handler`. `input_fn(data, content_type)` parses the body, `output_fn(output, accept)` formats the result, `process_fn` does both around scoring, `warm_fn(executable, params)` warms a staged version, `pipeline_fn(config)` builds the pipeline from a version, and `init_fn` / `shutdown_fn` run at server start and stop. The hooks are plain methods: one defined with `async def` fails with a `TypeError` when the class is created. In-process, `handler.score(record_or_frame)` runs the scoring step alone, converting date strings as the server does.
 
 ```python
-import asyncio, sys
+import sys
 from pathlib import Path
 from pydantic_core import to_json
-from decider.config import JsonFileStore
-from decider.serving import RequestHandler
-from decider.serving._format import Response
+from decikit.config import JsonFileStore
+from decikit.serving import RequestHandler
+from decikit.serving._format import Response
 
 sys.path.insert(0, str(Path("..").resolve()))
 
 
 class Handler(RequestHandler):
-    async def input_fn(self, data, content_type):
-        request = await super().input_fn(data, content_type)
+    def input_fn(self, data, content_type):
+        request = super().input_fn(data, content_type)
         if isinstance(request, dict):                      # one record: accept the channel's field names
             request["income"] = request.pop("gross_monthly_income", request.get("income"))
         return request
@@ -415,24 +445,24 @@ handler = Handler(JsonFileStore(basepath="../credit_risk/configs"), "credit_risk
 handler.stage()
 handler.activate()
 body = b'{"gross_monthly_income": 1000, "debt": 250, "applied_on": "2026-01-15"}'
-print(asyncio.run(handler.process_fn(body, "application/json", "application/json")).content.decode())
+print(handler.process_fn(body, "application/json", "application/json").content.decode())
 ```
 
 ```text
 {"approved":true,"config_version":"0.0.0"}
 ```
 
-`Response` is a named tuple of `(content: bytes, media_type: str)`; its import path is private. Raise a `DeciderError` subclass with a `_STATUS_CODE` from an override to answer with that status and a JSON message.
+`Response` is a named tuple of `(content: bytes, media_type: str)`; its import path is private. Raise a `DecikitError` subclass with a `_STATUS_CODE` from an override to answer with that status and a JSON message.
 
-To run the app under your own ASGI setup, the starlette factory is `decider.serving._servers.starlette:create_app` (for example `uvicorn --factory decider.serving._servers.starlette:create_app`); without a handler argument it builds one from the settings at startup.
+To run the app under your own ASGI setup, the starlette factory is `decikit.serving._servers.starlette:create_app` (for example `uvicorn --factory decikit.serving._servers.starlette:create_app`); without a handler argument it builds one from the settings at startup.
 
 ## Reusing another project
 
-Import the other project's package and put its pipeline inside yours. With `decider template` projects side by side, `credit_core/` and `offers/`, the offers project builds on the core one:
+Import the other project's package and put its pipeline inside yours. With `decikit template` projects side by side, `credit_core/` and `offers/`, the offers project builds on the core one:
 
 ```python
 # offers/pipeline.py
-from decider import flow, param
+from decikit import flow, param
 
 from credit_core.pipeline import build as build_core
 
@@ -470,15 +500,15 @@ shape: (2, 3)
 
 The core pipeline's params nest under the offers pipeline (`offers/credit_core/approved`), so the offers project's own config versions carry them. `relabel(reads=...)` maps a column the core reads to the name this project has; `relabel(writes=...)` does the same for outputs.
 
-Import the other project as a package, never a sibling file through `importlib`. `decider build` and `decider serve` put the project directory and its parent first on `sys.path`, so a sibling project in the same parent folder imports with no extra setup (`decider build` in `offers/` above succeeded with nothing else configured). When the consumed project lives elsewhere, add the folder that contains it to `PYTHONPATH`, after your own project.
+Import the other project as a package, never a sibling file through `importlib`. `decikit build` and `decikit serve` put the project directory and its parent first on `sys.path`, so a sibling project in the same parent folder imports with no extra setup (`decikit build` in `offers/` above succeeded with nothing else configured). When the consumed project lives elsewhere, add the folder that contains it to `PYTHONPATH`, after your own project.
 
 ## Testing a project
 
-Test through decider, not by calling the step functions: the handler test proves the pipeline wires, the version loads, the params validate and a raw request scores. The template's tests do that with `Handler(...).process_fn(...)`. Before reporting that a build works, run `decider build` and score `sample_request.json` over HTTP against `decider serve`. [Debugging and testing](debugging-and-testing.md) covers `assert_equivalent` and sessions, and [checks](checks.md) covers `decider check` in CI.
+Test through the decider toolkit, not by calling the step functions: the handler test proves the pipeline wires, the version loads, the params validate and a raw request scores. The template's tests do that with `Handler(...).process_fn(...)`. Before reporting that a build works, run `decikit build` and score `sample_request.json` over HTTP against `decikit serve`. [Debugging and testing](debugging-and-testing.md) covers `assert_equivalent` and sessions, and [checks](checks.md) covers `decikit check` in CI.
 
 ## Where to go next
 
 - [Tutorial: loan granting and pricing](../walkthroughs/loan-granting-and-pricing.md): a project with a decision table, a parameter table and a scorecard, built, served and retuned.
-- [Flow files](flow-files.md): serve a YAML pipeline with `DECIDER_API__PIPELINE=flow.yaml`.
+- [Flow files](flow-files.md): serve a YAML pipeline with `DECIKIT_API__PIPELINE=flow.yaml`.
 - [Tracing](tracing.md): capture decision evidence from a served pipeline.
 - [Serving architecture](../architecture/serving.md) and [config store architecture](../architecture/config-store.md).

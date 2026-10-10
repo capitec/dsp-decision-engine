@@ -5,8 +5,8 @@ A step gives the same answer in `interpreted`, `stepped` and `fused` mode, and i
 `x ** n` by repeated squaring, has no fixed-point decimal and types a string as its own unicode
 object. Kernel semantics is the set of numba types and overloads that close those gaps, plus the
 rules for nulls that every runner applies the same way. It lives in
-`decider/_engine/compile/semantics/`, `compile/decimal_type.py`, `compile/span.py` and the user
-types in `decider/ops/`.
+`decikit/_engine/compile/semantics/`, `compile/decimal_type.py`, `compile/span.py` and the user
+types in `decikit/ops/`.
 
 How steps become kernels is on [compilation](compile.md). How cached machine code is invalidated
 when these overloads change is on [the compile cache](cache.md). The user side of the same
@@ -24,7 +24,7 @@ overloads with `target="cpu"`, which outrank numba's generic builtins for the sa
 | `semantics/strings.py` | `==`, `!=`, `len`, `in`, `startswith`, `endswith` and `[]` on `SpanType` |
 
 `compile/njit.py` imports the package before it compiles anything, so the overloads are in place
-for the first step. They are global to the process: once `decider._engine.compile` is imported, a
+for the first step. They are global to the process: once `decikit._engine.compile` is imported, a
 plain `@njit` function written outside any pipeline gets them too. Every overload is keyed on its
 own type (`DecimalType`, `SpanType`) or on float operands, so plain int arithmetic, tuples and
 arrays keep numba's own behaviour.
@@ -35,17 +35,17 @@ covered without anyone listing it:
 
 ```text
 6c966223198695dd5fc65fcf4f55149d4a6e64cc5e88de7143fe85af3b604a6a
-decider/_engine/compile/decimal_type.py
-decider/_engine/compile/semantics/__init__.py
-decider/_engine/compile/semantics/decimals.py
-decider/_engine/compile/semantics/numbers.py
-decider/_engine/compile/semantics/strings.py
-decider/_engine/compile/span.py
-decider/ops/__init__.py
-decider/ops/decimal.py
-decider/ops/measures.py
-decider/ops/nested.py
-decider/ops/text.py
+decikit/_engine/compile/decimal_type.py
+decikit/_engine/compile/semantics/__init__.py
+decikit/_engine/compile/semantics/decimals.py
+decikit/_engine/compile/semantics/numbers.py
+decikit/_engine/compile/semantics/strings.py
+decikit/_engine/compile/span.py
+decikit/ops/__init__.py
+decikit/ops/decimal.py
+decikit/ops/measures.py
+decikit/ops/nested.py
+decikit/ops/text.py
 ```
 
 numba's disk cache keys a step by the step's own bytecode, so an edit to an overload would
@@ -54,7 +54,7 @@ cache index key, and [the cache page](cache.md) shows where.
 
 ```mermaid
 flowchart TD
-    files["semantics/*.py, span.py,<br/>decimal_type.py, ops/*.py"]:::foundation --> imp["import decider._engine.compile"]:::engine
+    files["semantics/*.py, span.py,<br/>decimal_type.py, ops/*.py"]:::foundation --> imp["import decikit._engine.compile"]:::engine
     imp --> reg["@overload(..., target='cpu')<br/>registered process-wide"]:::engine
     imp --> salt["SALT = sha256(file bytes)"]:::engine
     reg --> step["every njit step and kernel<br/>compiled afterwards"]:::engine
@@ -81,8 +81,8 @@ plain numba round(2.675, 2) = 2.68   CPython: 2.67
 plain numba round(0.125, 2) = 0.12   CPython: 0.12
 ```
 
-With `decider._engine.compile` imported, the same `@njit` function prints `2.67`. The overload calls
-`decimal.round(x, n, Rounding.HALF_EVEN)`, which is `round_float` in `decider/ops/decimal.py`, one
+With `decikit._engine.compile` imported, the same `@njit` function prints `2.67`. The overload calls
+`decimal.round(x, n, Rounding.HALF_EVEN)`, which is `round_float` in `decikit/ops/decimal.py`, one
 `@register_jitable` body that runs in Python and in a kernel. It splits `x * 10**n` into a double
 and its exact error with Dekker's two-product (no fused multiply-add needed), then decides the
 rounding from both parts. Negative `n` rounds to tens and hundreds; NaN and infinities pass
@@ -104,7 +104,7 @@ numba computes a float to an int power by repeated squaring, which drifts a few 
 ```text
 plain numba:          pow differs on 97309 of 100000
                       e.g. rate 0.00765..., months 255: 6.985595589299698 vs 6.985595589299625
-decider's overloads:  pow differs on 0 of 100000
+decikit's overloads:  pow differs on 0 of 100000
 ```
 
 LLVM still folds a literal `x ** 2` into `x * x`, which can miss `pow` by an ULP (noted in the
@@ -225,7 +225,7 @@ interpreted: OverflowError: 9223372036854775808 does not fit a Decimal's int64;
 A mix the table calls an error makes numba refuse the step. It then runs in Python with a
 `FallbackWarning`, where the Python class raises its own error (`TypeError: unsupported operand
 type(s) for +: 'Currency' and 'float'` for `amount + 1.5`), so the spelling fails in every mode.
-The reason `exe.fallbacks()` reports is numba's full candidate listing, with the decider line
+The reason `exe.fallbacks()` reports is numba's full candidate listing, with the decider toolkit line
 (`decimal[4] + float64 is not defined for a Decimal: an int counts as whole units, a float is not
 allowed`) in the middle of it.
 
@@ -252,7 +252,7 @@ The overloads in `semantics/strings.py`:
   feature does.
 
 Outside a kernel the same column is a `SpanArray` (a numpy view with the `SPAN_DTYPE` record
-`(address, length)`), whose elements read back as `decider.ops.Text` objects. `Text` answers the same
+`(address, length)`), whose elements read back as `decikit.ops.Text` objects. `Text` answers the same
 operations in Python, so the Python fallback and interpreted mode agree with the kernel:
 
 ```python
@@ -281,7 +281,7 @@ a string and numbered values differently per worker.
 
 ## Nested values
 
-`Struct[Item]` and `Columnar[Item]` (in `decider/ops/nested.py`) carry list and struct columns into
+`Struct[Item]` and `Columnar[Item]` (in `decikit/ops/nested.py`) carry list and struct columns into
 a kernel in shapes numba reads without Python objects.
 
 <div class="diagram" markdown>

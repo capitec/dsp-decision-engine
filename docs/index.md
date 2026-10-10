@@ -1,6 +1,6 @@
-![Decider](assets/decider-icon.png){ .hero-icon }
+![Decider toolkit](assets/decikit-icon.png){ .hero-icon }
 
-# Decider
+# Decider toolkit
 
 Build decision pipelines from plain Python functions, run them over a polars frame or one record at a time, and serve them over HTTP.
 
@@ -8,7 +8,7 @@ Build decision pipelines from plain Python functions, run them over a polars fra
 
 - [Getting started](getting-started.md)
 
-    Install decider, run a pipeline over a frame, score one record and retune a param.
+    Install the decider toolkit, run a pipeline over a frame, score one record and retune a param.
 
 - [Core concepts](concepts.md)
 

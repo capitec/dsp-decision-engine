@@ -1,6 +1,6 @@
 # Which durable step id survives refactors without making source noisy?
 
-Date: 2026-09-30 · Script: spike, not kept (behaviour is pinned by tests of `decider ids`)
+Date: 2026-09-30 · Script: spike, not kept (behaviour is pinned by tests of `decikit ids`)
 
 ## Purpose
 Pick an id syntax and format, then prove it against the real engine and a real source rewrite.

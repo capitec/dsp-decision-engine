@@ -1,33 +1,33 @@
 # The lab
 
-`decider.lab` holds the work done to a flow away from serving: reading data, running static checks over the
+`decikit.lab` holds the work done to a flow away from serving: reading data, running static checks over the
 source, comparing two versions, asserting that the execution modes agree, and running experiments. Each of
 those is a subpackage. The parent package holds the one thing they all share, a set of reference types that
 name the parts of a flow, and `describe`, the function that builds them.
 
 | Path | What it holds | Page |
 |---|---|---|
-| `decider/lab/__init__.py` | The public surface: `describe`, `resolve_step`, `source_location`, the refs, `CONTRACT_VERSION` | this page |
-| `decider/lab/_refs.py` | `FlowRef`, `StepRef`, `EdgeRef`, `ValueSlotRef`, `RecordRef`, `FlowDescription`, `CONTRACT_VERSION`, `check_version` | this page |
-| `decider/lab/_describe.py` | `describe`, `resolve_step`, `source_location` | this page |
-| `decider/lab/data/` | `read`, `scan`, named datasets and their providers, record keys, `LoadedData` | [Data](data.md) |
-| `decider/lab/checks/` | The `Check` registry, `CheckContext`, the runner, `Report`, and 34 built-in checks | [Checks](checks.md) |
-| `decider/lab/testing/` | `assert_equivalent`, `corpus`, `no_recompile` | [Testing helpers](testing.md) |
-| `decider/lab/diff/` | Structural, output, revision and proof comparison of two versions | [Diff](diff.md) |
-| `decider/lab/experiments/` | Baseline against scenarios over the same records, metrics, plots, reports | [Experiments](experiments.md) |
+| `decikit/lab/__init__.py` | The public surface: `describe`, `resolve_step`, `source_location`, the refs, `CONTRACT_VERSION` | this page |
+| `decikit/lab/_refs.py` | `FlowRef`, `StepRef`, `EdgeRef`, `ValueSlotRef`, `RecordRef`, `FlowDescription`, `CONTRACT_VERSION`, `check_version` | this page |
+| `decikit/lab/_describe.py` | `describe`, `resolve_step`, `source_location` | this page |
+| `decikit/lab/data/` | `read`, `scan`, named datasets and their providers, record keys, `LoadedData` | [Data](data.md) |
+| `decikit/lab/checks/` | The `Check` registry, `CheckContext`, the runner, `Report`, and 34 built-in checks | [Checks](checks.md) |
+| `decikit/lab/testing/` | `assert_equivalent`, `corpus`, `no_recompile` | [Testing helpers](testing.md) |
+| `decikit/lab/diff/` | Structural, output, revision and proof comparison of two versions | [Diff](diff.md) |
+| `decikit/lab/experiments/` | Baseline against scenarios over the same records, metrics, plots, reports | [Experiments](experiments.md) |
 
-`describe` is also importable from the top level as `decider.describe`. It is the one name with two import
+`describe` is also importable from the top level as `decikit.describe`. It is the one name with two import
 paths: it lives beside the refs it returns, and users reach for it often enough to want it at the top.
 
 ## Why the five packages share a parent
 
-The package layout keeps the core, the libraries and the tooling as siblings under `decider/`. The lab is the
+The package layout keeps the core, the libraries and the tooling as siblings under `decikit/`. The lab is the
 one nested group. The reasoning is that `data`, `checks`, `diff`, `testing` and
 `experiments` are all things you do to a flow outside serving, they name its parts with the same refs, and their
 imports run one way, so they share a parent that also owns the refs and `describe`.
 
 In the layer map that `tests/test_conventions.py` enforces, `lab` sits in layer 3 (libraries). It may import the
-core (layer 1: `decider`, `steps`, `ir`, `debug`, `_engine`) and the foundation (layer 0: `exceptions`,
+core (layer 1: `decikit`, `steps`, `ir`, `debug`, `_engine`) and the foundation (layer 0: `exceptions`,
 `_registry`, `_settings`, `ops`, `_suggest`). It may not import `serving` or `_tooling` (layer 4), which are the
 consumers. Inside the layer, imports only have to be acyclic.
 
@@ -41,12 +41,12 @@ The real import graph inside the lab is slightly richer than the one-line summar
 experiments`:
 
 - `data` imports nothing else from the lab. It is the floor.
-- `testing` imports nothing else from the lab either. It needs only the engine (`Engine`, `decider.debug.Session`,
+- `testing` imports nothing else from the lab either. It needs only the engine (`Engine`, `decikit.debug.Session`,
   the wiring `resolve`).
 - `diff` imports the refs and `describe`.
 - `checks` imports `data` (for `project_root`, to find `checks.yaml`), the refs and `describe`, and `testing`: the
   runtime checks `crash_probe` and `mode_divergence` run over `testing.corpus` and call
-  `testing.assert_equivalent`. The structure checks import `decider.lab.diff._smt` through `importlib` at the moment
+  `testing.assert_equivalent`. The structure checks import `decikit.lab.diff._smt` through `importlib` at the moment
   they solve a tree or table, so a missing `z3` is a skipped check and never an import error.
 - `experiments` imports `data`, `checks`, `diff`, the refs and `describe`.
 
@@ -58,12 +58,12 @@ carries it in `contract_version`, and the editor bridge sends it in its `Hello` 
 
 The rule for bumping it is in the docstring of `CONTRACT_VERSION`: removing or renaming a field is a major change
 and bumps the version; adding an optional field does not. A reader calls `check_version` (in
-`decider/lab/_refs.py`, not exported) on a document it loads. A missing or older version is accepted, a newer
+`decikit/lab/_refs.py`, not exported) on a document it loads. A missing or older version is accepted, a newer
 major version is refused, and a version that isn't a number is refused too:
 
 ```text
-DeciderError: contract version 2 is newer than 1; upgrade decider to read it
-DeciderError: unrecognised contract version 'v1'
+DecikitError: contract version 2 is newer than 1; upgrade decikit to read it
+DecikitError: unrecognised contract version 'v1'
 ```
 
 The experiment manifest has its own version check that mirrors this one (see [Experiments](experiments.md)).
@@ -87,9 +87,9 @@ ValidationError: 1 validation error for StepRef
 
 | Field | Meaning |
 |---|---|
-| `flow_id` | The committed durable id of the root flow (`id=` on `flow(...)`), `None` until `decider ids` writes one |
+| `flow_id` | The committed durable id of the root flow (`id=` on `flow(...)`), `None` until `decikit ids` writes one |
 | `name` | The root's path, which for a named flow is its name |
-| `source` | The import path of the object that produced the root (`decider.steps:SequentialStep` for a `flow(...)`) |
+| `source` | The import path of the object that produced the root (`decikit.steps:SequentialStep` for a `flow(...)`) |
 | `revision` | A resolved source revision, such as a git SHA, when the caller knows one; `describe` leaves it `None` |
 
 `StepRef` names one node.
@@ -105,7 +105,7 @@ ValidationError: 1 validation error for StepRef
 | `kind` | For a call node, `scalar`, `row` or `frame`; `None` otherwise |
 | `inputs`, `outputs` | For a call node, the value names it reads and writes |
 
-`decider.lab.StepRef` is a different class from `decider.StepRef`. The top-level one is the field type a
+`decikit.lab.StepRef` is a different class from `decikit.StepRef`. The top-level one is the field type a
 `ConfigurableStep` uses for a nested step; the lab one is a contract reference.
 
 `EdgeRef` names an edge by the paths at its two ends. `kind="control"` means `to_path` runs inside `from_path`.
@@ -126,14 +126,14 @@ never part of identity, because row order is not stable across loads. How a key 
 There are two kinds of identity, and neither stands in for the other. Derived
 identity is `path` and `source`, built from names and import paths: good for display, but a rename, an extraction
 or a reorder changes it. Committed identity is an opaque 12-hex `id` written into source next to the declaration
-(`@step(id="a1b2c3d4e5f6")`, `flow(..., id="0123abcdef45")`), and `decider ids` inserts missing ones. A step reused
+(`@step(id="a1b2c3d4e5f6")`, `flow(..., id="0123abcdef45")`), and `decikit ids` inserts missing ones. A step reused
 in two flows has one id and two paths, which is why the global reference is the pair `(flow_id, step_id)`.
 
 A rename shows the difference. Both versions below carry the same ids; only the name changes:
 
 ```python
-from decider import flow, step
-from decider.lab import describe, resolve_step
+from decikit import flow, step
+from decikit.lab import describe, resolve_step
 
 @step(id="a1b2c3d4e5f6")
 def affordability(income: float, debt: float) -> float:
@@ -185,9 +185,9 @@ flowchart LR
   classDef tooling fill:#ede9fe,stroke:#7c3aed,color:#4c1d95,stroke-width:1.5px;
 ```
 
-Step by step, in `decider/lab/_describe.py`:
+Step by step, in `decikit/lab/_describe.py`:
 
-1. `to_ir(step)` builds the checked IR, then `resolve(ir)` from `decider/_engine/wiring` builds the `Plan`. A wiring
+1. `to_ir(step)` builds the checked IR, then `resolve(ir)` from `decikit/_engine/wiring` builds the `Plan`. A wiring
    problem raises the engine's own `WiringError` here; `describe` adds no error type of its own.
 2. The `FlowRef` comes from the root node's `Origin`: `flow_id=origin.id`, `name=origin.path`,
    `source=origin.source`.
@@ -203,8 +203,8 @@ Step by step, in `decider/lab/_describe.py`:
 Here is the real description of a small loan flow with a branch:
 
 ```python
-from decider import branch, flow, param, step
-from decider.lab import describe
+from decikit import branch, flow, param, step
+from decikit.lab import describe
 
 def affordability(income: float, debt: float) -> float:
     return debt / income
@@ -233,10 +233,10 @@ The nodes, in the pre-order `describe` returns them:
 
 | `path` | `node_type` | `kind` | `inputs` | `outputs` | `source` |
 |---|---|---|---|---|---|
-| `loan` | `sequence` | | | | `decider.steps:SequentialStep` |
+| `loan` | `sequence` | | | | `decikit.steps:SequentialStep` |
 | `loan/affordability` | `call` | `scalar` | `income`, `debt` | `affordability` | `loan:affordability` |
 | `loan/approved` | `call` | `scalar` | `affordability` | `approved` | `loan:approved` |
-| `loan/offer_by_approval` | `branch` | | | | `decider.steps:BranchStep` |
+| `loan/offer_by_approval` | `branch` | | | | `decikit.steps:BranchStep` |
 | `loan/offer_by_approval/is_approved` | `call` | `scalar` | `approved` | `is_approved` | `loan:is_approved` |
 | `loan/offer_by_approval/full_offer` | `call` | `scalar` | `income` | `offer` | `loan:full_offer` |
 | `loan/offer_by_approval/no_offer` | `call` | `scalar` | `income` | `offer` | `loan:no_offer` |
@@ -269,8 +269,8 @@ offer@loan/offer_by_approval
 
 A few things in that output are easy to misread:
 
-- A composite node's `source` is the import path of its step class (`decider.steps:SequentialStep`,
-  `decider.steps:BranchStep`), not the place in user code where it was built.
+- A composite node's `source` is the import path of its step class (`decikit.steps:SequentialStep`,
+  `decikit.steps:BranchStep`), not the place in user code where it was built.
 - `full_offer` and `no_offer` read `income`, a pipeline input, so no data edge leads to them. Data edges only
   connect two nodes.
 - The branch writes its own version of `offer` (`offer@loan/offer_by_approval`): the merge of the two arms that
@@ -332,7 +332,7 @@ sequenceDiagram
   participant Agent as MCP client
   participant Tool as inspect_step (_tooling/mcp/_tools.py)
   participant Entry as import_flow
-  participant Lab as decider.lab
+  participant Lab as decikit.lab
   Agent->>Tool: inspect_step("credit.pipeline:build", "loan/approved")
   Tool->>Entry: import_flow(entry)
   Entry-->>Tool: pipeline
@@ -345,7 +345,7 @@ sequenceDiagram
   Tool-->>Agent: step, file, line, edges_in, edges_out
 ```
 
-The MCP tools in `decider/_tooling/mcp/_tools.py` are plain functions over the lab:
+The MCP tools in `decikit/_tooling/mcp/_tools.py` are plain functions over the lab:
 
 | Tool | What it does with the lab |
 |---|---|
@@ -353,19 +353,19 @@ The MCP tools in `decider/_tooling/mcp/_tools.py` are plain functions over the l
 | `inspect_step(entry, path)` | `resolve_step` by path, `source_location`, and the edges whose `to_path` or `from_path` is the node |
 | `lineage(entry, name)` | Every `ValueSlotRef` named `name` (the writers) and every data edge carrying it (the readers) |
 | `source_context(entry, path)` | `resolve_step`, `source_location`, and the eleven lines around that line |
-| `check_report(entry, config, data)` | `checks.run(...)` dumped as JSON, with `data` read through `decider.lab.data.read` |
+| `check_report(entry, config, data)` | `checks.run(...)` dumped as JSON, with `data` read through `decikit.lab.data.read` |
 | `checks_list()` | `checks.catalogue()` |
 
 The editor bridge uses the contract in three places:
 
-- `decider/_tooling/bridge/schema.py` generates the JSON Schema of the contract (`FlowDescription` plus every ref
+- `decikit/_tooling/bridge/schema.py` generates the JSON Schema of the contract (`FlowDescription` plus every ref
   under `$defs`, including `RecordRef`, which `FlowDescription` does not embed) with a `contract_version` key, and
   TypeScript interfaces from the same models.
-- `decider/_tooling/bridge/protocol.py` puts `contract_version` in `Hello` and `Capabilities`, and its generated
+- `decikit/_tooling/bridge/protocol.py` puts `contract_version` in `Hello` and `Capabilities`, and its generated
   block in `ui/lib/src/model/protocol.ts` carries `step_id` and `flow_id` fields described as the contract's
   `StepRef.step_id` and `FlowRef.flow_id`. A debug session's `Status` reply names the data the run started on as an `InputFingerprint`.
-- `decider/_tooling/bridge/datasets.py` and `rows.py` back the Datasets view and debug-session data with
-  `decider.lab.data` (see [Data](data.md)).
+- `decikit/_tooling/bridge/datasets.py` and `rows.py` back the Datasets view and debug-session data with
+  `decikit.lab.data` (see [Data](data.md)).
 
 Inside the lab, `Finding.step` is a `StepRef` taken from the same `describe` output, so a check finding joins
 directly to a node in an editor's graph, and the experiment manifest records the flow as a `FlowRef` and records
@@ -375,7 +375,7 @@ in depth.
 ## Changing the contract
 
 - Adding an optional field to a ref is backward compatible. Regenerate the TypeScript block with
-  `uv run python -m decider._tooling.bridge.protocol` so the editors see it.
+  `uv run python -m decikit._tooling.bridge.protocol` so the editors see it.
 - Renaming or removing a field, or changing its meaning, needs a `CONTRACT_VERSION` bump, after which older
   readers refuse new documents through `check_version`.
 - `tests/contract/test_contract.py` pins the behaviour: node, edge and slot shapes, data edges carrying the value

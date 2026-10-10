@@ -1,9 +1,9 @@
-"""A worked loan example on the real decider API, plus a loop and a stand-in tree."""
+"""A worked loan example on the real decikit API, plus a loop and a stand-in tree."""
 import polars as pl
 
-from decider import ConfigurableStep, branch, dag, flow, frame_step, loop, missing_as, param, step
-from decider._engine.ir.decls import Input, Output
-from decider._engine.ir.nodes import CallNode
+from decikit import ConfigurableStep, branch, dag, flow, frame_step, loop, missing_as, param, step
+from decikit._engine.ir.decls import Input, Output
+from decikit._engine.ir.nodes import CallNode
 
 BUREAU = pl.DataFrame({"client_id": [1, 2], "bureau_score": [640.0, 710.0]})
 

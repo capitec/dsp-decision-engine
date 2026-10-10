@@ -1,5 +1,5 @@
 """Home loan: secured, 60 to 360 months, loan-to-value limits."""
-from decider import flow
+from decikit import flow
 
 from bank.products.home_loan.affordability import hl_affordability
 from bank.products.home_loan.limits import hl_limits

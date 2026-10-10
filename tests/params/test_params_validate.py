@@ -3,9 +3,9 @@ import sys
 
 import pytest
 
-from decider import param
-from decider._engine.ir.decls import ParamDecl
-from decider._engine.params import (
+from decikit import param
+from decikit._engine.ir.decls import ParamDecl
+from decikit._engine.params import (
     NodeParams, ParamsCache, ParamsError, Status, bundle_class, check_namespaces, document_key, harvest,
     record_shared_type, validate_node,
 )
@@ -188,7 +188,7 @@ def test_one_field_set_is_one_bundle_class_picklable_by_reference():
 
 
 def test_a_bundle_class_named_by_another_process_is_rebuilt_on_demand():
-    import decider._engine.params.bundles as bundles
+    import decikit._engine.params.bundles as bundles
 
     cls = getattr(bundles, "Bundle_7_neverco_3_abc")
     assert cls._fields == ("neverco", "abc")
@@ -210,7 +210,7 @@ def test_an_unseen_document_is_unknown_then_cached():
 
 
 def test_an_equal_document_is_never_revalidated(monkeypatch):
-    import decider._engine.params.validate as v
+    import decikit._engine.params.validate as v
 
     cache, node = ParamsCache(), node_for("term/cap", cap_by_income)
     doc = {"term": {"cap": {"cap": 36.0}}}
@@ -258,3 +258,22 @@ def test_params_document_errors_list_every_step_with_params_and_the_defaults_hin
 
 def test_an_empty_entry_for_a_step_without_params_is_accepted():
     check_namespaces({"p": {"a": {}, "b": {"cap": 12.0}}}, {0: node_for("p/b", cap_by_income)})
+
+
+def test_a_params_document_edited_in_place_is_not_seen_by_score_but_a_copy_is():
+    import copy
+
+    from decikit import flow, param
+
+    def capped(x: float, cap: float = param(10.0)) -> float:
+        return min(x, cap)
+
+    pipeline = flow(capped, name="t")
+    exe = pipeline.compile("interpreted")
+    params = pipeline.parameters().defaults()
+    assert exe.score({"x": 50.0}, params)["capped"] == 10.0
+    params["t"]["capped"]["cap"] = 20.0
+    assert exe.score({"x": 50.0}, params)["capped"] == 10.0
+    edited = copy.deepcopy(params)
+    edited["t"]["capped"]["cap"] = 30.0
+    assert exe.score({"x": 50.0}, edited)["capped"] == 30.0

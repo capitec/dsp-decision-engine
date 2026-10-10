@@ -3,10 +3,10 @@ import json
 
 import polars as pl
 
-from decider import branch, dag, flow, frame_step, missing_as, param, step
-from decider import _engine as engine
-from decider._engine.ir.nodes import CallNode
-from decider.steps.trees import TreeConfig
+from decikit import branch, dag, flow, frame_step, missing_as, param, step
+from decikit import _engine as engine
+from decikit._engine.ir.nodes import CallNode
+from decikit.steps.trees import TreeConfig
 
 RISK_TREE = """
 {"type": "tree", "name": "risk_tree", "tree": {
@@ -106,19 +106,19 @@ risk_tree                   TreeConfig
 IR = """
 SequenceNode  <root>
   CallNode[frame]   join_bureau                   source=app.pipeline:join_bureau
-  SequenceNode      affordability                 source=decider.steps:DagStep
+  SequenceNode      affordability                 source=decikit.steps:DagStep
     CallNode        affordability/disposable_income   source=app.pipeline:disposable_income
     CallNode        affordability/ratio           source=app.pipeline:ratio
     CallNode        affordability/affordable      source=app.pipeline:affordable
   CallNode          banding                       source=app.pipeline:banding
-  SequenceNode      term                          source=decider.steps:SequentialStep
+  SequenceNode      term                          source=decikit.steps:SequentialStep
     CallNode        term/term_cap                 source=app.pipeline:term_cap
     CallNode        term/cap_by_income            source=app.pipeline:cap_by_income
-    BranchNode      term/by_sector                source=decider.steps:BranchStep
+    BranchNode      term/by_sector                source=decikit.steps:BranchStep
       CallNode      term/by_sector/is_private
       CallNode      term/by_sector/cap_private
       CallNode      term/by_sector/cap_public
-  CallNode[row]     risk_tree                     source=decider.steps.trees:TreeConfig  reference=yes
+  CallNode[row]     risk_tree                     source=decikit.steps.trees:TreeConfig  reference=yes
 """
 
 DEFAULTS = """
@@ -165,7 +165,7 @@ def test_to_ir_matches_the_listing_with_origins():
         if isinstance(node, CallNode):
             assert (node.reference is not None) == ("reference" in extras)
     root = actual[0][3]
-    assert root.origin.source == "decider.steps:SequentialStep"
+    assert root.origin.source == "decikit.steps:SequentialStep"
     assert root.emits == ("term_cap@*",)
     assert actual[-2][3].origin.source == "app.pipeline:cap_public"
 

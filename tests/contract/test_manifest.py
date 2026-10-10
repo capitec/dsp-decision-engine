@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import pytest
 
-from decider.lab import FlowRef, RecordRef
-from decider.exceptions import DeciderError
-from decider.lab.data import InputFingerprint
-from decider.lab.experiments import manifest_schema, Override, ResultRef, Revision, RunManifest
-from decider.lab.experiments._manifest import check_manifest_version, MANIFEST_VERSION, new_manifest_id, source_is_stale
+from decikit.lab import FlowRef, RecordRef
+from decikit.exceptions import DecikitError
+from decikit.lab.data import InputFingerprint
+from decikit.lab.experiments import manifest_schema, Override, ResultRef, Revision, RunManifest
+from decikit.lab.experiments._manifest import check_manifest_version, MANIFEST_VERSION, new_manifest_id, source_is_stale
 
 
 def make_manifest(**fields) -> RunManifest:
@@ -52,7 +52,7 @@ def test_selection_reuses_record_ref():
 def test_check_manifest_version_rejects_a_newer_format():
     check_manifest_version(None)
     check_manifest_version(MANIFEST_VERSION)
-    with pytest.raises(DeciderError):
+    with pytest.raises(DecikitError):
         check_manifest_version(str(int(MANIFEST_VERSION) + 1))
 
 

@@ -1,9 +1,9 @@
 # Types, text, money and nested data
 
-A step's annotations decide how each value is stored and whether a compiled kernel can hold it. Plain `float`, `int` and `bool` always compile. `decider.ops` adds the types that let strings, money, list columns and struct columns compile too, plus metadata that tells tools what a number measures. This page covers each of them, then `each` and `optimise`, which work on lists of items.
+A step's annotations decide how each value is stored and whether a compiled kernel can hold it. Plain `float`, `int` and `bool` always compile. `decikit.ops` adds the types that let strings, money, list columns and struct columns compile too, plus metadata that tells tools what a number measures. This page covers each of them, then `each` and `optimise`, which work on lists of items.
 
 ```python
-from decider.ops import Columnar, Currency, Decimal, Duration, FieldMetadata, Percent, Struct, Text, decimal
+from decikit.ops import Columnar, Currency, Decimal, Duration, FieldMetadata, Percent, Struct, Text, decimal
 ```
 
 | Value | Annotate it | Compiles | Notes |
@@ -28,7 +28,7 @@ Annotate a string input `Text` instead of `str` and the step stays in the kernel
 import warnings
 
 import polars as pl
-from decider import flow, param
+from decikit import flow, param
 
 warnings.simplefilter("ignore")
 
@@ -96,7 +96,7 @@ One column can be read as `str` by one step and as `Text` by another. A step tha
 Floats cannot hold most decimal amounts exactly (`0.1 + 0.2` is `0.30000000000000004`). `Currency` and `Decimal` are fixed-point: an int64 count of `10**-scale` units, with the scale part of the type. `Currency` is a `Decimal` at scale 4. `Decimal[p, s]` sets another precision and scale, with `p` at most 19 because the count is an int64. `Currency["R"]` adds display units.
 
 <div class="diagram" markdown>
-![A Currency value is a decider Decimal object in a step, an int64 count with the scale in its type inside a kernel, and shown with its units; a frame column is rescaled into that int64 and written back out as Decimal(38, 4); the exact range per scale is listed](../assets/diagrams/guide-types-decimal.svg)
+![A Currency value is a decider toolkit Decimal object in a step, an int64 count with the scale in its type inside a kernel, and shown with its units; a frame column is rescaled into that int64 and written back out as Decimal(38, 4); the exact range per scale is listed](../assets/diagrams/guide-types-decimal.svg)
 
 *A precision up to 18 always fits; 19 digits is limited by int64.*
 </div>
@@ -144,7 +144,7 @@ for bad in (lambda: 1.5 / a, lambda: a + 1.5, lambda: a // 2, lambda: round(a, 1
 float / Decimal is not defined: use float(d)
 unsupported operand type(s) for +: 'Decimal' and 'float'
 unsupported operand type(s) for //: 'Decimal' and 'int'
-use decider.ops.decimal.round(d, digits, mode) to round a Decimal
+use decikit.ops.decimal.round(d, digits, mode) to round a Decimal
 ```
 
 The rules, which hold in Python and inside a kernel alike:
@@ -156,7 +156,7 @@ The rules, which hold in Python and inside a kernel alike:
 - Comparisons are exact across scales and against ints. Against a float they compare `float(d)`.
 
 ```python
-from decider.ops.decimal import Rounding
+from decikit.ops.decimal import Rounding
 
 print([decimal.round(Decimal("2.675"), 2), decimal.round(Decimal("2.665"), 2, Rounding.HALF_EVEN),
        decimal.round(Decimal("2.669"), 2, Rounding.DOWN)])
@@ -168,7 +168,7 @@ print([decimal.round(Decimal("2.675"), 2), decimal.round(Decimal("2.665"), 2, Ro
 
 ### Money in a pipeline
 
-A step reads and returns decider `Decimal` values in every mode. Inside a compiled step they stay int64, so a decimal costs about what an int does. A record may carry a `str`, `int`, `float`, decider `Decimal` or `decimal.Decimal` for a money input:
+A step reads and returns the decider toolkit's `Decimal` values in every mode. Inside a compiled step they stay int64, so a decimal costs about what an int does. A record may carry a `str`, `int`, `float`, the toolkit's `Decimal` or `decimal.Decimal` for a money input:
 
 ```python
 from decimal import Decimal as StdDecimal
@@ -419,7 +419,7 @@ Read such a column as its plain type (`list[dict]` or `dict`) instead. It runs i
 `each(column, child, name=...)` runs a child flow on every item of a list column, adds the child's outputs to each item as new fields, and writes the enriched list back. The child is a flow of ordinary steps, so per-item rules get `missing_as` and `param` like any other. A later `Columnar[Item]` step reads the new fields in a kernel:
 
 ```python
-from decider import each, missing_as
+from decikit import each, missing_as
 
 def heavy(weight: float = missing_as(0.0), heavy_kg: float = param(20.0)) -> bool:
     return weight > heavy_kg
@@ -479,7 +479,7 @@ The child's params move up to the `each` step's path (`order/items/heavy_kg`), s
 "Try every candidate, keep the best" (the best offer, term, bundle or price point) is `optimise(count, evaluate, ...)`. `count` is a step writing the number of candidates for the row. `evaluate` is a flow that reads `index` (1 to `count`) and writes a score. The candidate with the highest score wins; a tie keeps the earlier one, and you minimise by negating the score. `disqualify` is an optional bool step run after `evaluate` that rejects a candidate.
 
 ```python
-from decider import optimise, step
+from decikit import optimise, step
 
 class Offer(TypedDict):
     amount: float
@@ -581,7 +581,7 @@ shape: (3, 3)
 └────────────┴─────────────┴───────────────┘
 ```
 
-`record` is null when nothing won. Two current limits: with `record=`, the score must be named `score` (a `score="margin"` rename fails with a `MissingInputError` for `score`), and the step that writes the nullable record runs in Python, so it raises a `FallbackWarning` naming `pricing/best/finalise/finalise`.
+`record` is null when nothing won. One current limit: with `record=`, the score must be named `score` (a `score="margin"` rename fails with a `MissingInputError` for `score`).
 
 ## Where to go next
 

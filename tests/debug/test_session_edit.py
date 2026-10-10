@@ -5,10 +5,10 @@ from collections import Counter
 import polars as pl
 import pytest
 
-from decider import ConfigurableStep, Value, branch, flow, step
-from decider._engine.debug import COMMAND, EVENT_LOG, Delete, Edited, Paused, Replace
-from decider.exceptions import WiringError
-from decider.lab.testing import MODES, no_recompile
+from decikit import ConfigurableStep, Value, branch, flow, step
+from decikit._engine.debug import COMMAND, EVENT_LOG, Delete, Edited, Paused, Replace
+from decikit.exceptions import WiringError
+from decikit.lab.testing import MODES, no_recompile
 
 CALLS: Counter = Counter()
 

@@ -1,6 +1,6 @@
 """Credit card: revolving limit, rate by grade. Pricing: the base rate by term, a loading by risk grade, fees by amount, capped by regulation."""
-from decider import dag, flow, param, step
-from decider.steps.tables import DecisionTableConfig
+from decikit import dag, flow, param, step
+from decikit.steps.tables import DecisionTableConfig
 
 cc_base_rates = DecisionTableConfig(
     name="cc_base_rates",

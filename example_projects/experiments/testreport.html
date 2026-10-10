@@ -1,23 +1,23 @@
 <!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>snapshot</title></head><body><div class="decider-report"><style>
-.decider-report { font-family: system-ui, -apple-system, sans-serif; max-width: 1200px; line-height: 1.4; }
-.decider-report h1 { font-size: 1.6em; margin: 0.4em 0; }
-.decider-report h2 { font-size: 1.3em; margin: 1.2em 0 0.4em; }
-.decider-report h3 { font-size: 1.1em; margin: 1em 0 0.2em; }
-.decider-report .facts, .decider-report .where { color: #555; margin: 0.2em 0 0.6em; }
-.decider-report .status { font-size: 0.7em; padding: 0.15em 0.6em; border-radius: 1em; vertical-align: middle;
+<html><head><meta charset="utf-8"><title>snapshot</title></head><body><div class="decikit-report"><style>
+.decikit-report { font-family: system-ui, -apple-system, sans-serif; max-width: 1200px; line-height: 1.4; }
+.decikit-report h1 { font-size: 1.6em; margin: 0.4em 0; }
+.decikit-report h2 { font-size: 1.3em; margin: 1.2em 0 0.4em; }
+.decikit-report h3 { font-size: 1.1em; margin: 1em 0 0.2em; }
+.decikit-report .facts, .decikit-report .where { color: #555; margin: 0.2em 0 0.6em; }
+.decikit-report .status { font-size: 0.7em; padding: 0.15em 0.6em; border-radius: 1em; vertical-align: middle;
   background: #fde68a; color: #713f12; }
-.decider-report .status.completed { background: #bbf7d0; color: #14532d; }
-.decider-report .status.failed { background: #fecaca; color: #7f1d1d; }
-.decider-report .warning { background: #fef3c7; padding: 0.4em 0.8em; border-left: 4px solid #f59e0b; }
-.decider-report .table { overflow-x: auto; margin: 0.4em 0; }
-.decider-report table { border-collapse: collapse; font-size: 0.85em; }
-.decider-report th, .decider-report td { border-bottom: 1px solid #e5e7eb; padding: 0.3em 0.7em; text-align: left;
+.decikit-report .status.completed { background: #bbf7d0; color: #14532d; }
+.decikit-report .status.failed { background: #fecaca; color: #7f1d1d; }
+.decikit-report .warning { background: #fef3c7; padding: 0.4em 0.8em; border-left: 4px solid #f59e0b; }
+.decikit-report .table { overflow-x: auto; margin: 0.4em 0; }
+.decikit-report table { border-collapse: collapse; font-size: 0.85em; }
+.decikit-report th, .decikit-report td { border-bottom: 1px solid #e5e7eb; padding: 0.3em 0.7em; text-align: left;
   white-space: nowrap; }
-.decider-report th { background: #f3f4f6; }
-.decider-report .row { display: flex; flex-wrap: wrap; gap: 1.5em; align-items: flex-start; }
-.decider-report section.metric { border-top: 1px solid #e5e7eb; margin-top: 1em; }
-.decider-report code { background: #f3f4f6; padding: 0 0.3em; border-radius: 3px; }
+.decikit-report th { background: #f3f4f6; }
+.decikit-report .row { display: flex; flex-wrap: wrap; gap: 1.5em; align-items: flex-start; }
+.decikit-report section.metric { border-top: 1px solid #e5e7eb; margin-top: 1em; }
+.decikit-report code { background: #f3f4f6; padding: 0 0.3em; border-radius: 3px; }
 </style><h2>snapshot <span class="status completed">completed</span></h2><p class="facts">200,000 records · revision 1cc5fd8257d5 · 0 scenario(s) next to the baseline</p><div class="table"><table><thead><tr><th>scenario</th><th>status</th><th>records</th><th>revision</th><th>changes</th><th>error</th></tr></thead><tbody><tr><td>baseline</td><td>completed</td><td>200,000</td><td></td><td>unchanged</td><td></td></tr></tbody></table></div><section class="metric"><h3>value_counts</h3><p class="where"><code>value_counts</code> of <code>approved</code> in the flow's output</p><div class="table"><table><thead><tr><th>scenario</th><th>column</th><th>counts.True</th><th>counts.False</th></tr></thead><tbody><tr><td>baseline</td><td>approved</td><td>153,081</td><td>46,919</td></tr></tbody></table></div><div class="row"><div class="chart">
 <style>
   #vis-840e371f5c4849ba87330bd432f9ff7e.vega-embed {

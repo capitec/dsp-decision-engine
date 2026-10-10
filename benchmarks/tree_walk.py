@@ -13,8 +13,8 @@ import time
 import numpy as np
 import polars as pl
 
-from decider._engine import Engine
-from decider.steps.trees import TreeConfig
+from decikit._engine import Engine
+from decikit.steps.trees import TreeConfig
 
 N = 1_000_000
 FLOATS = [f"f{i}" for i in range(16)]
@@ -106,10 +106,10 @@ def compare(doc: dict) -> None:
     engines = {}
     for mode in ("fused", "stepped", "interpreted"):
         exe = Engine().bind(tree, mode=mode)
-        engines[f"decider {mode}"] = (exe.run, exe.score)
+        engines[f"decikit {mode}"] = (exe.run, exe.score)
 
     # The outputs agree before anything is timed.
-    expected = engines["decider interpreted"][0](frame.head(20000)).select("label", "score", "band")
+    expected = engines["decikit interpreted"][0](frame.head(20000)).select("label", "score", "band")
     for name, (run, _) in engines.items():
         assert run(frame.head(20000)).select("label", "score", "band").equals(expected), name
 

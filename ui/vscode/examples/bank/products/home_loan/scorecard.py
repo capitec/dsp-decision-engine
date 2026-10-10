@@ -1,5 +1,5 @@
 """Home loan: secured, 60 to 360 months, loan-to-value limits. Application scorecard: points per characteristic, summed into a score."""
-from decider import flow, param, step
+from decikit import flow, param, step
 
 
 def hl_pts_bureau_score(bureau_score: float, cut_1: float = param(0.36), cut_2: float = param(0.54), cut_3: float = param(0.58),

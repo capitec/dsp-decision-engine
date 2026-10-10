@@ -57,7 +57,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children, currentUser })
           <div className="flex justify-between items-center h-16">
             {/* Logo/Brand */}
             <div className="flex items-center">
-              <h1 className="text-xl font-bold text-gray-900">DSP Decider</h1>
+              <h1 className="text-xl font-bold text-gray-900">DSP Decider toolkit</h1>
             </div>
 
             {/* Main Navigation */}

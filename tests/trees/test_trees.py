@@ -3,12 +3,12 @@ import numpy as np
 import polars as pl
 import pytest
 
-from decider import flow
-from decider import _engine as engine
-from decider._engine import Engine
-from decider._engine.compile import kernel
-from decider.steps.trees import TreeConfig, _walker as walker
-from decider.lab.testing import assert_equivalent
+from decikit import flow
+from decikit import _engine as engine
+from decikit._engine import Engine
+from decikit._engine.compile import kernel
+from decikit.steps.trees import TreeConfig, _walker as walker
+from decikit.lab.testing import assert_equivalent
 
 
 def v3(nodes: dict, edges: list, output: dict) -> dict:

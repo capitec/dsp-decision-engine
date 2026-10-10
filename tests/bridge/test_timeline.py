@@ -3,7 +3,7 @@ import os
 HERE = os.path.dirname(__file__)
 EXAMPLES = os.path.join(HERE, "..", "..", "ui", "vscode", "examples")
 LOAN = os.path.join(EXAMPLES, "loan.py")
-from decider._tooling.bridge.bridge import Bridge
+from decikit._tooling.bridge.bridge import Bridge
 
 
 def finished(**kw):

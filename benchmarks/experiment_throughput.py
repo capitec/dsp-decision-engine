@@ -9,9 +9,9 @@ import time
 import numpy as np
 import polars as pl
 
-from decider import flow, param
-from decider.lab.experiments import Experiment
-from decider.lab.experiments.metrics import Divergence, ValueCounts
+from decikit import flow, param
+from decikit.lab.experiments import Experiment
+from decikit.lab.experiments.metrics import Divergence, ValueCounts
 
 
 def ratio(income: float, debt: float) -> float:

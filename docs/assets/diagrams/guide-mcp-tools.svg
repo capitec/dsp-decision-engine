@@ -9,7 +9,7 @@
   <rect x="20" y="150" width="170" height="120" rx="10" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
   <text x="105" y="185" font-size="15" font-weight="600" fill="#1f2937" text-anchor="middle">agent's MCP host</text>
   <text x="105" y="210" font-size="13" fill="#1f2937" text-anchor="middle">starts the process:</text>
-  <text x="105" y="230" font-size="13" fill="#1f2937" text-anchor="middle">decider mcp [--raw]</text>
+  <text x="105" y="230" font-size="13" fill="#1f2937" text-anchor="middle">decikit mcp [--raw]</text>
   <text x="105" y="250" font-size="13" fill="#1f2937" text-anchor="middle">stdio</text>
 
   <rect x="240" y="20" width="420" height="92" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
@@ -38,7 +38,7 @@
   <text x="260" y="490" font-size="13" fill="#4c1d95">show_flow, set_breakpoints, debug_flow, debug_control, ...</text>
 
   <rect x="720" y="100" width="260" height="110" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
-  <text x="850" y="130" font-size="15" font-weight="600" fill="#134e4a" text-anchor="middle">decider core</text>
+  <text x="850" y="130" font-size="15" font-weight="600" fill="#134e4a" text-anchor="middle">decikit core</text>
   <text x="850" y="154" font-size="13" fill="#134e4a" text-anchor="middle">describe, checks.run,</text>
   <text x="850" y="174" font-size="13" fill="#134e4a" text-anchor="middle">Engine, TraceSink,</text>
   <text x="850" y="194" font-size="13" fill="#134e4a" text-anchor="middle">experiments.run, ids</text>
@@ -46,7 +46,7 @@
   <rect x="720" y="410" width="260" height="100" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
   <text x="850" y="440" font-size="15" font-weight="600" fill="#4c1d95" text-anchor="middle">VS Code window</text>
   <text x="850" y="464" font-size="13" fill="#4c1d95" text-anchor="middle">per-window socket and token</text>
-  <text x="850" y="484" font-size="13" fill="#4c1d95" text-anchor="middle">in ~/.decider/editor/ (0700)</text>
+  <text x="850" y="484" font-size="13" fill="#4c1d95" text-anchor="middle">in ~/.decikit/editor/ (0700)</text>
 
   <path d="M190,210 L236,210" stroke="#4b5563" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
   <path d="M660,66 L716,130" stroke="#4b5563" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>

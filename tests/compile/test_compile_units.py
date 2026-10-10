@@ -1,21 +1,22 @@
 """Grouping calls into units, what a unit keeps, and the Python fallback."""
 from __future__ import annotations
 
+import types
 from typing import TypedDict
 
 import numpy as np
 import pytest
 from numba.core.dispatcher import Dispatcher
 
-from decider import ConfigurableStep, allow_fallback, branch, flow, frame_step, helper, step
-from decider.ops import Columnar
-from decider._engine.compile import Fallback, Kernel, compile_plan, jit
-from decider._engine.compile.units import Layout
-from decider._engine.ir.decls import Input, Output, ParamDecl
-from decider._engine.ir.nodes import CallNode
-from decider._engine.params import param
-from decider._engine.wiring import resolve
-from decider._engine.wiring.plan import NodeVersion
+from decikit import ConfigurableStep, allow_fallback, branch, flow, frame_step, helper, step
+from decikit.ops import Columnar
+from decikit._engine.compile import Fallback, Kernel, compile_plan, jit
+from decikit._engine.compile.units import Layout
+from decikit._engine.ir.decls import Input, Output, ParamDecl
+from decikit._engine.ir.nodes import CallNode
+from decikit._engine.params import param
+from decikit._engine.wiring import resolve
+from decikit._engine.wiring.plan import NodeVersion
 
 
 def disposable_income(net_income: float, expenses: float) -> float:
@@ -322,3 +323,42 @@ def test_two_item_types_over_one_column_in_one_kernel_is_refused():
     lay.source(v, Input("items", Columnar[ItemA]))
     with pytest.raises(TypeError, match="two different Item types"):
         lay.source(v, Input("items", Columnar[ItemB]))
+
+
+def _module_of_helpers():
+    caps = types.ModuleType("caps")
+
+    @helper(signatures=[((float,), float)])
+    def round_down_500(value: float) -> float:
+        return value - value % 500.0
+
+    def plain(value: float) -> float:
+        return value
+
+    caps.round_down_500, caps.plain = round_down_500, plain
+    return caps
+
+
+caps = _module_of_helpers()
+
+
+def rounds_through_a_module(value: float) -> float:
+    return caps.round_down_500(value)
+
+
+def calls_a_plain_function_through_a_module(value: float) -> float:
+    return caps.plain(value)
+
+
+def test_a_helper_called_as_a_module_attribute_compiles(run):
+    plan = resolve(flow(rounds_through_a_module))
+    (unit,) = _units(compile_plan(plan))
+    assert isinstance(unit, Kernel), unit.reason
+    out, _ = run(plan, {"value": np.array([1499.0, 1500.0])})
+    assert out["rounds_through_a_module"].tolist() == [1000.0, 1500.0]
+
+
+def test_a_plain_function_called_as_a_module_attribute_explains_how_to_classify_it():
+    unit = compile_plan(resolve(flow(calls_a_plain_function_through_a_module)))[0]
+    assert isinstance(unit, Fallback)
+    assert "calls 'plain' without @helper or @allow_fallback" in unit.reason

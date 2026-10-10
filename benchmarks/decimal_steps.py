@@ -10,9 +10,9 @@ import time
 import numpy as np
 import polars as pl
 
-from decider import flow, param
-from decider.ops import decimal
-from decider.ops.decimal import Decimal, Rounding
+from decikit import flow, param
+from decikit.ops import decimal
+from decikit.ops.decimal import Decimal, Rounding
 
 sys.path.insert(0, "benchmarks")
 from serving_latency import stats  # noqa: E402

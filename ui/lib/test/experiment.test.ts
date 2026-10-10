@@ -118,10 +118,10 @@ describe("read-only summary helpers", () => {
 
 describe("a real experiment run end to end", () => {
   it("runs the new contract against a real pipeline and summarises a divergence", () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "decider-ui-experiment-"));
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "decikit-ui-experiment-"));
     fs.writeFileSync(
       path.join(dir, "credit.py"),
-      "from decider import flow, param\n" +
+      "from decikit import flow, param\n" +
         "def ratio(income, debt):\n" +
         "    return debt / income if income > 0 else 1.0\n" +
         "def approved(ratio, limit=param(0.4)):\n" +
@@ -133,7 +133,7 @@ describe("a real experiment run end to end", () => {
       { income: 1000.0, debt: 350.0 },
     ];
     const script = `import io, json
-from decider._tooling.bridge.bridge import Bridge
+from decikit._tooling.bridge.bridge import Bridge
 b = Bridge(out=io.StringIO())  # progress lines go to a throwaway stream, not stdout's one JSON reply
 r = b.handle({"id": 1, "cmd": "experiment", "file": ${JSON.stringify(path.join(dir, "credit.py"))}, "def_": ${JSON.stringify(DEF)}, "data": ${JSON.stringify(data)}})
 print(json.dumps(r))`;

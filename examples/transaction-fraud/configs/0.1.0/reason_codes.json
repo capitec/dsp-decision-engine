@@ -1,0 +1,1243 @@
+{
+  "type": "reason_codes",
+  "name": "rank_reasons",
+  "version": "fraud-reasons-2026.01",
+  "codes": [
+    {
+      "code": 5000,
+      "severity_rank": 1,
+      "description": "AML-adjacent indicator 0",
+      "is_regulatory": true
+    },
+    {
+      "code": 5001,
+      "severity_rank": 2,
+      "description": "AML-adjacent indicator 1",
+      "is_regulatory": true
+    },
+    {
+      "code": 5002,
+      "severity_rank": 3,
+      "description": "AML-adjacent indicator 2",
+      "is_regulatory": true
+    },
+    {
+      "code": 5003,
+      "severity_rank": 4,
+      "description": "AML-adjacent indicator 3",
+      "is_regulatory": true
+    },
+    {
+      "code": 5004,
+      "severity_rank": 5,
+      "description": "AML-adjacent indicator 4",
+      "is_regulatory": true
+    },
+    {
+      "code": 5005,
+      "severity_rank": 6,
+      "description": "AML-adjacent indicator 5",
+      "is_regulatory": true
+    },
+    {
+      "code": 5006,
+      "severity_rank": 7,
+      "description": "AML-adjacent indicator 6",
+      "is_regulatory": true
+    },
+    {
+      "code": 5007,
+      "severity_rank": 8,
+      "description": "AML-adjacent indicator 7",
+      "is_regulatory": true
+    },
+    {
+      "code": 5008,
+      "severity_rank": 9,
+      "description": "AML-adjacent indicator 8",
+      "is_regulatory": true
+    },
+    {
+      "code": 5009,
+      "severity_rank": 10,
+      "description": "AML-adjacent indicator 9",
+      "is_regulatory": true
+    },
+    {
+      "code": 5010,
+      "severity_rank": 1,
+      "description": "AML-adjacent indicator 10",
+      "is_regulatory": true
+    },
+    {
+      "code": 5011,
+      "severity_rank": 2,
+      "description": "AML-adjacent indicator 11",
+      "is_regulatory": true
+    },
+    {
+      "code": 5012,
+      "severity_rank": 3,
+      "description": "AML-adjacent indicator 12",
+      "is_regulatory": true
+    },
+    {
+      "code": 5013,
+      "severity_rank": 4,
+      "description": "AML-adjacent indicator 13",
+      "is_regulatory": true
+    },
+    {
+      "code": 5014,
+      "severity_rank": 5,
+      "description": "AML-adjacent indicator 14",
+      "is_regulatory": true
+    },
+    {
+      "code": 5015,
+      "severity_rank": 6,
+      "description": "AML-adjacent indicator 15",
+      "is_regulatory": true
+    },
+    {
+      "code": 5016,
+      "severity_rank": 7,
+      "description": "AML-adjacent indicator 16",
+      "is_regulatory": true
+    },
+    {
+      "code": 5017,
+      "severity_rank": 8,
+      "description": "AML-adjacent indicator 17",
+      "is_regulatory": true
+    },
+    {
+      "code": 5018,
+      "severity_rank": 9,
+      "description": "AML-adjacent indicator 18",
+      "is_regulatory": true
+    },
+    {
+      "code": 5019,
+      "severity_rank": 10,
+      "description": "AML-adjacent indicator 19",
+      "is_regulatory": true
+    },
+    {
+      "code": 5020,
+      "severity_rank": 1,
+      "description": "AML-adjacent indicator 20",
+      "is_regulatory": true
+    },
+    {
+      "code": 5021,
+      "severity_rank": 2,
+      "description": "AML-adjacent indicator 21",
+      "is_regulatory": true
+    },
+    {
+      "code": 5022,
+      "severity_rank": 3,
+      "description": "AML-adjacent indicator 22",
+      "is_regulatory": true
+    },
+    {
+      "code": 5023,
+      "severity_rank": 4,
+      "description": "AML-adjacent indicator 23",
+      "is_regulatory": true
+    },
+    {
+      "code": 5024,
+      "severity_rank": 5,
+      "description": "AML-adjacent indicator 24",
+      "is_regulatory": true
+    },
+    {
+      "code": 5025,
+      "severity_rank": 6,
+      "description": "AML-adjacent indicator 25",
+      "is_regulatory": true
+    },
+    {
+      "code": 5026,
+      "severity_rank": 7,
+      "description": "AML-adjacent indicator 26",
+      "is_regulatory": true
+    },
+    {
+      "code": 5027,
+      "severity_rank": 8,
+      "description": "AML-adjacent indicator 27",
+      "is_regulatory": true
+    },
+    {
+      "code": 5028,
+      "severity_rank": 9,
+      "description": "AML-adjacent indicator 28",
+      "is_regulatory": true
+    },
+    {
+      "code": 5029,
+      "severity_rank": 10,
+      "description": "AML-adjacent indicator 29",
+      "is_regulatory": true
+    },
+    {
+      "code": 5030,
+      "severity_rank": 1,
+      "description": "AML-adjacent indicator 30",
+      "is_regulatory": true
+    },
+    {
+      "code": 5031,
+      "severity_rank": 2,
+      "description": "AML-adjacent indicator 31",
+      "is_regulatory": true
+    },
+    {
+      "code": 5032,
+      "severity_rank": 3,
+      "description": "AML-adjacent indicator 32",
+      "is_regulatory": true
+    },
+    {
+      "code": 5033,
+      "severity_rank": 4,
+      "description": "AML-adjacent indicator 33",
+      "is_regulatory": true
+    },
+    {
+      "code": 5034,
+      "severity_rank": 5,
+      "description": "AML-adjacent indicator 34",
+      "is_regulatory": true
+    },
+    {
+      "code": 5035,
+      "severity_rank": 6,
+      "description": "AML-adjacent indicator 35",
+      "is_regulatory": true
+    },
+    {
+      "code": 5036,
+      "severity_rank": 7,
+      "description": "AML-adjacent indicator 36",
+      "is_regulatory": true
+    },
+    {
+      "code": 5037,
+      "severity_rank": 8,
+      "description": "AML-adjacent indicator 37",
+      "is_regulatory": true
+    },
+    {
+      "code": 5038,
+      "severity_rank": 9,
+      "description": "AML-adjacent indicator 38",
+      "is_regulatory": true
+    },
+    {
+      "code": 5039,
+      "severity_rank": 10,
+      "description": "AML-adjacent indicator 39",
+      "is_regulatory": true
+    },
+    {
+      "code": 3000,
+      "severity_rank": 11,
+      "description": "mule and scam indicator 0",
+      "is_regulatory": false
+    },
+    {
+      "code": 3001,
+      "severity_rank": 12,
+      "description": "mule and scam indicator 1",
+      "is_regulatory": false
+    },
+    {
+      "code": 3002,
+      "severity_rank": 13,
+      "description": "mule and scam indicator 2",
+      "is_regulatory": false
+    },
+    {
+      "code": 3003,
+      "severity_rank": 14,
+      "description": "mule and scam indicator 3",
+      "is_regulatory": false
+    },
+    {
+      "code": 3004,
+      "severity_rank": 15,
+      "description": "mule and scam indicator 4",
+      "is_regulatory": false
+    },
+    {
+      "code": 3005,
+      "severity_rank": 16,
+      "description": "mule and scam indicator 5",
+      "is_regulatory": false
+    },
+    {
+      "code": 3006,
+      "severity_rank": 17,
+      "description": "mule and scam indicator 6",
+      "is_regulatory": false
+    },
+    {
+      "code": 3007,
+      "severity_rank": 18,
+      "description": "mule and scam indicator 7",
+      "is_regulatory": false
+    },
+    {
+      "code": 3008,
+      "severity_rank": 19,
+      "description": "mule and scam indicator 8",
+      "is_regulatory": false
+    },
+    {
+      "code": 3009,
+      "severity_rank": 20,
+      "description": "mule and scam indicator 9",
+      "is_regulatory": false
+    },
+    {
+      "code": 3010,
+      "severity_rank": 11,
+      "description": "mule and scam indicator 10",
+      "is_regulatory": false
+    },
+    {
+      "code": 3011,
+      "severity_rank": 12,
+      "description": "mule and scam indicator 11",
+      "is_regulatory": false
+    },
+    {
+      "code": 3012,
+      "severity_rank": 13,
+      "description": "mule and scam indicator 12",
+      "is_regulatory": false
+    },
+    {
+      "code": 3013,
+      "severity_rank": 14,
+      "description": "mule and scam indicator 13",
+      "is_regulatory": false
+    },
+    {
+      "code": 3014,
+      "severity_rank": 15,
+      "description": "mule and scam indicator 14",
+      "is_regulatory": false
+    },
+    {
+      "code": 3015,
+      "severity_rank": 16,
+      "description": "mule and scam indicator 15",
+      "is_regulatory": false
+    },
+    {
+      "code": 3016,
+      "severity_rank": 17,
+      "description": "mule and scam indicator 16",
+      "is_regulatory": false
+    },
+    {
+      "code": 3017,
+      "severity_rank": 18,
+      "description": "mule and scam indicator 17",
+      "is_regulatory": false
+    },
+    {
+      "code": 3018,
+      "severity_rank": 19,
+      "description": "mule and scam indicator 18",
+      "is_regulatory": false
+    },
+    {
+      "code": 3019,
+      "severity_rank": 20,
+      "description": "mule and scam indicator 19",
+      "is_regulatory": false
+    },
+    {
+      "code": 3020,
+      "severity_rank": 11,
+      "description": "mule and scam indicator 20",
+      "is_regulatory": false
+    },
+    {
+      "code": 3021,
+      "severity_rank": 12,
+      "description": "mule and scam indicator 21",
+      "is_regulatory": false
+    },
+    {
+      "code": 3022,
+      "severity_rank": 13,
+      "description": "mule and scam indicator 22",
+      "is_regulatory": false
+    },
+    {
+      "code": 3023,
+      "severity_rank": 14,
+      "description": "mule and scam indicator 23",
+      "is_regulatory": false
+    },
+    {
+      "code": 3024,
+      "severity_rank": 15,
+      "description": "mule and scam indicator 24",
+      "is_regulatory": false
+    },
+    {
+      "code": 3025,
+      "severity_rank": 16,
+      "description": "mule and scam indicator 25",
+      "is_regulatory": false
+    },
+    {
+      "code": 3026,
+      "severity_rank": 17,
+      "description": "mule and scam indicator 26",
+      "is_regulatory": false
+    },
+    {
+      "code": 3027,
+      "severity_rank": 18,
+      "description": "mule and scam indicator 27",
+      "is_regulatory": false
+    },
+    {
+      "code": 3028,
+      "severity_rank": 19,
+      "description": "mule and scam indicator 28",
+      "is_regulatory": false
+    },
+    {
+      "code": 3029,
+      "severity_rank": 20,
+      "description": "mule and scam indicator 29",
+      "is_regulatory": false
+    },
+    {
+      "code": 3030,
+      "severity_rank": 11,
+      "description": "mule and scam indicator 30",
+      "is_regulatory": false
+    },
+    {
+      "code": 3031,
+      "severity_rank": 12,
+      "description": "mule and scam indicator 31",
+      "is_regulatory": false
+    },
+    {
+      "code": 3032,
+      "severity_rank": 13,
+      "description": "mule and scam indicator 32",
+      "is_regulatory": false
+    },
+    {
+      "code": 3033,
+      "severity_rank": 14,
+      "description": "mule and scam indicator 33",
+      "is_regulatory": false
+    },
+    {
+      "code": 3034,
+      "severity_rank": 15,
+      "description": "mule and scam indicator 34",
+      "is_regulatory": false
+    },
+    {
+      "code": 3035,
+      "severity_rank": 16,
+      "description": "mule and scam indicator 35",
+      "is_regulatory": false
+    },
+    {
+      "code": 3036,
+      "severity_rank": 17,
+      "description": "mule and scam indicator 36",
+      "is_regulatory": false
+    },
+    {
+      "code": 3037,
+      "severity_rank": 18,
+      "description": "mule and scam indicator 37",
+      "is_regulatory": false
+    },
+    {
+      "code": 3038,
+      "severity_rank": 19,
+      "description": "mule and scam indicator 38",
+      "is_regulatory": false
+    },
+    {
+      "code": 3039,
+      "severity_rank": 20,
+      "description": "mule and scam indicator 39",
+      "is_regulatory": false
+    },
+    {
+      "code": 2000,
+      "severity_rank": 21,
+      "description": "account takeover indicator 0",
+      "is_regulatory": false
+    },
+    {
+      "code": 2001,
+      "severity_rank": 22,
+      "description": "account takeover indicator 1",
+      "is_regulatory": false
+    },
+    {
+      "code": 2002,
+      "severity_rank": 23,
+      "description": "account takeover indicator 2",
+      "is_regulatory": false
+    },
+    {
+      "code": 2003,
+      "severity_rank": 24,
+      "description": "account takeover indicator 3",
+      "is_regulatory": false
+    },
+    {
+      "code": 2004,
+      "severity_rank": 25,
+      "description": "account takeover indicator 4",
+      "is_regulatory": false
+    },
+    {
+      "code": 2005,
+      "severity_rank": 26,
+      "description": "account takeover indicator 5",
+      "is_regulatory": false
+    },
+    {
+      "code": 2006,
+      "severity_rank": 27,
+      "description": "account takeover indicator 6",
+      "is_regulatory": false
+    },
+    {
+      "code": 2007,
+      "severity_rank": 28,
+      "description": "account takeover indicator 7",
+      "is_regulatory": false
+    },
+    {
+      "code": 2008,
+      "severity_rank": 29,
+      "description": "account takeover indicator 8",
+      "is_regulatory": false
+    },
+    {
+      "code": 2009,
+      "severity_rank": 30,
+      "description": "account takeover indicator 9",
+      "is_regulatory": false
+    },
+    {
+      "code": 2010,
+      "severity_rank": 21,
+      "description": "account takeover indicator 10",
+      "is_regulatory": false
+    },
+    {
+      "code": 2011,
+      "severity_rank": 22,
+      "description": "account takeover indicator 11",
+      "is_regulatory": false
+    },
+    {
+      "code": 2012,
+      "severity_rank": 23,
+      "description": "account takeover indicator 12",
+      "is_regulatory": false
+    },
+    {
+      "code": 2013,
+      "severity_rank": 24,
+      "description": "account takeover indicator 13",
+      "is_regulatory": false
+    },
+    {
+      "code": 2014,
+      "severity_rank": 25,
+      "description": "account takeover indicator 14",
+      "is_regulatory": false
+    },
+    {
+      "code": 2015,
+      "severity_rank": 26,
+      "description": "account takeover indicator 15",
+      "is_regulatory": false
+    },
+    {
+      "code": 2016,
+      "severity_rank": 27,
+      "description": "account takeover indicator 16",
+      "is_regulatory": false
+    },
+    {
+      "code": 2017,
+      "severity_rank": 28,
+      "description": "account takeover indicator 17",
+      "is_regulatory": false
+    },
+    {
+      "code": 2018,
+      "severity_rank": 29,
+      "description": "account takeover indicator 18",
+      "is_regulatory": false
+    },
+    {
+      "code": 2019,
+      "severity_rank": 30,
+      "description": "account takeover indicator 19",
+      "is_regulatory": false
+    },
+    {
+      "code": 2020,
+      "severity_rank": 21,
+      "description": "account takeover indicator 20",
+      "is_regulatory": false
+    },
+    {
+      "code": 2021,
+      "severity_rank": 22,
+      "description": "account takeover indicator 21",
+      "is_regulatory": false
+    },
+    {
+      "code": 2022,
+      "severity_rank": 23,
+      "description": "account takeover indicator 22",
+      "is_regulatory": false
+    },
+    {
+      "code": 2023,
+      "severity_rank": 24,
+      "description": "account takeover indicator 23",
+      "is_regulatory": false
+    },
+    {
+      "code": 2024,
+      "severity_rank": 25,
+      "description": "account takeover indicator 24",
+      "is_regulatory": false
+    },
+    {
+      "code": 2025,
+      "severity_rank": 26,
+      "description": "account takeover indicator 25",
+      "is_regulatory": false
+    },
+    {
+      "code": 2026,
+      "severity_rank": 27,
+      "description": "account takeover indicator 26",
+      "is_regulatory": false
+    },
+    {
+      "code": 2027,
+      "severity_rank": 28,
+      "description": "account takeover indicator 27",
+      "is_regulatory": false
+    },
+    {
+      "code": 2028,
+      "severity_rank": 29,
+      "description": "account takeover indicator 28",
+      "is_regulatory": false
+    },
+    {
+      "code": 2029,
+      "severity_rank": 30,
+      "description": "account takeover indicator 29",
+      "is_regulatory": false
+    },
+    {
+      "code": 2030,
+      "severity_rank": 21,
+      "description": "account takeover indicator 30",
+      "is_regulatory": false
+    },
+    {
+      "code": 2031,
+      "severity_rank": 22,
+      "description": "account takeover indicator 31",
+      "is_regulatory": false
+    },
+    {
+      "code": 2032,
+      "severity_rank": 23,
+      "description": "account takeover indicator 32",
+      "is_regulatory": false
+    },
+    {
+      "code": 2033,
+      "severity_rank": 24,
+      "description": "account takeover indicator 33",
+      "is_regulatory": false
+    },
+    {
+      "code": 2034,
+      "severity_rank": 25,
+      "description": "account takeover indicator 34",
+      "is_regulatory": false
+    },
+    {
+      "code": 2035,
+      "severity_rank": 26,
+      "description": "account takeover indicator 35",
+      "is_regulatory": false
+    },
+    {
+      "code": 2036,
+      "severity_rank": 27,
+      "description": "account takeover indicator 36",
+      "is_regulatory": false
+    },
+    {
+      "code": 2037,
+      "severity_rank": 28,
+      "description": "account takeover indicator 37",
+      "is_regulatory": false
+    },
+    {
+      "code": 2038,
+      "severity_rank": 29,
+      "description": "account takeover indicator 38",
+      "is_regulatory": false
+    },
+    {
+      "code": 2039,
+      "severity_rank": 30,
+      "description": "account takeover indicator 39",
+      "is_regulatory": false
+    },
+    {
+      "code": 1000,
+      "severity_rank": 31,
+      "description": "card fraud indicator 0",
+      "is_regulatory": false
+    },
+    {
+      "code": 1001,
+      "severity_rank": 32,
+      "description": "card fraud indicator 1",
+      "is_regulatory": false
+    },
+    {
+      "code": 1002,
+      "severity_rank": 33,
+      "description": "card fraud indicator 2",
+      "is_regulatory": false
+    },
+    {
+      "code": 1003,
+      "severity_rank": 34,
+      "description": "card fraud indicator 3",
+      "is_regulatory": false
+    },
+    {
+      "code": 1004,
+      "severity_rank": 35,
+      "description": "card fraud indicator 4",
+      "is_regulatory": false
+    },
+    {
+      "code": 1005,
+      "severity_rank": 36,
+      "description": "card fraud indicator 5",
+      "is_regulatory": false
+    },
+    {
+      "code": 1006,
+      "severity_rank": 37,
+      "description": "card fraud indicator 6",
+      "is_regulatory": false
+    },
+    {
+      "code": 1007,
+      "severity_rank": 38,
+      "description": "card fraud indicator 7",
+      "is_regulatory": false
+    },
+    {
+      "code": 1008,
+      "severity_rank": 39,
+      "description": "card fraud indicator 8",
+      "is_regulatory": false
+    },
+    {
+      "code": 1009,
+      "severity_rank": 40,
+      "description": "card fraud indicator 9",
+      "is_regulatory": false
+    },
+    {
+      "code": 1010,
+      "severity_rank": 31,
+      "description": "card fraud indicator 10",
+      "is_regulatory": false
+    },
+    {
+      "code": 1011,
+      "severity_rank": 32,
+      "description": "card fraud indicator 11",
+      "is_regulatory": false
+    },
+    {
+      "code": 1012,
+      "severity_rank": 33,
+      "description": "card fraud indicator 12",
+      "is_regulatory": false
+    },
+    {
+      "code": 1013,
+      "severity_rank": 34,
+      "description": "card fraud indicator 13",
+      "is_regulatory": false
+    },
+    {
+      "code": 1014,
+      "severity_rank": 35,
+      "description": "card fraud indicator 14",
+      "is_regulatory": false
+    },
+    {
+      "code": 1015,
+      "severity_rank": 36,
+      "description": "card fraud indicator 15",
+      "is_regulatory": false
+    },
+    {
+      "code": 1016,
+      "severity_rank": 37,
+      "description": "card fraud indicator 16",
+      "is_regulatory": false
+    },
+    {
+      "code": 1017,
+      "severity_rank": 38,
+      "description": "card fraud indicator 17",
+      "is_regulatory": false
+    },
+    {
+      "code": 1018,
+      "severity_rank": 39,
+      "description": "card fraud indicator 18",
+      "is_regulatory": false
+    },
+    {
+      "code": 1019,
+      "severity_rank": 40,
+      "description": "card fraud indicator 19",
+      "is_regulatory": false
+    },
+    {
+      "code": 1020,
+      "severity_rank": 31,
+      "description": "card fraud indicator 20",
+      "is_regulatory": false
+    },
+    {
+      "code": 1021,
+      "severity_rank": 32,
+      "description": "card fraud indicator 21",
+      "is_regulatory": false
+    },
+    {
+      "code": 1022,
+      "severity_rank": 33,
+      "description": "card fraud indicator 22",
+      "is_regulatory": false
+    },
+    {
+      "code": 1023,
+      "severity_rank": 34,
+      "description": "card fraud indicator 23",
+      "is_regulatory": false
+    },
+    {
+      "code": 1024,
+      "severity_rank": 35,
+      "description": "card fraud indicator 24",
+      "is_regulatory": false
+    },
+    {
+      "code": 1025,
+      "severity_rank": 36,
+      "description": "card fraud indicator 25",
+      "is_regulatory": false
+    },
+    {
+      "code": 1026,
+      "severity_rank": 37,
+      "description": "card fraud indicator 26",
+      "is_regulatory": false
+    },
+    {
+      "code": 1027,
+      "severity_rank": 38,
+      "description": "card fraud indicator 27",
+      "is_regulatory": false
+    },
+    {
+      "code": 1028,
+      "severity_rank": 39,
+      "description": "card fraud indicator 28",
+      "is_regulatory": false
+    },
+    {
+      "code": 1029,
+      "severity_rank": 40,
+      "description": "card fraud indicator 29",
+      "is_regulatory": false
+    },
+    {
+      "code": 1030,
+      "severity_rank": 31,
+      "description": "card fraud indicator 30",
+      "is_regulatory": false
+    },
+    {
+      "code": 1031,
+      "severity_rank": 32,
+      "description": "card fraud indicator 31",
+      "is_regulatory": false
+    },
+    {
+      "code": 1032,
+      "severity_rank": 33,
+      "description": "card fraud indicator 32",
+      "is_regulatory": false
+    },
+    {
+      "code": 1033,
+      "severity_rank": 34,
+      "description": "card fraud indicator 33",
+      "is_regulatory": false
+    },
+    {
+      "code": 1034,
+      "severity_rank": 35,
+      "description": "card fraud indicator 34",
+      "is_regulatory": false
+    },
+    {
+      "code": 1035,
+      "severity_rank": 36,
+      "description": "card fraud indicator 35",
+      "is_regulatory": false
+    },
+    {
+      "code": 1036,
+      "severity_rank": 37,
+      "description": "card fraud indicator 36",
+      "is_regulatory": false
+    },
+    {
+      "code": 1037,
+      "severity_rank": 38,
+      "description": "card fraud indicator 37",
+      "is_regulatory": false
+    },
+    {
+      "code": 1038,
+      "severity_rank": 39,
+      "description": "card fraud indicator 38",
+      "is_regulatory": false
+    },
+    {
+      "code": 1039,
+      "severity_rank": 40,
+      "description": "card fraud indicator 39",
+      "is_regulatory": false
+    },
+    {
+      "code": 4000,
+      "severity_rank": 41,
+      "description": "first-party fraud indicator 0",
+      "is_regulatory": false
+    },
+    {
+      "code": 4001,
+      "severity_rank": 42,
+      "description": "first-party fraud indicator 1",
+      "is_regulatory": false
+    },
+    {
+      "code": 4002,
+      "severity_rank": 43,
+      "description": "first-party fraud indicator 2",
+      "is_regulatory": false
+    },
+    {
+      "code": 4003,
+      "severity_rank": 44,
+      "description": "first-party fraud indicator 3",
+      "is_regulatory": false
+    },
+    {
+      "code": 4004,
+      "severity_rank": 45,
+      "description": "first-party fraud indicator 4",
+      "is_regulatory": false
+    },
+    {
+      "code": 4005,
+      "severity_rank": 46,
+      "description": "first-party fraud indicator 5",
+      "is_regulatory": false
+    },
+    {
+      "code": 4006,
+      "severity_rank": 47,
+      "description": "first-party fraud indicator 6",
+      "is_regulatory": false
+    },
+    {
+      "code": 4007,
+      "severity_rank": 48,
+      "description": "first-party fraud indicator 7",
+      "is_regulatory": false
+    },
+    {
+      "code": 4008,
+      "severity_rank": 49,
+      "description": "first-party fraud indicator 8",
+      "is_regulatory": false
+    },
+    {
+      "code": 4009,
+      "severity_rank": 50,
+      "description": "first-party fraud indicator 9",
+      "is_regulatory": false
+    },
+    {
+      "code": 4010,
+      "severity_rank": 41,
+      "description": "first-party fraud indicator 10",
+      "is_regulatory": false
+    },
+    {
+      "code": 4011,
+      "severity_rank": 42,
+      "description": "first-party fraud indicator 11",
+      "is_regulatory": false
+    },
+    {
+      "code": 4012,
+      "severity_rank": 43,
+      "description": "first-party fraud indicator 12",
+      "is_regulatory": false
+    },
+    {
+      "code": 4013,
+      "severity_rank": 44,
+      "description": "first-party fraud indicator 13",
+      "is_regulatory": false
+    },
+    {
+      "code": 4014,
+      "severity_rank": 45,
+      "description": "first-party fraud indicator 14",
+      "is_regulatory": false
+    },
+    {
+      "code": 4015,
+      "severity_rank": 46,
+      "description": "first-party fraud indicator 15",
+      "is_regulatory": false
+    },
+    {
+      "code": 4016,
+      "severity_rank": 47,
+      "description": "first-party fraud indicator 16",
+      "is_regulatory": false
+    },
+    {
+      "code": 4017,
+      "severity_rank": 48,
+      "description": "first-party fraud indicator 17",
+      "is_regulatory": false
+    },
+    {
+      "code": 4018,
+      "severity_rank": 49,
+      "description": "first-party fraud indicator 18",
+      "is_regulatory": false
+    },
+    {
+      "code": 4019,
+      "severity_rank": 50,
+      "description": "first-party fraud indicator 19",
+      "is_regulatory": false
+    },
+    {
+      "code": 4020,
+      "severity_rank": 41,
+      "description": "first-party fraud indicator 20",
+      "is_regulatory": false
+    },
+    {
+      "code": 4021,
+      "severity_rank": 42,
+      "description": "first-party fraud indicator 21",
+      "is_regulatory": false
+    },
+    {
+      "code": 4022,
+      "severity_rank": 43,
+      "description": "first-party fraud indicator 22",
+      "is_regulatory": false
+    },
+    {
+      "code": 4023,
+      "severity_rank": 44,
+      "description": "first-party fraud indicator 23",
+      "is_regulatory": false
+    },
+    {
+      "code": 4024,
+      "severity_rank": 45,
+      "description": "first-party fraud indicator 24",
+      "is_regulatory": false
+    },
+    {
+      "code": 4025,
+      "severity_rank": 46,
+      "description": "first-party fraud indicator 25",
+      "is_regulatory": false
+    },
+    {
+      "code": 4026,
+      "severity_rank": 47,
+      "description": "first-party fraud indicator 26",
+      "is_regulatory": false
+    },
+    {
+      "code": 4027,
+      "severity_rank": 48,
+      "description": "first-party fraud indicator 27",
+      "is_regulatory": false
+    },
+    {
+      "code": 4028,
+      "severity_rank": 49,
+      "description": "first-party fraud indicator 28",
+      "is_regulatory": false
+    },
+    {
+      "code": 4029,
+      "severity_rank": 50,
+      "description": "first-party fraud indicator 29",
+      "is_regulatory": false
+    },
+    {
+      "code": 4030,
+      "severity_rank": 41,
+      "description": "first-party fraud indicator 30",
+      "is_regulatory": false
+    },
+    {
+      "code": 4031,
+      "severity_rank": 42,
+      "description": "first-party fraud indicator 31",
+      "is_regulatory": false
+    },
+    {
+      "code": 4032,
+      "severity_rank": 43,
+      "description": "first-party fraud indicator 32",
+      "is_regulatory": false
+    },
+    {
+      "code": 4033,
+      "severity_rank": 44,
+      "description": "first-party fraud indicator 33",
+      "is_regulatory": false
+    },
+    {
+      "code": 4034,
+      "severity_rank": 45,
+      "description": "first-party fraud indicator 34",
+      "is_regulatory": false
+    },
+    {
+      "code": 4035,
+      "severity_rank": 46,
+      "description": "first-party fraud indicator 35",
+      "is_regulatory": false
+    },
+    {
+      "code": 4036,
+      "severity_rank": 47,
+      "description": "first-party fraud indicator 36",
+      "is_regulatory": false
+    },
+    {
+      "code": 4037,
+      "severity_rank": 48,
+      "description": "first-party fraud indicator 37",
+      "is_regulatory": false
+    },
+    {
+      "code": 4038,
+      "severity_rank": 49,
+      "description": "first-party fraud indicator 38",
+      "is_regulatory": false
+    },
+    {
+      "code": 4039,
+      "severity_rank": 50,
+      "description": "first-party fraud indicator 39",
+      "is_regulatory": false
+    },
+    {
+      "code": 6001,
+      "severity_rank": 1,
+      "description": "hard block: sanctions",
+      "is_regulatory": true
+    },
+    {
+      "code": 6002,
+      "severity_rank": 1,
+      "description": "hard block: account_frozen",
+      "is_regulatory": true
+    },
+    {
+      "code": 6003,
+      "severity_rank": 1,
+      "description": "hard block: mule_confirmed",
+      "is_regulatory": true
+    },
+    {
+      "code": 6004,
+      "severity_rank": 1,
+      "description": "hard block: device_blocked",
+      "is_regulatory": true
+    },
+    {
+      "code": 6005,
+      "severity_rank": 1,
+      "description": "hard block: card_compromised",
+      "is_regulatory": true
+    },
+    {
+      "code": 6006,
+      "severity_rank": 1,
+      "description": "hard block: court_order",
+      "is_regulatory": true
+    }
+  ]
+}

@@ -9,7 +9,7 @@ This tutorial builds a small unsecured loan service from an empty folder. An app
 - build and serve the project and call it over HTTP,
 - retune the grade cut-offs and the affordability limit through a new config version, with no code change.
 
-It follows the shape of the larger loan granting example project in the repository (`example_projects/03-loan-granting-pricing`), cut down to one screen of code.
+It follows the shape of the larger loan granting example project in the repository (`examples/loan-granting-pricing`), cut down to one screen of code.
 
 ```mermaid
 flowchart TD
@@ -34,7 +34,7 @@ flowchart TD
 ## 1. Create the project
 
 ```bash
-$ decider template flex_loan
+$ decikit template flex_loan
 created flex_loan/README.md
 created flex_loan/__init__.py
 created flex_loan/configs/0.0.0/params.json
@@ -55,7 +55,7 @@ Replace `flex_loan/pipeline.py`:
 ```python
 """Flex Loan granting and pricing: eligibility, an application scorecard, a risk grade,
 a rate card, the instalment and an affordability test."""
-from decider import ParamTable, flow, param, param_table
+from decikit import ParamTable, flow, param, param_table
 
 
 def eligible(age: float, monthly_income: float,
@@ -163,7 +163,7 @@ The params document, `flex_loan/configs/0.0.0/params.json`, holds every param un
 }
 ```
 
-Finally, one representative request in `flex_loan/sample_request.json`. `decider build` warms every kernel with it:
+Finally, one representative request in `flex_loan/sample_request.json`. `decikit build` warms every kernel with it:
 
 ```json
 {"age": 34, "monthly_income": 28000, "monthly_expenses": 14000, "months_employed": 40, "utilisation": 0.25, "amount": 60000, "term_months": 36}
@@ -175,8 +175,8 @@ From the folder that contains `flex_loan/`, load the latest config version, buil
 
 ```python
 import polars as pl
-from decider import ConfigurableStep
-from decider.config import JsonFileStore
+from decikit import ConfigurableStep
+from decikit.config import JsonFileStore
 from flex_loan.pipeline import build
 
 store = JsonFileStore(basepath="flex_loan/configs")
@@ -224,8 +224,8 @@ Reading the rows:
 A served request is one record. Compile once, then call `score` with a dict:
 
 ```python
-from decider import ConfigurableStep
-from decider.config import JsonFileStore
+from decikit import ConfigurableStep
+from decikit.config import JsonFileStore
 from flex_loan.pipeline import build
 
 store = JsonFileStore(basepath="flex_loan/configs")
@@ -253,12 +253,11 @@ The scorecard writes each variable's points (`age_score` and so on) beside the t
 Replace `flex_loan/tests/test_pipeline.py` with tests that send raw JSON through the same handler the server uses, pinned to config version `0.0.0` so a later version doesn't change what they assert:
 
 ```python
-"""Scores requests through the served handler, raw JSON bytes in, as `decider serve` does."""
-import asyncio
+"""Scores requests through the served handler, raw JSON bytes in, as `decikit serve` does."""
 import json
 from pathlib import Path
 
-from decider.config import JsonFileStore
+from decikit.config import JsonFileStore
 
 from flex_loan.inference import Handler
 
@@ -269,7 +268,7 @@ HANDLER.activate()
 
 
 def score(body: bytes) -> dict:
-    response = asyncio.run(HANDLER.process_fn(body, "application/json", "application/json"))
+    response = HANDLER.process_fn(body, "application/json", "application/json")
     return json.loads(response.content)
 
 
@@ -302,20 +301,20 @@ The tests assert exact answers from worked examples. A test that only checks an 
 ## 7. Build and serve
 
 ```bash
-$ decider build
-decider: pipeline flex_loan.pipeline:build from /…/flex_loan/pipeline.py
-decider: handler flex_loan.inference:Handler from /…/flex_loan/inference.py
+$ decikit build
+decikit: pipeline flex_loan.pipeline:build from /…/flex_loan/pipeline.py
+decikit: handler flex_loan.inference:Handler from /…/flex_loan/inference.py
 built config version 0.0.0 (pipeline flex_loan.pipeline:build, mode fused)
 ```
 
-`decider build` imported the pipeline, loaded version `0.0.0`'s two documents, validated its params document, and scored `sample_request.json` through every kernel, which fills numba's disk cache so the server starts without compiling. Then serve it (one worker on a chosen port here; the defaults are port 8080 and 2 × CPUs + 1 workers):
+`decikit build` imported the pipeline, loaded version `0.0.0`'s two documents, validated its params document, and scored `sample_request.json` through every kernel, which fills numba's disk cache so the server starts without compiling. Then serve it (one worker on a chosen port here; the defaults are port 8080 and 2 × CPUs + 1 workers):
 
 ```bash
-$ decider serve --workers 1 --port 39109 --host 127.0.0.1
+$ decikit serve --workers 1 --port 39109 --host 127.0.0.1
 INFO:     Started server process [4020015]
 INFO:     Waiting for application startup.
-decider: pipeline flex_loan.pipeline:build from /…/flex_loan/pipeline.py
-decider: handler flex_loan.inference:Handler from /…/flex_loan/inference.py
+decikit: pipeline flex_loan.pipeline:build from /…/flex_loan/pipeline.py
+decikit: handler flex_loan.inference:Handler from /…/flex_loan/inference.py
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://127.0.0.1:39109 (Press CTRL+C to quit)
 ```
@@ -336,7 +335,7 @@ Credit policy tightens: the grade cut-offs move up and instalments may take at m
 
 ```python
 import copy
-from decider.config import JsonFileStore
+from decikit.config import JsonFileStore
 
 store = JsonFileStore(basepath="configs")
 current = store.read(store.latest_version())
@@ -367,9 +366,9 @@ print(sorted(store.versions()))
 `configs/0.1.0/` now sits beside `configs/0.0.0/`, with all three documents. Build it, then restart the server, which stages the latest version when it starts:
 
 ```bash
-$ decider build
+$ decikit build
 built config version 0.1.0 (pipeline flex_loan.pipeline:build, mode fused)
-$ decider serve --workers 1 --port 39109 --host 127.0.0.1
+$ decikit serve --workers 1 --port 39109 --host 127.0.0.1
 $ curl -s -d @sample_request.json -H 'content-type: application/json' localhost:39109/invocations
 {"age":34,"monthly_income":28000,"monthly_expenses":14000,"months_employed":40,"utilisation":0.25,"amount":60000,"term_months":36,"approved":true,"base_points":600.0,"age_score":10.0,"months_employed_score":15.0,"utilisation_score":50.0,"app_score":675.0,"risk_grade":3,"annual_rate":0.195,"instalment":2214.56,"eligible":true,"affordable":true}
 ```
@@ -380,10 +379,10 @@ The same applicant, with the same score of 675, is now grade 3 (the grade 2 cut-
 sequenceDiagram
     participant P as policy owner
     participant S as config store
-    participant B as decider build
-    participant W as decider serve
+    participant B as decikit build
+    participant W as decikit serve
     P->>S: create_version(edited copy): 0.1.0
-    P->>B: decider build
+    P->>B: decikit build
     B->>S: read 0.1.0, validate params, warm kernels
     B-->>P: built config version 0.1.0
     P->>W: restart workers
@@ -391,7 +390,7 @@ sequenceDiagram
     W-->>P: /ping 200, requests answered by 0.1.0
 ```
 
-A version that doesn't validate never goes live: `max_share` is declared `param(0.35, ge=0.0, le=1.0)`, so a version with `1.5` fails `decider build` with a `ParamsError`, and `RequestHandler.stage` raises the same error while the active version keeps serving. In a long-running process you can also call `handler.stage("0.1.0")` and `handler.activate()`, and `handler.rollback()` to go back.
+A version that doesn't validate never goes live: `max_share` is declared `param(0.35, ge=0.0, le=1.0)`, so a version with `1.5` fails `decikit build` with a `ParamsError`, and `RequestHandler.stage` raises the same error while the active version keeps serving. In a long-running process you can also call `handler.stage("0.1.0")` and `handler.activate()`, and `handler.rollback()` to go back.
 
 ## 9. Compare the two versions
 
@@ -399,8 +398,8 @@ Before a version ships, run both over the same applicants:
 
 ```python
 import polars as pl
-from decider import ConfigurableStep
-from decider.config import JsonFileStore
+from decikit import ConfigurableStep
+from decikit.config import JsonFileStore
 from flex_loan.pipeline import build
 
 store = JsonFileStore(basepath="flex_loan/configs")
@@ -441,11 +440,11 @@ shape: (4, 7)
 └───────────┴─────────────┴─────────────┴────────────┴────────────┴────────────────┴───────────────┘
 ```
 
-Three of the four applicants move down a grade and pay more; no approval changes on this sample. For a real comparison over a dataset, with per-column change counts, use [`decider.lab.diff`](../guides/diff-and-equivalence.md) or an [experiment](../guides/experiments.md); the [compare two policy versions](compare-two-policy-versions.md) tutorial walks through one.
+Three of the four applicants move down a grade and pay more; no approval changes on this sample. For a real comparison over a dataset, with per-column change counts, use [`decikit.lab.diff`](../guides/diff-and-equivalence.md) or an [experiment](../guides/experiments.md); the [compare two policy versions](compare-two-policy-versions.md) tutorial walks through one.
 
 ## Where to go next
 
 - [Trees, tables and scorecards](../guides/trees-tables-scorecards.md): put the rate card's rows in the params document (`"rows": {"table": ...}`) so pricing can change them like the grade cut-offs.
 - [Debugging and testing](../guides/debugging-and-testing.md): step through one applicant's decision, and break on a rate-card row.
 - [Tracing](../guides/tracing.md): record which steps and branches each decision took.
-- [Checks](../guides/checks.md): `decider check flex_loan.pipeline:build` flags float money and other risks before release.
+- [Checks](../guides/checks.md): `decikit check flex_loan.pipeline:build` flags float money and other risks before release.

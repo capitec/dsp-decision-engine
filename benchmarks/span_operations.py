@@ -11,9 +11,9 @@ import warnings
 import numpy as np
 import polars as pl
 
-from decider import flow, param
-from decider.ops import Text
-from decider._engine import Engine
+from decikit import flow, param
+from decikit.ops import Text
+from decikit._engine import Engine
 
 N = 200_000
 CALLS = 3000

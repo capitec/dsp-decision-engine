@@ -5,7 +5,7 @@ import polars as pl
 import pytest
 from pydantic import ValidationError
 
-from decider._serde import FrameDoc, PolarsSchema, PrimitiveSchema, convert_schema
+from decikit._serde import FrameDoc, PolarsSchema, PrimitiveSchema, convert_schema
 
 
 def _through_json(value):

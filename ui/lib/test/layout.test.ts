@@ -6,10 +6,10 @@ import { callNodes } from "../src/model/protocol";
 import { findSteps } from "../src/FindStep";
 import { dataEdges, findNode, fold, layout, orderEdges, touchPoints } from "../src/layout";
 
-// The example flows live with the VS Code extension; the Python bridge is decider._tooling.bridge.
+// The example flows live with the VS Code extension; the Python bridge is decikit._tooling.bridge.
 const ROOT = path.resolve(__dirname, "../../vscode");
 const ir: DescribeResult["ir"] = JSON.parse(
-  execFileSync("uv", ["run", "python", "-c", `from decider._tooling.bridge.bridge import Bridge; import json; print(json.dumps(Bridge().describe(${JSON.stringify(path.join(ROOT, "examples", "loan.py"))})["ir"]))`]).toString(),
+  execFileSync("uv", ["run", "python", "-c", `from decikit._tooling.bridge.bridge import Bridge; import json; print(json.dumps(Bridge().describe(${JSON.stringify(path.join(ROOT, "examples", "loan.py"))})["ir"]))`]).toString(),
 );
 
 // Three-way fan-out `depth` levels deep: 3^depth steps, so a few thousand nodes in all.

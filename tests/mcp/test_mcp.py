@@ -6,15 +6,15 @@ import json
 import pytest
 from fastmcp.exceptions import ToolError
 
-from decider.lab.data import read
-from decider.lab.experiments import Experiment
-from decider.steps._entry import import_flow
-from decider.lab.experiments.metrics import Divergence
-from decider._tooling.mcp import Policy, build_server
-from decider._tooling.mcp._policy import REDACTED
+from decikit.lab.data import read
+from decikit.lab.experiments import Experiment
+from decikit.steps._entry import import_flow
+from decikit.lab.experiments.metrics import Divergence
+from decikit._tooling.mcp import Policy, build_server
+from decikit._tooling.mcp._policy import REDACTED
 
 PIPELINE_SRC = '''\
-from decider import flow, param, step
+from decikit import flow, param, step
 
 
 def ratio(income: float, debt: float) -> float:
@@ -115,7 +115,7 @@ def test_discover_flows_finds_a_project_under_a_hidden_directory(tmp_path):
 
 
 BUILD_SRC = '''\
-from decider import flow, param
+from decikit import flow, param
 
 
 def approved(score: float, limit: float = param(0.4)) -> bool:

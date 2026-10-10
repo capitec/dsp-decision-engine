@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { IRNodeJson } from "@decider/ui";
+import type { IRNodeJson } from "@decikit/ui";
 import { breakpointPaths, fromRepr, onlyAt, onlyAtPath, pausedAt } from "../src/locate";
 
 const call = (path: string, line: number, endLine: number) => ({

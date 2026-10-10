@@ -1,5 +1,5 @@
 """Tables every product reads: the channel discount and the credit life premium by age."""
-from decider.steps.tables import DecisionTableConfig
+from decikit.steps.tables import DecisionTableConfig
 
 channel_discounts = DecisionTableConfig(
     name="channel_discounts",

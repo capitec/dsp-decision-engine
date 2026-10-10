@@ -9,7 +9,7 @@ import time
 import warnings
 
 import polars as pl
-from decider import Engine, flow, param
+from decikit import Engine, flow, param
 
 def disposable(income: float, expenses: float) -> float:
     return income - expenses
@@ -38,7 +38,7 @@ fused {'income': 1000.0, 'expenses': 300.0, 'debt': 200.0, 'affordable': True}
 |---|---|---|---|
 | `"interpreted"` | each step as a Python function, row by row | every step, and inside trees | debugging, the reference answer, pipelines that barely run |
 | `"stepped"` | each step as its own numba kernel over all rows, with a Python driver between steps | every step | debugging compiled behaviour, finding which step of a kernel raised |
-| `"fused"` | one kernel per run of consecutive compilable steps; branches and loops of plain scalar steps packed into one kernel | kernel boundaries only | serving (`decider serve`'s default), batch runs |
+| `"fused"` | one kernel per run of consecutive compilable steps; branches and loops of plain scalar steps packed into one kernel | kernel boundaries only | serving (`decikit serve`'s default), batch runs |
 
 `pipeline.run(df)` is interpreted. `Engine(...).bind(pipeline, mode)` does what `compile` does and takes the engine options (`strict_compile=`, `params_validation=`). An unknown mode is refused: `EngineError: unknown mode 'jit'; expected one of ['fused', 'interpreted', 'stepped']`.
 
@@ -130,7 +130,7 @@ Branches and loops pack into one fused kernel when every step inside is a plain 
 A step that cannot compile still runs. The compiled modes run it in Python, row by row, and keep the steps before and after it compiled. Each fallback is announced once per executable with a `FallbackWarning`, and `fallbacks()` lists every one with its reason:
 
 ```python
-from decider import FallbackWarning, allow_fallback
+from decikit import FallbackWarning, allow_fallback
 
 def applied_month(applied_on: date) -> int:
     return applied_on.month
@@ -186,7 +186,7 @@ mixed/via_legacy -> @allow_fallback: calls the @allow_fallback function 'legacy_
 
 Reading the report:
 
-- `applied_month` reads a `date`. decider does not even ask numba; no kernel takes it.
+- `applied_month` reads a `date`. The decider toolkit does not even ask numba; no kernel takes it.
 - `lookup` builds a dict literal, which numba supports, so it compiled and is not listed.
 - `flagged` has an `import` in its body. numba refused it with `UnsupportedBytecodeError`, one of the compile-time errors that trigger a fallback.
 - `via_legacy` calls a function marked `@allow_fallback`, which makes the call an intentional Python boundary: no warning, but still listed with `@allow_fallback:` in front.
@@ -227,7 +227,7 @@ warnings.filterwarnings("ignore", category=FallbackWarning)
 `@allow_fallback` is for function steps and the functions they call. A tree, table, scorecard, branch or loop falls back as a whole, and decorating one raises `TypeError`:
 
 ```python
-from decider import branch
+from decikit import branch
 
 try:
     allow_fallback(branch("on_card", affordable, modifies=["affordable"], name="b"))
@@ -236,7 +236,7 @@ except TypeError as e:
 ```
 
 ```text
-@allow_fallback takes a function, or step() of one, not BranchStep. A tree, table, scorecard, branch or loop falls back as a whole: filter decider.FallbackWarning instead.
+@allow_fallback takes a function, or step() of one, not BranchStep. A tree, table, scorecard, branch or loop falls back as a whole: filter decikit.FallbackWarning instead.
 ```
 
 ### Strict compile
@@ -258,7 +258,9 @@ mixed/applied_month runs in Python, row by row: reads 'applied_on' as <class 'da
 {'code': 4, 'legacy_score': 8.0}
 ```
 
-The strict error is a plain `ValueError`, not a `DeciderError`.
+The strict error is a plain `ValueError`, not a `DecikitError`.
+
+`strict_compile=True` also refuses hidden state, in every mode: a step that reads a module-level object (a `HiddenStateWarning` otherwise) makes `bind` raise `EngineError`, so a CI build with one fails.
 
 ## The first call and the numba cache
 
@@ -284,19 +286,19 @@ True True
 ```
 
 <div class="diagram" markdown>
-![Timeline of one process: compile(mode) only wires the plan; the first call compiles each step with numba and assembles the kernels; later calls reuse them; compiled steps are cached on disk in __pycache__, assembled kernels live in memory per process, and decider build and server staging warm them before requests](../assets/diagrams/guide-compile-first-call.svg)
+![Timeline of one process: compile(mode) only wires the plan; the first call compiles each step with numba and assembles the kernels; later calls reuse them; compiled steps are cached on disk in __pycache__, assembled kernels live in memory per process, and decikit build and server staging warm them before requests](../assets/diagrams/guide-compile-first-call.svg)
 
 *Changing a param value never recompiles; changing a step's code or annotations does.*
 </div>
 
 What is cached where:
 
-- Each compiled step function is cached on disk by numba, in `__pycache__` next to the file that defines it (`*.nbi` index and `*.nbc` data files). The cache key includes the function's content and a hash of decider's compile semantics, so an edited step or a decider upgrade recompiles once. A step defined in a notebook cell, an `exec` string or a closure has no file to cache against and compiles in every process.
+- Each compiled step function is cached on disk by numba, in `__pycache__` next to the file that defines it (`*.nbi` index and `*.nbc` data files). The cache key includes the function's content and a hash of the decider toolkit's compile semantics, so an edited step or a decider toolkit upgrade recompiles once. A step defined in a notebook cell, an `exec` string or a closure has no file to cache against and compiles in every process.
 - The fused and stepped kernels assembled from those steps are built once per process and never written to disk. A new process pays for that part again.
 - The disk cache records the CPU it was built on. A cache built on one machine type misses silently on another and recompiles at start-up.
 - Each git worktree has its own `__pycache__`, so the first run in a fresh worktree is slow.
 
-To keep compiling off the request path, `decider build` scores `sample_request.json` through every kernel, and a server worker stages its config version (which warms it the same way) before it answers `/ping`. In your own service, call `score` once with a representative record at start-up.
+To keep compiling off the request path, `decikit build` scores `sample_request.json` through every kernel, and a server worker stages its config version (which warms it the same way) before it answers `/ping`. In your own service, call `score` once with a representative record at start-up.
 
 ## Threads and nogil
 
@@ -351,5 +353,5 @@ The repository's `benchmarks/` folder holds plain scripts that measure the engin
 - [Types, text, money and nested data](types-and-money.md): the types that compile.
 - [Branches, loops and frame steps](branches-loops-frames.md): what packs into one kernel.
 - [Debugging and testing](debugging-and-testing.md): sessions per mode and `assert_equivalent` across modes.
-- [Projects and serving](projects-and-serving.md): `decider build` and warm-up in a deployed service.
+- [Projects and serving](projects-and-serving.md): `decikit build` and warm-up in a deployed service.
 - Architecture: [runners](../architecture/engine/runners.md), [compile](../architecture/engine/compile.md), [kernels](../architecture/engine/kernels.md) and the [numba cache](../architecture/engine/cache.md).

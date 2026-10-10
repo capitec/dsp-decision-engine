@@ -1,5 +1,5 @@
 """Home loan: secured, 60 to 360 months, loan-to-value limits. Stress tests: the instalment under rate shocks, and whether it still fits."""
-from decider import flow, param, step
+from decikit import flow, param, step
 
 
 def hl_shock_25bp_instalment(requested_amount: float, requested_term: float, hl_rate: float, shock: float = param(0.0025)) -> float:

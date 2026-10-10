@@ -11,13 +11,13 @@ import sys
 import numba
 import numpy as np
 
-from decider import flow
-from decider._engine.compile import compile_plan, cpu_target, fingerprint, jit
-from decider._engine.ir.decls import Input, Output
-from decider._engine.ir.nodes import CallNode, SequenceNode
-from decider._engine.ir.origin import Origin
-from decider._engine.params import param
-from decider._engine.wiring import resolve
+from decikit import flow
+from decikit._engine.compile import compile_plan, cpu_target, fingerprint, jit
+from decikit._engine.ir.decls import Input, Output
+from decikit._engine.ir.nodes import CallNode, SequenceNode
+from decikit._engine.ir.origin import Origin
+from decikit._engine.params import param
+from decikit._engine.wiring import resolve
 
 RATE = 0.1
 
@@ -174,7 +174,7 @@ def test_equal_captured_arrays_share_compiled_code_and_a_changed_one_compiles_it
 
 _SET_STEP = ("def tier(grade: str) -> bool:\n"
              "    return grade in {'gold', 'silver', 'bronze', 'platinum', 'diamond', 'copper'}\n")
-_SET_CHILD = "import step\nfrom decider._engine.compile import fingerprint\nprint(fingerprint(step.tier))\n"
+_SET_CHILD = "import step\nfrom decikit._engine.compile import fingerprint\nprint(fingerprint(step.tier))\n"
 
 
 def test_the_fingerprint_is_stable_across_hash_seeds(tmp_path):
@@ -199,7 +199,7 @@ _STEP = "def half(x: float) -> float:\n    return round(x * 0.5, 1)\n"
 _CHILD = """
 import json, sys
 import step
-import decider._engine.compile.njit as njit
+import decikit._engine.compile.njit as njit
 njit.SALT = sys.argv[1]
 _, kernel = njit.jit(step.half)
 print(json.dumps([kernel(3.0), len(kernel.stats.cache_hits), len(kernel.stats.cache_misses)]))
@@ -210,7 +210,7 @@ _STEP_WITH_HELPER = "from rates import rate\n\ndef fee(amount: float) -> float:\
 _CHILD_WITH_HELPER = """
 import json
 import step
-import decider._engine.compile.njit as njit
+import decikit._engine.compile.njit as njit
 _, kernel = njit.jit(step.fee)
 print(json.dumps([kernel(100.0), len(kernel.stats.cache_hits), len(kernel.stats.cache_misses)]))
 """
@@ -289,12 +289,12 @@ def test_the_fingerprint_follows_module_attribute_calls_to_the_function(tmp_path
 
 def test_a_step_first_seen_without_a_file_still_gets_a_disk_cache(tmp_path):
     # Dispatchers are shared by content: a notebook cell or an exec'd doc block must not leave
-    # the same code uncacheable for every later caller, or `decider build` warms nothing.
+    # the same code uncacheable for every later caller, or `decikit build` warms nothing.
     import importlib.util
 
     from numba.core.caching import NullCache
 
-    from decider._engine.compile.njit import jit
+    from decikit._engine.compile.njit import jit
 
     src = "def spread(a: float, b: float) -> float:\n    return a - b + 3.0\n"
     ns: dict = {}
@@ -319,7 +319,7 @@ _CHILD_MODES = """
 import json
 import polars as pl
 import step
-from decider import Engine, flow
+from decikit import Engine, flow
 
 out = [Engine().bind(flow(step.half, name="p"), mode=mode).run(pl.DataFrame({"x": [3.0]}))["half"].to_list()
        for mode in ("stepped", "fused")]
@@ -328,7 +328,7 @@ print(json.dumps(out))
 
 
 def test_an_unreadable_disk_cache_index_is_a_miss_and_is_rewritten(tmp_path):
-    # An index written by another decider version can name a module that no longer exists.
+    # An index written by another decikit version can name a module that no longer exists.
     (tmp_path / "step.py").write_text(_STEP)
     (tmp_path / "child.py").write_text(_CHILD_MODES)
     env = dict(os.environ, NUMBA_CACHE_DIR=str(tmp_path / "numba_cache"))

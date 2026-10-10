@@ -1,17 +1,29 @@
 # Known limitations
 
-Gaps in the current code that users and maintainers should know about before relying on it; each was checked against `decider/` when this file was written.
+Gaps in the current code that users and maintainers should know about before relying on it; each was checked against `decikit/` when this file was written.
 
 ## Compilation and caching
 
-**Object globals are keyed by identity.** A step reading a dict or other non-array global is fingerprinted with `id()` (`_engine/compile/fingerprint.py`).
-Impact: the numba disk cache from `decider build` misses on another process; put constants in literals, `param()`s or `param_table`s.
+**Object globals are keyed by identity.** A step reading an instance of a class of its own is fingerprinted with `id()` (`_engine/compile/fingerprint.py`); numbers, strings, dates, Decimals, regexes, enums, classes and plain containers of those are keyed by value. A class is keyed by its own methods' bytecode and constants, not by what its methods call, and a jitclass by its numba type, which differs per process.
+Impact: the numba disk cache from `decikit build` misses on another process, and `decikit.lab.diff` reads the step as always changed. Binding warns with `HiddenStateWarning` (`Engine(strict_compile=True)` raises); put the data in literals, a config document, `param()`s or `param_table`s.
+
+**A callable object read as `module.NAME` is not seen.** The walk follows the attributes a step reads off a module, but skips any callable that is not a function, module or class (so a ufunc or `np.searchsorted` is not flagged). An instance with `__call__` read that way (`transforms.normalise(x)` where `normalise = Normaliser(mean, std)`) is neither keyed nor warned about; read as a plain global it is.
+Impact: editing its data leaves the cache key and `decikit.lab.diff` unchanged. Keep the data in a document or a `param()`, or import the object by name.
+
+**A library is versioned by the distribution of its top-level module's name.** `importlib.metadata.version("yaml")` finds no `PyYAML`, so such a library is keyed by the Python version instead.
+Impact: upgrading it changes the key of a step that calls one of its jitted functions only if that function's own bytecode changed, not if only a function it calls did; clear the numba cache (`NUMBA_CACHE_DIR`) after upgrading such a library.
+
+**Frame steps are not checked for hidden state.** `Engine.bind` lints scalar and row steps only, so a frame step reading a registry (the fraud rule set) is not warned about.
+Impact: such a step also reads as always changed in a diff. Checking frame nodes needs `_renamed_frame` (relabelled frame steps) exempted first.
 
 **The disk cache is tied to the CPU.** Cached kernels miss silently on a host with a different CPU.
 Workaround: build on the serving host type, or compare `cpu_target()` recorded at build time.
 
 **Two steps in one fused kernel cannot read one column as `Columnar` of different Item types.** Binding raises `TypeError`.
 Workaround: read the column with one Item type everywhere, or give the second reader its own column.
+
+**A compiled step returning a dict or a list of dicts runs in Python.** `compile_call` accepts it, but no kernel stores a dict, so the fused kernel fails at its first launch and splits into per-call Python runs, silently (no `FallbackWarning`, absent from `fallbacks()`, and `strict_compile=True` does not raise).
+Impact: such a step costs a Python call per row although it looks compiled; its output is still checked against the declared type. Return a `Struct[...]` tuple or a `Columnar[...]` list of tuples to compile it.
 
 **Compile caches grow without eviction.** Step dispatchers, fused kernels, Arrow schema plans, the params cache and `RequestHandler._history` are unbounded.
 Impact: a long-lived process that stages many versions or sees many distinct params documents leaks memory; restart periodically.
@@ -35,6 +47,9 @@ Workaround: write a variable exponent if bit-equality with CPython matters.
 
 **Decimal does not mix with floats freely.** `float / Decimal` and `Decimal ± float` are errors in Python and kernels; a float may multiply or divide a decimal.
 Workaround: `float(d)` for ratios; see the [types guide](../guides/types-and-money.md).
+
+**A float read as an `int` must be whole.** `7.0` is accepted; `7.5`, NaN and inf raise `NotIntegralError` naming the input or step, for an `int` step input, an `int` tree feature, and an `-> int` output, in frames, records and every mode. A step that reads a float another step wrote as `int` receives the float unchanged (only an `int` output is checked), and `-2**63` still reads as null in a tree.
+Workaround: round in a step (`int(x)`, `round(x)`), or declare the column `float` (the tree `feature_types` entry `float`).
 
 ## Steps and flows
 
@@ -65,12 +80,12 @@ Impact: a quiet report is not a proof; use the `suppress_checks` field for known
 Impact: dead arms are found only by the static structure checks.
 
 **Table overlap and gaps skip tables over 40 rows,** and tree/table reachability needs the `prove` extra (`z3-solver`); without it the z3 checks are reported under `skipped`.
-Workaround: `pip install 'decider[prove]'`; split very large tables.
+Workaround: `pip install 'decikit[prove]'`; split very large tables.
 
 **`diff.prove` stops at the IR hash and z3.** There is no normalised-document tier, no threshold-enumeration tier and no `first_divergent_step`.
 Impact: an arithmetic change that preserves outputs reads as `identical=None`, not proven equal.
 
-**`checks.yaml` is found from the current directory,** as datasets are, so `decider check` and the MCP `check_report` depend on the working directory.
+**`checks.yaml` is found from the current directory,** as datasets are, so `decikit check` and the MCP `check_report` depend on the working directory.
 Workaround: pass `--config` / `config=` explicitly.
 
 ## Serving
@@ -78,7 +93,7 @@ Workaround: pass `--config` / `config=` explicitly.
 **`RequestHandler.process_fn` runs the pipeline on the event loop.** With Starlette one worker serves requests one at a time, so `nogil` kernels never overlap inside it.
 Workaround: run several worker processes; moving scoring to a thread pool is untested and should be measured first (`engine/concurrency.md`).
 
-**`decider serve` fails when `os.cpu_count()` is `None`** and no worker count is set (`_settings.py` computes `os.cpu_count() * 2 + 1`).
+**`decikit serve` fails when `os.cpu_count()` is `None`** and no worker count is set (`_settings.py` computes `os.cpu_count() * 2 + 1`).
 Workaround: set `serve.workers` explicitly in restricted containers.
 
 **Arrow request bodies reach the kernels without a full validation pass.** `serving/_parse.py` reads Arrow IPC with polars, and the boundary shim reads string views with nanoarrow's unchecked accessor, so a malformed view that polars accepts could crash the worker. Whether polars rejects such views was not tested.

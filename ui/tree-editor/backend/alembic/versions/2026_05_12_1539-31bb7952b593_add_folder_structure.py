@@ -11,7 +11,7 @@ from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
-from dsp_decider.settings import settings
+from dsp_decikit.settings import settings
 
 # revision identifiers, used by Alembic.
 revision: str = "31bb7952b593"

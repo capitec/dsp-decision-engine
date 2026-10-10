@@ -4,13 +4,13 @@ from __future__ import annotations
 import numpy as np
 import polars as pl
 
-from decider import _engine as engine
-from decider._engine import Engine
-from decider._engine.compile import Fallback, Kernel, compile_plan, default_bundle
-from decider._engine.wiring import resolve
-from decider.steps import ParamRef
-from decider.steps.scorecard import ScorecardConfig
-from decider.steps.scorecard._config import (
+from decikit import _engine as engine
+from decikit._engine import Engine
+from decikit._engine.compile import Fallback, Kernel, compile_plan, default_bundle
+from decikit._engine.wiring import resolve
+from decikit.steps import ParamRef
+from decikit.steps.scorecard import ScorecardConfig
+from decikit.steps.scorecard._config import (
     AdjustedVariable,
     BoundBin,
     ConstantScore,

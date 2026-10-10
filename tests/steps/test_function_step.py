@@ -5,12 +5,12 @@ import dataclasses
 import polars as pl
 import pytest
 
-from decider import dag, flow, param, step
-from decider import _engine as engine
-from decider._engine.ir.decls import NullPolicy
-from decider.exceptions import ParamsError
-from decider.steps._base import as_step
-from decider.steps._function import FunctionStep
+from decikit import dag, flow, param, step
+from decikit import _engine as engine
+from decikit._engine.ir.decls import NullPolicy
+from decikit.exceptions import ParamsError
+from decikit.steps._base import as_step
+from decikit.steps._function import FunctionStep
 
 
 def cap_by_income_band(term_cap: float, min_net_salary: float,
@@ -100,7 +100,7 @@ def test_output_and_outputs_together_raise():
 
 
 def test_inputs_carry_their_null_policies_into_the_ir():
-    from decider import missing_as
+    from decikit import missing_as
 
     def tiers(a: float, b: float = missing_as(0.0), c: float | None = None) -> float:
         return a + b + (c or 0.0)

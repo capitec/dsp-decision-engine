@@ -1,5 +1,5 @@
 """Personal loan: unsecured, 6 to 84 months."""
-from decider import flow
+from decikit import flow
 
 from bank.products.personal_loan.affordability import pl_affordability
 from bank.products.personal_loan.limits import pl_limits

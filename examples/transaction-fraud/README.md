@@ -1,0 +1,278 @@
+# Transaction fraud interdiction
+
+Decide, while an instant payment is in flight, whether to let it through, challenge the client, hold it for a
+person, decline it, close the channel or freeze the account. It is a flat set of 635 rules that analysts own,
+tuned between releases by approved overlays, and it records everything that fired, not just the winner.
+
+## The business problem
+
+An instant payment that clears is gone within seconds, so the assessment has to happen before it completes. The
+bank runs a large flat rule set written by fraud analysts, not engineers:
+
+- **521 live rules and 114 shadow rules** in five families: card fraud (`CF`), account takeover (`AT`),
+  mule and scam (`MS`), first-party fraud (`FP`) and AML-adjacent (`AA`). A *shadow* rule is a candidate on live
+  traffic: it is evaluated and recorded, and it must never change the outcome.
+- **Rules overlap on purpose.** On a real mule payment nine rules may fire at once across three families with
+  three owners. All nine are recorded, because the analyst tuning the family, the dispute pack and the monthly
+  false-positive review each need the whole set. One rule *decides*.
+- **Overlays tune the set without editing it.** During a scam wave the duty officer layers a "1.4x more
+  sensitive" overlay on the mule family. The authored rule still reads R8 000; the effective threshold is lower
+  while the overlay is in force. Each decision records what the rules would have done without the overlays.
+- **Some things are not negotiable.** A sanctions match, a frozen account, a confirmed mule, a blocked device, a
+  compromised card or a court order sets a minimum action that no rule or overlay can soften, yet every rule is
+  still evaluated so the record is complete.
+- **A fraudster must not learn the rule.** The client is told the same thing for every `decline`, whichever
+  rule fired.
+
+The enrichment feeding the rules (velocity counters, device and counterparty lookups, the model score) can be
+stale or missing. The decision records how degraded it was, and stale or restricted inputs change which rules apply.
+
+## What it decides
+
+[`fraud_interdiction.pipeline:build`](fraud_interdiction/pipeline.py) takes an instant-payment event, already
+enriched, and returns:
+
+| Result | Fields |
+|---|---|
+| Decision | `action_code` (10 allow, 20 monitor, 30 step up, 40 hold for review, 50 decline, 60 block channel, 70 freeze account), `action_source_rule_id` (the rule, or `HARD_BLOCK:<gates>`), `governance_exception` |
+| Reasons | `decline_reason_codes` (every reason, most severe first), `primary_reason_code` (the deciding rule's or gate's), `reason_registry_version` |
+| What fired | `fired_rule_ids`, `unevaluable_rule_ids`, `fired_on_overlay_ids`, `shadow_fired_rule_ids` |
+| What the overlays did | `mule_scam_amount_multiplier` and `_unadjusted`, `applied_adjustment_ids`, `adjustment_set_id`, `counterfactual_fired_rule_ids`, `counterfactual_action_code` |
+| Enrichment | `velocity_completeness_band`, `enrichment_degradation_code` (a bit per source), `degraded_mode_code` (0 normal, 1 reduced, 2 restricted, 3 fail closed), `late_arrival_flag` |
+| Hard blocks | `hard_block_code` (a bit per gate), `hard_block_forced_action` |
+| Client | `client_visible`, `client_wording_key` |
+| Evidence | `rule_set_version` |
+
+The rules, in the order the pipeline applies them:
+
+1. **Enrichment verdict.** Each velocity aggregate is fresh, stale or absent. A short window absent, or two
+   aggregates absent, is *materially degraded*. The degraded sources become a bitset; two or more sources, or
+   materially degraded velocity, is *restricted*; a stale sanctions or mule list is *fail closed*.
+2. **Hard blocks.** Six gates, each forcing a minimum action. When two hold, both are recorded and the more severe
+   action applies.
+3. **Overlays.** The mule and scam amount thresholds are multiplied by the product of the overlays in force on the
+   decision date (a festive x0.7, an attack-window x1/1.4), in their declared order. A separate overlay turns an
+   account-takeover rule's `monitor` into a `step_up` on the web channel.
+4. **Rules.** Every *applicable* rule is evaluated, with no early exit. A rule applies when its event type, effective
+   dates and segments fit, and (in restricted mode) when it does not read velocity. A rule that reads a stale
+   aggregate follows the behaviour it declares: be *unevaluable*, evaluate to false, or use the value as it is.
+   Rules that read an overlay-adjusted threshold are evaluated twice, so the decision can say which rules fired
+   only because of an overlay.
+5. **Action.** The most severe action among the firings wins; ties go to higher severity, then lower priority
+   number, then family seniority (`AA`, `MS`, `AT`, `CF`, `FP`), then rule id. A *critical* rule is binding: when
+   one fires, only critical rules compete. Two critical rules that disagree are a *governance exception*. A hard
+   block is a floor under all of it.
+6. **Counterfactual.** The action the authored rules alone would have produced, without the overlays.
+7. **Wording.** A generic wording per action; the key is replaced if the client has not consented to the
+   channel (`credit_core.consent`).
+
+Not built: the enrichment lookups themselves (the request carries resolved values), staleness for all 168 velocity
+aggregates (three are tracked), compensating rules in restricted mode, the held-payment rule for fail-closed mode,
+dispatch to queues, outcome feedback, languages, the runners-up record, and the latency target.
+
+## Features it shows
+
+| Decider toolkit feature | Where |
+|---|---|
+| `TreeConfig` as a flat rule set: `prioritized_flat_rule`, `mode: "all"`, so every rule answers and none exits early | `_tree` in [rules.py](fraud_interdiction/rules.py) |
+| A step type of your own, `ConfigurableStep`, whose document holds rule governance *and* conditions and which expands into trees and a frame step with `ctx.expand` | [rules.py](fraud_interdiction/rules.py), [`configs/0.1.0/rule_set.json`](configs/0.1.0/rule_set.json) |
+| `frame_step` for work as wide as the rule set (635 columns read by name) | [firing.py](fraud_interdiction/firing.py) |
+| Computed features that read a column an earlier step wrote (`amount - 8000 * mule_scam_amount_multiplier`) | [`rule_set.json`](configs/0.1.0/rule_set.json), [overlays.py](fraud_interdiction/overlays.py) |
+| Steps that compile: `param`, `missing_as`, `IntEnum` constants, bitsets, multi-output `step(outputs=)` | [enrichment.py](fraud_interdiction/enrichment.py), [hard_blocks.py](fraud_interdiction/hard_blocks.py) |
+| `@allow_fallback` for steps that are Python on purpose (dates, lists, strings), checked with `Engine(strict_compile=True)` | [action.py](fraud_interdiction/action.py), [overlays.py](fraud_interdiction/overlays.py), [tests/test_serving.py](tests/test_serving.py) |
+| `DecisionTableConfig` in a config document, then `flow` so a later step may overwrite what the table wrote | [`client_wording.json`](configs/0.1.0/client_wording.json), [pipeline.py](fraud_interdiction/pipeline.py), [wording.py](fraud_interdiction/wording.py) |
+| `dag` (dependency order) for the pipeline, `flow` (written order) for one value written twice | [pipeline.py](fraud_interdiction/pipeline.py) |
+| `ConfigurableStep` types whose fields are the data, compared by `decikit.lab.diff`: overlays, reason codes and rule-set versions from `credit_core`, and this package's `AmountOverlays` and `ActionResolver`, which hold an `AdjustmentStack` as a field | [overlays.py](fraud_interdiction/overlays.py), [action.py](fraud_interdiction/action.py), [tests/test_release_checks.py](tests/test_release_checks.py) |
+| A params document, including a switch that turns the whole overlay stack off | [`params.json`](configs/0.1.0/params.json), [backtest.py](fraud_interdiction/backtest.py) |
+| One executable for a batch (`run`) and a record (`score`) with the same answers; a backtest is the batch run | [backtest.py](fraud_interdiction/backtest.py), [tests/test_serving.py](tests/test_serving.py) |
+| JSON dates arriving as strings, warm-up from `sample_request.json`, serving the raw request bytes | [sample_request.json](sample_request.json), [tests/test_serving.py](tests/test_serving.py) |
+
+## Run it
+
+From the repository root, put every example on the path once (this project imports `credit_core`):
+
+```bash
+export PYTHONPATH=$(printf '%s:' "$PWD"/examples/*/)
+cd examples/transaction-fraud
+export DECIKIT_API__CODE_PATH="$PWD" DECIKIT_API__PIPELINE="fraud_interdiction.pipeline:build" DECIKIT_CONFIG__BASEPATH="$PWD/configs"
+```
+
+Build (validates `configs/0.1.0`, compiles and warms every kernel with `sample_request.json`). The first build in
+a fresh checkout takes about a minute and a half while numba compiles the rule trees; later builds reuse the cache:
+
+```bash
+uv run decikit build
+# built config version 0.1.0 (pipeline fraud_interdiction.pipeline:build, mode fused)
+```
+
+Serve, and assess the sample payment. Its date is a plain JSON string:
+
+```bash
+uv run decikit serve --workers 1 &
+curl -s -d @sample_request.json -H 'content-type: application/json' localhost:8080/invocations |
+  jq '{action_code, action_source_rule_id, primary_reason_code, client_wording_key, mule_scam_amount_multiplier,
+       applied_adjustment_ids, fired_on_overlay_ids, counterfactual_action_code,
+       fired: (.fired_rule_ids | length), shadow: (.shadow_fired_rule_ids | length)}'
+```
+
+```json
+{
+  "action_code": 40,
+  "action_source_rule_id": "MS-0021",
+  "primary_reason_code": 3021,
+  "client_wording_key": "wording.hold_for_review.v1",
+  "mule_scam_amount_multiplier": 0.7,
+  "applied_adjustment_ids": ["ADJ-2026-002"],
+  "fired_on_overlay_ids": ["MS-0015"],
+  "counterfactual_action_code": 40,
+  "fired": 20,
+  "shadow": 5
+}
+```
+
+Twenty mule and scam rules fired on this payment, and `MS-0021` decided. The response carries every input too;
+change one and ask again. A sanctioned counterparty is blocked, and the twenty rules are still all recorded:
+
+```bash
+jq '.sanctions_list_match=true' sample_request.json |
+  curl -s -d @- -H 'content-type: application/json' localhost:8080/invocations |
+  jq -c '{action_code, action_source_rule_id, primary_reason_code, hard_block_code, fired: (.fired_rule_ids | length)}'
+# {"action_code":60,"action_source_rule_id":"HARD_BLOCK:sanctions","primary_reason_code":6001,"hard_block_code":1,"fired":20}
+```
+
+At R6 000 the payment is under the authored R8 000 threshold of `MS-0208` but over the festive overlay's R5 600.
+Four rules fire only because of the overlay, and without it the bank would have asked for a step-up (30), not a hold (40):
+
+```bash
+jq '.amount=6000' sample_request.json |
+  curl -s -d @- -H 'content-type: application/json' localhost:8080/invocations |
+  jq -c '{action_code, action_source_rule_id, fired_on_overlay_ids, counterfactual_action_code}'
+# {"action_code":40,"action_source_rule_id":"MS-0021","fired_on_overlay_ids":["MS-0006","MS-0018","MS-0021","MS-0208"],"counterfactual_action_code":30}
+```
+
+Tests (from the repository root, with `PYTHONPATH` set as above):
+
+```bash
+uv run pytest examples/transaction-fraud -q
+```
+
+To regenerate `configs/0.1.0` (the synthetic rules, the wording table, the overlays, the reason codes, the rule-set versions and the params document):
+`uv run python scripts/generate_configs.py`.
+
+## The documents
+
+`build` receives one document per argument, each a file in `configs/<version>/`. A change to any of them is a new config
+version, and `decikit.lab.diff.structure` reports it.
+
+- [`rule_set.json`](configs/0.1.0/rule_set.json) and [`client_wording.json`](configs/0.1.0/client_wording.json): the rules and the
+  wording table, as before.
+- [`amount_overlays.json`](configs/0.1.0/amount_overlays.json) is an `amount_overlays` step holding an `adjustment_stack`: the
+  multipliers on the mule and scam amount thresholds, in stack order. `family` is the provenance the overlays are scoped to.
+  The stack's own `stack_enabled` is not used here: the step reads the `adjustment_stack_enabled` column, so one param
+  (`fraud_interdiction/adjustment_stack_enabled/adjustment_stack_enabled`) still turns every overlay off.
+- [`action_escalation.json`](configs/0.1.0/action_escalation.json) is an `adjustment_stack` on `at_web_action`: the overlay that
+  raises an account-takeover `monitor` to a `step_up` on the web channel. `ActionResolver` applies it to each firing, with the
+  firing rule's family and the record's channel as the provenance.
+- [`reason_codes.json`](configs/0.1.0/reason_codes.json) is a `reason_codes` set: 200 rule reasons and the six hard-block codes,
+  with their severity rank.
+- [`rule_set_versions.json`](configs/0.1.0/rule_set_versions.json) is an `effective_versions` step: which rule set version a
+  decision date falls in.
+
+```json
+{"type": "amount_overlays", "name": "amount_overlays", "family": "MS", "stack": {
+  "type": "adjustment_stack", "name": "amount_overlays", "target": "mule_scam_amount_multiplier", "set_id": "ADJS-2026.01",
+  "adjustments": [
+    {"adjustment_id": "ADJ-2026-002", "kind": "cap_adjustment", "target": "mule_scam_amount_multiplier",
+     "effect": {"op": "multiply", "value": 0.7}, "scope": {"family": "MS"}, "stack_position": 2,
+     "owner": "Head of Fraud", "approval_reference": "HOF-2025-1122",
+     "rationale": "Mule and scam amount thresholds x0.7 for the festive period",
+     "effective_from": "2025-12-01", "effective_to": "2026-01-15", "review_date": "2026-01-08", "tighten_only": true}]}}
+```
+
+```json
+{"type": "effective_versions", "family": "fraud.rule_set", "output": "rule_set_version", "versions": [
+  {"version_id": "RS-2025.11", "effective_from": "2025-11-01", "effective_to": "2026-01-01"},
+  {"version_id": "RS-2026.01", "effective_from": "2026-01-01"}]}
+```
+
+The step names and the params paths did not change when these stopped being objects, so a params document and stored evidence
+from before still apply.
+
+## Backtest
+
+The rules that run in the payment path also run over stored events, so a threshold or an overlay can be costed
+before it is deployed. `backtest` runs the events through the same executable with the overlay stack on and off:
+
+```python
+import polars as pl
+from fraud_interdiction.backtest import backtest
+
+events = pl.read_parquet("last_90_days.parquet")
+backtest(executable, events, params)
+# {"with_overlays": {"events": ..., "blocked": ..., "hit_rate": ..., "value_blocked": ...}, "without_overlays": {...}}
+```
+
+## Layout
+
+```
+fraud_interdiction/
+  pipeline.py        build(rule_set, client_wording, rule_set_versions, amount_overlays, action_escalation, reason_codes)
+  rules.py           Rule and RuleSet: the config document, expanded into trees plus the firing step
+  firing.py          applicability, stale velocity and the overlay effect on each firing (a frame step over plain tuples)
+  action.py          ActionResolver: precedence, critical rules, hard-block floor, reasons, counterfactual
+  enrichment.py      velocity band, degradation bitset, degraded mode, late arrival
+  hard_blocks.py     the six gates
+  overlays.py        AmountOverlays (an AdjustmentStack for the mule and scam amounts) and the on/off switch column
+  wording.py         consent-aware client wording
+  backtest.py        batch costing with the overlays on and off
+  vocab.py           actions, modes, gate and family codes
+configs/0.1.0/       rule_set.json, client_wording.json, amount_overlays.json, action_escalation.json,
+                     reason_codes.json, rule_set_versions.json, params.json
+scripts/             generate_configs.py
+sample_request.json
+tests/
+```
+
+## Things worth knowing
+
+- **Governance beside the condition.** A rule's owner-facing attributes (family, severity, action, priority,
+  effective dates, segments, criticality, reason code, what to do when velocity is stale) sit in the same JSON
+  object as its condition. A tree node has no field for them, and they do not vary per record, so `RuleSet` keeps
+  them and generates the trees. Changing a rule's action is a config change, not a code change.
+- **Overlay-adjusted rules carry two conditions.** `condition` reads the multiplier column; `base_condition` is
+  the same rule at its authored thresholds. The base tree is evaluated only for those rules (19 of 635).
+  An `overlay_exempt` rule may not have a `base_condition`; the document refuses to load otherwise.
+- **Shadow isolation is structural.** `resolve_action` is not given `shadow_fired_rule_ids`, so a shadow rule has
+  no way to reach the action.
+- **Critical rules.** "Binding" is read as: any firing critical rule means only critical rules compete, so a
+  critical `allow` also overrides ordinary firings of other families. The business description is not explicit
+  about that second part.
+- **Hard blocks floor the counterfactual too.** They are not overlays, so what the authored rules alone would have
+  done still includes them.
+- **Many rules, one tree per list.** `RuleSet` writes one `prioritized_flat_rule` tree per list (live, shadow,
+  overlay-adjusted) in `mode: "all"`. `decikit` splits a list of more than 32 rules into `<tree>/part_<k>` nodes
+  when it builds the plan; the step report and `diff` name those paths. The answers do not depend on the split.
+- **Data in documents, not objects.** No step reads a register or a module-level `dict`: the overlays, the reason codes and the
+  rule-set versions are config documents, and a step's constants hold the rest. A release check (`decikit.lab.diff.structure`)
+  therefore sees an overlay change from x0.7 to x0.35, a moved cut-over, a reordered severity and a rule asking for a different
+  action, and none of the steps raises `HiddenStateWarning` (see [tests/test_release_checks.py](tests/test_release_checks.py)).
+  Owner, approval reference, rationale and review date stay in the overlay documents for people and the ageing report; the
+  diff ignores them. The firing step closes over tuples of plain values for the same reason.
+- **What runs in Python.** Steps reading dates, lists or strings (`rule_set_version`, `amount_overlays`,
+  `resolve_action`, the wording step) are Python on purpose and marked `@allow_fallback`; the enrichment verdict,
+  the hard blocks and the rule trees run in the kernel.
+- **Synthetic data.** Every rule, threshold and band is invented. The 635 rules come from a fixed seed; `MS-0208`
+  is written by hand so the worked examples have a rule to point at.
+
+## Reuse
+
+Uses [`shared-credit-core`](../shared-credit-core/README.md) by package name:
+
+| From `credit_core` | Used for |
+|---|---|
+| `adjustments.AdjustmentStack`, `evaluate` | the overlay stacks: scope, stack order, expiry and tighten-only checked when the document loads; a switch that turns them off. `AmountOverlays` and `ActionResolver` each hold one as a field, because the overlays here are scoped by rule family, which the stack's own step does not match |
+| `reason_codes.ReasonCodes`, `rank_codes` | ranking every fired reason; an unregistered code raises |
+| `dates.EffectiveVersions` | the `rule_set_version` in force on the decision date |
+| `consent.consent_verdict_step`, `channel_permitted_step` | whether the client may be told on the chosen channel |
+
+It publishes nothing for other examples to import.

@@ -1,6 +1,6 @@
 # Experiments internals
 
-An experiment runs a flow's baseline and a set of scenarios over the same records and measures the difference. A scenario is one controlled change: other params, a value written over an input or a step's output, or another git revision of the code. `decider.lab.experiments` splits the work into a runner that only executes, metrics that collect through callback hooks, plots that draw a metric's summary, and a report that lays them out. The whole definition is data (`experiment.json`), so a notebook, the CLI and the editors all run the same thing.
+An experiment runs a flow's baseline and a set of scenarios over the same records and measures the difference. A scenario is one controlled change: other params, a value written over an input or a step's output, or another git revision of the code. `decikit.lab.experiments` splits the work into a runner that only executes, metrics that collect through callback hooks, plots that draw a metric's summary, and a report that lays them out. The whole definition is data (`experiment.json`), so a notebook, the CLI and the editors all run the same thing.
 
 How to write and run experiments is in the [Experiments guide](../../guides/experiments.md). This page covers the inside: the definition and result models, the runner's control flow, the process model for revision scenarios, the job and handle machinery, and every built-in callback, metric, plot and report block.
 
@@ -8,26 +8,26 @@ How to write and run experiments is in the [Experiments guide](../../guides/expe
 
 | File | What it holds |
 |---|---|
-| `decider/lab/experiments/__init__.py` | Public names; importing it registers the built-in metrics, plots, blocks and callbacks |
-| `decider/lab/experiments/_experiments.py` | `ExperimentDef`, `FlowSpec`, `InputSpec`, `Scenario`, `RunStatus`, `ScenarioResult`, `ExperimentResult`, `validate`, the `Experiment` builder |
-| `decider/lab/experiments/_runner.py` | `run`, `start`, `_run`, `_drive`, the `_Local` and `_Revision` executors, override writers, batching, status and manifest |
-| `decider/lab/experiments/_worker.py` | The subprocess that runs one scenario on a checked-out revision |
-| `decider/lab/experiments/callbacks.py` | `Callback` and its hooks, `Run`, `Batch`, `NodeBatch`, `Progress`, `JobProgress`, `WriteOutputs` |
-| `decider/lab/experiments/_jobs.py` | `JobStatus`, `Job`, `JobHandle`, `PartialResult` |
-| `decider/lab/experiments/_handle.py` | `RunHandle`, what `start()` returns |
-| `decider/lab/experiments/_manifest.py` | `RunManifest` and its parts, `manifest_schema`, version checks |
-| `decider/lab/experiments/_cost.py` | `CostEstimate` and `estimate_cost` |
-| `decider/lab/experiments/_entry.py` | `infer_entry`: the `module:name` of a live pipeline |
-| `decider/lab/experiments/metrics/` | `Metric` and `Summary` (`_base.py`), output metrics (`_outputs.py`), `Divergence` (`_compare.py`), `BranchFlows` (`_paths.py`) |
-| `decider/lab/experiments/plots/` | `Plot` and `Figure` (`_base.py`), `Bars` and `Changes`, `Distribution` and `Ranges`, `Sankey` with its Vega template `sankey.vg.json` |
-| `decider/lab/experiments/report/_blocks.py` | `Report`, `Block` and the built-in blocks, HTML rendering |
+| `decikit/lab/experiments/__init__.py` | Public names; importing it registers the built-in metrics, plots, blocks and callbacks |
+| `decikit/lab/experiments/_experiments.py` | `ExperimentDef`, `FlowSpec`, `InputSpec`, `Scenario`, `RunStatus`, `ScenarioResult`, `ExperimentResult`, `validate`, the `Experiment` builder |
+| `decikit/lab/experiments/_runner.py` | `run`, `start`, `_run`, `_drive`, the `_Local` and `_Revision` executors, override writers, batching, status and manifest |
+| `decikit/lab/experiments/_worker.py` | The subprocess that runs one scenario on a checked-out revision |
+| `decikit/lab/experiments/callbacks.py` | `Callback` and its hooks, `Run`, `Batch`, `NodeBatch`, `Progress`, `JobProgress`, `WriteOutputs` |
+| `decikit/lab/experiments/_jobs.py` | `JobStatus`, `Job`, `JobHandle`, `PartialResult` |
+| `decikit/lab/experiments/_handle.py` | `RunHandle`, what `start()` returns |
+| `decikit/lab/experiments/_manifest.py` | `RunManifest` and its parts, `manifest_schema`, version checks |
+| `decikit/lab/experiments/_cost.py` | `CostEstimate` and `estimate_cost` |
+| `decikit/lab/experiments/_entry.py` | `infer_entry`: the `module:name` of a live pipeline |
+| `decikit/lab/experiments/metrics/` | `Metric` and `Summary` (`_base.py`), output metrics (`_outputs.py`), `Divergence` (`_compare.py`), `BranchFlows` (`_paths.py`) |
+| `decikit/lab/experiments/plots/` | `Plot` and `Figure` (`_base.py`), `Bars` and `Changes`, `Distribution` and `Ranges`, `Sankey` with its Vega template `sankey.vg.json` |
+| `decikit/lab/experiments/report/_blocks.py` | `Report`, `Block` and the built-in blocks, HTML rendering |
 
-The package sits in the lab layer and depends downward: on the engine (`Engine`, the stepped and fused [runners](../engine/runners.md), `State`, params `merge`), on the lab's [data loading](data.md) for inputs, on [checks](checks.md) for the preflight report, and on [diff](diff.md) for the change primitive and the git helpers. Plots import altair and the report imports markdown-it-py, both only when something renders. They are the `experiments` extra (`pip install 'decider[experiments]'`, which also brings IPython).
+The package sits in the lab layer and depends downward: on the engine (`Engine`, the stepped and fused [runners](../engine/runners.md), `State`, params `merge`), on the lab's [data loading](data.md) for inputs, on [checks](checks.md) for the preflight report, and on [diff](diff.md) for the change primitive and the git helpers. Plots import altair and the report imports markdown-it-py, both only when something renders. They are the `experiments` extra (`pip install 'decikit[experiments]'`, which also brings IPython).
 
 ```mermaid
 flowchart TD
     B["Experiment builder<br/>.run() / .start()"] --> R
-    CLI["decider experiment run"] --> J
+    CLI["decikit experiment run"] --> J
     J["experiment.json<br/>run(path) / start(path)"] --> R
     R["_runner._run"] --> K["checks.run<br/>preflight"]
     R --> E["engine: Engine().bind<br/>fused or stepped"]
@@ -70,7 +70,7 @@ classDiagram
     }
     class FlowSpec {
         entry: str
-        decider: str
+        decikit: str
     }
     class InputSpec {
         path: str
@@ -118,11 +118,11 @@ classDiagram
     style Report fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
 ```
 
-`FlowSpec.entry` is an import path (`"module:qualname"`), either a module-level pipeline or a zero-argument factory; `import_flow` in `decider/steps/_entry.py` resolves both. `FlowSpec.decider` is a version specifier the installed decider must satisfy. The runner checks it with `packaging.specifiers.SpecifierSet` and refuses with `DeciderError: flow needs decider >=9.0, installed 0.0.2.dev548+g369d6dfb8`. `InputSpec` names a `.parquet`, `.csv`, `.json` or `.jsonl` file or a project dataset, and a validator refuses both at once.
+`FlowSpec.entry` is an import path (`"module:qualname"`), either a module-level pipeline or a zero-argument factory; `import_flow` in `decikit/steps/_entry.py` resolves both. `FlowSpec.decikit` is a version specifier the installed decider toolkit must satisfy. The runner checks it with `packaging.specifiers.SpecifierSet` and refuses with `DecikitError: flow needs decikit >=9.0, installed 0.0.2.dev548+g369d6dfb8`. `InputSpec` names a `.parquet`, `.csv`, `.json` or `.jsonl` file or a project dataset, and a validator refuses both at once.
 
-`metrics` and `plots` are lists of registry models. `MetricRef = ref(Metric)` and `PlotRef = ref(Plot)` are field types from `decider/_registry` that accept a dict and resolve it by its `type` tag, or an instance. Each built-in subclass declares `type: t.Literal["divergence"] = "divergence"` and so on, and a user subclass registers itself the same way when its module is imported. `Metric.json_schema()` and `Plot.json_schema()` return one schema per registered type, which the editor bridge uses for forms. A metric's `key` is its `name`, or its `type` when unnamed; a plot's `key` is its `name`, or the key of the metric it draws.
+`metrics` and `plots` are lists of registry models. `MetricRef = ref(Metric)` and `PlotRef = ref(Plot)` are field types from `decikit/_registry` that accept a dict and resolve it by its `type` tag, or an instance. Each built-in subclass declares `type: t.Literal["divergence"] = "divergence"` and so on, and a user subclass registers itself the same way when its module is imported. `Metric.json_schema()` and `Plot.json_schema()` return one schema per registered type, which the editor bridge uses for forms. A metric's `key` is its `name`, or its `type` when unnamed; a plot's `key` is its `name`, or the key of the metric it draws.
 
-`version` is `"2"`. `check_experiment_version` reads the major number and refuses a newer one: `experiment version 3 is newer than 2; upgrade decider`.
+`version` is `"2"`. `check_experiment_version` reads the major number and refuses a newer one: `experiment version 3 is newer than 2; upgrade decikit`.
 
 ### The builder
 
@@ -168,7 +168,7 @@ for p in validate(def_, credit):
 
 ## The run, end to end
 
-`run(def_or_path, frame=None, out_dir=None, callbacks=())` loads a definition, imports the flow and scans the input, then calls `_run`. `Experiment.run()` calls `_run` directly with its live step and frame. `start()` and `Experiment.start()` call the same `_run` on a background thread (see [jobs and handles](#jobs-and-handles)). The `decider experiment run PATH [--out DIR]` command calls `run` and exits 0 only when the status is `completed`.
+`run(def_or_path, frame=None, out_dir=None, callbacks=())` loads a definition, imports the flow and scans the input, then calls `_run`. `Experiment.run()` calls `_run` directly with its live step and frame. `start()` and `Experiment.start()` call the same `_run` on a background thread (see [jobs and handles](#jobs-and-handles)). The `decikit experiment run PATH [--out DIR]` command calls `run` and exits 0 only when the status is `completed`.
 
 ```mermaid
 sequenceDiagram
@@ -179,7 +179,7 @@ sequenceDiagram
     participant C as callbacks + metrics
     participant P as plots
     U->>R: def, step, frame, params
-    R->>R: flow.decider window, validate()
+    R->>R: flow.decikit window, validate()
     R->>R: preflight: checks.run on the first batch
     R->>X: _Local per scenario, _Revision for another SHA
     R->>C: on_run_start(run)
@@ -204,12 +204,12 @@ sequenceDiagram
 
 Step by step, `_run`:
 
-1. Fills an empty `flow.entry` from `infer_entry(step)` if a scenario has a revision, checks `flow.decider`, and runs `validate`.
+1. Fills an empty `flow.entry` from `infer_entry(step)` if a scenario has a revision, checks `flow.decikit`, and runs `validate`.
 2. Takes the baseline params: the `params` argument, or `step.parameters().defaults()`.
 3. Counts the records (`frame.height`, or `select(pl.len())` on a lazy frame) and collects the first batch as a sample. `checks.run(step, ["missing_required", "invalid_params_doc"], data=sample, params=base_params)` produces the preflight report, which is stored on the result. A failing preflight does not stop the run. [Checks internals](checks.md) describes those two checks.
 4. Prepends the baseline as `Scenario(name="baseline")`, builds the shared callbacks (the caller's, plus `JobProgress` when there is a job and `WriteOutputs` when there is an `out_dir`), and gives every scenario its own copy of every metric with `model_copy(deep=True)` and `reset()`.
 5. Collects node selectors from the shared callbacks and the metrics that override `on_node_end`: their `nodes` globs and `node_id`s.
-6. Opens a `decider-experiment-*` temporary directory, builds one executor per scenario, calls `on_run_start` on everything, and drives the batches. A `finally` block removes every git worktree it made.
+6. Opens a `decikit-experiment-*` temporary directory, builds one executor per scenario, calls `on_run_start` on everything, and drives the batches. A `finally` block removes every git worktree it made.
 7. Derives the `RunStatus`, sets `run.status`, calls `on_run_end`, then collects `summaries[metric][scenario] = metric.summarise()` for every scenario that did not fail, and renders each plot with `Figure.of(plot.render(summaries[plot.metric]))`.
 8. Builds the `ExperimentResult` and, with an `out_dir`, writes `result.json` next to the scenario outputs.
 
@@ -290,7 +290,7 @@ A scenario with `revision` resolves it to a SHA with the diff module's `resolve`
 
 1. `materialise(sha)` checks the revision out into a detached git worktree, cached per SHA for the run, so scenarios on one revision share one checkout.
 2. The whole input is written once to `input.parquet` in the run's temporary directory (`sink_parquet` for a lazy frame).
-3. On the first batch, `_Revision.run` starts `python -m decider.lab.experiments._worker` with a JSON request (`entry`, `tree`, `input`, `params`, the scenario's other fields, the selectors, `batch_size`, `out`) and waits for it to finish.
+3. On the first batch, `_Revision.run` starts `python -m decikit.lab.experiments._worker` with a JSON request (`entry`, `tree`, `input`, `params`, the scenario's other fields, the selectors, `batch_size`, `out`) and waits for it to finish.
 4. The worker imports the flow from the checkout, takes the request's params or else the old revision's own defaults, builds the same `_Local` executor the parent uses, runs every batch with the same boundaries, and pickles `(output, node batches)` to `<out>/<index>.pkl`. Its last stdout line is `{"ok": true}` or an error.
 5. Every batch, including the first, unpickles `<index>.pkl`, so the revision's output joins the lockstep like a local scenario.
 
@@ -306,7 +306,7 @@ A run in a scratch repository whose `HEAD^` has `limit = param(0.4)` and `HEAD` 
 
 ```python
 def_ = ExperimentDef(
-    name="limit-change", flow={"entry": "lending.pipeline:build", "decider": ">=0.0"},
+    name="limit-change", flow={"entry": "lending.pipeline:build", "decikit": ">=0.0"},
     input={"path": "loans.parquet"}, batch_size=2,
     scenarios=[{"name": "previous", "revision": "HEAD^"},
                {"name": "previous_tight", "revision": "HEAD^", "params": {"credit": {"approved": {"limit": 0.3}}}}],
@@ -431,17 +431,17 @@ A flow whose step reads a counter that changes between calls gives `RunStatus.NO
 
 ### The manifest
 
-`RunManifest` (`decider/lab/experiments/_manifest.py`) is the small, versioned, immutable record of what ran. It carries references to bulk results, never the results. The runner fills it like this, from the 20,000-record loan run:
+`RunManifest` (`decikit/lab/experiments/_manifest.py`) is the small, versioned, immutable record of what ran. It carries references to bulk results, never the results. The runner fills it like this, from the 20,000-record loan run:
 
 ```json
 {
   "manifest_version": "1",
   "manifest_id": "b361eae7f6054eca8677f934eab210d8",
   "kind": "experiment_run",
-  "flow": {"flow_id": null, "name": "loans", "source": "decider.steps:SequentialStep", "revision": null},
+  "flow": {"flow_id": null, "name": "loans", "source": "decikit.steps:SequentialStep", "revision": null},
   "revision": {"authored": "HEAD", "resolved": "369d6dfb82cde0b7b0915080c7af51f1f2e32649"},
   "source": {"clean": true, "dirty_paths": [], "fingerprint": null, "fingerprint_scope": ""},
-  "environment": {"python": "3.14.5", "decider": "0.0.2.dev548+g369d6dfb8", "dependencies": []},
+  "environment": {"python": "3.14.5", "decikit": "0.0.2.dev548+g369d6dfb8", "dependencies": []},
   "input": {"dataset": "", "fingerprint": "b185f4a7648060e812c7afe42bda048dc1635c7d6c8e85ca1fc27b33d0736fb7",
             "columns": [["income", "Float64"], ["debt", "Float64"], ["collateral", "Float64"]], "row_count": 20000},
   "selection": {"filter": null, "sample": null, "records": []},
@@ -454,7 +454,7 @@ A flow whose step reads a counter that changes between calls gives `RunStatus.NO
 
 - `flow` is `describe(step).flow`, a `FlowRef` built from the root IR node's origin.
 - `revision` holds the experiment's authored revision and the SHA `resolve` gave for it.
-- `environment` holds the Python version and the installed decider version from package metadata. `dependencies` is never filled by the runner.
+- `environment` holds the Python version and the installed decider toolkit version from package metadata. `dependencies` is never filled by the runner.
 - `input` is an `InputFingerprint`. For an eager frame it comes from `LoadedData.from_frame(frame).summary`, with a content fingerprint. For a lazy frame it has the dataset name, the row count and the schema, and no fingerprint, so nothing scans the data twice. `dataset` is `input.dataset`, or the file name of `input.path`, or empty for a builder run.
 - `outputs` has one `ResultRef` per scenario when there is an `out_dir`.
 - `source`, `selection` and `overrides` keep their defaults; the runner does not fill them. Scenario overrides are on each `ScenarioResult` instead.
@@ -465,7 +465,7 @@ A flow whose step reads a counter that changes between calls gives `RunStatus.NO
 
 ### Cost estimate
 
-`estimate_cost(step, rows)` in `decider/lab/experiments/_cost.py` resolves the flow's wiring and counts calls. `CostEstimate` holds `rows`, `calls` and `frame_calls`, and `row_operations = rows * (calls - frame_calls)`: every non-frame call runs once per row, every frame call once. `_run` passes the height of the first batch as `rows`, not the record count. The 20,000-record run with `batch_size=5_000` reported `rows=5000 calls=7 frame_calls=0` and 35,000 row operations.
+`estimate_cost(step, rows)` in `decikit/lab/experiments/_cost.py` resolves the flow's wiring and counts calls. `CostEstimate` holds `rows`, `calls` and `frame_calls`, and `row_operations = rows * (calls - frame_calls)`: every non-frame call runs once per row, every frame call once. `_run` passes the height of the first batch as `rows`, not the record count. The 20,000-record run with `batch_size=5_000` reported `rows=5000 calls=7 frame_calls=0` and 35,000 row operations.
 
 ### Output files
 
@@ -478,11 +478,11 @@ no_collateral/...  rate_shock/...  one_record/...
 result.json
 ```
 
-`pl.scan_parquet(f"{out_dir}/baseline/*.parquet")` reads a scenario back. decider writes these files where the caller says and owns no storage of its own.
+`pl.scan_parquet(f"{out_dir}/baseline/*.parquet")` reads a scenario back. The decider toolkit writes these files where the caller says and owns no storage of its own.
 
 ## Jobs and handles
 
-`start()` wraps `_run` in a `RunHandle` (`decider/lab/experiments/_handle.py`). The handle makes a `JobHandle` of kind `experiment_run`, starts a daemon thread, and passes the job to `_run`, which adds a `JobProgress` callback. `JobHandle` (`decider/lab/experiments/_jobs.py`) is a small mutable controller around an immutable `Job` snapshot, which is what the editor bridge and MCP read. It is a generic finite-job model; experiments are its main user.
+`start()` wraps `_run` in a `RunHandle` (`decikit/lab/experiments/_handle.py`). The handle makes a `JobHandle` of kind `experiment_run`, starts a daemon thread, and passes the job to `_run`, which adds a `JobProgress` callback. `JobHandle` (`decikit/lab/experiments/_jobs.py`) is a small mutable controller around an immutable `Job` snapshot, which is what the editor bridge and MCP read. It is a generic finite-job model; experiments are its main user.
 
 ```mermaid
 stateDiagram-v2
@@ -533,7 +533,7 @@ result: RunStatus.CANCELLED [30] JobStatus.CANCELLED 20 100
 
 ## Callbacks
 
-`Callback` (`decider/lab/experiments/callbacks.py`) has five hooks, all no-ops by default:
+`Callback` (`decikit/lab/experiments/callbacks.py`) has five hooks, all no-ops by default:
 
 | Hook | When | Receives |
 |---|---|---|
@@ -543,7 +543,7 @@ result: RunStatus.CANCELLED [30] JobStatus.CANCELLED 20 100
 | `on_progress(run, done)` | after every scenario has run a batch | the record count done so far |
 | `on_run_end(run)` | once, after the status is known | `Run` with `status` set |
 
-`overrides(callback, hook)` checks whether a class overrides a hook, so the runner can skip work nobody listens to. Node values are only read, and the flow only runs stepped, when some metric or callback overrides `on_node_end` and has a `nodes` or `node_id` attribute. `selects(callback, path, id)` decides per node: an `fnmatch` glob on the node path, or an exact durable id (12 hex characters, from `decider ids`).
+`overrides(callback, hook)` checks whether a class overrides a hook, so the runner can skip work nobody listens to. Node values are only read, and the flow only runs stepped, when some metric or callback overrides `on_node_end` and has a `nodes` or `node_id` attribute. `selects(callback, path, id)` decides per node: an `fnmatch` glob on the node path, or an exact durable id (12 hex characters, from `decikit ids`).
 
 There are three built-in callbacks. `Progress` prints records done, the total and elapsed time after each batch. `JobProgress` connects a run to a `JobHandle`, as above. `WriteOutputs` writes each batch's output to parquet.
 
@@ -703,7 +703,7 @@ A `Plot` (`plots/_base.py`) is a registry model with a `metric` to draw, an opti
 *`Sankey(metric="branch_flows", scenario="premium_0.08")`.*
 </div>
 
-`Figure.html()` returns a `<div>` and a script that embeds the spec with vega-embed. Every figure on a page shares one loader promise, `window.deciderVega`, that loads vega, vega-lite and vega-embed once, in order, from jsDelivr at the versions altair pins, and through `requirejs` when the page has it. The reason: figures that each loaded their own scripts raced each other, and in VS Code a report of several charts failed with vega-embed's "compile is not a function". A script that fails to load shows the URL in the chart's place. Specs are JSON-escaped so `</` cannot close the script tag.
+`Figure.html()` returns a `<div>` and a script that embeds the spec with vega-embed. Every figure on a page shares one loader promise, `window.decikitVega`, that loads vega, vega-lite and vega-embed once, in order, from jsDelivr at the versions altair pins, and through `requirejs` when the page has it. The reason: figures that each loaded their own scripts raced each other, and in VS Code a report of several charts failed with vega-embed's "compile is not a function". A script that fails to load shows the URL in the chart's place. Specs are JSON-escaped so `</` cannot close the script tag.
 
 ## Reports
 
@@ -734,18 +734,18 @@ Without a report, the default is an `Overview` and one `MetricSection` per metri
 - A failing scenario never stops the others, and a stopped, partial or non-reproducible run never reports `completed`.
 - Revision code runs only in a fresh process, never imported into the caller's process.
 - Plots and summaries are plain JSON in the result.
-- `decider` writes bulk outputs only where the caller's `out_dir` says.
+- `decikit` writes bulk outputs only where the caller's `out_dir` says.
 
 ## How it fails
 
 | Symptom | Cause | What to do |
 |---|---|---|
 | `ValueError: <scenario>: override 'x' is produced, not an input; declare 'at: <step path>'` (and the other `validate` messages) | The definition does not fit the flow | Fix the definition; `validate(def_, step)` lists every problem without running |
-| `DeciderError: flow needs decider ...` | `flow.decider` excludes the installed version | Install a matching decider or widen the window |
+| `DecikitError: flow needs decikit ...` | `flow.decikit` excludes the installed version | Install a matching decider toolkit version or widen the window |
 | A scenario `failed` with a revision error | The worker could not import the flow at that revision, or the run raised there | The error text is the worker's; the [diff page](diff.md) shows how to drive a worker by hand |
 | `TypeError: 'NoneType' object is not subscriptable` from `run()` | The baseline failed while a global metric reads `batch.baseline` (see the warning above) | Run the baseline alone first to see its error |
 | A metric or callback raises | Hook exceptions are not caught | The traceback points at the hook |
-| `DeciderError: experiment plots need altair: pip install 'decider[experiments]'` | A plot rendered without altair | Install the extra |
+| `DecikitError: experiment plots need altair: pip install 'decikit[experiments]'` | A plot rendered without altair | Install the extra |
 | A chart shows "could not load https://cdn.jsdelivr.net/..." | The page cannot reach the CDN | Open the report where the CDN is reachable |
 
 ## What is measured
@@ -766,7 +766,7 @@ and a whole experiment (baseline, determinism rerun and one scenario) with `benc
 | 1,000,000 | 104 ms | 168 ms |
 | 10,000,000 | 382 ms | 897 ms |
 
-Measured, a worktree checkout takes about 0.5 s and starting a worker and importing decider about 0.8 s. The run above saw about 1.7 s for a revision scenario on three records, including its whole run.
+Measured, a worktree checkout takes about 0.5 s and starting a worker and importing the decider toolkit about 0.8 s. The run above saw about 1.7 s for a revision scenario on three records, including its whole run.
 
 ## Why it is shaped this way
 

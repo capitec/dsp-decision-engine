@@ -5,13 +5,13 @@ import polars as pl
 import pytest
 from numba.extending import overload
 
-from decider import flow, missing_as, param
-from decider.ops import decimal
-from decider.ops.decimal import Currency
-from decider._engine import Engine
-from decider._engine.debug import Session
-from decider._engine.run import Executable
-from decider.lab.testing import assert_equivalent, corpus, no_recompile
+from decikit import flow, missing_as, param
+from decikit.ops import decimal
+from decikit.ops.decimal import Currency
+from decikit._engine import Engine
+from decikit._engine.debug import Session
+from decikit._engine.run import Executable
+from decikit.lab.testing import assert_equivalent, corpus, no_recompile
 
 
 # Nothing numba and CPython could disagree on (no division, no rounding), so

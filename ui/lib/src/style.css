@@ -1,17 +1,17 @@
 /* Every rule is nested under the root, so the UI can share a page without styling it. The root is
    the size container its layouts respond to: the panel, not the window. */
-.decider {
-  font-family: var(--decider-font, system-ui);
-  font-size: var(--decider-font-size, 13px);
-  color: var(--decider-fg);
-  background: var(--decider-bg);
+.decikit {
+  font-family: var(--decikit-font, system-ui);
+  font-size: var(--decikit-font-size, 13px);
+  color: var(--decikit-fg);
+  background: var(--decikit-bg);
   height: 100%;
   container-type: size;
 
   /* One palette: semantic state colours, derived once and used everywhere. */
-  --changed: var(--decider-orange, #d18616);
-  --added: var(--decider-green, #89d185);
-  --lineage: var(--decider-blue, #3794ff);
+  --changed: var(--decikit-orange, #d18616);
+  --added: var(--decikit-green, #89d185);
+  --lineage: var(--decikit-blue, #3794ff);
 
   &,
   button,
@@ -32,7 +32,7 @@ header {
   align-items: center;
   gap: 12px;
   padding: 7px 12px;
-  border-bottom: 1px solid var(--decider-border);
+  border-bottom: 1px solid var(--decikit-border);
   flex-wrap: wrap;
   row-gap: 4px;
   /* A stacking context, so the Discovery dropdown paints above the body panes below. */
@@ -48,8 +48,8 @@ header {
     font-size: 0.82em;
     padding: 1px 8px;
     border-radius: 999px;
-    border: 1px solid var(--decider-border);
-    color: var(--decider-muted);
+    border: 1px solid var(--decikit-border);
+    color: var(--decikit-muted);
     white-space: nowrap;
   }
 }
@@ -66,11 +66,11 @@ header {
   align-items: center;
   gap: 10px;
   padding: 4px 12px;
-  border-bottom: 1px solid var(--decider-border);
-  background: var(--decider-widget-bg, transparent);
+  border-bottom: 1px solid var(--decikit-border);
+  background: var(--decikit-widget-bg, transparent);
   font-size: 0.92em;
 
-  .pause-icon { color: var(--decider-pause-icon, var(--decider-warning)); }
+  .pause-icon { color: var(--decikit-pause-icon, var(--decikit-warning)); }
 
   button { margin-left: auto; }
   button + button { margin-left: 0; }
@@ -82,7 +82,7 @@ header {
   flex: none;
   overflow: auto;
   padding: 6px 0;
-  border-right: 1px solid var(--decider-border);
+  border-right: 1px solid var(--decikit-border);
   font-size: 0.92em;
 
   .tree-node {
@@ -94,37 +94,37 @@ header {
     padding: 3px 8px;
     background: none;
     border: none;
-    color: var(--decider-fg);
+    color: var(--decikit-fg);
     cursor: pointer;
     text-align: left;
     border-radius: 3px;
 
     &:hover {
-      background: var(--decider-hover-bg);
+      background: var(--decikit-hover-bg);
     }
 
     &.selected {
-      background: var(--decider-selection-bg);
-      color: var(--decider-selection-fg, var(--decider-fg));
+      background: var(--decikit-selection-bg);
+      color: var(--decikit-selection-fg, var(--decikit-fg));
     }
   }
 
   .twisty {
     width: 1em;
-    color: var(--decider-muted);
+    color: var(--decikit-muted);
   }
 
   .kind {
     width: 1.1em;
     text-align: center;
     font-size: 0.72em;
-    color: var(--decider-muted);
+    color: var(--decikit-muted);
   }
 
-  .kind.row { color: var(--decider-green); }
-  .kind.frame { color: var(--decider-blue); }
-  .kind.branch { color: var(--decider-purple); }
-  .kind.loop { color: var(--decider-yellow); }
+  .kind.row { color: var(--decikit-green); }
+  .kind.frame { color: var(--decikit-blue); }
+  .kind.branch { color: var(--decikit-purple); }
+  .kind.loop { color: var(--decikit-yellow); }
 
   .name {
     flex: 1;
@@ -135,7 +135,7 @@ header {
   }
 
   .writes {
-    color: var(--decider-muted);
+    color: var(--decikit-muted);
     font-size: 0.85em;
     max-width: 40%;
     overflow: hidden;
@@ -165,23 +165,23 @@ header {
 
 .cluster rect {
   fill: none;
-  stroke: var(--decider-border);
+  stroke: var(--decikit-border);
   stroke-dasharray: 5 4;
   stroke-width: 1.2;
 }
-.cluster.branch rect { stroke: var(--decider-purple); }
-.cluster.loop rect { stroke: var(--decider-yellow); }
+.cluster.branch rect { stroke: var(--decikit-purple); }
+.cluster.loop rect { stroke: var(--decikit-yellow); }
 .cluster text {
   font-size: 11px;
   font-weight: 600;
-  fill: var(--decider-fg);
+  fill: var(--decikit-fg);
   cursor: pointer;
 
   &:hover { text-decoration: underline; }
 
   .kind {
     font-weight: 400;
-    fill: var(--decider-muted);
+    fill: var(--decikit-muted);
   }
 }
 
@@ -189,41 +189,41 @@ header {
   cursor: pointer;
 
   rect {
-    fill: var(--decider-input-bg, var(--decider-bg));
-    stroke: var(--decider-border);
+    fill: var(--decikit-input-bg, var(--decikit-bg));
+    stroke: var(--decikit-border);
     stroke-width: 1.2;
     transition: stroke 150ms ease;
   }
 
   text {
-    fill: var(--decider-fg);
+    fill: var(--decikit-fg);
     pointer-events: none;
   }
 
   text.title { font-size: 13px; font-weight: 600; }
-  text.sub { font-size: 11px; fill: var(--decider-muted); }
+  text.sub { font-size: 11px; fill: var(--decikit-muted); }
 
   &.selected rect {
-    stroke: var(--decider-focus, var(--decider-link));
+    stroke: var(--decikit-focus, var(--decikit-link));
     stroke-width: 3;
   }
 
   &.touches rect {
-    fill: var(--decider-match-bg, color-mix(in srgb, var(--lineage) 28%, transparent));
+    fill: var(--decikit-match-bg, color-mix(in srgb, var(--lineage) 28%, transparent));
     stroke: var(--lineage);
     stroke-width: 2;
   }
 
-  &.row rect { stroke: var(--decider-green); }
+  &.row rect { stroke: var(--decikit-green); }
   &.frame rect { stroke-dasharray: 5 2; }
 
   &.folded rect {
-    fill: var(--decider-widget-bg, transparent);
+    fill: var(--decikit-widget-bg, transparent);
     stroke-dasharray: 6 3;
   }
 
   &.paused rect {
-    stroke: var(--decider-pause-icon, var(--decider-warning));
+    stroke: var(--decikit-pause-icon, var(--decikit-warning));
     stroke-width: 2.5;
   }
 
@@ -233,23 +233,23 @@ header {
     fill: transparent;
     cursor: pointer;
   }
-  .bp-dot.set { fill: var(--decider-breakpoint, var(--decider-red)); }
-  &:hover .bp-dot:not(.set) { fill: color-mix(in srgb, var(--decider-breakpoint, var(--decider-red)) 35%, transparent); }
-  .bp-eq { fill: var(--decider-button-fg, #fff); font-size: 7px; font-weight: 700; pointer-events: none; }
-  .pause-dot rect { fill: var(--decider-pause-icon, var(--decider-warning)); stroke: none; }
-  .ran-dot { fill: var(--decider-green); }
+  .bp-dot.set { fill: var(--decikit-breakpoint, var(--decikit-red)); }
+  &:hover .bp-dot:not(.set) { fill: color-mix(in srgb, var(--decikit-breakpoint, var(--decikit-red)) 35%, transparent); }
+  .bp-eq { fill: var(--decikit-button-fg, #fff); font-size: 7px; font-weight: 700; pointer-events: none; }
+  .pause-dot rect { fill: var(--decikit-pause-icon, var(--decikit-warning)); stroke: none; }
+  .ran-dot { fill: var(--decikit-green); }
 }
 
 .edge path {
   fill: none;
-  stroke: var(--decider-fg);
+  stroke: var(--decikit-fg);
   stroke-width: 1.2;
   opacity: 0.5;
 }
 .edge.back path { stroke-dasharray: 5 3; }
 .edge text {
   font-size: 10px;
-  fill: var(--decider-muted);
+  fill: var(--decikit-muted);
 }
 .edge .hit {
   stroke: transparent;
@@ -262,10 +262,10 @@ header {
   stroke-dasharray: 3 3;
 }
 .edge.data.out path {
-  stroke: var(--decider-blue);
+  stroke: var(--decikit-blue);
 }
 .edge.data.in path {
-  stroke: var(--decider-green);
+  stroke: var(--decikit-green);
 }
 .edge.data .hit {
   opacity: 0;
@@ -273,7 +273,7 @@ header {
 }
 .edge.data text {
   font-size: 10px;
-  fill: var(--decider-fg);
+  fill: var(--decikit-fg);
 }
 
 .edge.selected path {
@@ -288,8 +288,8 @@ header {
   display: flex;
   gap: 2px;
   padding: 3px;
-  background: var(--decider-widget-bg);
-  border: 1px solid var(--decider-border);
+  background: var(--decikit-widget-bg);
+  border: 1px solid var(--decikit-border);
   border-radius: 5px;
 
   button {
@@ -304,7 +304,7 @@ header {
   bottom: 8px;
   left: 8px;
   font-size: 0.82em;
-  color: var(--decider-muted);
+  color: var(--decikit-muted);
   pointer-events: none;
 }
 
@@ -314,10 +314,10 @@ header {
   flex: none;
   overflow: auto;
   padding: 10px 12px 24px;
-  border-left: 1px solid var(--decider-border);
+  border-left: 1px solid var(--decikit-border);
 
   &.empty {
-    color: var(--decider-muted);
+    color: var(--decikit-muted);
     line-height: 1.5;
 
     p { margin: 0; }
@@ -340,24 +340,24 @@ header {
       font-size: 0.78em;
       padding: 1px 7px;
       border-radius: 999px;
-      border: 1px solid var(--decider-border);
-      color: var(--decider-muted);
+      border: 1px solid var(--decikit-border);
+      color: var(--decikit-muted);
       white-space: nowrap;
     }
   }
 
   .doc {
     margin: 0 0 8px;
-    color: var(--decider-muted);
+    color: var(--decikit-muted);
   }
 
   .formula,
   .code {
     margin: 0 0 8px;
     padding: 6px 8px;
-    font-family: var(--decider-mono, monospace);
+    font-family: var(--decikit-mono, monospace);
     font-size: 0.86em;
-    background: var(--decider-code-bg, transparent);
+    background: var(--decikit-code-bg, transparent);
     border-radius: 4px;
     overflow-wrap: anywhere;
   }
@@ -371,7 +371,7 @@ header {
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.03em;
-      color: var(--decider-muted);
+      color: var(--decikit-muted);
 
       .muted.small { text-transform: none; letter-spacing: 0; }
     }
@@ -386,9 +386,9 @@ header {
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.03em;
-      color: var(--decider-muted);
+      color: var(--decikit-muted);
 
-      &::marker { color: var(--decider-muted); }
+      &::marker { color: var(--decikit-muted); }
     }
   }
 
@@ -413,9 +413,9 @@ header {
 
   .paused-here {
     padding: 4px 7px;
-    border: 1px solid var(--decider-pause-icon, var(--decider-warning));
+    border: 1px solid var(--decikit-pause-icon, var(--decikit-warning));
     border-radius: 4px;
-    color: var(--decider-pause-icon, var(--decider-warning));
+    color: var(--decikit-pause-icon, var(--decikit-warning));
     margin-bottom: 6px;
     font-size: 0.9em;
   }
@@ -438,12 +438,12 @@ header {
 
   .value-edit {
     font: inherit;
-    font-family: var(--decider-mono);
+    font-family: var(--decikit-mono);
     font-size: 0.95em;
     width: 7em;
-    background: var(--decider-input-bg);
-    color: var(--decider-input-fg);
-    border: 1px solid var(--decider-input-border);
+    background: var(--decikit-input-bg);
+    color: var(--decikit-input-fg);
+    border: 1px solid var(--decikit-input-border);
     border-radius: 3px;
     padding: 1px 4px;
   }
@@ -458,7 +458,7 @@ header {
   .trace {
     margin-top: 6px;
 
-    summary { cursor: pointer; font-size: 0.82em; color: var(--decider-link); }
+    summary { cursor: pointer; font-size: 0.82em; color: var(--decikit-link); }
   }
 
   .trace-off { margin-top: 6px; font-style: italic; }
@@ -467,7 +467,7 @@ header {
 .node-link {
   background: none;
   border: none;
-  color: var(--decider-link);
+  color: var(--decikit-link);
   cursor: pointer;
   text-align: left;
   padding: 2px 4px;
@@ -475,7 +475,7 @@ header {
   font-size: 0.92em;
 
   &:hover {
-    background: var(--decider-hover-bg);
+    background: var(--decikit-hover-bg);
     text-decoration: underline;
   }
 }
@@ -483,11 +483,11 @@ header {
 .chip {
   padding: 2px 9px;
   border-radius: 999px;
-  border: 1px solid var(--decider-border);
-  background: var(--decider-button2-bg);
-  color: var(--decider-button2-fg, var(--decider-fg));
+  border: 1px solid var(--decikit-border);
+  background: var(--decikit-button2-bg);
+  color: var(--decikit-button2-fg, var(--decikit-fg));
   cursor: pointer;
-  font-family: var(--decider-mono, monospace);
+  font-family: var(--decikit-mono, monospace);
   font-size: 0.85em;
 
   &:hover {
@@ -499,41 +499,41 @@ header {
 button {
   font-family: inherit;
   font-size: inherit;
-  background: var(--decider-button2-bg);
-  color: var(--decider-button2-fg, var(--decider-fg));
+  background: var(--decikit-button2-bg);
+  color: var(--decikit-button2-fg, var(--decikit-fg));
   border: none;
   padding: 3px 10px;
   cursor: pointer;
   white-space: nowrap;
 
-  &:hover { background: var(--decider-hover-bg); }
+  &:hover { background: var(--decikit-hover-bg); }
 
   &.primary,
   &.active {
-    background: var(--decider-button-bg);
-    color: var(--decider-button-fg);
+    background: var(--decikit-button-bg);
+    color: var(--decikit-button-fg);
   }
 
   &.link {
     background: none;
     padding: 0;
-    color: var(--decider-link);
+    color: var(--decikit-link);
   }
 
   &:focus-visible {
-    outline: 1px solid var(--decider-focus, var(--decider-link));
+    outline: 1px solid var(--decikit-focus, var(--decikit-link));
     outline-offset: 1px;
   }
 }
 
-.muted { color: var(--decider-muted); }
+.muted { color: var(--decikit-muted); }
 .small { font-size: 0.85em; }
-.mono { font-family: var(--decider-mono, monospace); }
-.empty { padding: 20px; color: var(--decider-muted); }
+.mono { font-family: var(--decikit-mono, monospace); }
+.empty { padding: 20px; color: var(--decikit-muted); }
 
 ::selection {
-  background: var(--decider-selection-bg);
-  color: var(--decider-selection-fg, inherit);
+  background: var(--decikit-selection-bg);
+  color: var(--decikit-selection-fg, inherit);
 }
 
 .structure::-webkit-scrollbar,
@@ -543,7 +543,7 @@ button {
 }
 .structure::-webkit-scrollbar-thumb,
 .inspector::-webkit-scrollbar-thumb {
-  background: var(--decider-border);
+  background: var(--decikit-border);
   border-radius: 5px;
 }
 .structure::-webkit-scrollbar-track,
@@ -563,7 +563,7 @@ button {
     width: auto;
     max-height: 38%;
     border-left: none;
-    border-top: 1px solid var(--decider-border);
+    border-top: 1px solid var(--decikit-border);
   }
   .graph {
     flex: 1;
@@ -594,21 +594,21 @@ button {
     font-size: 0.8em;
     padding: 1px 9px;
     border-radius: 999px;
-    border: 1px solid var(--decider-border);
+    border: 1px solid var(--decikit-border);
     text-transform: uppercase;
     letter-spacing: 0.03em;
 
     &.badge-completed { border-color: var(--added); color: var(--added); }
     &.badge-non_reproducible,
     &.badge-partial { border-color: var(--changed); color: var(--changed); }
-    &.badge-failed { border-color: var(--decider-error); color: var(--decider-error); }
+    &.badge-failed { border-color: var(--decikit-error); color: var(--decikit-error); }
     &.badge-cancelled,
-    &.badge-timed_out { border-color: var(--decider-muted); color: var(--decider-muted); }
+    &.badge-timed_out { border-color: var(--decikit-muted); color: var(--decikit-muted); }
   }
 
   .experiment-banner {
     padding: 8px 11px;
-    border: 1px solid var(--decider-border);
+    border: 1px solid var(--decikit-border);
     border-radius: 5px;
     font-size: 0.92em;
 
@@ -622,9 +622,9 @@ button {
     border-collapse: collapse;
     font-size: 0.92em;
 
-    th, td { padding: 4px 12px; text-align: left; border-bottom: 1px solid var(--decider-border); }
-    th { color: var(--decider-muted); font-weight: 600; font-size: 0.82em; text-transform: uppercase; }
-    tr.failed td { color: var(--decider-error); }
+    th, td { padding: 4px 12px; text-align: left; border-bottom: 1px solid var(--decikit-border); }
+    th { color: var(--decikit-muted); font-weight: 600; font-size: 0.82em; text-transform: uppercase; }
+    tr.failed td { color: var(--decikit-error); }
   }
 
   .report-row {
@@ -640,10 +640,10 @@ button {
     flex-direction: column;
     gap: 10px;
     padding-top: 12px;
-    border-top: 1px solid var(--decider-border);
+    border-top: 1px solid var(--decikit-border);
 
     h2, h3 { margin: 0; }
-    h3 { font-size: 0.85em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--decider-muted); }
+    h3 { font-size: 0.85em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--decikit-muted); }
   }
 
   .report-text { font-size: 0.95em; line-height: 1.55; }
@@ -654,19 +654,19 @@ button {
     overflow-x: auto;
 
     table { border-collapse: collapse; font-size: 0.88em; }
-    th, td { padding: 3px 11px; text-align: left; border-bottom: 1px solid var(--decider-border); white-space: nowrap; }
-    th { color: var(--decider-muted); font-weight: 600; font-size: 0.82em; text-transform: uppercase; }
+    th, td { padding: 3px 11px; text-align: left; border-bottom: 1px solid var(--decikit-border); white-space: nowrap; }
+    th { color: var(--decikit-muted); font-weight: 600; font-size: 0.82em; text-transform: uppercase; }
   }
 
   .vega-chart {
     min-width: 260px;
     min-height: 180px;
-    background: var(--decider-widget-bg, transparent);
-    border: 1px solid var(--decider-border);
+    background: var(--decikit-widget-bg, transparent);
+    border: 1px solid var(--decikit-border);
     border-radius: 6px;
     padding: 6px;
 
-    .chart-error { margin: 0; color: var(--decider-error); font-size: 0.85em; white-space: pre-wrap; }
+    .chart-error { margin: 0; color: var(--decikit-error); font-size: 0.85em; white-space: pre-wrap; }
   }
 }
 
@@ -683,11 +683,11 @@ button {
     margin: 0;
     padding: 8px 16px;
     list-style: none;
-    border-bottom: 1px solid var(--decider-border);
-    background: color-mix(in srgb, var(--decider-error) 8%, transparent);
+    border-bottom: 1px solid var(--decikit-border);
+    background: color-mix(in srgb, var(--decikit-error) 8%, transparent);
     font-size: 0.88em;
 
-    li { padding: 2px 0; color: var(--decider-error); }
+    li { padding: 2px 0; color: var(--decikit-error); }
     li::before { content: "⚠ "; }
   }
 
@@ -698,7 +698,7 @@ button {
     padding: 14px 16px 24px;
   }
 
-  .description { margin: 0 0 8px; font-size: 0.95em; line-height: 1.5; color: var(--decider-muted); }
+  .description { margin: 0 0 8px; font-size: 0.95em; line-height: 1.5; color: var(--decikit-muted); }
 
   .meta-grid {
     display: grid;
@@ -707,15 +707,15 @@ button {
     margin: 4px 0 8px;
     font-size: 0.92em;
 
-    dt { color: var(--decider-muted); text-transform: uppercase; font-size: 0.78em; letter-spacing: 0.03em; align-self: baseline; padding-top: 2px; }
+    dt { color: var(--decikit-muted); text-transform: uppercase; font-size: 0.78em; letter-spacing: 0.03em; align-self: baseline; padding-top: 2px; }
     dd { margin: 0; }
   }
 
   .summary-section {
     padding-top: 12px;
-    border-top: 1px solid var(--decider-border);
+    border-top: 1px solid var(--decikit-border);
 
-    h3 { margin: 0 0 6px; font-size: 0.85em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--decider-muted); }
+    h3 { margin: 0 0 6px; font-size: 0.85em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--decikit-muted); }
   }
 
   .summary-row {

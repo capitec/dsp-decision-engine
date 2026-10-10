@@ -8,16 +8,16 @@ import polars as pl
 import pytest
 from click.testing import CliRunner
 
-from decider import _engine as engine
-from decider._tooling.cli import cli
-from decider.lab import describe
-from decider._engine.ir.nodes import iter_nodes
-from decider._tooling.cli.ids import IdError, add_ids, generate
-from decider.steps import flow, step
+from decikit import _engine as engine
+from decikit._tooling.cli import cli
+from decikit.lab import describe
+from decikit._engine.ir.nodes import iter_nodes
+from decikit._tooling.cli.ids import IdError, add_ids, generate
+from decikit.steps import flow, step
 
 PIPELINE = '''"""A retail credit pipeline, kept readable."""
 # keep this comment, the imports, the decorators and the spacing exactly.
-from decider.steps import branch, dag, flow, step
+from decikit.steps import branch, dag, flow, step
 
 @step(output="term_cap")  # a note on the decorator
 def cap_by_income(term_cap: float) -> float:
@@ -218,7 +218,7 @@ def test_committed_ids_survive_a_rename(repo: Path):
 
 def test_committed_ids_survive_reordering(repo: Path):
     (repo / "pipeline.py").write_text(
-        'from decider.steps import flow, step\n\n'
+        'from decikit.steps import flow, step\n\n'
         '@step(output="x")\ndef a(x: float) -> float:\n    return x\n\n'
         '@step(output="y")\ndef b(y: float) -> float:\n    return y\n\n'
         'pipe = flow(a, b, name="p")\n'
@@ -234,7 +234,7 @@ def test_committed_ids_survive_reordering(repo: Path):
 
 def test_committed_ids_survive_extraction(repo: Path):
     (repo / "pipeline.py").write_text(
-        'from decider.steps import flow, step\n\n'
+        'from decikit.steps import flow, step\n\n'
         '@step(output="x")\ndef a(x: float) -> float:\n    return x\n\n'
         'pipe = flow(a, name="p")\n'
     )
@@ -261,7 +261,7 @@ def test_cli_ids_adds_ids(repo: Path, monkeypatch):
 
 
 def test_a_pipeline_without_ids_still_runs_and_describes():
-    # Migration: an existing project that never runs `decider ids` is unchanged —
+    # Migration: an existing project that never runs `decikit ids` is unchanged —
     # no id is required, and identity falls back to the derived path/source.
     def ratio(income: float, debt: float) -> float:
         return debt / income
@@ -279,7 +279,7 @@ def test_a_pipeline_without_ids_still_runs_and_describes():
 
 
 def test_ids_cover_every_composite_constructor():
-    from decider.steps._composites import COMPOSITES
+    from decikit.steps._composites import COMPOSITES
 
     src = "".join(f'x{i} = {kind}(name="n{i}")\n' for i, kind in enumerate(COMPOSITES))
     _, changes = add_ids(src)

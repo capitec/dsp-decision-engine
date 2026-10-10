@@ -1,5 +1,5 @@
 """Home loan: secured, 60 to 360 months, loan-to-value limits. Affordability: the instalment at the offered and a stressed rate against disposable income."""
-from decider import flow, param, step
+from decikit import flow, param, step
 
 
 def hl_instalment(requested_amount: float, requested_term: float, hl_monthly_rate: float, hl_monthly_fee: float) -> float:

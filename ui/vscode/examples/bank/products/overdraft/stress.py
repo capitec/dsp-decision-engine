@@ -1,5 +1,5 @@
 """Overdraft on a salary account. Stress tests: the instalment under rate shocks, and whether it still fits."""
-from decider import flow, param, step
+from decikit import flow, param, step
 
 
 def od_shock_25bp_instalment(requested_amount: float, requested_term: float, od_rate: float, shock: float = param(0.0025)) -> float:

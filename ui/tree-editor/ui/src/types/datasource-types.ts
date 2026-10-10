@@ -43,7 +43,7 @@ export interface TableInfo {
 }
 
 // PolarsSchema type definition
-// Matches the decider PolarsSchema
+// Matches the decikit PolarsSchema
 
 // Primitive/simple Polars types (no constructor arguments)
 export type PolarsPrimitiveType =

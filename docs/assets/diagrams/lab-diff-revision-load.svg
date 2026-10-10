@@ -10,7 +10,7 @@
   <rect x="15" y="15" width="440" height="570" rx="10" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
   <text x="235" y="42" font-size="15" font-weight="600" fill="#1f2937" text-anchor="middle">parent process (live code imported)</text>
   <rect x="545" y="15" width="440" height="570" rx="10" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
-  <text x="765" y="42" font-size="15" font-weight="600" fill="#1f2937" text-anchor="middle">worker: python -m decider.lab.diff._worker</text>
+  <text x="765" y="42" font-size="15" font-weight="600" fill="#1f2937" text-anchor="middle">worker: python -m decikit.lab.diff._worker</text>
 
   <!-- parent steps -->
   <rect x="40" y="62" width="390" height="50" rx="9" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
@@ -19,10 +19,10 @@
 
   <rect x="40" y="132" width="390" height="50" rx="9" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
   <text x="235" y="153" font-size="14" fill="#4c1d95" text-anchor="middle">materialise(sha)</text>
-  <text x="235" y="172" font-size="13" fill="#4c1d95" text-anchor="middle">git worktree add --detach decider-revision-*</text>
+  <text x="235" y="172" font-size="13" fill="#4c1d95" text-anchor="middle">git worktree add --detach decikit-revision-*</text>
 
   <rect x="40" y="202" width="390" height="50" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
-  <text x="235" y="223" font-size="14" fill="#14532d" text-anchor="middle">scratch dir decider-diff-*</text>
+  <text x="235" y="223" font-size="14" fill="#14532d" text-anchor="middle">scratch dir decikit-diff-*</text>
   <text x="235" y="242" font-size="13" fill="#14532d" text-anchor="middle">input.parquet (only for outputs)</text>
 
   <rect x="40" y="272" width="390" height="62" rx="9" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
@@ -77,6 +77,6 @@
   <text x="588" y="132" font-size="13" fill="#1f2937">so importing it again returns the cached live</text>
   <text x="588" y="152" font-size="13" fill="#1f2937">module. A new interpreter has no cache: every</text>
   <text x="588" y="172" font-size="13" fill="#1f2937">module the entry imports comes from the</text>
-  <text x="588" y="192" font-size="13" fill="#1f2937">checkout. decider itself still resolves from</text>
+  <text x="588" y="192" font-size="13" fill="#1f2937">checkout. decikit itself still resolves from</text>
   <text x="588" y="212" font-size="13" fill="#1f2937">the installed package, the same sys.executable.</text>
 </svg>

@@ -1,5 +1,5 @@
-from decider import param
-from decider._engine.params import NodeParams, Status, harvest, validate_node
+from decikit import param
+from decikit._engine.params import NodeParams, Status, harvest, validate_node
 
 
 def sector_rate(sector: str, private: str = param("private"),

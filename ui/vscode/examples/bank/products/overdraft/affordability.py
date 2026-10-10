@@ -1,5 +1,5 @@
 """Overdraft on a salary account. Affordability: the instalment at the offered and a stressed rate against disposable income."""
-from decider import flow, param, step
+from decikit import flow, param, step
 
 
 def od_instalment(requested_amount: float, requested_term: float, od_monthly_rate: float, od_monthly_fee: float) -> float:

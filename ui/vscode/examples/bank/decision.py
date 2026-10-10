@@ -1,5 +1,5 @@
 """The final decision: referrals, the reason code and the channel message."""
-from decider import flow, param, step
+from decikit import flow, param, step
 
 
 def product_arm(product_code: int) -> int:

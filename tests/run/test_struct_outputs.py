@@ -6,9 +6,9 @@ from typing import TypedDict
 import polars as pl
 import pytest
 
-from decider import Engine, flow, loop, step
-from decider.ops import Columnar, Struct
-from decider.lab.testing import assert_equivalent
+from decikit import Engine, flow, loop, step
+from decikit.ops import Columnar, Struct
+from decikit.lab.testing import assert_equivalent
 
 
 class Product(TypedDict):

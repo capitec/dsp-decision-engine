@@ -1,6 +1,6 @@
 import json
 
-from decider._tooling.mcp._docs import read_doc, save_doc
+from decikit._tooling.mcp._docs import read_doc, save_doc
 
 TREE = {"type": "tree", "name": "risk", "tree": {
     "nodes": [{"id": "root", "data": {"type": "unary", "condition": {"op": ">", "feature": "ratio", "threshold": 0.7}}},

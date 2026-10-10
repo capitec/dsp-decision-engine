@@ -74,7 +74,7 @@ configured to use the system certificate store (`system-certs = true` in
 <h3 id="directory-structure">📂 Directory Structure</h3>
 
 ```
-decider/                  The package: pipelines, engine, steps, lab, serving, CLI and MCP tooling
+decikit/                  The package: pipelines, engine, steps, lab, serving, CLI and MCP tooling
 tests/                    pytest suite
 docs/                     Documentation site (zensical); docs/design_decisions/ holds the design history
 benchmarks/               Plain scripts: uv run python benchmarks/<name>.py
@@ -86,7 +86,7 @@ pyproject.toml            Project metadata, dependencies, tool config
 uv.lock                   Locked dependency graph (committed)
 ```
 
-How `decider/` is laid out inside, and which packages may import which, is in
+How `decikit/` is laid out inside, and which packages may import which, is in
 [docs/architecture/package-layout.md](docs/architecture/package-layout.md).
 `uv run pytest tests/test_conventions.py -q` enforces the file-size and import rules.
 

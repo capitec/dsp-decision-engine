@@ -1,5 +1,5 @@
 """Overdraft on a salary account."""
-from decider import flow
+from decikit import flow
 
 from bank.products.overdraft.affordability import od_affordability
 from bank.products.overdraft.limits import od_limits

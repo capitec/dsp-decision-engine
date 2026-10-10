@@ -4,11 +4,11 @@ from typing import Annotated
 import numpy as np
 import pytest
 
-from decider import flow, loop, param, step
-from decider.lab import checks
-from decider.lab.checks import Severity
-from decider.ops import decimal
-from decider.ops.decimal import Currency, Rounding
+from decikit import flow, loop, param, step
+from decikit.lab import checks
+from decikit.lab.checks import Severity
+from decikit.ops import decimal
+from decikit.ops.decimal import Currency, Rounding
 
 
 def run(*fns, alias):

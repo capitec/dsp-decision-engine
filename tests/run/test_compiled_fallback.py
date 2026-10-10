@@ -8,15 +8,15 @@ import numpy as np
 import polars as pl
 import pytest
 
-from decider.exceptions import FallbackWarning, WiringError
+from decikit.exceptions import FallbackWarning, WiringError
 
-from decider import allow_fallback, branch, flow, missing_as, step
-from decider.ops import Text
-from decider._engine import Engine
-from decider._engine.boundary._arrow.intrinsics import load_u8
-from decider._engine.compile import Fallback, Kernel
-from decider._engine.run.representations import spans
-from decider.lab.testing import assert_equivalent
+from decikit import allow_fallback, branch, flow, missing_as, step
+from decikit.ops import Text
+from decikit._engine import Engine
+from decikit._engine.boundary._arrow.intrinsics import load_u8
+from decikit._engine.compile import Fallback, Kernel
+from decikit._engine.run.representations import spans
+from decikit.lab.testing import assert_equivalent
 
 COMPILED = ("stepped", "fused")
 
@@ -314,8 +314,8 @@ def test_fallback_warnings_are_silenced_by_their_category(mode):
 
 @pytest.mark.parametrize("bad", ["flow", "scorecard", "frame_step"])
 def test_allow_fallback_refuses_a_step_it_could_not_reach(bad):
-    from decider import frame_step
-    from decider.steps.scorecard._config import DefaultBin, ScorecardConfig, ScoredVariable, ValuesBin
+    from decikit import frame_step
+    from decikit.steps.scorecard._config import DefaultBin, ScorecardConfig, ScoredVariable, ValuesBin
 
     targets = {
         "flow": lambda: flow(half, name="p"),
@@ -354,6 +354,31 @@ def test_a_numba_lowering_assert_falls_back_with_a_reason(mode):
     assert out["mixed_list"].to_list() == [[1.0, 2.0], [1.5]]
 
 
+def mixed_records(x: float) -> list[dict]:
+    return [{"n": 1, "v": "x"}, {"n": 2, "v": x}]
+
+
+@pytest.mark.parametrize("mode", COMPILED)
+def test_a_numba_boxing_type_error_falls_back_with_a_reason(mode):
+    exe = Engine().bind(flow(mixed_records, name="p"), mode=mode)
+    with pytest.warns(FallbackWarning, match="p/mixed_records runs in Python, row by row: TypeError"):
+        assert exe.score({"x": 1.5})["mixed_records"] == [{"n": 1, "v": "x"}, {"n": 2, "v": 1.5}]
+
+
+@allow_fallback
+def accepted_mixed_records(x: float) -> list[dict]:
+    return [{"n": 1, "v": "x"}, {"n": 2, "v": x}]
+
+
+@pytest.mark.parametrize("mode", COMPILED)
+def test_an_accepted_step_numba_cannot_box_runs_under_strict_compile(mode):
+    strict = Engine(strict_compile=True).bind(flow(accepted_mixed_records, name="p"), mode=mode)
+    assert strict.score({"x": 1.5})["accepted_mixed_records"] == [{"n": 1, "v": "x"}, {"n": 2, "v": 1.5}]
+    # One column holds one type per field, so a frame refuses a number beside text rather than turning it into text.
+    with pytest.raises(ValueError, match="field \\[\\].v: holds number and str"):
+        strict.run(pl.DataFrame({"x": [1.5]}))
+
+
 def asserts_positive(x: float) -> float:
     assert x > 0.0
     return x
@@ -364,4 +389,18 @@ def test_a_step_asserting_at_runtime_still_raises(mode):
     exe = Engine().bind(flow(asserts_positive, name="p"), mode=mode)
     assert exe.score({"x": 1.0})["asserts_positive"] == 1.0
     with pytest.raises(AssertionError):
+        exe.score({"x": -1.0})
+
+
+def raises_type_error(x: float) -> float:
+    if x < 0.0:
+        raise TypeError("negative")
+    return x
+
+
+@pytest.mark.parametrize("mode", COMPILED)
+def test_a_step_raising_type_error_at_runtime_still_raises(mode):
+    exe = Engine().bind(flow(raises_type_error, name="p"), mode=mode)
+    assert exe.fallbacks() == {}
+    with pytest.raises(TypeError, match="negative"):
         exe.score({"x": -1.0})

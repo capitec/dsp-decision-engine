@@ -7,12 +7,12 @@ import time
 
 import polars as pl
 
-from decider._tooling.bridge.bridge import Bridge
+from decikit._tooling.bridge.bridge import Bridge
 
 
 def _definition(tmp_path, monkeypatch, *, rows=2, batch_size=None, **extra):
     (tmp_path / "credit.py").write_text(
-        "from decider import flow, param\n"
+        "from decikit import flow, param\n"
         "def ratio(income, debt):\n"
         "    return debt / income if income > 0 else 1.0\n"
         "def approved(ratio, limit=param(0.4)):\n"

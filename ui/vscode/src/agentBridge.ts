@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import type { IRNodeJson } from "@decider/ui";
+import type { IRNodeJson } from "@decikit/ui";
 import { makeHandler, type AgentState, type DebugControl } from "./agentActions";
 import { listen } from "./agentSocket";
 import { currentBreakpoints, debugFlow, setBreakpointNodes } from "./debugging";
@@ -38,7 +38,7 @@ export function startAgentBridge(host: Host): vscode.Disposable {
       if (disposed) stop();
       else stops.set(f.uri.fsPath, stop);
     } catch (e) {
-      console.warn(`decider: editor bridge unavailable for ${f.uri.fsPath}: ${(e as Error).message}`);
+      console.warn(`decikit: editor bridge unavailable for ${f.uri.fsPath}: ${(e as Error).message}`);
     }
   };
   vscode.workspace.workspaceFolders?.forEach(add);
@@ -111,7 +111,7 @@ function vscodeState(h: Host): AgentState {
     },
     reveal: (file, line) => h.open(file, line),
     async showFlow(file, pipeline) {
-      await vscode.commands.executeCommand("decider.showFlow", vscode.Uri.file(file), pipeline);
+      await vscode.commands.executeCommand("decikit.showFlow", vscode.Uri.file(file), pipeline);
     },
     setBreakpoints(nodes) {
       const ir = h.ir();

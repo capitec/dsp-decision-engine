@@ -1,0 +1,69 @@
+{
+  "type": "decision_table",
+  "name": "appetite_by_grade",
+  "columns": {
+    "grade": "Int64",
+    "appetite_amount_cap": "Float64"
+  },
+  "rows": [
+    {
+      "grade": 1,
+      "appetite_amount_cap": 500000.0
+    },
+    {
+      "grade": 2,
+      "appetite_amount_cap": 460000.0
+    },
+    {
+      "grade": 3,
+      "appetite_amount_cap": 420000.0
+    },
+    {
+      "grade": 4,
+      "appetite_amount_cap": 360000.0
+    },
+    {
+      "grade": 5,
+      "appetite_amount_cap": 300000.0
+    },
+    {
+      "grade": 6,
+      "appetite_amount_cap": 220000.0
+    },
+    {
+      "grade": 7,
+      "appetite_amount_cap": 180000.0
+    },
+    {
+      "grade": 8,
+      "appetite_amount_cap": 140000.0
+    },
+    {
+      "grade": 9,
+      "appetite_amount_cap": 70000.0
+    },
+    {
+      "grade": 10,
+      "appetite_amount_cap": 50000.0
+    },
+    {
+      "grade": 11,
+      "appetite_amount_cap": 28000.0
+    },
+    {
+      "grade": 12,
+      "appetite_amount_cap": 0.0
+    }
+  ],
+  "expression": {
+    "type": "eq",
+    "variable": "risk_grade",
+    "value_column": "grade"
+  },
+  "outputs": [
+    "appetite_amount_cap"
+  ],
+  "default": [
+    0.0
+  ]
+}

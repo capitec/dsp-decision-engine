@@ -3,10 +3,10 @@ import json
 
 import pytest
 
-from decider import flow, step
-from decider.lab import checks
-from decider.lab.checks import Severity
-from decider.exceptions import DeciderError
+from decikit import flow, step
+from decikit.lab import checks
+from decikit.lab.checks import Severity
+from decikit.exceptions import DecikitError
 
 
 @step(output="cents")
@@ -70,7 +70,7 @@ def test_an_explicit_check_list_ignores_the_project_file(tmp_path, monkeypatch):
 ])
 def test_an_invalid_config_is_a_clear_error_naming_the_file(tmp_path, text, message):
     path = _write(tmp_path, text)
-    with pytest.raises(DeciderError, match=message) as e:
+    with pytest.raises(DecikitError, match=message) as e:
         checks.run(flow(scale, name="term"), config=path)
     assert str(path) in str(e.value)
 
@@ -83,7 +83,7 @@ def test_an_explicit_check_list_still_honours_the_project_disable_and_fail_on(tm
 
 
 def test_two_entries_of_one_type_with_different_options_both_run():
-    from decider.lab.checks._config import ChecksConfig
+    from decikit.lab.checks._config import ChecksConfig
 
     cfg = ChecksConfig.model_validate({"extends": None, "checks": [
         {"type": "durable_ids", "severity": "error"}, {"type": "durable_ids", "severity": "info"},

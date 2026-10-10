@@ -1,4 +1,4 @@
-"""Every Python example in decider/GUIDE.md runs, inside a project made by `decider template credit_risk`."""
+"""Every Python example in decikit/GUIDE.md runs, inside a project made by `decikit template credit_risk`."""
 import os
 import re
 import sys
@@ -8,10 +8,10 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-import decider
-from decider._tooling.cli import cli
+import decikit
+from decikit._tooling.cli import cli
 
-GUIDE = (Path(decider.__file__).parent / "GUIDE.md").read_text()
+GUIDE = (Path(decikit.__file__).parent / "GUIDE.md").read_text()
 BLOCKS = re.findall(r"```python\n(.*?)```", GUIDE, re.S)
 
 # Examples of behaviour that lands with fixes outside the guide; un-xfail them once merged.
@@ -25,7 +25,7 @@ def _marks(block: str):
 
 @pytest.fixture
 def credit_risk_project(tmp_path, monkeypatch):
-    monkeypatch.setattr(os, "environ", {k: v for k, v in os.environ.items() if not k.upper().startswith("DECIDER_")})
+    monkeypatch.setattr(os, "environ", {k: v for k, v in os.environ.items() if not k.upper().startswith("DECIKIT_")})
     monkeypatch.setattr(sys, "path", [str(tmp_path), *sys.path])
     for name in [m for m in sys.modules if m.split(".")[0] == "credit_risk"]:
         monkeypatch.delitem(sys.modules, name)
@@ -44,10 +44,10 @@ def test_guide_example_runs(block, credit_risk_project):
 
 
 def test_the_package_docstring_quickstart_runs():
-    quickstart = decider.__doc__.split("Quickstart::")[1].split("\nA function's")[0]
-    exec(compile(textwrap.dedent(quickstart), "decider.__doc__", "exec"), {})
+    quickstart = decikit.__doc__.split("Quickstart::")[1].split("\nA function's")[0]
+    exec(compile(textwrap.dedent(quickstart), "decikit.__doc__", "exec"), {})
 
 
-def test_decider_guide_prints_the_guide():
+def test_decikit_guide_prints_the_guide():
     result = CliRunner().invoke(cli, ["guide"])
     assert result.exit_code == 0 and result.output.strip() == GUIDE.strip()

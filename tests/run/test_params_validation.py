@@ -4,9 +4,9 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
-from decider import branch, param, step
-from decider._engine import Engine
-from decider._engine.params import ParamsError
+from decikit import branch, param, step
+from decikit._engine import Engine
+from decikit._engine.params import ParamsError
 
 
 def is_big(x: float) -> bool:

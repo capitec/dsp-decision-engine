@@ -1,5 +1,5 @@
 """Overdraft on a salary account. Limits: product caps and the offer."""
-from decider import flow, param, step
+from decikit import flow, param, step
 
 
 def od_product_cap(grade: int, cap: float = param(50000.0)) -> float:

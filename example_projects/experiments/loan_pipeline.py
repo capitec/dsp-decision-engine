@@ -10,7 +10,7 @@ from __future__ import annotations
 import numpy as np
 import polars as pl
 
-from decider import branch, flow, param, step
+from decikit import branch, flow, param, step
 
 
 def ratio(income: float, debt: float) -> float:

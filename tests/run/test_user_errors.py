@@ -4,8 +4,8 @@ import sys
 import polars as pl
 import pytest
 
-from decider import branch, flow, frame_step, param, step
-from decider._engine import Engine
+from decikit import branch, flow, frame_step, param, step
+from decikit._engine import Engine
 
 MODES = ("interpreted", "stepped", "fused")
 needs_notes = pytest.mark.skipif(sys.version_info < (3, 11), reason="exception notes are Python 3.11+")

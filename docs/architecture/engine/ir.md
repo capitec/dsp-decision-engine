@@ -3,10 +3,10 @@
 The IR is the tree the engine executes. Every step, from a plain function to a decision tree loaded from JSON,
 produces it through `to_ir(ctx)`, and nothing downstream of it knows which step type it came from. The
 [wiring](wiring.md) resolver, the three [runners](runners.md), the [compiler](compile.md), the [debugger](debug.md),
-`parameters()` and the checks in `decider.lab` all read the same node classes. How each step type lowers to these
+`parameters()` and the checks in `decikit.lab` all read the same node classes. How each step type lowers to these
 nodes is on the [steps and IR](../steps-and-ir.md) page. This page covers the data model itself.
 
-The code lives in `decider/_engine/ir/`:
+The code lives in `decikit/_engine/ir/`:
 
 | File | Holds |
 |---|---|
@@ -15,14 +15,14 @@ The code lives in `decider/_engine/ir/`:
 | `origin.py` | `Origin`, `check_id`, `check_name` |
 | `context.py` | `IRContext`, `to_ir`, `step_map`, the build cache, the checks, relabelling |
 
-Step-type authors import the public names from `decider.ir`.
+Step-type authors import the public names from `decikit.ir`.
 
 ## The node classes
 
 <div class="diagram" markdown>
 ![IRNode at the top, with its six subclasses in a box below: CallNode, SequenceNode, BranchNode, LoopNode, ScatterGatherNode and the unwired FiniteStateMachineNode, each with its fields](../../assets/diagrams/engine-ir-nodes.svg)
 
-*The node classes in `decider/_engine/ir/nodes.py` and their fields. The red one is declared but nothing builds or runs it.*
+*The node classes in `decikit/_engine/ir/nodes.py` and their fields. The red one is declared but nothing builds or runs it.*
 </div>
 
 Every node is a frozen, slotted dataclass with `eq=False`, so two nodes are equal only when they are the same
@@ -39,10 +39,10 @@ condition then its body.
 | `FiniteStateMachineNode` | nothing yet | declared only; see below |
 
 The set started as `CallNode`, `SequenceNode`, `BranchNode` and `LoopNode`. `ScatterGatherNode` came later, for
-`each`, and `FiniteStateMachineNode` is declared in `nodes.py` and exported from `decider.ir` without anything building or
+`each`, and `FiniteStateMachineNode` is declared in `nodes.py` and exported from `decikit.ir` without anything building or
 running it: `resolve` raises `TypeError: can't resolve FiniteStateMachineNode`, the [wiring](wiring.md) `Plan`
 has a `FiniteStateMachine` class documented as "not yet wired", and relabelling raises for it. Only the checks in
-`decider/lab/checks/_builtin/ids.py` walk into it.
+`decikit/lab/checks/_builtin/ids.py` walk into it.
 
 ### CallNode and its three kinds
 
@@ -92,7 +92,7 @@ The first came from `"factor": 2.0`, the second from `"factor": {"param": "uplif
 carry the addresses of its packed arrays:
 
 ```text
-row Origin(path='risk', source='decider.steps.trees:TreeConfig', ...)
+row Origin(path='risk', source='decikit.steps.trees:TreeConfig', ...)
     reference: yes
     inputs  [('ratio', float, 'MISSING_AS')]
     outputs [('risk', int)]
@@ -104,7 +104,7 @@ row Origin(path='risk', source='decider.steps.trees:TreeConfig', ...)
 ```
 
 Those addresses change on every load, which is why the debugger's hot reload keys a config node by its document
-and class code instead of by its IR fields (`decider/_engine/debug/hot.py`).
+and class code instead of by its IR fields (`decikit/_engine/debug/hot.py`).
 
 A `frame` node with `inputs=None` or `outputs=None` has unknown lineage: the function may read or rewrite any
 column. The resolver treats one with unknown outputs as a barrier ([wiring](wiring.md)).
@@ -134,14 +134,14 @@ paths ['fees', 'fees/fee', 'fees/fee/item_fee']
 The credit pipeline from the [engine overview](index.md), printed by walking `to_ir(credit)`:
 
 ```text
-SequenceNode credit  source=decider.steps:SequentialStep
+SequenceNode credit  source=decikit.steps:SequentialStep
   CallNode[scalar] credit/disposable_income
       source=loan:disposable_income
       in  net_income: float REQUIRED
       in  expenses: float MISSING_AS fill=0.0
       out disposable_income: float
   BranchNode credit/by_employment  modifies=['limit']
-      source=decider.steps:BranchStep
+      source=decikit.steps:BranchStep
     CallNode[scalar] credit/by_employment/salaried
         source=loan:salaried
         in  employment_type: int REQUIRED
@@ -167,7 +167,7 @@ SequenceNode credit  source=decider.steps:SequentialStep
 The script that printed it is a recursive walk over `children()`:
 
 ```python
-from decider.ir import BranchNode, CallNode, to_ir
+from decikit.ir import BranchNode, CallNode, to_ir
 
 def show(node, depth=0):
     pad = "  " * depth
@@ -208,7 +208,7 @@ show(to_ir(credit))
  'credit/affordable']
 ```
 
-A node has no `path` attribute of its own; the path is `node.origin.path`. The module docstring of `decider/ir.py`
+A node has no `path` attribute of its own; the path is `node.origin.path`. The module docstring of `decikit/ir.py`
 shows `node.path` in its example, which raises `AttributeError`.
 
 ## Ids, paths and origins
@@ -221,7 +221,7 @@ Every node carries an `Origin`, a frozen dataclass of plain strings, so events a
 | `source` | `loan:salaried_limit` | the import path of the function or class that produced the node |
 | `locator` | `n17` | a position inside a `row` node, shown as `path#n17` |
 | `id` | `3f9a0c12be47` | an optional durable step id, 12 lowercase hex characters, committed in source |
-| `suppress_checks` | `("DCD101",)` | check codes or aliases the step suppresses, read by `decider.lab.checks` |
+| `suppress_checks` | `("DCD101",)` | check codes or aliases the step suppresses, read by `decikit.lab.checks` |
 
 Anonymous flows are transparent: they add no path segment. A `ConfigurableStep`'s nodes sit under its name. The
 root has the root step's name as its path, or `""` when it is anonymous.
@@ -242,11 +242,11 @@ WiringError: step id 'ABC' must be 12 lowercase hex characters
 
 The path and source are derived ids, rebuilt from names and import paths on every build; renaming or moving a step
 changes them. The `id` is the committed one. It survives a rename, an extraction or a reorder because it depends on
-neither name nor position, and it is one per definition, so a step reused at two paths keeps one id at both. `decider ids` writes ids into source. With `id=None` everything else is
+neither name nor position, and it is one per definition, so a step reused at two paths keeps one id at both. `decikit ids` writes ids into source. With `id=None` everything else is
 unchanged:
 
 ```text
-Origin(path='afford', source='decider.steps:SequentialStep',
+Origin(path='afford', source='decikit.steps:SequentialStep',
        locator=None, id='a1b2c3d4e5f6', suppress_checks=())
 Origin(path='afford/ratio', source='__main__:ratio',
        locator=None, id='3f9a0c12be47', suppress_checks=())
@@ -259,7 +259,7 @@ misses numba's cache and recompiles in 4.6 to 4.8 s at 200 arguments, against 0.
 
 ## Inputs, outputs and null policies
 
-`Input(name, annotation, null_policy, fill, arg)` is one declared input. `harvest` in `decider/_engine/params/harvest.py`
+`Input(name, annotation, null_policy, fill, arg)` is one declared input. `harvest` in `decikit/_engine/params/harvest.py`
 reads them from a function's signature:
 
 | Declared as | `null_policy` | A null in the data |

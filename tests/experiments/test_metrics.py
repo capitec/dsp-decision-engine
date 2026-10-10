@@ -4,10 +4,10 @@ import typing as t
 
 import polars as pl
 
-from decider import branch, flow, param, step
-from decider.lab.experiments import Experiment, ExperimentDef
-from decider.lab.experiments.metrics import Batch, BranchFlows, Describe, Divergence, Histogram, Metric, Summary
-from decider.lab.experiments.plots import Sankey
+from decikit import branch, flow, param, step
+from decikit.lab.experiments import Experiment, ExperimentDef
+from decikit.lab.experiments.metrics import Batch, BranchFlows, Describe, Divergence, Histogram, Metric, Summary
+from decikit.lab.experiments.plots import Sankey
 
 LIMIT_03 = {"demo": {"approved": {"limit": 0.3}}}
 

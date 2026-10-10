@@ -1,6 +1,6 @@
 # Design decisions
 
-Why decider is built the way it is, for maintainers: read the decision file for an area before changing it, and the experiment behind a rule before arguing with its numbers. Not published on the docs site; how things work is in `docs/architecture/`.
+Why the decider toolkit is built the way it is, for maintainers: read the decision file for an area before changing it, and the experiment behind a rule before arguing with its numbers. Not published on the docs site; how things work is in `docs/architecture/`.
 
 - `decisions/`: the rules each area holds, each with its reason, in a few bullets.
 - `experiments/`: one question per file: purpose, method, result, decision. Most name the `benchmarks/` script that reproduces them (`uv run python benchmarks/<name>.py`); "spike" means the code lives outside the repo in `../decider-experimentation/`.
@@ -33,9 +33,10 @@ New rationale goes into the decision file for its area; a new measurement become
 | [What drives the tail of single-record latency?](experiments/single-record-tail-latency.md) | spike |
 | [When to fuse, release the GIL, use fastmath, fall back or cache?](experiments/kernel-compilation-choices.md) | spike |
 | [How should `score` take a record, and what should it cache?](experiments/single-record-calling-convention.md) | spike |
+| [Where does a one-record run spend its time outside the steps?](experiments/per-step-overhead.md) | spike |
 | [Can one scatter/gather primitive replace `each`'s two modes?](experiments/each-scatter-gather.md) | `each_unified.py` |
 | [Does a loop over candidate bundles pack?](experiments/packed-loop-over-bundles.md) | `bundle_search.py`, `fan_out_reduce.py` |
-| [How did decider compare with decider2?](experiments/decider-vs-decider2.md) | `modes.py`, `control_flow.py` |
+| [How did the decider toolkit compare with decider2?](experiments/decider-vs-decider2.md) | `modes.py`, `control_flow.py` |
 | **Types** | |
 | [Can a kernel match prefix, suffix, contains and regex, and in which language?](experiments/string-matching-beyond-equality.md) | spike |
 | [What does a fixed-point money type cost; where does rounding disagree?](experiments/money-types-and-rounding.md) | `decimal_steps.py` |
@@ -47,6 +48,8 @@ New rationale goes into the decision file for its area; a new measurement become
 | [Should trees run in Rust, a polars plugin, ZEN or generated code?](experiments/alternatives-to-a-numba-tree-walker.md) | spike |
 | [Tree and table data: generated literals or runtime arrays?](experiments/runtime-arrays-vs-generated-code.md) | spike |
 | [What does the shared tree walker cost to call and compile?](experiments/tree-walker-costs.md) | `tree_walk.py` |
+| [Why does a tree of hundreds of rules take minutes to compile?](experiments/wide-output-compile.md) | `tree_wide_outputs.py` |
+| [How wide should the parts of a split tree be?](experiments/tree-split-part-size.md) | `tree_split_sweep.py` |
 | [Do the shared walker and matcher keep up with generated kernels?](experiments/trees-tables-vs-decider2.md) | `tree_walk.py`, `table_match.py` |
 | **Serving** | |
 | [How should a kernel read a polars frame?](experiments/reading-a-polars-frame-in-a-kernel.md) | spike |

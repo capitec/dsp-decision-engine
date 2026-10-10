@@ -1,9 +1,10 @@
 """Decision-table score() latency and batch throughput of a DecisionTableConfig in every mode.
 
-Two tables. "bands": 12 contiguous score bands (between) writing a String,
+Three tables. "bands": 12 contiguous score bands (between) writing a String,
 an Int64 and a Float64 column. "gated": the same bands ANDed with a string
-`in` on a `channel` column (a List[String] per row). Each also runs with its
-rows read from the params document.
+`in` on a `channel` column (a List[String] per row). "code": an `eq` on an Int64
+column, compared as float64 and then declared `int`. Each also runs with its rows
+read from the params document.
 
     uv run python benchmarks/table_match.py
 """
@@ -13,20 +14,22 @@ import time
 import numpy as np
 import polars as pl
 
-from decider._engine import Engine
-from decider.steps.tables import DecisionTableConfig
+from decikit._engine import Engine
+from decikit.steps.tables import DecisionTableConfig
 
 N = 1_000_000
 rng = np.random.default_rng(0)
 CUTS = np.linspace(0.0, 1.0, 13).tolist()
 ROWS = [{"lo": None if i == 0 else CUTS[i], "hi": None if i == 11 else CUTS[i + 1], "band": f"band_{i % 5}",
-         "pts": i, "rate": i / 10, "keys": ["app", "web"] if i % 2 else ["branch"]} for i in range(12)]
+         "pts": i, "rate": i / 10, "code": 1000 + i, "keys": ["app", "web"] if i % 2 else ["branch"]} for i in range(12)]
 DTYPES = {"lo": "Float64", "hi": "Float64", "band": "String", "pts": "Int64", "rate": "Float64",
-          "keys": {"type": "List", "inner": "String"}}
+          "code": "Int64", "keys": {"type": "List", "inner": "String"}}
 BETWEEN = {"type": "between", "variable": "score", "lower_bound_column": "lo", "upper_bound_column": "hi"}
 GATED = {"type": "and", "expressions": [BETWEEN, {"type": "in", "variable": "channel", "values_column": "keys"}]}
+CODE = {"type": "eq", "variable": "code", "value_column": "code"}
 OUTPUTS = ["band", "pts", "rate"]
-frame = pl.DataFrame({"score": rng.uniform(0, 1, N), "channel": rng.choice(["app", "web", "branch", "call"], N)})
+frame = pl.DataFrame({"score": rng.uniform(0, 1, N), "channel": rng.choice(["app", "web", "branch", "call"], N),
+                      "code": rng.integers(1000, 1015, N).astype(float)})
 ROW = frame.row(0, named=True)
 
 
@@ -49,14 +52,14 @@ def latency(score, calls=20000):
     return samples[len(samples) // 2] * 1e6, samples[int(len(samples) * 0.99)] * 1e6
 
 
-def compare(expression: dict) -> None:
+def compare(expression: dict, **extra) -> None:
     doc = {"parameters": {"data": ROWS, "dtypes": list(DTYPES.items())}, "expression": expression,
-           "outputs": OUTPUTS, "default": ["none", -1, 0.0]}
+           "outputs": OUTPUTS, "default": ["none", -1, 0.0], **extra}
     engines = {}
     table = DecisionTableConfig.load({"type": "decision_table", "name": "bands", **doc})
     for mode in ("fused", "stepped", "interpreted"):
         exe = Engine().bind(table, mode=mode)
-        engines[f"decider {mode}"] = (exe.run, exe.score)
+        engines[f"decikit {mode}"] = (exe.run, exe.score)
     # The same rows read from the params document, which every call passes.
     columns = {**DTYPES, "band": {"type": "Enum", "categories": sorted({r["band"] for r in ROWS} | {"none"})}}
     by_param = DecisionTableConfig.load({"type": "decision_table", "name": "bands", "columns": columns,
@@ -64,11 +67,11 @@ def compare(expression: dict) -> None:
                                          **{k: v for k, v in doc.items() if k != "parameters"}})
     exe = Engine().bind(by_param, mode="fused")
     params = {"bands": {"rows": ROWS}}
-    engines["decider fused, rows param"] = (lambda df, exe=exe: exe.run(df, params),
+    engines["decikit fused, rows param"] = (lambda df, exe=exe: exe.run(df, params),
                                             lambda r, exe=exe: exe.score(r, params))
 
     # The outputs agree before anything is timed.
-    expected = engines["decider interpreted"][0](frame.head(20000)).select(OUTPUTS).cast({"pts": pl.Int64})
+    expected = engines["decikit interpreted"][0](frame.head(20000)).select(OUTPUTS).cast({"pts": pl.Int64})
     for name, (run, _) in engines.items():
         assert run(frame.head(20000)).select(OUTPUTS).cast({"pts": pl.Int64}).equals(expected), name
 
@@ -85,3 +88,9 @@ print("12 score bands")
 compare(BETWEEN)
 print("bands AND a string list")
 compare(GATED)
+print("an Int64 code `eq`, compared as float64")
+compare(CODE)
+frame = frame.with_columns(pl.col("code").cast(pl.Int64))
+ROW = frame.row(0, named=True)
+print("the same, declared int")
+compare(CODE, variable_types={"code": "int"})

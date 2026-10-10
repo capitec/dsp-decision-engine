@@ -1,13 +1,13 @@
 # Debugging and testing
 
-When a record gets an answer you did not expect, you want to see the values each step produced for it, change one and watch the rest follow, and fix the step without starting over. When the answer is right, you want a test that keeps it right in every execution mode. `decider` gives you both: `describe` for the static shape of a flow, a debug `Session` for stepping through a run, and `decider.lab.testing` for the assertions your test suite runs.
+When a record gets an answer you did not expect, you want to see the values each step produced for it, change one and watch the rest follow, and fix the step without starting over. When the answer is right, you want a test that keeps it right in every execution mode. `decikit` gives you both: `describe` for the static shape of a flow, a debug `Session` for stepping through a run, and `decikit.lab.testing` for the assertions your test suite runs.
 
 Every example on this page uses this affordability flow:
 
 ```python
 # afford.py
 import polars as pl
-from decider import branch, flow, param, step
+from decikit import branch, flow, param, step
 
 
 def disposable_income(net_income: float, expenses: float) -> float:
@@ -62,10 +62,10 @@ df = pl.DataFrame({
 
 ## Looking at a flow: `describe`
 
-`describe(pipeline)` (also `decider.lab.describe`) returns the static structure without running anything: every node with its path, kind, inputs and outputs, the control and data edges between them, and every value slot (one version of a value, written by one node).
+`describe(pipeline)` (also `decikit.lab.describe`) returns the static structure without running anything: every node with its path, kind, inputs and outputs, the control and data edges between them, and every value slot (one version of a value, written by one node).
 
 ```python
-from decider import describe
+from decikit import describe
 from afford import pipeline
 
 desc = describe(pipeline)
@@ -94,7 +94,7 @@ data afford/term_cap -> afford/by_sector/cap_public ('term_cap',)
 ['net_income', 'expenses', 'disposable_income@afford/disposable_income', 'instalment', 'affordability_ratio@afford/affordability_ratio', 'requested_term', 'term_cap@afford/term_cap', 'sector_code', 'is_private@afford/by_sector/is_private', 'term_cap@afford/by_sector/cap_private', 'term_cap@afford/by_sector/cap_public', 'term_cap@afford/by_sector', 'affordable@afford/affordable']
 ```
 
-`term_cap` has four slots: the step that computes it, each arm that rewrites it, and the branch's merge of the two arms. That is why a value can be named as `name@path` everywhere in the debugger. The `FlowDescription` is a pydantic model, so `desc.model_dump_json()` is the form the MCP server and the VS Code extension read. For the IR itself, see `decider.ir.to_ir` and [Steps and IR](../architecture/steps-and-ir.md).
+`term_cap` has four slots: the step that computes it, each arm that rewrites it, and the branch's merge of the two arms. That is why a value can be named as `name@path` everywhere in the debugger. The `FlowDescription` is a pydantic model, so `desc.model_dump_json()` is the form the MCP server and the VS Code extension read. For the IR itself, see `decikit.ir.to_ir` and [Steps and IR](../architecture/steps-and-ir.md).
 
 ## A debug session
 
@@ -179,7 +179,7 @@ A position inside a tree or table (`"name#locator"`) is a node id of the tree, o
 
 ```python
 import polars as pl
-from decider import TreeConfig, flow
+from decikit import TreeConfig, flow
 
 tree = TreeConfig.load({"type": "tree", "name": "risk_tree", "path_output": "leaf", "tree": {
     "nodes": [{"id": "n0", "data": {"type": "unary", "condition": {"op": ">", "feature": "term", "threshold": 60}}},
@@ -235,7 +235,7 @@ A step is one node over every row that reaches it, never one row at a time. A br
 
 ```python
 import polars as pl
-from decider import flow, loop, step
+from decikit import flow, loop, step
 
 def unpaid(balance: float) -> bool:
     return balance > 0.0
@@ -348,7 +348,7 @@ A session can swap code while it runs and re-run only what the change affects. V
 ### `replace` and `delete`
 
 ```python
-from decider import step
+from decikit import step
 from afford import pipeline, df
 
 @step(output="affordability_ratio")
@@ -384,7 +384,7 @@ WiringError: after editing 'afford/disposable_income' nothing produces 'disposab
 `reload(pipeline)` switches to an edited version of the whole pipeline. It compares the two by content (function code, config data, params and wiring), finds the first checkpoint where they differ and re-runs from there. Re-running the notebook cells or re-importing the module that builds the pipeline is enough; the objects do not have to be the same.
 
 ```python
-from decider import branch, flow, param, step
+from decikit import branch, flow, param, step
 from afford import (pipeline, df, disposable_income, affordability_ratio, term_cap,
                     is_private, cap_private, cap_public)
 
@@ -420,12 +420,12 @@ In a notebook, `s.watch(source)` registers an IPython hook that reloads after ev
 
 A reload that fails to import or build logs a `ReloadFailed` event and raises; the session keeps the pipeline it had and carries on.
 
-Outside a notebook, poll the files yourself with `ModuleWatcher`, which is what `watch("module:attr")` uses. It is not re-exported from `decider.debug`, so import it from `decider._engine.debug.hot`:
+Outside a notebook, poll the files yourself with `ModuleWatcher`, which is what `watch("module:attr")` uses. It is not re-exported from `decikit.debug`, so import it from `decikit._engine.debug.hot`:
 
 ```python
 from pathlib import Path
 import polars as pl
-from decider._engine.debug.hot import ModuleWatcher
+from decikit._engine.debug.hot import ModuleWatcher
 
 df = pl.DataFrame({"income": [1000.0, 500.0], "debt": [350.0, 400.0]})
 watcher = ModuleWatcher("hotpkg.pipeline:pipeline")
@@ -453,7 +453,7 @@ None
 
 ## Events
 
-Everything a session does is appended to `s.events`, a list of frozen dataclasses from `decider.debug`, each tagged by `kind`:
+Everything a session does is appended to `s.events`, a list of frozen dataclasses from `decikit.debug`, each tagged by `kind`:
 
 | Event | When | Carries |
 |---|---|---|
@@ -479,10 +479,10 @@ Overridden(name='affordability_ratio', producer='override@afford/affordable', va
 
 ### Driving a session from JSON
 
-Editors and agents drive a session with commands in JSON. Each command's `kind` is the name of the `Session` method it calls, and `session.apply(command)` dispatches it. The pydantic adapters `COMMAND`, `EVENT` and `EVENT_LOG` encode and decode them; they and the command classes (`BreakAt`, `ClearBreak`, `StepOver`, `StepInto`, `Resume`, `Pause`, `SetValue`, `Rewind`, `Delete`) live in `decider._engine.debug`.
+Editors and agents drive a session with commands in JSON. Each command's `kind` is the name of the `Session` method it calls, and `session.apply(command)` dispatches it. The pydantic adapters `COMMAND`, `EVENT` and `EVENT_LOG` encode and decode them; they and the command classes (`BreakAt`, `ClearBreak`, `StepOver`, `StepInto`, `Resume`, `Pause`, `SetValue`, `Rewind`, `Delete`) live in `decikit._engine.debug`.
 
 ```python
-from decider._engine.debug import COMMAND, EVENT_LOG, SetValue
+from decikit._engine.debug import COMMAND, EVENT_LOG, SetValue
 
 s = watcher.get().session(df)
 s.apply(COMMAND.validate_json('{"kind": "break_at", "target": "credit/approved"}'))
@@ -502,7 +502,7 @@ print(EVENT_LOG.dump_json(s.events[-3:-2]).decode())
 
 ## Testing a flow
 
-Test through decider, not by calling the step functions: only a run through the engine proves that the pipeline wires, validates its params and gives the same answer in every mode. `decider.lab.testing` has three helpers.
+Test through the decider toolkit, not by calling the step functions: only a run through the engine proves that the pipeline wires, validates its params and gives the same answer in every mode. `decikit.lab.testing` has three helpers.
 
 | Helper | Asserts |
 |---|---|
@@ -544,7 +544,7 @@ For each mode in `modes` (default `("interpreted", "stepped", "fused")`), it che
 - With `script`, a second session driven by `script(session)` and then resumed to the end: the same frame in every mode.
 
 ```python
-from decider.lab.testing import assert_equivalent
+from decikit.lab.testing import assert_equivalent
 from afford import pipeline, df
 
 out = assert_equivalent(pipeline, df)
@@ -579,7 +579,7 @@ The returned frame is the plain run's, not the scripted one. An error in the fir
 `corpus(step)` builds frames that move each input to the values that break pipelines: zero, a negative, null (only for inputs no step declares required), `2**53 + 1` for an int, the rounding ties `0.125, 0.5, 1.005, 1.5, 2.5, 2.675, -2.5` for a float, and large amounts for a `Decimal` or `Currency`. Each row has a `case` column naming what it moved.
 
 ```python
-from decider.lab.testing import corpus
+from decikit.lab.testing import corpus
 from afford import pipeline
 
 frames = corpus(pipeline)
@@ -602,7 +602,7 @@ print(frames["boundary"]["case"].to_list()[:12])
 `no_recompile()` fails the block if numba compiles anything inside it. Use it to pin down that retuning params, or adding rows to a [parameter table](parameter-tables.md), reuses the compiled kernel.
 
 ```python
-from decider.lab.testing import no_recompile
+from decikit.lab.testing import no_recompile
 
 exe = pipeline.compile("fused")
 exe.run(df)                                   # compiles (or loads from the disk cache)
@@ -620,7 +620,7 @@ AssertionError: numba compiled 2 specialisation(s): ratio2(float64, float64), _b
 
 ```python
 # credit.py
-from decider import flow, param
+from decikit import flow, param
 
 
 def debt_ratio(income: float, debt: float) -> float:
@@ -640,8 +640,8 @@ def build():
 import polars as pl
 import pytest
 
-from decider import Engine
-from decider.lab.testing import assert_equivalent, corpus, no_recompile
+from decikit import Engine
+from decikit.lab.testing import assert_equivalent, corpus, no_recompile
 
 from credit import build
 

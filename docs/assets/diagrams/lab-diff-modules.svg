@@ -8,7 +8,7 @@
 
   <!-- layer labels -->
   <text x="20" y="22" font-size="13" fill="#6b7280">callers outside the package</text>
-  <text x="20" y="152" font-size="13" fill="#6b7280">decider.lab.diff (public)</text>
+  <text x="20" y="152" font-size="13" fill="#6b7280">decikit.lab.diff (public)</text>
   <text x="980" y="400" font-size="13" fill="#6b7280" text-anchor="end">private modules</text>
 
   <!-- row 1 -->
@@ -18,7 +18,7 @@
   <text x="170" y="94" font-size="13" fill="#4c1d95" text-anchor="middle">the runner imports the git helpers</text>
 
   <rect x="440" y="32" width="240" height="74" rx="9" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
-  <text x="560" y="56" font-size="14" fill="#4c1d95" text-anchor="middle" font-weight="600">decider diff (CLI)</text>
+  <text x="560" y="56" font-size="14" fill="#4c1d95" text-anchor="middle" font-weight="600">decikit diff (CLI)</text>
   <text x="560" y="76" font-size="13" fill="#4c1d95" text-anchor="middle">revisions(...).outputs(),</text>
   <text x="560" y="94" font-size="13" fill="#4c1d95" text-anchor="middle">then .structure()</text>
 

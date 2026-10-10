@@ -8,16 +8,16 @@ import sys
 import polars as pl
 import pytest
 
-from decider import flow
-from decider.steps.trees.schema import load_document
-from decider import _engine as engine
-from decider._engine import Engine
-from decider._engine.compile import kernel
-from decider._engine.debug import NodeVisited
-from decider.steps import ConfigurableStep
-from decider.steps.trees import TreeConfig, _walker as walker
-from decider.steps.trees.schema import LeafNode
-from decider.lab.testing import assert_equivalent
+from decikit import flow
+from decikit.steps.trees.schema import load_document
+from decikit import _engine as engine
+from decikit._engine import Engine
+from decikit._engine.compile import kernel
+from decikit._engine.debug import NodeVisited
+from decikit.steps import ConfigurableStep
+from decikit.steps.trees import TreeConfig, _walker as walker
+from decikit.steps.trees.schema import LeafNode
+from decikit.lab.testing import assert_equivalent
 
 RISK = {
     "nodes": [
@@ -65,7 +65,7 @@ def test_a_tree_with_infinite_numbers_round_trips_through_json():
 
 def test_the_tree_is_one_row_node_whose_params_are_its_param_refs():
     node = engine.to_ir(_risk())
-    assert (node.kind, node.origin.path, node.origin.source) == ("row", "risk_tree", "decider.steps.trees:TreeConfig")
+    assert (node.kind, node.origin.path, node.origin.source) == ("row", "risk_tree", "decikit.steps.trees:TreeConfig")
     assert node.reference is not None and node.fn is walker.walk
     assert [i.name for i in node.inputs] == ["ratio"]
     assert [o.name for o in node.outputs] == ["band", "pts"]
@@ -114,6 +114,15 @@ def test_feature_types_accept_polars_spellings_and_refuse_unknown_ones():
     assert TreeConfig(name="t", tree=RISK, feature_types={"ratio": "Float64"}).feature_types == {"ratio": "float"}
     with pytest.raises(ValueError, match="not a type a tree understands"):
         TreeConfig(name="t", tree=RISK, feature_types={"ratio": "decimal"})
+
+
+def test_an_int_feature_written_as_float_by_a_step_is_refused():
+    def ratio(x: float) -> float:
+        return x
+
+    tree = TreeConfig(name="risk_tree", tree=RISK, feature_types={"ratio": "int"})
+    with pytest.raises(ValueError, match="p/risk_tree reads 'ratio' as int, but p/ratio writes it as float"):
+        Engine().bind(flow(ratio, tree, name="p"))
 
 
 # A corpus of random trees: flat rules, the same trees as v3 documents, and
@@ -317,8 +326,8 @@ def test_a_path_output_named_like_an_output_column_is_refused():
 _CHILD = """
 import contextlib, io, json
 import polars as pl
-from decider._engine import Engine
-from decider.steps.trees import TreeConfig
+from decikit._engine import Engine
+from decikit.steps.trees import TreeConfig
 
 tree = TreeConfig(name="t", tree=json.loads(%r))
 log = io.StringIO()

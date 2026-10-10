@@ -1,7 +1,7 @@
 """Composite indicators built from the other features."""
 import math  # noqa: F401
 
-from decider import dag, param, step  # noqa: F401
+from decikit import dag, param, step  # noqa: F401
 
 
 def existing_instalments_to_net_income(existing_instalments: float, net_income: float) -> float:

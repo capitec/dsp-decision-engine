@@ -4,14 +4,14 @@ from decimal import Decimal
 import polars as pl
 import pytest
 
-import decider._engine.boundary.dtypes as dtypes_mod
-from decider._engine.boundary._arrow import available
-from decider._engine.boundary._arrow.plan import ArrowKindError
-from decider._engine.boundary.dtypes import (
+import decikit._engine.boundary.dtypes as dtypes_mod
+from decikit._engine.boundary._arrow import available
+from decikit._engine.boundary._arrow.plan import ArrowKindError
+from decikit._engine.boundary.dtypes import (
     ColumnPlan, NeedsKernelSplit, cast_frame, cast_series, explain_boundary, plan_column,
 )
-from decider._engine.ir.decls import FeatureKind as K
-from decider._engine.ir.decls import Input, NullPolicy, feature_kind
+from decikit._engine.ir.decls import FeatureKind as K
+from decikit._engine.ir.decls import Input, NullPolicy, feature_kind
 
 needs_shim = pytest.mark.skipif(not available(), reason="the Arrow shim can't be built here (no C compiler)")
 

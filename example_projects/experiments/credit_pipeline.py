@@ -6,7 +6,7 @@ the flow itself.
 """
 from __future__ import annotations
 
-from decider import flow, param
+from decikit import flow, param
 
 
 def ratio(income: float, debt: float) -> float:

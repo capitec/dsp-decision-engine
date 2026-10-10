@@ -4,8 +4,8 @@ import typing as t
 import polars as pl
 import pytest
 
-from decider.lab.data import DatasetError, DatasetProvider, FileProvider, FolderProvider
-from decider.lab.data._keys import DuplicateRecordKeyError
+from decikit.lab.data import DatasetError, DatasetProvider, FileProvider, FolderProvider
+from decikit.lab.data._keys import DuplicateRecordKeyError
 
 FRAME = pl.DataFrame({"client_id": [1, 2], "amount": [10, 20]})
 

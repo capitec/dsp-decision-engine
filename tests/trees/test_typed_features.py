@@ -2,11 +2,11 @@
 import polars as pl
 import pytest
 
-from decider import _engine as engine
-from decider._engine import Engine
-from decider._engine.compile import kernel
-from decider._engine.ir.decls import base_annotation
-from decider.steps.trees import TreeConfig, _walker as walker
+from decikit import _engine as engine
+from decikit._engine import Engine
+from decikit._engine.compile import kernel
+from decikit._engine.ir.decls import base_annotation
+from decikit.steps.trees import TreeConfig, _walker as walker
 
 BIG = 9007199254740992  # 2**53: the first integer float64 can't tell from its successor
 MODES = ("interpreted", "stepped", "fused")
@@ -50,6 +50,12 @@ def test_int64_above_2_53_is_compared_exactly_in_every_mode(run):
     for mode in MODES:
         exe = Engine().bind(tree, mode=mode)
         assert (exe.score({"n": BIG})["hit"], exe.score({"n": BIG + 1})["hit"]) == (1, 0), mode
+
+
+def test_an_int_threshold_past_2_53_that_float64_cannot_hold_is_accepted(run):
+    tree = one_node({"op": "==", "feature": "n", "threshold": BIG + 1}, feature_types={"n": "int"})
+    frame = pl.DataFrame({"n": pl.Series([BIG, BIG + 1, BIG + 2], dtype=pl.Int64)})
+    assert run(tree, frame)["hit"].to_list() == [0, 1, 0]
 
 
 def test_an_undeclared_int_feature_is_read_as_a_float_and_collapses(run):

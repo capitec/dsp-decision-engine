@@ -1,6 +1,6 @@
 """Where one request's microseconds go inside the process, and the kernel floor.
 
-Every term of `RequestHandler.process_fn` is timed on its own; `score()` is
+Every term of `RequestHandler.process_fn` is timed on its own; `Executable.score()` is
 timed as cumulative prefixes of the work it does, so each stage is the next
 difference. The whole table runs `--reps` times and the lowest p50 and p99 of
 each term is reported: this box is shared, and the minimum is what the term
@@ -9,7 +9,6 @@ costs when nothing preempts it. HTTP framing is measured over a socket in
 
     uv run python benchmarks/serving_latency.py [flagship|tree|gated|all] [--reps 3]
 """
-import asyncio
 import gc
 import io
 import json
@@ -21,12 +20,12 @@ import numpy as np
 import polars as pl
 from pydantic_core import from_json, to_json
 
-from decider import flow, param
-from decider.config import JsonFileStore
-from decider._engine.run.engine import _NO_FRAME
-from decider._engine.run.state import State, load_record as _load
-from decider.serving._handler import RequestHandler
-from decider.serving._parse import coerce_record, parse_application_json
+from decikit import flow, param
+from decikit.config import JsonFileStore
+from decikit._engine.run.engine import _NO_FRAME
+from decikit._engine.run.state import State, load_record as _load
+from decikit.serving._handler import RequestHandler
+from decikit.serving._parse import coerce_record, parse_application_json
 
 sys.path.insert(0, "benchmarks")
 import tree_walk  # noqa: E402  the tree document the tree benchmark uses
@@ -56,7 +55,7 @@ TREE_ROW = {k: v for k, v in tree_walk.ROW.items() if k != "channel"}
 
 
 def cases():
-    from decider.steps.trees import TreeConfig
+    from decikit.steps.trees import TreeConfig
 
     return {
         "flagship": (flow(disposable_income, affordability_ratio, cap_by_income_band), FLAGSHIP_ROW),
@@ -92,23 +91,6 @@ def stats(fn, calls=CALLS, warm=WARM):
     return _pct(samples)
 
 
-async def _atime(fn, calls, warm):
-    for _ in range(warm):
-        await fn()
-    gc.collect()
-    samples = np.empty(calls)
-    perf = time.perf_counter
-    for k in range(calls):
-        t = perf()
-        await fn()
-        samples[k] = perf() - t
-    return _pct(samples)
-
-
-async def _noop():
-    return None
-
-
 def _gc_off(fn):
     def run():
         gc.disable()
@@ -119,8 +101,8 @@ def _gc_off(fn):
     return run
 
 
-def terms(pipeline, row, loop):
-    """(name, is_async, callable) for every term of one request, plus the floors."""
+def terms(pipeline, row):
+    """(name, callable) for every term of one request, plus the floors."""
     store = JsonFileStore(basepath=tempfile.mkdtemp(dir=".scratch"))
     store.create_version({"params": {}})
     handler = RequestHandler(store, pipeline, mode="fused")
@@ -159,34 +141,34 @@ def terms(pipeline, row, loop):
     schema_msg, batch_msg = ipc[:8 + int.from_bytes(ipc[4:8], "little")], ipc[8 + int.from_bytes(ipc[4:8], "little"):]
     one = pl.read_ipc_stream(ipc)
     rows = [
-        ("json.loads(body)", 0, lambda: json.loads(body)),
-        ("from_json(body)", 0, lambda: from_json(body)),
-        ("input_fn body (sync part)", 0, lambda: parse_application_json(body)),
-        ("coerce_record", 0, lambda: coerce_record(row, dates)),
-        ("module_fn", 0, handler.module_fn),
-        ("score() total", 0, lambda: exe.score(row, params)),
-        ("to_json(result)", 0, lambda: to_json(result)),
-        ("output_fn", 0, lambda: handler.output_fn(result, "application/json")),
-        ("await an empty coroutine", 1, _noop),
-        ("await input_fn", 1, lambda: handler.input_fn(body, "application/json")),
-        ("await process_fn (no HTTP)", 1, lambda: handler.process_fn(body, "application/json", "application/json")),
-        ("same work, sync, one function", 0, lambda: handler.output_fn(
+        ("json.loads(body)", lambda: json.loads(body)),
+        ("from_json(body)", lambda: from_json(body)),
+        ("input_fn body (sync part)", lambda: parse_application_json(body)),
+        ("coerce_record", lambda: coerce_record(row, dates)),
+        ("module_fn", handler.module_fn),
+        ("score() total", lambda: exe.score(row, params)),
+        ("to_json(result)", lambda: to_json(result)),
+        ("output_fn", lambda: handler.output_fn(result, "application/json")),
+        ("input_fn", lambda: handler.input_fn(body, "application/json")),
+        ("handler.score(record)", lambda: handler.score(row)),
+        ("process_fn (no HTTP)", lambda: handler.process_fn(body, "application/json", "application/json")),
+        ("same work, sync, one function", lambda: handler.output_fn(
             exe.score(coerce_record(parse_application_json(body), dates), params), "application/json")),
-        ("same work, sync, gc off", 0, _gc_off(lambda: handler.output_fn(
+        ("same work, sync, gc off", _gc_off(lambda: handler.output_fn(
             exe.score(coerce_record(parse_application_json(body), dates), params), "application/json"))),
-        ("|score: State(plan, _NO_FRAME, 1)", 0, lambda: State(plan, _NO_FRAME, 1)),
-        ("|score: + _load inputs", 0, build),
-        ("|score: + _params bundle", 0, prepared),
-        ("|score: + runner.iterate", 0, ran),
-        ("|score: + output dict", 0, scored),
+        ("|score: State(plan, _NO_FRAME, 1)", lambda: State(plan, _NO_FRAME, 1)),
+        ("|score: + _load inputs", build),
+        ("|score: + _params bundle", prepared),
+        ("|score: + runner.iterate", ran),
+        ("|score: + output dict", scored),
     ]
     rows += [
-        (f"|arrow: read_ipc_stream ({len(ipc)} B)", 0, lambda: pl.read_ipc_stream(ipc)),
-        (f"|arrow: read_ipc_stream, schema cached ({len(batch_msg)} B)", 0,
+        (f"|arrow: read_ipc_stream ({len(ipc)} B)", lambda: pl.read_ipc_stream(ipc)),
+        (f"|arrow: read_ipc_stream, schema cached ({len(batch_msg)} B)",
          lambda: pl.read_ipc_stream(schema_msg + batch_msg)),
-        ("|arrow: + df.row(0, named=True)", 0, lambda: pl.read_ipc_stream(ipc).row(0, named=True)),
-        ("|arrow: write_ipc_stream of the result", 0, lambda: _ipc(pl.DataFrame([result]))),
-        ("|arrow: exe.run(one-row frame)", 0, lambda: exe.run(one, params)),
+        ("|arrow: + df.row(0, named=True)", lambda: pl.read_ipc_stream(ipc).row(0, named=True)),
+        ("|arrow: write_ipc_stream of the result", lambda: _ipc(pl.DataFrame([result]))),
+        ("|arrow: exe.run(one-row frame)", lambda: exe.run(one, params)),
     ]
     state = ran()
     run = exe._params(params, 1)
@@ -227,8 +209,8 @@ def _floors(exe, state, run, row, result):
         for unit, values, valid, bundles in units:
             unit.run(dict(values), valid, bundles, 1)
 
-    rows = [("floor: kernel dispatchers only", 0, dispatch),
-            ("floor: unit.run (+ per-call allocs)", 0, via_run)]
+    rows = [("floor: kernel dispatchers only", dispatch),
+            ("floor: unit.run (+ per-call allocs)", via_run)]
 
     # Inputs written into the arrays the kernels already hold, outputs read out of theirs.
     slots = [(v.name, own[v.id]) for _, versions in exe._inputs for v in versions if v.name in row and v.id in own]
@@ -250,7 +232,7 @@ def _floors(exe, state, run, row, result):
             out[k] = arr[0].item()
         return to_json(out)
 
-    return rows + [("floor: whole request, nothing allocated", 0, whole)]
+    return rows + [("floor: whole request, nothing allocated", whole)]
 
 
 def _units(exe, state, run):
@@ -270,21 +252,20 @@ def _units(exe, state, run):
 
 
 def main(which, reps):
-    loop = asyncio.new_event_loop()
     print(f"timer overhead p50: {stats(lambda: None)[0]:.3f} µs, reps: {reps}\n")
     for name in which:
         pipeline, row = cases()[name]
-        rows, calls, nbytes = terms(pipeline, row, loop)
+        rows, calls, nbytes = terms(pipeline, row)
         best = {}
         for _ in range(reps):
-            for term, is_async, fn in rows:
-                p = loop.run_until_complete(_atime(fn, calls, WARM)) if is_async else stats(fn, calls, WARM)
+            for term, fn in rows:
+                p = stats(fn, calls, WARM)
                 old = best.get(term)
                 best[term] = p if old is None else (min(old[0], p[0]), min(old[1], p[1]))
         print(f"── {name}: {len(row)} inputs, {nbytes} byte JSON body, {calls} calls/rep ──")
         print(f"{'term':<38}{'p50 µs':>9}{'p99 µs':>9}{'stage':>9}")
         last = 0.0
-        for term, _, _ in rows:
+        for term, _ in rows:
             p50, p99 = best[term]
             stage = ""
             if term.startswith("|score:"):
@@ -292,7 +273,6 @@ def main(which, reps):
                 last = p50
             print(f"{term:<38}{p50:>9.2f}{p99:>9.2f}{stage}")
         print()
-    loop.close()
 
 
 if __name__ == "__main__":
