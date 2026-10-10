@@ -230,8 +230,8 @@ export function staleOps(mine: Op[], concurrent: Op[]): Op[] {
 
 /**
  * My touched paths that overlap theirs under the offline rule (both diffed from `base`); empty means merge.
- * Two order ops on the same list conflict only when the keys common to base, mine and theirs end up in a
- * different relative order.
+ * Two order ops on the same list conflict only when both sides changed the relative order of the keys common to
+ * base, mine and theirs, and changed them differently.
  */
 export function conflicts(mine: Op[], theirs: Op[], base: Json): string[] {
   const theirPaths = touched(theirs).map(split)
@@ -263,7 +263,6 @@ function ordersDisagree(docs: Json[], at: string[]): boolean {
     keys.push(k)
   }
   const common = new Set(keys[0].filter((k) => keys[1].includes(k) && keys[2].includes(k)))
-  const mineOrder = keys[1].filter((k) => common.has(k))
-  const theirOrder = keys[2].filter((k) => common.has(k))
-  return mineOrder.some((k, i) => k !== theirOrder[i])
+  const [base, mine, theirs] = keys.map((ks) => JSON.stringify(ks.filter((k) => common.has(k))))
+  return base !== mine && mine !== theirs && theirs !== base
 }

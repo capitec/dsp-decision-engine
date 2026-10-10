@@ -243,8 +243,8 @@ def stale_ops(mine, concurrent):
 def conflicts(mine, theirs, base):
     """My touched paths that overlap theirs under the offline rule (both diffed from `base`); empty means merge.
 
-    Overlap is an equal, ancestor or descendant path. Two order ops on the same list conflict only when the keys
-    common to base, mine and theirs end up in a different relative order.
+    Overlap is an equal, ancestor or descendant path. Two order ops on the same list conflict only when both sides
+    changed the relative order of the keys common to base, mine and theirs, and changed it differently.
     """
     their_paths = [_split(p) for p in touched(theirs)]
     docs = None
@@ -271,4 +271,5 @@ def _orders_disagree(docs, at):
     if None in keys:
         return True
     common = set(keys[0]) & set(keys[1]) & set(keys[2])
-    return [k for k in keys[1] if k in common] != [k for k in keys[2] if k in common]
+    base, mine, theirs = ([k for k in ks if k in common] for ks in keys)
+    return base != mine != theirs != base
