@@ -6,7 +6,7 @@ and the docstrings (`help(decikit)`, `help(decikit.flow)`, ...) are current.
 
 The decider toolkit builds decision pipelines (credit, pricing, fraud rules, campaigns)
 from plain Python functions. A pipeline runs over a polars frame or one
-record (a dict), both through `run`, interpreted or compiled with numba,
+record (a dict), both through `run`, compiled with numba (fused) or interpreted,
 and serves over HTTP with `decikit serve`.
 
 ## Mental model
@@ -24,10 +24,15 @@ and serves over HTTP with `decikit serve`.
 - **Outputs**: `run` returns the input columns plus every value nothing reads;
   intermediates are dropped unless kept with `.emit("name")`.
 - **Engines**: `p.compile(engine)` takes a tag or an instance:
-  `InterpretedEngine` (`"interpreted"`, plain Python; what `p.run` uses),
-  `SteppedEngine` (`"stepped"`) or `FusedEngine` (`"fused"`, numba;
-  `decikit serve`'s default). Settings ride on the instance:
-  `FusedEngine(strict_compile=True)`. All engines give the same answers.
+  `InterpretedEngine` (`"interpreted"`, plain Python), `SteppedEngine`
+  (`"stepped"`) or `FusedEngine` (`"fused"`, numba; `decikit serve`'s default).
+  Settings ride on the instance: `FusedEngine(strict_compile=True)`. All engines
+  give the same answers. `p.run` and `p.compile()` follow the default engine,
+  fused when unset; `with decikit.engine("interpreted"):` switches both for a
+  block (instant runs while you edit: a fused `run` binds and builds on every
+  call, so repeat it on a small frame and it is slower than interpreted), or
+  pass `engine=` to one call. `p.session` opens interpreted, and `decikit serve`
+  takes its engine from its own document, not from this default.
 
 ## Which construct for which need
 
@@ -65,12 +70,13 @@ and serves over HTTP with `decikit serve`.
 from datetime import date
 
 import polars as pl
-from decikit import DecikitError, Executable, flow, missing_as, param
+from decikit import DecikitError, Executable, allow_fallback, flow, missing_as, param
 from decikit.exceptions import ParamsError
 
 def debt_ratio(income: float, debt: float = missing_as(0.0)) -> float:
     return debt / income
 
+@allow_fallback                      # a date never enters a kernel, so this step runs in Python
 def month_end(applied_on: date) -> bool:
     return applied_on.day >= 25
 
@@ -106,6 +112,12 @@ validated once and remembered by identity, so editing it in place and passing
 it again keeps the old values, silently. Pass a new dict to change a value
 (`copy.deepcopy(params)`, then edit the copy). In the example above the edit
 comes before the first call, so it is seen.
+
+`run` is fused by default, so a step that reads a `date`, `str` or `list` warns with a
+`FallbackWarning`; `@allow_fallback` accepts that. A fallback step runs row by row in
+Python instead of in the kernel. A step that returns a `dict` falls back too; the same
+record returned as a tuple under `Struct[Item]` or `Columnar[Item]` compiles
+("Nested columns").
 
 An input with neither `missing_as(fill)` nor a `T | None` annotation is required:
 a null value or an absent column raises `MissingInputError`. To default it for a
@@ -430,7 +442,7 @@ assert pricing.parameters() == {"pricing/rate": {"ladder": {
 params = pricing.parameters().defaults()          # {"pricing": {"rate": {"ladder": [{"floor": 0, "rate": 0.2}]}}}
 params["pricing"]["rate"]["ladder"] = [{"floor": 0, "rate": 0.2}, {"floor": 600, "rate": 0.1}]
 df = pl.DataFrame({"score": [550, 720]})
-assert pricing.run(df, params=params)["rate"].to_list() == [0.2, 0.1]     # interpreted
+assert pricing.run(df, params=params)["rate"].to_list() == [0.2, 0.1]     # the default engine: fused
 
 exe = pricing.compile("fused")
 assert exe.run(df, params=params)["rate"].to_list() == [0.2, 0.1]
