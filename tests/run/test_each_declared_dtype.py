@@ -1,13 +1,16 @@
 """Every engine types a declared `each`'s gathered list from the pipeline, never from the items it holds."""
 from __future__ import annotations
 
+from datetime import datetime
 from typing import TypedDict
+from zoneinfo import ZoneInfo
 
 import polars as pl
 import pytest
 from polars.testing import assert_frame_equal
 
 from decikit import PolarsEngine, each, flow, frame_step, missing_as
+from decikit.exceptions import EngineError
 
 ENGINES = ("interpreted", "stepped", "fused")
 
@@ -78,3 +81,26 @@ def test_record_run_returns_the_items_as_built(engine, pipe):
     got = pipe.compile(engine).run({"n": 2, "flip": True})["lines"]
     assert [list(d.items()) for d in got] == [[("sku", "s0"), ("weight", 0.0), ("heavy", False)],
                                               [("sku", "s1"), ("weight", 10.0), ("heavy", False)]]
+
+
+class Stamped(TypedDict):
+    at: datetime
+
+
+def stamps(n: int) -> list[Stamped]:
+    return [{"at": datetime(2020, 1, 1, 12, tzinfo=ZoneInfo("Africa/Johannesburg"))}] * n
+
+
+STAMPED = flow(stamps, each("stamps", flow(heavy, name="stamp"), name="each_stamp"), name="p")
+
+
+@pytest.mark.parametrize("engine", ENGINES)
+def test_a_zoned_datetime_in_a_naive_declared_field_keeps_its_zone(engine):
+    got = STAMPED.compile(engine).run(pl.DataFrame({"n": [1]}))["stamps"].to_list()
+    assert got[0][0]["at"] == datetime(2020, 1, 1, 12, tzinfo=ZoneInfo("Africa/Johannesburg"))
+    assert got[0][0]["at"].tzinfo is not None
+
+
+def test_the_polars_engine_refuses_a_zoned_datetime_in_a_naive_declared_field():
+    with pytest.raises(EngineError, match="'stamps' came back as .*declared"):
+        PolarsEngine().bind(STAMPED).run(pl.DataFrame({"n": [1]}).lazy()).collect()

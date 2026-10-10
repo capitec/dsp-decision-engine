@@ -84,4 +84,5 @@ def _within(got: pl.DataType, want: pl.DataType) -> bool:
                                                   for f in got.fields)
     if isinstance(want, (pl.List, pl.Array)):
         return isinstance(got, (pl.List, pl.Array)) and _within(got.inner, want.inner)
-    return not got.is_nested()
+    # A cast between time zones keeps the instant but not the wall clock a reader sees.
+    return not got.is_nested() and getattr(got, "time_zone", None) == getattr(want, "time_zone", None)
