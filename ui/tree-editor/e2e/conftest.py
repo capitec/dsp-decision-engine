@@ -7,6 +7,12 @@ from playwright.sync_api import Page
 from tree_ui import register
 
 
+def pytest_collection_modifyitems(items):
+    for item in items:
+        if not any(item.get_closest_marker(m) for m in ("smoke", "serve", "slow")):
+            item.add_marker(pytest.mark.full)
+
+
 @pytest.fixture(scope="session")
 def base_url():
     return os.environ.get("E2E_BASE_URL", "http://localhost:8000")

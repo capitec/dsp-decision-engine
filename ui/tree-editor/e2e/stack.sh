@@ -5,8 +5,10 @@
 #   ./stack.sh up       build the UI if needed, start Postgres and the backend, wait for /api/health
 #   ./stack.sh down     stop the backend, remove the container and its volume
 #   ./stack.sh logs     the backend log
+#   ./stack.sh test [pytest args]   run the suite against this stack (e.g. -m smoke)
 #
-# E2E_PORT (8600), E2E_PG_PORT (55432), E2E_RUNTIME (podman), E2E_STATE (<repo>/.scratch/ui-e2e-stack).
+# E2E_PORT (8600), E2E_PG_PORT (55432), E2E_RUNTIME (podman), E2E_STATE (<repo>/.scratch/ui-e2e-stack),
+# E2E_TMPDIR (/var/tmp/dtmp-ui-e2e: temp files and browser profiles on disk, not in a RAM-backed /tmp).
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$here/../../.." && pwd)
@@ -51,9 +53,16 @@ down() {
   "$runtime" volume rm "$pg" >/dev/null 2>&1 || true
 }
 
+run_tests() {
+  TMPDIR=${E2E_TMPDIR:-/var/tmp/dtmp-ui-e2e}; mkdir -p "$TMPDIR"
+  cd "$here" && E2E_BASE_URL="http://localhost:$port" TMPDIR="$TMPDIR" SETUPTOOLS_SCM_PRETEND_VERSION=0.0.0 \
+    uv run --no-project --with-requirements requirements.txt --with-editable "$repo" pytest "$@"
+}
+
 case "${1:-}" in
   up) up ;;
   down) down ;;
   logs) cat "$state/backend.log" ;;
-  *) sed -n 2,9p "$0"; exit 2 ;;
+  test) shift; run_tests "$@" ;;
+  *) sed -n 2,10p "$0"; exit 2 ;;
 esac
