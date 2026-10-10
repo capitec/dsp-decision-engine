@@ -227,6 +227,15 @@ def test_every_project_appears_on_exactly_one_page(signed_in: Page):
     assert sorted(names) == [f"Bulk {i:02d}" for i in range(14)]
 
 
+def test_the_project_list_pages_most_recently_changed_first(signed_in: Page):
+    ids = [create_project(signed_in, name, flat_document())["id"] for name in ("A", "B", "C")]
+    signed_in.request.put(f"/api/v1/projects/{ids[0]}", data={"description": "changed"})
+
+    pages = [signed_in.request.get(f"/api/v1/projects?page={n}&size=2").json()["items"] for n in (1, 2)]
+
+    assert [[p["name"] for p in items] for items in pages] == [["A", "C"], ["B"]]
+
+
 def test_page_size_can_be_changed(signed_in: Page):
     seed_many(signed_in, 8)
     open_projects(signed_in)
