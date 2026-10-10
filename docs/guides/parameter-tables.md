@@ -211,6 +211,12 @@ shape: (3, 4)
 
 `parameters()` reports the shared table once, with `used_by` listing every step that reads it. Steps sharing a key must declare the same columns: two different declarations are an `IRError` when the flow is built (`shared param 'term_caps' is declared ... by limits/term_cap and ... by limits/headroom`). Declaring the schema once, as `CAPS` above, keeps them in step.
 
+## Rows read from a config document
+
+When a table's default rows come from a config document (a rate card read by `build`), declare where with `param_table(columns, default=rows, seeded_from="rate_card")`. A params document that sets the same table replaces the document's rows, so editing the document would seem to do nothing. Staging a config version (`decider build`, a server's start, `RequestHandler.stage()`) therefore warns with `ShadowedTableWarning`, naming the table, the document and the params key. Rows passed per call (`run(df, params=...)`, experiments) are never checked.
+
+Three ways to switch it off: `warnings.filterwarnings("ignore", category=ShadowedTableWarning)`; the setting `DECIDER_BUILD__WARN_SHADOWED_TABLES=false`; or, for a table the params document is meant to replace, `param_table(..., seeded_from="rate_card", allow_override=True)`.
+
 ## What the step receives
 
 The argument is a namedtuple with one field per column, in declaration order. Each field is a read-only numpy array (`int64`, `float64` or `bool`), indexed by row: `bands.rate[i]`, `len(bands.floor)`. It is the same object shape in every mode, which is why the loop compiles. Iterate with `range(len(...))` over one column; `for row in bands` iterates the columns, not the rows.

@@ -174,6 +174,7 @@ Settings are `DECIDER_*` environment variables, with `__` between nested names. 
 | `DECIDER_API__MODE` | `interpreted`, `stepped` or `fused` | `fused` |
 | `DECIDER_CONFIG__TYPE` | the config store type | `file:json` |
 | `DECIDER_CONFIG__BASEPATH` | the `JsonFileStore` folder | `configs` |
+| `DECIDER_BUILD__WARN_SHADOWED_TABLES` | `false` stops the `ShadowedTableWarning` that staging a version (`decider build`, a server's start) gives when its params document sets a `param_table(..., seeded_from=...)` | `true` |
 
 If the handler module exists but has no class of that name, startup fails with `inference.py has no 'Handler'; define class Handler(RequestHandler) there, or point DECIDER_API__HANDLER at the module:class that holds your handler`.
 

@@ -260,6 +260,8 @@ mixed/applied_month runs in Python, row by row: reads 'applied_on' as <class 'da
 
 The strict error is a plain `ValueError`, not a `DeciderError`.
 
+`strict_compile=True` also refuses hidden state, in every mode: a step that reads a module-level object (a `HiddenStateWarning` otherwise) makes `bind` raise `EngineError`, so a CI build with one fails.
+
 ## The first call and the numba cache
 
 Binding is cheap. The first `run` or `score` of a compiled executable compiles: numba types each step from its annotations and builds the kernels, which takes a large fraction of a second for a small pipeline. Later calls reuse the kernels, and so does a second executable built from the same steps in the same process:
