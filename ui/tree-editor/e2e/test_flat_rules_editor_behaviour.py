@@ -137,7 +137,6 @@ def test_escape_in_the_parameter_picker_closes_the_suggestions_and_keeps_the_tex
     expect(box).to_have_value("lim")
 
 
-@pytest.mark.xfail(strict=True, reason="Enter and Escape do nothing in the rule rename box; only the check button ends it")
 def test_enter_in_the_rule_rename_box_finishes_the_rename(signed_in: Page):
     open_doc(signed_in, SMALL)
     card = rule_card(signed_in)
