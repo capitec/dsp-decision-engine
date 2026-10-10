@@ -25,7 +25,7 @@ Configurations (`<engine>-<mode>`):
 
 Streamed runs include reading and writing parquet, in-memory runs do not, so compare `*-stream` with `fused-io` and `*-mem` with each other.
 
-Correctness first: on 10k rows `check` compares every configuration's output with eager fused, in memory and streamed with a 1000-row streaming chunk, column by column with exact equality and dtype. All 16 comparisons were equal (no float tolerance was needed: the polars arithmetic and the Python arithmetic agree bit for bit on these data).
+Correctness first: on 10k rows `check` compares every configuration's output with eager fused, in memory and streamed with a 1000-row streaming chunk, column by column with exact equality and dtype. All 19 comparisons were equal (no float tolerance was needed: the polars arithmetic and the Python arithmetic agree bit for bit on these data).
 
 Box: 28 polars threads (`pl.thread_pool_size()`), polars 1.41.2, Python 3.14.5, 31 GB shared with other sessions. One-minute load average at the start and end of the four timed invocations: 106 and 15 (10k and 1M, first pass), 7.3 and 9.0 and 8.8 and 12.7 (the re-run of flagship and tree at 10k and 1M, then of fallback at 1M), 8.9 (50M flagship, no end record). Round 2, start and end: memstream flagship 8.9 and 14.9, tree 14.9 and 11.2, fallback 11.2 and 6.2; flagship memory runs 6.2 and 14.7, 14.7 and 10.7, 10.7 and 13.6, 12.8 and 12.3; fallback 5M 18.1 and 9.1; one-file flagship 9.3 and 12.4, 12.4 and 11.7; tree 50M 11.7 and 54.8, 54.8 and 17.8, 17.8 and 14.1 (another session was running during the first of those). Other sessions' work is in the spread, which is why the min-max is given.
 
@@ -48,7 +48,7 @@ Fallback with the steps as frame steps, 1M rows:
 | in memory | 26.2 (24.2-28.9) | 4.88 (4.85-5.47) | 2.47 (2.47-3.05) | 0.707 (0.631-0.767) |
 | streamed | 33.0 (31.3-33.7) | 6.11 (5.28-6.12) | 3.72 (3.69-5.57) | 0.375 (0.369-0.494) |
 
-Share of the host-to-native gap that the rewrite closes: in memory 84% (ten frame steps) and 93% (one); streamed 82% and 89%. What is left is 6.9x and 3.5x native in memory, 16x and 9.9x streamed.
+Share of the host-to-native gap that the rewrite closes: in memory 84% (ten frame steps) and 93% (one); streamed 82% and 90%. What is left is 6.9x and 3.5x native in memory, 16x and 9.9x streamed.
 
 **50M rows, flagship** (3 child runs; the frame is 2.0 GB in memory: 5 float64 columns)
 
@@ -66,13 +66,13 @@ Share of the host-to-native gap that the rewrite closes: in memory 84% (ten fram
 Cold build (executable build plus the warm-up call, seconds): flagship 0.5 to 1.0 host and fused, 0.03 hand-written; tree 1.2 to 1.5 both (the walker compiles), 0.06 hand-written; fallback 0.07 to 0.15 (nothing compiles).
 
 What the numbers show:
-- The host is the eager fused run, batch by batch: in memory it is within noise of `fused-mem` on every pipeline (flagship 50M: 3.70 s against 4.56 s, the host faster by 19%; tree and fallback 1M within 4%). Streamed, it is faster than `fused-io`'s read-run-write on the flagship (50M: 4.60 s against 10.3 s; 1M: 0.255 against 0.372 s) and the tree (0.79 against 0.85 s at 1M) and 21% slower on the fallback pipeline (33.0 against 27.3 s at 1M), with about the same peak RSS.
+- The host is the eager fused run, batch by batch: in memory it is within noise of `fused-mem` on every pipeline (flagship 50M: 3.70 s against 4.56 s, the host faster by 19%; tree and fallback 1M within 4%). Streamed, it is faster than `fused-io`'s read-run-write on the flagship (50M: 4.60 s against 10.3 s; 1M: 0.255 against 0.372 s, ranges overlapping) and the tree (0.79 against 0.85 s at 1M) and 21% slower on the fallback pipeline (33.0 against 27.3 s at 1M), with about the same peak RSS.
 - Streamed, the host is within noise of hand-written polars on the flagship (50M: 4.60 (4.27-5.70) s against 4.15 (3.93-5.27) s; 1M: 0.255 against 0.335 s) and on the tree (1M: 0.79 (0.70-0.80) against 0.71 (0.69-0.79) s). The streamed flagship is bound by reading and writing parquet.
 - In memory the host is not within noise of hand-written polars on the flagship: 50M rows 3.70 s against 0.200 s (18x), because the host runs one single-threaded numba pass over the whole frame while polars spreads the arithmetic over 28 threads. At 1M rows the gap is 1.7x with overlapping ranges (host 12.7-27.9 ms, native 9.3-14.9 ms). On the tree the two are equal in memory at 1M (0.197 s each).
 - The fallback-heavy pipeline is where native polars wins by two orders of magnitude (26 s against 0.7 s per 1M rows, 37x). Rewriting the steps as frame steps closes most of that: 5.4x (ten steps) and 10.6x (one step) faster than the host in memory.
 - A frame step costs more than its polars body. Profiling `frame1` at 1M rows (cProfile, one run): 2.6 s in all, of which 1.6 s is `State.from_series` turning the frame's `str` and `date` columns into the engine's run state (42 calls in three `Engine.run`s, two of them on zero rows), against 0.7 s for the polars expressions themselves. That is why the one-step rewrite is 3.5x and not 1x native.
 - A frame step is a pipeline breaker: the segments before and after it stream, but the step runs once on the whole frame, so its input and output columns are in memory together. `frames-stream` and `frame1-stream` at 1M rows peak at 628 and 908 MB against 784 MB for `host-stream`; at 1M rows this does not show, and at 50M it was not run.
-- Memory, 50M rows, flagship, first session (one merged 1.5 GB parquet file): streamed peak RSS 3969 to 4086 MB for the host and 4023 to 4095 MB for hand-written polars, twice the 2.0 GB frame. The second round below shows this is the input layout and polars' scan/sink, not the host.
+- Memory, 50M rows, flagship, first session (one merged 1.4 GB parquet file): streamed peak RSS 3969 to 4086 MB for the host and 4023 to 4095 MB for hand-written polars, twice the 2.0 GB frame. The second round below shows this is the input layout and polars' scan/sink, not the host.
 
 ### Round 2: the in-memory frame through the streaming engine (`host-memstream`)
 
@@ -103,9 +103,9 @@ The frame is 2.0 GB in memory. Median peak RSS in MB (median wall seconds). `cop
 | one file, row group 1M | 28 | 3522 (2.82 s) | 4069 (3.33 s) | 4032 (4.20 s) |
 | one file, row group 1M | 4 | 2018 (3.57 s) | 2187 (4.51 s) | 2293 (4.97 s) |
 
-- The host's peak RSS is within 2% of hand-written polars with 28 threads and within 9% with 4 (684 against 628 MB at the smallest). In this session its wall time was 10 to 26% above hand-written polars, with non-overlapping ranges in four of the six rows (the first session's 4.60 (4.27-5.70) against 4.15 (3.93-5.27) s overlapped).
+- The host's peak RSS is within 2% of hand-written polars with 28 threads and within 9% with 4 (684 against 628 MB at the smallest). In this session its wall time was 10 to 26% above hand-written polars, with non-overlapping ranges in three of the six rows (the first session's 4.60 (4.27-5.70) against 4.15 (3.93-5.27) s overlapped).
 - The peak depends on the input layout and on threads, not on the host: one merged file reads at 3.5 GB even for the plain copy, twenty parts at 2.8 GB; four threads cut it to 0.9 and 2.0 GB; smaller row groups with 4 threads cut it to 0.37 GB.
-- Hand-written polars and the host peak 1.4 GB above `copy-stream` with 28 threads and small row groups (2.4 against 1.0 GB), and 0.26 to 0.32 GB above it with 4 threads: the two new columns' buffers. A run is under half the frame (0.63 and 0.68 GB against 2.0 GB) only with 4 threads and 100k row groups.
+- Hand-written polars and the host peak 1.4 GB above `copy-stream` with 28 threads and small row groups (2.4 against 1.0 GB), and 0.26 to 0.32 GB above it with 4 threads and small row groups: the two new columns' buffers. A run is under half the frame (0.63 and 0.68 GB against 2.0 GB) only with 4 threads and 100k row groups.
 
 ### Round 2: the tree at 50M rows streamed (7.2 GB of columns in 20 parts, 5.7 GB on disk)
 
@@ -133,7 +133,7 @@ Not measured: the fallback pipeline at 50M, and the eager tree and eager fallbac
 ## Decides
 The rule from the spec: P6 (polars bodies and native segments) is not built if the host is within noise of hand-written polars on the flagship and the tree, and the `frame_step` rewrite closes most of the gap on the fallback-heavy pipeline.
 
-- Second clause: met on the 1M numbers. The rewrite closes 84% (ten frame steps) to 93% (one frame step) of the gap in memory and 82 to 89% streamed.
+- Second clause: met on the 1M numbers. The rewrite closes 84% (ten frame steps) to 93% (one frame step) of the gap in memory and 82 to 90% streamed.
 - First clause, streamed: on the flagship the host's wall time is within noise of hand-written polars in the first session (50M and 1M) and 10 to 26% above it in the second (50M, six layouts); on the tree at 1M it is within noise, and at 50M only the host finishes inside the 7 GB cap. First clause, in memory: met on the tree (1M) and not on the flagship, where hand-written polars was 18x faster at 50M rows (and 1.7x at 1M with overlapping ranges). Collecting the in-memory frame with the streaming engine narrows the 50M flagship gap to 4.3x (0.93 against 0.218 s) and makes the host 3.4x faster than hand-written polars on the tree at 1M.
 - The fallback-heavy gap is the Python bodies, which only a rewrite by the author (frame steps, which the engine already supports) or a translator of Python to expressions would remove; the rewrite is 5x to 10x faster than the host at 1M and 5.7x to 7.9x at 5M, with a memory cost that grows with the rows.
 - P4's exit asked for peak RSS well under the frame size at 50M rows, streamed, on a pipeline without frame steps. With the host: 4.0 GB with one merged input file and default threads, 2.8 GB with 20 parts, 2.5 GB with 20 parts and 100k row groups, 0.68 GB with 4 threads and 100k row groups (frame 2.0 GB). In each setting hand-written polars peaks within 2 to 9% of the host's figure and a plain scan-to-sink copy at 0.37 to 3.5 GB.
