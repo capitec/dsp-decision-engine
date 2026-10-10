@@ -70,6 +70,11 @@ def check_message(message: t.Any) -> None:
             raise Rejected(f"{kind} needs a value: {path}")
         if kind == "order" and not (isinstance(op["value"], list) and all(isinstance(k, str) for k in op["value"])):
             raise Rejected(f"order needs a list of keys: {path}")
+    parts = message.get("parts", [])
+    if not isinstance(parts, list) or not all(
+            isinstance(p, list) and len(p) == 2 and isinstance(p[0], str) and isinstance(p[1], int)
+            and not isinstance(p[1], bool) and p[1] >= 0 for p in parts) or sum(p[1] for p in parts) > len(ops):
+        raise Rejected("parts must be [message id, op count] pairs covering the ops")
     if _has_nul(ops):
         # Postgres JSON cannot hold one: the write would fail and the client would send it again and again.
         raise Rejected("text cannot contain a NUL character")
@@ -199,12 +204,14 @@ async def _new_errors(merged: dict, current: dict, own: t.Callable[[], dict], ex
 
 
 async def apply_message(project_id: uuid.UUID, client_id: str, msg_id: str, base: int, ops: list,
-                        offline: bool = False, executor=None) -> Applied:
+                        offline: bool = False, executor=None, parts: t.Sequence = ()) -> Applied:
     """Apply one live message and commit it as the next version; a message already in the log is not applied again.
 
     Online, an op inside something another client changed since `base` is dropped. `offline` merges the batch whole
-    or not at all (Rejected names the conflicting paths); `executor` runs its validation. Raises Rejected (nothing
-    stored) when the base is unknown or the result is not a document of the project's type.
+    or not at all (Rejected names the conflicting paths); `executor` runs its validation. `parts` (`[msg_id, op
+    count]` in order) names earlier messages of this client the batch contains; the ops of one already logged are
+    skipped. Raises Rejected (nothing stored) when the base is unknown or the result is not a document of the
+    project's type.
     """
     started = time.perf_counter()
     async with db_session() as session:
@@ -214,6 +221,8 @@ async def apply_message(project_id: uuid.UUID, client_id: str, msg_id: str, base
         for row in rows:
             if (row.client_id, row.msg_id) == (client_id, msg_id):
                 return Applied(row.version, row.ops)
+        # A message still in flight when its client reconnected is applied by now, but resent inside the batch.
+        ops = _unlogged(ops, parts, {row.msg_id for row in rows if row.client_id == client_id})
         theirs = [op for row in rows if row.client_id != client_id for op in row.ops]
         stale, base_doc, replayed, compared = [], None, locked, locked
         if offline:
@@ -254,6 +263,15 @@ async def apply_message(project_id: uuid.UUID, client_id: str, msg_id: str, base
                 (checked - applying) * 1e3, (validated - checked) * 1e3, (done - validated) * 1e3,
                 (done - started) * 1e3)
     return Applied(version, applied, stale + failed)
+
+
+def _unlogged(ops: list, parts: t.Sequence, logged: set) -> list:
+    kept, at = [], 0
+    for part_id, count in parts:
+        if part_id not in logged:
+            kept += ops[at:at + count]
+        at += count
+    return kept + ops[at:]
 
 
 def first_version(project: Project) -> ProjectOp:

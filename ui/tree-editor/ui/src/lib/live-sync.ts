@@ -19,7 +19,8 @@
 import { apply, diff, type Json, type Op } from './live-ops'
 
 export type LiveStatus = 'connecting' | 'live' | 'reconnecting'
-type Message = { id: string; base: number; ops: Op[]; offline?: boolean }
+/** `parts`: the earlier messages an offline batch contains, `[id, op count]` in order. */
+type Message = { id: string; base: number; ops: Op[]; offline?: boolean; parts?: Array<[string, number]> }
 type Socket = Pick<WebSocket, 'send' | 'close' | 'onopen' | 'onmessage' | 'onclose'>
 
 export interface LiveHooks {
@@ -160,9 +161,14 @@ export class LiveSync {
   /** After a reconnect: everything pending goes as one offline batch (resent as is when it already is one). */
   private sendOffline(base: { version: number; doc: Json }) {
     const [first] = this.pending
+    // A message still in flight when the socket dropped may be applied after the catch-up; the parts let the
+    // server skip it instead of applying it twice.
     const batch = this.pending.length === 1 && first.offline
       ? first
-      : { id: crypto.randomUUID(), base: base.version, ops: this.pending.flatMap((p) => p.ops), offline: true }
+      : {
+          id: crypto.randomUUID(), base: base.version, ops: this.pending.flatMap((p) => p.ops), offline: true,
+          parts: this.pending.flatMap((p) => p.parts ?? [[p.id, p.ops.length] as [string, number]]),
+        }
     this.pending = [batch]
     this.offlineDoc = apply(base.doc, batch.ops)[0]
     this.send({ type: 'ops', ...batch })
