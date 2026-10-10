@@ -1,10 +1,16 @@
 import os
+import signal
 import uuid
 
 import pytest
 from playwright.sync_api import Page
 
 from tree_ui import register
+
+
+def pytest_configure(config):
+    # A run stopped by its PID (SIGTERM) still unwinds its teardowns, so no `decikit serve` it started outlives it.
+    signal.signal(signal.SIGTERM, signal.default_int_handler)
 
 
 def pytest_collection_modifyitems(items):
