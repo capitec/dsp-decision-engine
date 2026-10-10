@@ -1,12 +1,14 @@
 """The decision as served: raw request bytes through the handler `decikit serve` uses, in its compiled default mode."""
 import json
 from pathlib import Path
+from typing import is_typeddict
 
 import pytest
 from decikit import FusedEngine
 from decikit.config import JsonFileStore
 from decikit.serving import RequestHandler
 
+from consolidation import inventory, records
 from consolidation.pipeline import build
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -54,10 +56,14 @@ def test_other_decisions_are_served_the_same_as_interpreted(handler, assess, sam
     assert {name: served[name] for name in FIGURES} == {name: interpreted[name] for name in FIGURES}
 
 
+# A frame row holds every declared key, null where a single record left it out; only a declared-optional key is read as absent.
+OPTIONAL = {key for module in (inventory, records) for cls in vars(module).values() if is_typeddict(cls)
+            for key in cls.__optional_keys__}
+
+
 def present(value):
-    """A frame row holds every declared key, null where a single record left it out; compare with those keys read as absent."""
     if isinstance(value, dict):
-        return {k: present(v) for k, v in value.items() if v is not None}
+        return {k: present(v) for k, v in value.items() if not (v is None and k in OPTIONAL)}
     return [present(v) for v in value] if isinstance(value, list) else value
 
 
