@@ -179,7 +179,6 @@ def test_boolean_checks_save_and_run(signed_in: Page, op, expected):
     assert approved(export_document(signed_in, project), {"flag": [True, False]}) == expected
 
 
-@pytest.mark.xfail(strict=True, reason="the operator list offers Is Null and Is Not Null, which decikit's schema does not accept")
 @pytest.mark.parametrize("op", ["is_null", "is_not_null"])
 def test_a_null_check_is_either_not_offered_or_saves_a_valid_document(signed_in: Page, op):
     open_doc(signed_in)
@@ -223,7 +222,6 @@ def test_a_non_finite_threshold_is_not_saved_as_zero(signed_in: Page, text):
     assert saved_condition(save(signed_in))["threshold"] != 0  # refusing it would keep the 5
 
 
-@pytest.mark.xfail(strict=True, reason="changing the operator resets the threshold to 0")
 def test_changing_the_operator_keeps_a_literal_threshold(signed_in: Page):
     open_doc(signed_in)
     card = unary_rule(signed_in, "<=")
@@ -233,7 +231,6 @@ def test_changing_the_operator_keeps_a_literal_threshold(signed_in: Page):
     assert saved_condition(save(signed_in))["threshold"] == 1000
 
 
-@pytest.mark.xfail(strict=True, reason="changing the operator replaces a parameter threshold with 0")
 def test_changing_the_operator_keeps_a_parameter_threshold(signed_in: Page):
     open_doc(signed_in)
     add_parameter(signed_in, "limit", "Float64", "1000")

@@ -84,7 +84,6 @@ def test_not_is_not_offered_once_a_composite_has_two_conditions(signed_in: Page)
     expect(signed_in.get_by_role("option", name="NOT", exact=True)).to_be_disabled()
 
 
-@pytest.mark.xfail(strict=True, reason="changing a nested composite's operator empties its conditions")
 def test_changing_a_nested_composite_operator_keeps_its_conditions(signed_in: Page):
     open_doc(signed_in)
     card = rule_card(signed_in)
@@ -178,7 +177,6 @@ def manual_ranges(page: Page, bands: list[tuple[str, str, int]]):
     return card
 
 
-@pytest.mark.xfail(strict=True, reason="manual ranges are saved without strict: false, so decikit rejects gaps")
 def test_manual_ranges_with_a_gap_save_valid(signed_in: Page):
     open_doc(signed_in)
     manual_ranges(signed_in, [("0", "10", 1), ("20", "30", 1)])

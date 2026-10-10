@@ -18,7 +18,6 @@ def dialog_types(page: Page) -> list[str]:
     return seen
 
 
-@pytest.mark.xfail(strict=True, reason="the flat-rule editor has no unsaved-changes indicator")
 def test_an_unsaved_edit_is_indicated(signed_in: Page):
     open_doc(signed_in, SMALL)
     expect(signed_in.get_by_text(UNSAVED)).to_have_count(0)
@@ -27,20 +26,18 @@ def test_an_unsaved_edit_is_indicated(signed_in: Page):
     expect(signed_in.get_by_text(UNSAVED).first).to_be_visible()
 
 
-@pytest.mark.xfail(strict=True, reason="Back leaves the editor with unsaved edits without asking")
 def test_back_after_an_unsaved_edit_asks_before_leaving(signed_in: Page):
     open_doc(signed_in, SMALL)
     seen = dialog_types(signed_in)
     rename_rule(signed_in, "Edited")
     signed_in.get_by_role("button", name="Back").click()
 
-    # signed_in accepts a native confirm, so the page ends on the overview or on an in-page prompt
+    # signed_in accepts a native confirm, so the page ends on the project list or on an in-page prompt
     prompt = signed_in.get_by_role("alertdialog")
-    expect(signed_in.get_by_role("heading", name="Overview").or_(prompt).first).to_be_visible()
+    expect(signed_in.get_by_role("button", name="Create New Project").or_(prompt).first).to_be_visible()
     assert seen or prompt.is_visible()
 
 
-@pytest.mark.xfail(strict=True, reason="closing the page with unsaved edits shows no beforeunload prompt")
 def test_closing_the_tab_after_an_unsaved_edit_asks_before_leaving(signed_in: Page):
     open_doc(signed_in, SMALL)
     rename_rule(signed_in, "Edited")
@@ -64,7 +61,7 @@ def test_saved_edit_is_still_there_after_leaving_and_opening_the_project_again(s
     rename_rule(signed_in, "Edited")
     save(signed_in)
     signed_in.get_by_role("button", name="Back").click()
-    expect(signed_in.get_by_role("heading", name="Overview")).to_be_visible()  # Back lands on the overview
+    expect(signed_in).to_have_url(re.compile(r"/projects$"))  # Back lands on the project list
     signed_in.goto(f"/flat-rules/{project}")
 
     expect(signed_in.get_by_test_id("rule-card")).to_have_count(1, timeout=30_000)
@@ -72,11 +69,10 @@ def test_saved_edit_is_still_there_after_leaving_and_opening_the_project_again(s
     assert get_project(signed_in, project)["project_data"]["rules"][0]["meta"]["name"] == "Edited"
 
 
-@pytest.mark.xfail(strict=True, reason="after Back, the browser's back button bounces off /flat-rules to the overview")
 def test_browser_back_after_the_back_button_returns_to_the_editor(signed_in: Page):
     project = open_doc(signed_in, SMALL)
     signed_in.get_by_role("button", name="Back").click()
-    expect(signed_in.get_by_role("heading", name="Overview")).to_be_visible()
+    expect(signed_in).to_have_url(re.compile(r"/projects$"))
     signed_in.go_back()
 
     expect(signed_in).to_have_url(re.compile(rf"/flat-rules/{project}$"))

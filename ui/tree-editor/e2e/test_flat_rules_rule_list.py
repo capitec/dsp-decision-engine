@@ -58,7 +58,6 @@ def test_empty_rule_name_is_not_saved_as_an_empty_name(signed_in: Page):
     assert saved["project_data"]["rules"][0]["meta"]["name"]
 
 
-@pytest.mark.xfail(strict=True, reason="two rules of one name in all mode save valid, and the second's answer replaces the first's")
 def test_duplicate_rule_names_in_all_mode_are_reported_or_both_rules_answer(signed_in: Page):
     never = {**SMALL, "condition": {**SMALL["condition"], "threshold": 0}}
     project = open_doc(signed_in, SMALL, never, mode="all")
@@ -72,7 +71,6 @@ def test_duplicate_rule_names_in_all_mode_are_reported_or_both_rules_answer(sign
     assert sorted(row.values()) == ["approve", "decline"]
 
 
-@pytest.mark.xfail(strict=True, reason="a rule description is not part of the saved document")
 def test_rule_description_survives_save_and_reload(signed_in: Page):
     open_doc(signed_in, SMALL)
     card = rule_card(signed_in)

@@ -248,8 +248,9 @@ def set_output_column_type(page: Page, column: str, dtype: str) -> None:
 
 
 def output_cell(page: Page, record: int, column: int) -> Locator:
-    """The editable field of output record `record` (table row), column index `column`."""
-    return page.locator("tbody tr").nth(record).locator("td").nth(column).locator("input, [role=combobox]").first
+    """The editable field of output record `record` (its result_idx), column index `column`."""
+    row = page.locator("tbody tr:not([data-testid='output-default-row'])").nth(record)
+    return row.locator("td").nth(column).locator("input, [role=combobox]").first
 
 
 def open_custom_types(page: Page) -> Locator:
