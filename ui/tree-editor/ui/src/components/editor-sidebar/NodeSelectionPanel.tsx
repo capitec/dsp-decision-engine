@@ -35,6 +35,7 @@ export const NodeSelectionPanel: React.FC<NodeSelectionPanelProps> = ({ node }) 
       // Default to cases with ranges op when selecting "cases"
       baseUpdate.type = 'cases';
       baseUpdate.op = 'ranges';
+      baseUpdate.strict = false;
       baseUpdate.feature = '';
       baseUpdate.conditions = [];
       baseUpdate.branches = [];
