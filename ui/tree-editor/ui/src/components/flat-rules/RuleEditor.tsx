@@ -198,6 +198,13 @@ export const RuleEditor: React.FC<RuleEditorProps> = () => {
     ));
   }, [setTrees]);
 
+  // The name is renamed as it is typed; cancelling, or finishing with an empty name, puts the old one back
+  const [nameBeforeEdit, setNameBeforeEdit] = useState('');
+  const finishRename = (tree: PrioritizedTree, keep: boolean) => {
+    if (!keep || !tree.name.trim()) renameTree(tree.id, nameBeforeEdit);
+    setEditingTreeName(null);
+  };
+
   const moveTree = useCallback((treeId: string, direction: 'up' | 'down') => {
     setTrees(prev => {
       const index = prev.findIndex(t => t.id === treeId);
@@ -600,13 +607,16 @@ export const RuleEditor: React.FC<RuleEditorProps> = () => {
                     <Input
                       value={tree.name}
                       onChange={(e) => renameTree(tree.id, e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === 'Escape') finishRename(tree, e.key === 'Enter');
+                      }}
                       className="w-48 h-8 text-sm"
                       autoFocus
                     />
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => setEditingTreeName(null)}
+                      onClick={() => finishRename(tree, true)}
                       data-testid="rule-rename-done"
                       className="h-7 px-2"
                     >
@@ -615,10 +625,7 @@ export const RuleEditor: React.FC<RuleEditorProps> = () => {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => {
-                        setEditingTreeName(null);
-                        // Reset name to original
-                      }}
+                      onClick={() => finishRename(tree, false)}
                       className="h-7 px-2"
                     >
                       <X className="w-3.5 h-3.5 text-red-600" />
@@ -631,7 +638,7 @@ export const RuleEditor: React.FC<RuleEditorProps> = () => {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => setEditingTreeName(tree.id)}
+                        onClick={() => { setNameBeforeEdit(tree.name); setEditingTreeName(tree.id); }}
                         data-testid="rule-rename"
                         className="h-6 px-1.5"
                       >

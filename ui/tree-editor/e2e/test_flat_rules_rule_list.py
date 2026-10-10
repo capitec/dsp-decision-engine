@@ -49,7 +49,6 @@ def test_unicode_and_very_long_rule_names_survive_a_round_trip(signed_in: Page, 
     assert rule_names(signed_in) == [name]
 
 
-@pytest.mark.xfail(strict=True, reason="an empty rule name is saved as is")
 def test_empty_rule_name_is_not_saved_as_an_empty_name(signed_in: Page):
     open_doc(signed_in, SMALL)
     rename_rule(signed_in, "")
