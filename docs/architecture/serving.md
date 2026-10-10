@@ -76,7 +76,7 @@ All three methods take `self._lock`, a `threading.Lock`. `stage(version=None)` d
 1. `store.latest_version()` when no version is given, or `RuntimeError("the config store has no versions to stage.")` for an empty store.
 2. `store.read(version)` for the documents.
 3. `Engine().bind(self.pipeline_fn(config), mode=self.mode)`.
-4. `warm_fn(executable, params)`: one record through `score()` and the same record as a one-row frame through `run()`, so every kernel compiles (or loads from numba's disk cache) before a request needs it.
+4. `warm_fn(executable, params)`: one record through `run()` as a dict and the same record as a one-row frame through `run()`, so every kernel compiles (or loads from numba's disk cache) before a request needs it.
 5. A new `Live` in `_staged`.
 
 `activate()` moves `_staged` to `_active` and pushes the previous `_active` onto `_history`. `rollback()` pops `_history` back into `_active`. There is no limit on the history; the code marks that with a `ponytail:` comment, since a process that activates thousands of versions would keep every one of their executables alive.
@@ -155,7 +155,7 @@ sequenceDiagram
     H->>H: live = module_fn()
     alt one JSON object
         H->>H: coerce_record
-        H->>E: score(record, params)
+        H->>E: run(record, params)
         E-->>H: dict
     else anything else
         H->>H: coerce_frame
@@ -170,7 +170,7 @@ sequenceDiagram
 `process_fn` is `output_fn(score(input_fn(data, content_type)), accept)`, and all of its hooks are plain synchronous methods; a subclass that overrides one with `async def` fails with a `TypeError` when the class is created. The steps:
 
 1. `input_fn` looks the `Content-Type` header up in `DEFAULT_INPUT_HANDLERS` by exact string. A missing parser is `UnsupportedContentTypeError` (415). Any exception the parser raises becomes `InputParsingError` (400) with the parser's message.
-2. `score(request)` starts with `module_fn()`, which returns `self._active` or raises `RuntimeError("no config version is active; call stage() then activate().")`. The HTTP routes never get that far without an active version because `ready()` answers 503 first. A `dict` then takes the single-record path, `Executable.score`; a `pl.DataFrame` takes the batch path, `Executable.run`. Code in the same process calls `score` directly with a parsed record or frame.
+2. `score(request)` starts with `module_fn()`, which returns `self._active` or raises `RuntimeError("no config version is active; call stage() then activate().")`. The HTTP routes never get that far without an active version because `ready()` answers 503 first. A `dict` then takes the single-record path and a `pl.DataFrame` the batch path, both through `Executable.run`. Code in the same process calls `score` directly with a parsed record or frame.
 3. `output_fn` writes the result for the `Accept` header (default `*/*` when the header is absent).
 
 ### Input formats
@@ -318,11 +318,11 @@ The in-process budget, fused mode, one record, no HTTP (µs, lowest p50 of three
 | `input_fn` | 1.36 | 3.08 | 3.21 |
 | `coerce_record` (no date inputs) | 0.48 | 0.57 | 0.59 |
 | `module_fn` | 0.12 | 0.12 | 0.12 |
-| `score()` | 30.4 | 62.7 | 136.3 |
+| `run(record)` | 30.4 | 62.7 | 136.3 |
 | `output_fn` | 1.84 | 3.49 | 3.56 |
 | `process_fn`, whole | 39.4 | 77.2 | 151.8 |
 
-Inside `score()`, flagship spends 6.68 µs turning the dict into one numpy block per dtype (`_load`), 1.54 µs finding the cached params bundle and 18.9 µs in `runner.iterate`, of which the numba kernels themselves take 2.13 µs. The gated tree's 104 µs `iterate` is almost all the string span builder, which costs 71.7 µs to describe one 3-byte string. The floor, the same kernels with nothing allocated per call, is 6.98 µs for a whole flagship request including `from_json` and `to_json`, so about 5.6x is available inside the process without touching the protocol. That work belongs to the engine; see [Runners](engine/runners.md) and [Boundary](engine/boundary.md).
+Inside `run(record)`, flagship spends 6.68 µs turning the dict into one numpy block per dtype (`_load`), 1.54 µs finding the cached params bundle and 18.9 µs in `runner.iterate`, of which the numba kernels themselves take 2.13 µs. The gated tree's 104 µs `iterate` is almost all the string span builder, which costs 71.7 µs to describe one 3-byte string. The floor, the same kernels with nothing allocated per call, is 6.98 µs for a whole flagship request including `from_json` and `to_json`, so about 5.6x is available inside the process without touching the protocol. That work belongs to the engine; see [Runners](engine/runners.md) and [Boundary](engine/boundary.md).
 
 The same measurement on a shared, loaded development box, with the credit-limit example (a decision table and two scalar steps), gave (p50 of 5000 calls, µs):
 
@@ -330,7 +330,7 @@ The same measurement on a shared, loaded development box, with the credit-limit 
 from_json(body)          0.7 us
 coerce_record            0.5 us
 module_fn                0.2 us
-score()                 57.8 us
+run(record)             57.8 us
 output_fn                1.4 us
 process_fn              99.7 us
 ```
@@ -342,11 +342,11 @@ Outside the process, an echo route that scores nothing measured 3.3 µs over sha
 The question was whether an Arrow payload or a dedicated socket server would make single requests faster. The measured answer was no:
 
 - Arrow IPC is a slower codec than JSON for one record. `pl.read_ipc_stream` took 17.1 µs against `from_json`'s 0.90, and writing the reply 40.6 µs against `to_json`'s 1.16. Arrow wins from about 4096 rows, which is where the engine's boundary already borrows buffers.
-- `exe.run(one-row frame)` cost 150 µs against `score()`'s 30.4, so a single record must not be routed through a frame. That is why `process_fn` branches on `dict` versus frame.
+- `exe.run(one-row frame)` cost 150 µs against `run(record)`'s 30.4, so a single record must not be routed through a frame. That is why `process_fn` branches on `dict` versus frame.
 - A long-lived pyarrow record-batch stream measured slower than every transport except HTTP.
 - Swapping `json.loads` for `pydantic_core.from_json` cut `process_fn` from 49.9 to 39.4 µs (flagship). That swap is in the code; its one visible change is that a lone surrogate (`"\ud800"`) is now rejected with a 400.
 
-So the batch content types (Arrow, Parquet, CSV, JSONL) exist for batch callers, and JSON stays the single-record format. `score()` takes a dict rather than keyword arguments because, at 400 inputs, CPython matching keyword names cost 1190 µs against 60 µs for a dict.
+So the batch content types (Arrow, Parquet, CSV, JSONL) exist for batch callers, and JSON stays the single-record format. `run(record)` takes a dict rather than keyword arguments because, at 400 inputs, CPython matching keyword names cost 1190 µs against 60 µs for a dict.
 
 ## Processes and threads
 
@@ -370,7 +370,7 @@ flowchart LR
 
 `decikit serve` starts uvicorn with `create_app` as a factory and `workers` processes (default `2 * os.cpu_count() + 1`, computed at serve time on the target host). Each worker builds its own handler in the lifespan hook and stages and activates the store's latest version before `/ping` turns 200. Workers share nothing in memory; they share numba's disk cache, which `decikit build` fills ahead of time.
 
-Inside one worker, `process_fn` is a plain method: `score()` runs on the event loop's thread, and nothing in it awaits. One worker therefore scores one request at a time, and throughput scales with worker processes, not with concurrent requests per worker.
+Inside one worker, `process_fn` is a plain method: `run()` runs on the event loop's thread, and nothing in it awaits. One worker therefore scores one request at a time, and throughput scales with worker processes, not with concurrent requests per worker.
 
 `RequestHandler` is still safe to call from many threads at once, which matters when you host it yourself (a thread pool, a notebook, a test). The rules:
 

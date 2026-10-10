@@ -48,7 +48,7 @@ def spans(x: np.ndarray, mask: np.ndarray | None, alive: list, source: pl.Series
     if mask is not None:
         x = np.where(mask, x, None)
     if len(x) <= 32:
-        # A few records (score): borrowing each value's own bytes beats building a frame to export.
+        # A few records (a record's run): borrowing each value's own bytes beats building a frame to export.
         return _borrowed(x, alive)
     from decikit._engine.boundary.extract import extract_frame
 

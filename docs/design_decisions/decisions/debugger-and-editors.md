@@ -46,7 +46,7 @@ Read this before changing the debug `Session`, the editor bridge, the VS Code ex
 ## The bridge is an adapter over `Session`, never a second debugger
 
 - It lives in `decikit/_tooling/bridge/` and runs as `python -m decikit._tooling.bridge`; no separate distribution and no shim for the old `decikit_bridge` import.
-- A bridge session runs interpreted; `assert_equivalent` pins it equal to `run()` and `score()` in all modes (`tests/bridge/test_parity.py`).
+- A bridge session runs interpreted; `assert_equivalent` pins it equal to `run()` on a frame and on each record in all modes (`tests/bridge/test_parity.py`).
 - See: [Editor bridge](../../architecture/editor-bridge.md)
 
 ## One short-lived process per question; replies on fd 3; types generated from Python

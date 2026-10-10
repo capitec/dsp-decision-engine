@@ -197,7 +197,7 @@ sample = json.load(open("sample_request.json"))
 store = history.DecisionStore()
 request = parse_dates(sample)
 store.append(history.decision_of_record(
-    request, executable.score(request, params),
+    request, executable.run(request, params),
     assessment_kind_code=vocab.EP1_NEW_TO_BANK, comparison_basis_code=vocab.COMPARISON_ORIGINATION))
 
 next_year = parse_dates(sample | {"decision_date": "2027-09-24", "knowledge_date": "2027-09-24"})

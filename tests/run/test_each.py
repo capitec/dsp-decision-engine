@@ -53,15 +53,15 @@ def test_a_null_list_reads_as_no_items():
 @pytest.mark.parametrize("record", ({"items": []}, {"items": None}))
 def test_batch_handles_empty_and_null_lists_on_a_single_record(record):
     exe = Engine().bind(pipeline(EachMode.BATCH), mode="fused")
-    assert exe.score(record)["items"] == []
+    assert exe.run(record)["items"] == []
 
 
 def test_the_childs_params_are_tunable_through_the_parent_document():
     exe = Engine().bind(pipeline(), mode="interpreted")
     record = {"items": [{"weight": 25.0}]}
-    assert exe.score(record)["items"] == [{"weight": 25.0, "heavy": True}]
+    assert exe.run(record)["items"] == [{"weight": 25.0, "heavy": True}]
     params = {"order": {"items": {"heavy_kg": 30.0}}}
-    assert exe.score(record, params=params)["items"] == [{"weight": 25.0, "heavy": False}]
+    assert exe.run(record, params=params)["items"] == [{"weight": 25.0, "heavy": False}]
     assert exe.plan is not None  # smoke: the hoisted param is part of the schema
 
 
@@ -75,7 +75,7 @@ def test_a_missing_item_field_uses_the_childs_fill():
 @pytest.mark.parametrize("mode", MODES)
 def test_an_item_dict_missing_the_key_entirely_uses_the_childs_fill(mode):
     exe = Engine().bind(pipeline(), mode=mode)
-    assert exe.score({"items": [{}]})["items"] == [{"heavy": False}]
+    assert exe.run({"items": [{}]})["items"] == [{"heavy": False}]
 
 
 class Item(TypedDict):

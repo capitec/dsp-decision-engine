@@ -152,7 +152,7 @@ def _visits(tree, record):
     exe = Engine().bind(tree)
     seen = []
     exe.runner.visit = seen.append
-    exe.score(record)
+    exe.run(record)
     return seen
 
 

@@ -210,17 +210,17 @@ if __name__ == "__main__":
            timed(lambda: _hand_batch(pc, wc, LF, LR, MAX_WEIGHT, out_index, out_score), 20))
 
     exe = Engine().bind(PIPELINE, mode="fused")
-    got = exe.score(RECORD)
+    got = exe.run(RECORD)
     assert got["best_index"] == ref[0] and abs(got["best_score"] - ref[1]) < 1e-6, (got, ref)
     print(f"  optimise (fused): best_index={got['best_index']} score={got['best_score']:.3f} "
           f"evaluated={got['evaluated']} disqualified={got['disqualified']}")
     print(f"  packed loops: {sorted(getattr(exe.runner, 'packed', {}))}")
     print(f"  fallbacks: {exe.runner.fallbacks()}")
-    report("optimise score() 1 order", timed(lambda: exe.score(RECORD), 200))
+    report("optimise run(record) 1 order", timed(lambda: exe.run(RECORD), 200))
     report(f"optimise run() {ORDERS} orders", timed(lambda: exe.run(FRAME), 10))
 
     loop_exe = Engine().bind(explicit_loop(), mode="fused")
-    lg = loop_exe.score(RECORD)
+    lg = loop_exe.run(RECORD)
     assert lg["best_index"] == got["best_index"] and abs(lg["best_score"] - got["best_score"]) < 1e-9
-    report("explicit loop score() 1 order", timed(lambda: loop_exe.score(RECORD), 200))
+    report("explicit loop run(record) 1 order", timed(lambda: loop_exe.run(RECORD), 200))
     report(f"explicit loop run() {ORDERS} orders", timed(lambda: loop_exe.run(FRAME), 10))

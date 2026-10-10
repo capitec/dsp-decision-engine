@@ -1,7 +1,7 @@
 """Compile time of a `mode: "all"` tree against its rule count.
 
 `uv run python benchmarks/tree_wide_outputs.py 250` builds a tree of 250 similar rules (three conditions each,
-one boolean output per rule) and times `bind` plus the first `score`. Set `NUMBA_CACHE_DIR` to a fresh directory
+one boolean output per rule) and times `bind` plus the first record `run`. Set `NUMBA_CACHE_DIR` to a fresh directory
 for a cold run and run it twice for a warm one. `--whole` keeps the tree as one walker call (`part_outputs: null`).
 """
 import random
@@ -31,5 +31,5 @@ def tree(n: int, part_outputs: int | None = 64) -> TreeConfig:
 if __name__ == "__main__":
     n = int(sys.argv[1])
     start = time.time()
-    Engine().bind(flow(tree(n, None if "--whole" in sys.argv else 64), name="p"), mode="fused").score({f"f{i}": float(i) for i in range(12)})
+    Engine().bind(flow(tree(n, None if "--whole" in sys.argv else 64), name="p"), mode="fused").run({f"f{i}": float(i) for i in range(12)})
     print(f"{n} rules: {time.time() - start:.1f} s")

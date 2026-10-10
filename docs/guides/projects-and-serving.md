@@ -191,7 +191,7 @@ sequenceDiagram
     H->>H: module_fn() reads the active version once
     H->>H: input_fn(): dict for a JSON object, else a frame
     alt one record (dict)
-        H->>E: score(record, params)
+        H->>E: run(record, params)
     else a frame
         H->>E: run(frame, params)
     end
@@ -201,7 +201,7 @@ sequenceDiagram
     A-->>C: 200 with the body, or the error's status and {"message": ...}
 ```
 
-A JSON object is one record and goes through `score`, the single-record path that never builds a polars frame. Anything else is a frame and goes through `run`:
+A JSON object is one record and goes through `run` as a dict, the single-record path that never builds a polars frame. Anything else is a frame and goes through `run` as a frame:
 
 | `content-type` | Read as |
 |---|---|
@@ -263,7 +263,7 @@ print(call(b'income,debt,applied_on\n1000,250,2026-01-15\n', accept="application
 
 ### One record at a time
 
-Send a single decision as a JSON object, not as a one-element array or a CSV. The object takes the single-record path: the record goes straight into one-row arrays and comes back as a dict. In Python the same rule holds: `executable.score(record_dict, params)` takes a dict (never keyword arguments) and costs about a fifth of `run` on a one-row frame, which builds a frame, exports it through Arrow and assembles an output frame (the figure `decikit guide` gives). The measured breakdown of a served request is in `docs/design_decisions/experiments/serving-latency-budget.md`. Arrow IPC costs more to encode and decode than a typical pipeline takes to run, so keep it for batches.
+Send a single decision as a JSON object, not as a one-element array or a CSV. The object takes the single-record path: the record goes straight into one-row arrays and comes back as a dict. In Python the same rule holds: `executable.run(record_dict, params)` takes a dict (never keyword arguments) and costs about a fifth of `run` on a one-row frame, which builds a frame, exports it through Arrow and assembles an output frame (the figure `decikit guide` gives). The measured breakdown of a served request is in `docs/design_decisions/experiments/serving-latency-budget.md`. Arrow IPC costs more to encode and decode than a typical pipeline takes to run, so keep it for batches.
 
 ### Error responses
 

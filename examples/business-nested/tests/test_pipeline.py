@@ -53,10 +53,10 @@ def by_entity(out, field):
 
 
 def test_outcome_and_attribution_do_not_depend_on_the_order_of_entities_and_events(executable, params, sample):
-    baseline = executable.score(parse_dates(sample), params)
+    baseline = executable.run(parse_dates(sample), params)
     rng = random.Random(7)
     for _ in range(10):
-        out = executable.score(parse_dates(shuffled(sample, rng)), params)
+        out = executable.run(parse_dates(shuffled(sample, rng)), params)
         assert {name: out[name] for name in DECISION_OUTPUTS} == {name: baseline[name] for name in DECISION_OUTPUTS}
         assert by_entity(out, "adverse_event_ids") == by_entity(baseline, "adverse_event_ids")
 
@@ -65,16 +65,16 @@ def test_order_independence_holds_for_a_structure_with_two_paths_and_many_events
     many = [event(i, 800.0 * i, event_date=date(2026, 1, i)) for i in range(1, 16)]
     sample["entities"] = [entity(1, 5, 30.0, many), entity(2, 1, 0.0, is_controlling=True, entity_key="K"),
                           entity(2, 5, 50.0, many[:3], entity_key="K"), entity(3, 5, 20.0)]
-    baseline = executable.score(parse_dates(sample), params)
+    baseline = executable.run(parse_dates(sample), params)
     rng = random.Random(11)
     for _ in range(10):
-        out = executable.score(parse_dates(shuffled(sample, rng)), params)
+        out = executable.run(parse_dates(shuffled(sample, rng)), params)
         assert {name: out[name] for name in DECISION_OUTPUTS} == {name: baseline[name] for name in DECISION_OUTPUTS}
 
 
 def test_replaying_a_decision_reproduces_it_exactly(executable, params, sample):
     record = parse_dates(sample)
-    assert executable.score(record, params) == executable.score(copy.deepcopy(record), params)
+    assert executable.run(record, params) == executable.run(copy.deepcopy(record), params)
 
 
 def test_a_batch_agrees_with_one_record_at_a_time(executable, params, sample):
@@ -82,7 +82,7 @@ def test_a_batch_agrees_with_one_record_at_a_time(executable, params, sample):
     approved["entities"][0]["adverse_events"].pop(0)
     batch = executable.run(pl.DataFrame([declined, approved]), params)
     for row, record in enumerate((declined, approved)):
-        single = executable.score(record, params)
+        single = executable.run(record, params)
         for name in ("outcome_code", "risk_grade", "offered_amount", "instalment", "primary_reason_code",
                      "attributing_entity_id", "attributing_event_ids", "decline_reason_codes"):
             assert batch[name].to_list()[row] == single[name], name

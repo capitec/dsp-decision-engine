@@ -96,8 +96,8 @@ def test_the_built_project_serves_the_generated_handler(project):
     handler.activate()
     live = handler.module_fn()
     day = date(2026, 1, 5)
-    assert live.executable.score({"income": 1000.0, "debt": 500.0, "applied_on": day}, live.params)["approved"] is False
-    assert live.executable.score({"income": 1000.0, "debt": None, "applied_on": day}, live.params)["approved"] is True
+    assert live.executable.run({"income": 1000.0, "debt": 500.0, "applied_on": day}, live.params)["approved"] is False
+    assert live.executable.run({"income": 1000.0, "debt": None, "applied_on": day}, live.params)["approved"] is True
 
 
 def test_build_fails_with_a_clear_message_on_an_invalid_params_document(project):

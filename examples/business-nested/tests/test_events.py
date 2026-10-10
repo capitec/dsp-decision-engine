@@ -17,7 +17,7 @@ def classified(amount=1_000.0, event_type_code=1, criticality_class=vocab.CRITIC
     item = {"event_id": 1, "event_type_code": event_type_code, "amount": amount, "event_date": date(2026, 8, 1),
             "status_is_active": True, "is_disputed": False, "is_satisfied": False, "decision_date": decision_date,
             "sector_code": sector_code, "criticality_class": criticality_class, **flags}
-    return classify.score(item, params)
+    return classify.run(item, params)
 
 
 @pytest.mark.parametrize("criticality_class, severity", [

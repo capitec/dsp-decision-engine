@@ -54,6 +54,6 @@ def decide(pipeline, sample, params):
     def run(params_document=None, **changes):
         record = {**sample, **changes}
         record["cycle_date"] = date.fromisoformat(record["cycle_date"])
-        return pipeline.score(record, copy.deepcopy(params_document or params))
+        return pipeline.run(record, copy.deepcopy(params_document or params))
 
     return run

@@ -77,7 +77,7 @@ def limit_decision(limit_account: dict, decision_date: date, current_limit: floa
     executable, params = _limit_executable()
     record = {**limit_account, "decision_date": decision_date, "bureau_as_of_date": decision_date,
               "product_code": LIMIT_PRODUCT, "current_limit": current_limit}
-    result = executable.score(record, params)
+    result = executable.run(record, params)
     return {"current_limit": current_limit, "proposed_limit": result["final_proposed_limit"],
             "change_type_code": result["change_type_code"], "matrix_cell_id": result["matrix_cell_id"]}
 
@@ -103,7 +103,7 @@ def annual_review(
 
     basis = review_basis_code(statement_age_months, management_accounts_present, turnover_months)
     scored = {**request, "ebitda": round(request["ebitda"] * (1 - EBITDA_HAIRCUT.get(basis, 0.0)), 2)}
-    result = executable.score(scored, params)
+    result = executable.run(scored, params)
     # A weaker review restricts: the grade can be no better than the floor. With no evidence at all it stays as it was.
     grade = max(result["risk_grade"], GRADE_FLOOR.get(basis, 1))
     if basis == vocab.REVIEW_NOT_PERFORMED:
@@ -119,7 +119,7 @@ def annual_review(
     business = {**as_now, **{f: scored[f] for f in FINANCIALS}}
     structure = {**business, "entities": _with_current_entities(scored, previous["request"])}
     migration = history.grade_migration(
-        previous, current, *(executable.score(r, params)["probability_of_default_unadjusted"]
+        previous, current, *(executable.run(r, params)["probability_of_default_unadjusted"]
                              for r in (as_now, business, structure)))
     current["comparison_basis_code"] = migration["comparison_basis_code"]
 

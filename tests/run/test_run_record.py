@@ -1,4 +1,4 @@
-"""score(): one record in, one dict out, in every mode; concurrent, retunable, fast."""
+"""run(record): one record in, one dict out, in every mode; concurrent, retunable, fast."""
 import gc
 import threading
 import time
@@ -33,13 +33,13 @@ def _expected(row, cap=48.0):
     return {"affordability_ratio": ratio, "cap_by_income_band": capped}
 
 
-def test_score_returns_the_record_plus_every_output(bind):
-    assert bind(flagship).score(ROW) == {**ROW, **_expected(ROW)}
+def test_a_record_run_returns_the_record_plus_every_output(bind):
+    assert bind(flagship).run(ROW) == {**ROW, **_expected(ROW)}
 
 
 def test_an_emit_is_seen_only_by_the_pipeline_that_asked_for_it(bind):
-    assert bind(flagship.emit("disposable_income")).score(ROW)["disposable_income"] == 2600.0
-    assert "disposable_income" not in bind(flagship).score(ROW)
+    assert bind(flagship.emit("disposable_income")).run(ROW)["disposable_income"] == 2600.0
+    assert "disposable_income" not in bind(flagship).run(ROW)
 
 
 def test_validity_and_fills_never_leak_between_calls(bind):
@@ -50,22 +50,22 @@ def test_validity_and_fills_never_leak_between_calls(bind):
     full = {"net_income": 10.0, "expenses": 3.0}
     calls = [full, {"net_income": None, "expenses": 3.0}, full, {"net_income": 10.0}, full,
              {"net_income": 10.0, "expenses": None}, full, {}, full]
-    assert [exe.score(r)["net"] for r in calls] == [7.0, -4.0, 7.0, -90.0, 7.0, -90.0, 7.0, -101.0, 7.0]
+    assert [exe.run(r)["net"] for r in calls] == [7.0, -4.0, 7.0, -90.0, 7.0, -90.0, 7.0, -101.0, 7.0]
 
 
 def test_a_bad_retune_is_a_hard_error(bind):
     exe = bind(flagship)
     with pytest.raises(ParamsError, match="cap_by_income_band: param 'cap'"):
-        exe.score(ROW, params={"cap_by_income_band": {"cap": 999.0}})
+        exe.run(ROW, params={"cap_by_income_band": {"cap": 999.0}})
     with pytest.raises(ParamsError, match="Did you mean 'cap_by_income_band'"):
-        exe.score(ROW, params={"cap_by_income_bnad": {"cap": 24.0}})
-    assert exe.score(ROW)["cap_by_income_band"] == 48.0
+        exe.run(ROW, params={"cap_by_income_bnad": {"cap": 24.0}})
+    assert exe.run(ROW)["cap_by_income_band"] == 48.0
 
 
 @pytest.mark.parametrize("mode", ["stepped", "fused"])
-def test_sixteen_threads_score_concurrently_with_no_cross_talk(mode):
+def test_sixteen_threads_run_records_concurrently_with_no_cross_talk(mode):
     exe = Engine().bind(flagship, mode=mode)
-    exe.score(ROW)
+    exe.run(ROW)
     n_threads, rounds = 16, 200
     start = threading.Barrier(n_threads)
     mismatches = [None] * n_threads
@@ -79,7 +79,7 @@ def test_sixteen_threads_score_concurrently_with_no_cross_talk(mode):
         bad = 0
         for _ in range(rounds):
             for r, e in zip(rows, expected):
-                out = exe.score(r)
+                out = exe.run(r)
                 bad += (out["affordability_ratio"], out["cap_by_income_band"]) != tuple(e.values())
         mismatches[t] = bad
 
@@ -91,20 +91,20 @@ def test_sixteen_threads_score_concurrently_with_no_cross_talk(mode):
     assert mismatches == [0] * n_threads
 
 
-def test_fused_flagship_score_p50_is_within_60_microseconds():
+def test_fused_flagship_record_p50_is_within_60_microseconds():
     # Three rounds, so a load spike on a shared box can't fail a real ~30 µs result.
     exe = Engine().bind(flagship, mode="fused")
     for _ in range(500):
-        exe.score(ROW)
+        exe.run(ROW)
     p50s = []
     for _ in range(3):
         gc.collect()
         samples = []
         for _ in range(2000):
             t0 = time.perf_counter()
-            exe.score(ROW)
+            exe.run(ROW)
             samples.append(time.perf_counter() - t0)
         p50s.append(sorted(samples)[1000] * 1e6)
         if p50s[-1] <= 60.0:
             return
-    pytest.fail(f"fused flagship score() p50 over 60 µs in every round: {[round(x, 1) for x in p50s]}")
+    pytest.fail(f"fused flagship run(record) p50 over 60 µs in every round: {[round(x, 1) for x in p50s]}")

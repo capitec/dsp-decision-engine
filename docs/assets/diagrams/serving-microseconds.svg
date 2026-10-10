@@ -7,7 +7,7 @@
   <rect x="127.6" y="48" width="9.7" height="44" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
   <rect x="137.3" y="48" width="2.4" height="44" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
   <rect x="139.7" y="48" width="617.1" height="44" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
-  <text x="448" y="75" font-size="14" text-anchor="middle" fill="#134e4a">score() 30.4</text>
+  <text x="448" y="75" font-size="14" text-anchor="middle" fill="#134e4a">run(dict) 30.4</text>
   <rect x="756.8" y="48" width="37.4" height="44" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
   <rect x="794.2" y="48" width="105.8" height="44" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
   <text x="847" y="75" font-size="13" text-anchor="middle" fill="#1f2937">rest 5.2</text>

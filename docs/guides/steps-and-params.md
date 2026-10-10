@@ -1,4 +1,4 @@
-# Steps, params, run and score
+# Steps, params and run
 
 Write each calculation as a plain function, wire the functions into a pipeline, keep the policy numbers in a params document, and run the result over a frame or one record at a time. Everything on this page runs in every mode; the examples build on each other, so run them top to bottom.
 
@@ -128,7 +128,7 @@ except DecikitError as e:
     print(type(e).__name__, e)
 
 try:
-    credit.compile().score({"income": 1000.0})
+    credit.compile().run({"income": 1000.0})
 except DecikitError as e:
     print(type(e).__name__, e)
 ```
@@ -272,7 +272,7 @@ import warnings
 
 with warnings.catch_warnings(record=True) as caught:
     warnings.simplefilter("always")
-    credit.compile().score({"income": 1000.0, "debt": 600.0, "multiple": 5.0})
+    credit.compile().run({"income": 1000.0, "debt": 600.0, "multiple": 5.0})
 print(caught[0].message)
 ```
 
@@ -419,12 +419,12 @@ print(credit.drop("expenses").run(df).columns)
 ['income', 'debt', 'band', 'band_score', 'limit']
 ```
 
-`score(record)` takes one dict and returns one dict: the record's own keys plus the outputs. Values come back as Python objects: `float`, `int`, `bool`, and the decider toolkit's `Decimal` or `Currency` for money.
+`run(record)` takes one dict and returns one dict: the record's own keys plus the outputs. Values come back as Python objects: `float`, `int`, `bool`, and the decider toolkit's `Decimal` or `Currency` for money.
 
 ```python
 exe = credit.compile("fused")
-print(exe.score({"income": 1000.0, "debt": 600.0}))
-print(exe.score({"income": 1000.0, "debt": 600.0}, params))
+print(exe.run({"income": 1000.0, "debt": 600.0}))
+print(exe.run({"income": 1000.0, "debt": 600.0}, params))
 ```
 
 ```text
@@ -434,12 +434,12 @@ print(exe.score({"income": 1000.0, "debt": 600.0}, params))
 
 `pipeline.run(df)` binds a fresh interpreted executable on every call. For anything repeated, compile once and keep the `Executable`: it caches validated params documents and compiled kernels, and is safe to call from many threads.
 
-| | `run(df)` | `score(record)` |
+| | `run(df)` | `run(record)` |
 |---|---|---|
 | takes | a polars `DataFrame` | a `dict` |
 | returns | a `DataFrame` | a `dict` |
 | used by | analysis, back-tests, experiments, `assert_equivalent` | `decikit serve`, the request handler |
-| params | `run(df, params=doc)` | `score(record, doc)` |
+| params | `run(df, params=doc)` | `run(record, doc)` |
 
 A column in the input that the pipeline itself produces is refused, so neither value silently hides the other:
 
@@ -498,7 +498,7 @@ def price(list_price: float) -> float:
     return discounted(list_price) + 1.0
 
 priced = flow(price, name="h").compile("fused")
-print(priced.score({"list_price": 10.555}), priced.fallbacks())
+print(priced.run({"list_price": 10.555}), priced.fallbacks())
 ```
 
 ```text

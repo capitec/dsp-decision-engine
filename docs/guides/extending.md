@@ -361,7 +361,7 @@ class Failing:
 
 
 sink = TraceSink(Failing())
-print(exe.score({"income": 1000.0, "debt": 200.0}, trace=sink)["approved"], sink.status())
+print(exe.run({"income": 1000.0, "debt": 200.0}, trace=sink)["approved"], sink.status())
 ```
 
 ```text

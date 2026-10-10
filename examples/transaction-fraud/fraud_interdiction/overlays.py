@@ -49,7 +49,7 @@ class AmountOverlays(ConfigurableStep):
     Example::
 
         overlays = ConfigurableStep.load("configs/0.1.0/amount_overlays.json")
-        flow(adjustment_stack_enabled, overlays).score({"decision_date": date(2025, 12, 15)})
+        flow(adjustment_stack_enabled, overlays).run({"decision_date": date(2025, 12, 15)})
     """
 
     type: Literal["amount_overlays"] = "amount_overlays"

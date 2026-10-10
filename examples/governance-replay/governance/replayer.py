@@ -13,9 +13,10 @@ class _Tap:
     def __init__(self, inner, owner):
         self._inner, self._owner = inner, owner
 
-    def score(self, record, params):
-        self._owner.typed = record
-        return self._inner.score(record, params)
+    def run(self, data, params):
+        if isinstance(data, dict):
+            self._owner.typed = data
+        return self._inner.run(data, params)
 
     def __getattr__(self, name):
         return getattr(self._inner, name)

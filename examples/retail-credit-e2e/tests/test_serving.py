@@ -60,4 +60,4 @@ def test_every_step_that_runs_in_python_says_so_on_purpose(sample, params):
     undeclared = {step for step, reason in strict.fallbacks().items() if not reason.startswith("@allow_fallback")}
     assert strict.fallbacks() and not undeclared
     # A node that compiles on first use only meets strict mode when it is scored.
-    assert strict.score(parse_dates(sample), params)["offer_amount"] == 76250.0
+    assert strict.run(parse_dates(sample), params)["offer_amount"] == 76250.0
