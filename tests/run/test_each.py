@@ -7,7 +7,7 @@ from typing import TypedDict
 import polars as pl
 import pytest
 
-from decikit import EachMode, Engine, FusedEngine, InterpretedEngine, each, flow, missing_as, param
+from decikit import EachMode, Engine, FusedEngine, InterpretedEngine, branch, each, flow, missing_as, param
 from decikit.ops import Columnar, Currency
 from decikit.lab.testing import assert_equivalent
 
@@ -131,3 +131,15 @@ def test_a_decimal_item_field_reads_as_its_value_not_its_whole_part(mode, n):
     out = pipe.compile(mode).run(df)["items"].to_list()
     assert {float(item["doubled"]) for row in out for item in row} == {2.5}
     assert pipe.compile(mode).run({"items": [{"amount": StdDecimal("1.25")}]})["items"][0]["doubled"] == Currency("2.5")
+
+
+def many(n: int) -> bool:
+    return n > 1
+
+
+def test_an_each_inside_a_branch_runs_on_every_engine():
+    pipe = flow(branch(many, each("items", flow(heavy, name="item"), name="items"), modifies=["items"],
+                       name="when_many"), name="order")
+    df = FRAME.with_columns(n=pl.Series([2, 0, 5]))
+    out = assert_equivalent(pipe, df)
+    assert [[i.get("heavy") for i in row] for row in out["items"].to_list()] == [[False, True], [], [True]]
