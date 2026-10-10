@@ -6,21 +6,26 @@ import polars as pl
 from decikit import TreeConfig
 from playwright.sync_api import Locator, Page, expect
 
+import flat_rules_ui
+import tree_ui
 from seed import create_project, get_project
 
 SCHEMA = [["amount", "Float64"], ["band", "String"], ["code", "Int64"], ["flag", "Boolean"]]
 
 
 def output_table(*labels: str, default: str = "decline") -> dict:
+    """A one-column `decision` output with one record per label."""
     return {"dtypes": [["decision", "String"]], "type_defs": {}, "data": [{"decision": x} for x in labels],
             "default": {"decision": default}}
 
 
 def leaf(node_id: str, result_idx: int = -1, x: float = 0.0, y: float = 300.0) -> dict:
+    """A leaf node on output record `result_idx` (-1: the default row)."""
     return {"id": node_id, "position": {"x": x, "y": y}, "data": {"type": "leaf", "result_idx": result_idx}}
 
 
 def unary(node_id: str, op: str = "<=", feature="amount", x: float = 300.0, y: float = 0.0, **condition) -> dict:
+    """A unary node `feature op threshold` (`threshold=1000` unless other condition fields are given)."""
     if not condition:
         condition = {"threshold": 1000}
     data = {"type": "unary", "condition": {"op": op, "feature": feature, **condition}}
@@ -28,21 +33,25 @@ def unary(node_id: str, op: str = "<=", feature="amount", x: float = 300.0, y: f
 
 
 def cases(node_id: str, op: str, conditions: list, x: float = 300.0, y: float = 0.0, **fields) -> dict:
+    """A cases node (`ranges`, `isin` or `string_match`) on `amount` unless `feature=` says otherwise."""
     fields.setdefault("feature", "amount")
     return {"id": node_id, "position": {"x": x, "y": y},
             "data": {"type": "cases", "op": op, "conditions": conditions, **fields}}
 
 
 def composite(node_id: str, op: str, conditions: list, x: float = 300.0, y: float = 0.0) -> dict:
+    """An AND/OR/NOT node over `conditions`."""
     return {"id": node_id, "position": {"x": x, "y": y}, "data": {"type": "composite", "op": op, "conditions": conditions}}
 
 
 def edge(source: str, target: str, *indices: int) -> dict:
+    """An edge taking branches `indices` (default 0) of `source` to `target`."""
     return {"id": f"{source}:{target}", "source": source, "target": target, "data": {"sourceIndex": list(indices or [0])}}
 
 
 def document(nodes: list, edges: list, output: dict | None = None, parameters: dict | None = None,
              input_schema: list | None = None) -> dict:
+    """A v3 tree document as the editor saves it."""
     return {"type": "ui-tree", "formatVersion": 3, "nodes": nodes, "edges": edges, "subtrees": [],
             "input_schema": input_schema or SCHEMA, "parameters": parameters or {},
             "output": output or output_table("approve", "review")}
@@ -78,6 +87,7 @@ def fit_view(page: Page) -> None:
 
 
 def node(page: Page, node_id: str) -> Locator:
+    """The canvas node with id `node_id`."""
     return page.locator(f'.react-flow__node[data-id="{node_id}"]')
 
 
@@ -93,21 +103,18 @@ def deselect(page: Page) -> None:
 
 
 def edge_between(page: Page, source: str, target: str) -> Locator:
+    """The canvas edge from `source` to `target`."""
     return page.locator(f'.react-flow__edge[data-id="{source}:{target}"]')
 
 
 def edge_labels(page: Page) -> Locator:
+    """The layer holding every edge's branch label."""
     return page.locator(".react-flow__edgelabel-renderer")
 
 
 def connect(page: Page, source: str, target: str) -> None:
     """Drag from the source node's bottom handle to the target node's top handle."""
-    a = node(page, source).locator(".react-flow__handle-bottom").bounding_box()
-    t = node(page, target).locator(".react-flow__handle-top").bounding_box()
-    page.mouse.move(a["x"] + a["width"] / 2, a["y"] + a["height"] / 2)
-    page.mouse.down()
-    page.mouse.move(t["x"] + t["width"] / 2, t["y"] + t["height"] / 2, steps=10)
-    page.mouse.up()
+    tree_ui.connect(page, node(page, source), node(page, target))
 
 
 def delete_selected(page: Page, key: str = "Backspace") -> None:
@@ -116,7 +123,8 @@ def delete_selected(page: Page, key: str = "Backspace") -> None:
 
 
 def sidebar(page: Page) -> Locator:
-    return page.locator("div.w-80.border-l")
+    """The editor's right-hand panel (node, edge or general settings)."""
+    return page.get_by_test_id("editor-sidebar")
 
 
 def set_node_type(page: Page, kind: str) -> None:
@@ -139,63 +147,35 @@ def choose_feature(page: Page, feature: str, current: str = "Select or search fe
 
 
 def set_threshold(page: Page, value: str) -> None:
+    """Type `value` into the selected unary node's threshold."""
     sidebar(page).get_by_placeholder("0", exact=True).fill(value)
-
-
-def add_parameter(page: Page, name: str, dtype: str = "Float64", value: str | None = None) -> None:
-    """General panel -> Manage Parameters -> new row -> name, type, default -> Add -> Save Changes."""
-    page.get_by_role("button", name=re.compile(r"^Manage Parameters")).click()
-    dialog = page.get_by_role("dialog", name="Manage Variables")
-    first = dialog.get_by_role("button", name="Add Your First Parameter")
-    (first if first.is_visible() else dialog.get_by_role("button", name="Add Parameter")).click()
-    row = dialog.locator("tbody tr").filter(has=page.get_by_placeholder("parameter_name"))
-    row.get_by_placeholder("parameter_name").fill(name)
-    if dtype != "String":
-        row.get_by_role("combobox").click()
-        page.get_by_role("option", name=dtype, exact=True).click()
-    if value is not None:
-        row.locator("td").nth(2).locator("input").first.fill(value)
-    row.get_by_role("button", name="Add", exact=True).click()
-    dialog.get_by_role("button", name="Save Changes").click()
-    expect(dialog).to_be_hidden()
 
 
 def use_parameter(page: Page, name: str, index: int = 0) -> None:
     """Click the `index`-th # in the sidebar (next to a value), then type the parameter's name."""
-    toggle = sidebar(page).get_by_role("button", name="#").nth(index)
-    holder = toggle.locator("xpath=..")
-    toggle.click()
-    box = holder.get_by_placeholder("parameter_name")
-    box.fill(name)
-    box.press("Escape")
+    flat_rules_ui.use_parameter(sidebar(page), name, index)
 
 
 def save(page: Page) -> dict:
-    """Click Save; returns the server's reply (with `validation_errors`)."""
-    with page.expect_response(lambda r: r.request.method == "PUT" and "/api/v1/projects/" in r.url) as reply:
-        page.get_by_role("button", name="Save", exact=True).click()
-    assert reply.value.ok, reply.value.text()
+    """Click Save and wait for the indicator to clear; returns the server's reply (with `validation_errors`)."""
+    reply = flat_rules_ui.save(page)
     expect(page.get_by_text("Unsaved changes")).to_be_hidden()
-    return reply.value.json()
+    return reply
+
+
+def open_menu(page: Page) -> None:
+    """Open the editor header's menu (Export Project, Clear Workspace, ...)."""
+    page.get_by_test_id("project-menu").click()
+
+
+def drag_node(page: Page, node_id: str, dx: int, dy: int) -> None:
+    """Drag the canvas node `node_id` by (dx, dy) pixels."""
+    tree_ui.drag(page, node(page, node_id), dx, dy)
 
 
 def nudge(page: Page, node_id: str) -> None:
     """Drag a node a little: a change that makes the project dirty without touching the tree's meaning."""
-    box = node(page, node_id).bounding_box()
-    x, y = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
-    page.mouse.move(x, y)
-    page.mouse.down()
-    page.mouse.move(x + 20, y + 20, steps=5)
-    page.mouse.up()
-
-
-def drag_node(page: Page, node_id: str, dx: int, dy: int) -> None:
-    box = node(page, node_id).bounding_box()
-    x, y = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
-    page.mouse.move(x, y)
-    page.mouse.down()
-    page.mouse.move(x + dx, y + dy, steps=10)
-    page.mouse.up()
+    drag_node(page, node_id, 20, 20)
 
 
 def click_edge(page: Page, source: str, target: str) -> None:
@@ -217,8 +197,10 @@ def two_leaves(root: dict, *more: dict, edges: tuple = ((0, "yes"), (1, "no"))) 
 
 
 def saved_data(page: Page, project: str, node_id: str = "root") -> dict:
+    """The stored `data` of node `node_id`."""
     return next(n for n in get_project(page, project)["project_data"]["nodes"] if n["id"] == node_id)["data"]
 
 
 def outcome(truth: list[bool]) -> list[str]:
+    """approve where the condition holds, review otherwise (the `two_leaves` wiring)."""
     return ["approve" if t else "review" for t in truth]

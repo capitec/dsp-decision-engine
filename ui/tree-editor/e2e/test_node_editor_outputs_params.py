@@ -7,8 +7,8 @@ import pytest
 from decikit import TreeConfig
 from playwright.sync_api import Page, expect
 
+from flat_rules_ui import add_parameter
 from node_ui import (
-    add_parameter,
     deselect,
     document,
     edge,

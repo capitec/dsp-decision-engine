@@ -25,7 +25,7 @@ from node_ui import (
     sidebar,
     unary,
 )
-from seed import export_document, get_project, import_document
+from seed import create_project, export_document, get_project, import_document
 
 NODES = ".react-flow__node"
 CAMPAIGN = Path(__file__).resolve().parents[3] / "examples/campaign-trees/configs/0.1.0/campaign_23.json"
@@ -212,9 +212,7 @@ def test_campaign_tree_imports_opens_and_exports_the_same_nodes(signed_in: Page)
 @pytest.mark.slow
 def test_three_hundred_node_tree_opens_renders_every_node_and_edits_and_saves_a_deep_node(signed_in: Page):
     doc = big_tree(150)
-    project = signed_in.request.post("/api/v1/projects", data={"name": "Big", "project_type": "tree", "project_data": doc})
-    assert project.ok, project.text()
-    project_id = project.json()["id"]
+    project_id = create_project(signed_in, "Big", doc, project_type="tree")["id"]
 
     started = time.monotonic()
     signed_in.goto(f"/projects/{project_id}")
@@ -242,9 +240,8 @@ def test_rearranging_a_three_hundred_node_tree_separates_the_nodes(signed_in: Pa
     doc = big_tree(150)
     for n in doc["nodes"]:
         n["position"] = {"x": 0.0, "y": 0.0}
-    project = signed_in.request.post("/api/v1/projects", data={"name": "Big", "project_type": "tree", "project_data": doc})
-    assert project.ok, project.text()
-    signed_in.goto(f"/projects/{project.json()['id']}")
+    project = create_project(signed_in, "Big", doc, project_type="tree")
+    signed_in.goto(f"/projects/{project['id']}")
     expect(signed_in.locator(NODES)).to_have_count(len(doc["nodes"]), timeout=60_000)
 
     started = time.monotonic()
