@@ -14,7 +14,6 @@ from test_flat_rule_params import flat_document
 
 SAVE_URL = re.compile(r"/api/v1/projects/[0-9a-f-]{36}$")
 NO_CONFLICT_DETECTION = "no conflict detection: the second tab's save replaces the first tab's saved edit without a warning"
-NO_FLAT_GUARD = "the flat-rule editor has no unsaved-changes guard: reloading drops the edit without asking"
 DIRTY_FLAG_CLEARED = "an edit made while a save is in flight is neither stored nor flagged: the save's reply clears 'Unsaved changes'"
 
 
@@ -238,7 +237,6 @@ def test_reloading_the_node_editor_after_saving_does_not_ask(signed_in: Page):
     assert edit_is_stored(signed_in, project, "tree")
 
 
-@pytest.mark.xfail(strict=True, reason=NO_FLAT_GUARD)
 def test_reloading_the_flat_rule_editor_with_unsaved_edits_asks_first(signed_in: Page):
     open_with_edit(signed_in, "flat")
     asked = []
