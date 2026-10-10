@@ -248,7 +248,7 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
     >
       {/* Error indicator badge */}
       {nodeHasError && (
-        <div className="absolute -top-2 -left-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
+        <div data-testid="node-error" className="absolute -top-2 -left-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
           !
         </div>
       )}
@@ -359,7 +359,7 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
                 }
               }}
             >
-              <SelectTrigger className="w-32">
+              <SelectTrigger className="w-32" data-testid="cases-op">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -651,7 +651,7 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
                         value={(node as any).match_type || 'exact'}
                         onValueChange={(value) => updateNode(treeId, node.id, { match_type: value } as any)}
                       >
-                        <SelectTrigger className="w-32 h-8">
+                        <SelectTrigger className="w-32 h-8" data-testid="match-type">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -753,6 +753,7 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
                               ) : (
                                 <ParameterizedNumericInput
                                   value={(condition.when as any).min ?? null}
+                                  allowEmpty
                                   onChange={(newValue) => {
                                     const newConditions = [...node.conditions];
                                     newConditions[idx] = { ...condition, when: { ...condition.when, min: newValue } };
@@ -774,6 +775,7 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
                             <div>
                               <ParameterizedNumericInput
                                 value={(condition.when as any).max ?? null}
+                                allowEmpty
                                 onChange={(newValue) => {
                                   const newConditions = [...node.conditions];
                                   newConditions[idx] = { ...condition, when: { ...condition.when, max: newValue } };
@@ -800,7 +802,7 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
                                   updateNode(treeId, node.id, { conditions: newConditions } as any);
                                 }}
                               >
-                                <SelectTrigger className="h-8">
+                                <SelectTrigger className="h-8" data-testid="case-then">
                                   <SelectValue placeholder="Branch" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -890,7 +892,7 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
                                 }}
                                 availableParameters={availableParameters}
                                 label=""
-                                placeholder="Type integers and press Enter"
+                                placeholder="Type numbers and press Enter"
                                 onManageParameters={onManageParameters}
                                 showManageParameters={true}
                                 showLabel={false}
@@ -907,7 +909,7 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
                                   updateNode(treeId, node.id, { conditions: newConditions } as any);
                                 }}
                               >
-                                <SelectTrigger className="h-8">
+                                <SelectTrigger className="h-8" data-testid="case-then">
                                   <SelectValue placeholder="Branch" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -1047,7 +1049,7 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
                                   updateNode(treeId, node.id, { conditions: newConditions } as any);
                                 }}
                               >
-                                <SelectTrigger className="h-8">
+                                <SelectTrigger className="h-8" data-testid="case-then">
                                   <SelectValue placeholder="Branch" />
                                 </SelectTrigger>
                                 <SelectContent>

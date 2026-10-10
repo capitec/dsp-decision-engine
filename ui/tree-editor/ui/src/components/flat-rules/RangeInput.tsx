@@ -6,8 +6,8 @@ import { boundLabel } from '@/utils/param-refs';
 interface RangeInputProps {
   minValue: number | ParameterReference | null | undefined;
   maxValue: number | ParameterReference | null | undefined;
-  onMinChange: (value: number | ParameterReference | undefined) => void;
-  onMaxChange: (value: number | ParameterReference | undefined) => void;
+  onMinChange: (value: number | ParameterReference | null) => void;
+  onMaxChange: (value: number | ParameterReference | null) => void;
   availableParameters?: ParameterOption[];
   onManageParameters?: () => void;
   disabled?: boolean;
@@ -57,7 +57,7 @@ export const RangeInput: React.FC<RangeInputProps> = ({
               // Ensure min stays null in strict mode
               onMaxChange(value);
               if (minValue !== null && minValue !== undefined) {
-                onMinChange(undefined);
+                onMinChange(null);
               }
             }}
             availableParameters={availableParameters}

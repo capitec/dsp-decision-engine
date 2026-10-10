@@ -95,6 +95,7 @@ export const CasesConditionEditor: React.FC<CasesConditionEditorProps> = ({
                 ) : (
                   <ParameterizedNumericInput
                     value={condition.min ?? null}
+                    allowEmpty
                     onChange={(newValue) => updateCondition(index, { min: newValue })}
                     availableParameters={availableParameters}
                     label=""
@@ -110,6 +111,7 @@ export const CasesConditionEditor: React.FC<CasesConditionEditorProps> = ({
                 <span className="font-medium text-gray-600 text-sm w-16">Max:</span>
                 <ParameterizedNumericInput
                   value={condition.max ?? null}
+                  allowEmpty
                   onChange={(newValue) => updateCondition(index, { max: newValue })}
                   availableParameters={availableParameters}
                   label=""

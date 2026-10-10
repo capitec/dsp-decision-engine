@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 import pytest
+from decikit.steps.trees.schema import load_document
 
 from dsp_decikit.db.models.projects import ProjectType
 from dsp_decikit.services.documents import (
@@ -140,3 +141,12 @@ def test_a_document_that_is_no_tree_is_refused_naming_what_it_is(data):
     with pytest.raises(ValueError, match="not a tree") as e:
         detect_project_type(data)
     assert data.get("type", "not a tree") in str(e.value)
+
+
+def test_a_one_rule_flat_document_imports_as_a_prioritized_set_that_runs_the_same():
+    rule = {"meta": {"name": "only"}, "rule": {"type": "leaf", "result_idx": 0}}
+    output = {"dtypes": [["d", "String"]], "data": [{"d": "x"}]}
+    flat = {"type": "flat_rule", "rule": rule, "output": output}
+    imported = imported_document(flat)
+    assert detect_project_type(imported) == ProjectType.FLAT_RULE
+    assert load_document(imported).to_tree().model_dump() == load_document(flat).to_tree().model_dump()

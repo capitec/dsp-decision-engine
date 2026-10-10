@@ -35,10 +35,15 @@ def check_document(data: t.Any, project_type: ProjectType) -> None:
 
 
 def imported_document(data: t.Any) -> t.Any:
-    """The tree a file holds: the file itself, or the `tree` of a TreeConfig step document (`{"type": "tree", ...}`),
-    whose step settings (path_output, feature_types, ...) the editor does not hold."""
+    """The tree a file holds, as the editor holds it: the file itself, or the `tree` of a TreeConfig step document
+    (`{"type": "tree", ...}`, whose step settings the editor does not hold); a one-rule `flat_rule` becomes a
+    prioritized set of that rule."""
     if isinstance(data, dict) and data.get("type") == "tree" and isinstance(data.get("tree"), dict):
-        return data["tree"]
+        data = data["tree"]
+    # One nested rule runs as a first_match set of that one rule, which the flat-rule editor holds
+    if isinstance(data, dict) and data.get("type") == "flat_rule" and "rule" in data:
+        rest = {k: v for k, v in data.items() if k not in ("type", "rule")}
+        return {**rest, "type": "prioritized_flat_rule", "mode": "first_match", "rules": [data["rule"]]}
     return data
 
 

@@ -726,10 +726,11 @@ async def export_project(
         )
 
     export_data = dict(project.project_data)
+    # The document's own metadata (its name, description) wins over the project's name; the stamp is fresh.
     export_data["metadata"] = {
+        "name": project.name,
         **(export_data.get("metadata") or {}),
         "project_id": str(project.id),
-        "name": project.name,
         "project_type": project.project_type.value,
         "exported_at": datetime.now(timezone.utc).isoformat(),
         "decikit_version": decikit.__version__,
