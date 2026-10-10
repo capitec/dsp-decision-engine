@@ -116,8 +116,8 @@ comes before the first call, so it is seen.
 `run` is fused by default, so a step that reads a `date`, `str` or `list` warns with a
 `FallbackWarning`; `@allow_fallback` accepts that. A fallback step runs row by row in
 Python instead of in the kernel. A step that returns a `dict` falls back too; the same
-record returned as a tuple under `Struct[Item]` or `Columnar[Item]` compiles
-("Nested columns").
+record returned as a tuple under `Struct[Item]`, or a list of such tuples under
+`Columnar[Item]`, compiles ("Nested columns").
 
 An input with neither `missing_as(fill)` nor a `T | None` annotation is required:
 a null value or an absent column raises `MissingInputError`. To default it for a
