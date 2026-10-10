@@ -181,7 +181,9 @@ def test_the_same_field_edited_at_once_converges_to_one_value_everywhere(signed_
     rename_rule(second, "From second")
     held[0].wait_held(signed_in)
     held[1].wait_held(second)
+    # Released together, the two sockets race for the row lock; one after the other, the later one must win.
     held[0].release()
+    stored(signed_in, project, lambda d: names(d)[0] == "From first")
     held[1].release()
 
     data = stored(signed_in, project, lambda d: names(d)[0] == "From second")
