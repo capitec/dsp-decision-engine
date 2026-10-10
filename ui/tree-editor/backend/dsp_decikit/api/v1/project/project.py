@@ -9,7 +9,7 @@ import decikit
 
 from fastapi import Depends, HTTPException, Query, UploadFile, File, Form, Response
 from fastapi.responses import JSONResponse
-from sqlalchemy import select, case
+from sqlalchemy import select, case, update
 from fastapi_pagination import Page, Params, paginate
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -56,6 +56,10 @@ class ProjectUpdate(BaseModel):
     description: t.Optional[str] = None
     folder_id: t.Optional[uuid.UUID] = None
     project_data: t.Optional[t.Dict[str, t.Any]] = None
+    base_version: t.Optional[int] = Field(
+        None,
+        description="The version the caller last saw; a save is refused (409) when the project has moved on. Omit to overwrite.",
+    )
 
 
 class ProjectResponse(BaseModel):
@@ -69,6 +73,7 @@ class ProjectResponse(BaseModel):
     created_by: uuid.UUID
     created_at: datetime
     updated_at: datetime
+    version: int
     is_owner: bool
     access_mode: AccessMode
 
@@ -90,6 +95,7 @@ class ProjectDetailResponse(BaseModel):
     created_by: uuid.UUID
     created_at: datetime
     updated_at: datetime
+    version: int
     is_owner: bool
     access_mode: AccessMode
 
@@ -106,6 +112,7 @@ class ProjectDetailResponse(BaseModel):
             created_by=project.created_by,
             created_at=project.created_at,
             updated_at=project.updated_at,
+            version=project.version,
             is_owner=is_owner,
             access_mode=access_mode,
         )
@@ -399,33 +406,52 @@ async def update_project(
         result = await session.execute(query)
         project = result.scalar_one()
 
-        # Update fields
+        changes: t.Dict[str, t.Any] = {}
         if project_data.name is not None:
-            project.name = project_data.name
+            changes["name"] = project_data.name
         if project_data.description is not None:
-            project.description = project_data.description
+            changes["description"] = project_data.description
         if project_data.folder_id is not None:
             # Validate access to new folder
-            if project_data.folder_id is not None:
-                from dsp_decikit.services.folder_permissions import check_folder_access
+            from dsp_decikit.services.folder_permissions import check_folder_access
 
-                try:
-                    await check_folder_access(
-                        session, project_data.folder_id, current_user, AccessMode.WRITE
-                    )
-                except (PermissionError, ValueError) as e:
-                    raise HTTPException(
-                        status_code=403, detail=f"Target folder access denied: {e}"
-                    )
-            project.folder_id = project_data.folder_id
+            try:
+                await check_folder_access(
+                    session, project_data.folder_id, current_user, AccessMode.WRITE
+                )
+            except (PermissionError, ValueError) as e:
+                raise HTTPException(
+                    status_code=403, detail=f"Target folder access denied: {e}"
+                )
+            changes["folder_id"] = project_data.folder_id
         if project_data.project_data is not None:
             try:
                 check_document(project_data.project_data, project.project_type)
             except ValueError as e:
                 raise HTTPException(status_code=400, detail=str(e))
-            project.project_data = project_data.project_data
+            changes["project_data"] = project_data.project_data
 
-        project.updated_at = datetime.now(timezone.utc)
+        # One conditional statement, so two saves of the same base cannot both pass the check
+        stmt = update(Project).where(Project.id == project_id)
+        if project_data.base_version is not None:
+            stmt = stmt.where(Project.version == project_data.base_version)
+        saved = await session.execute(
+            stmt.values(
+                **changes, version=Project.version + 1, updated_at=datetime.now(timezone.utc)
+            )
+            .returning(Project.version)
+            .execution_options(synchronize_session=False)
+        )
+        if saved.first() is None:
+            await session.refresh(project)
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "stale_version",
+                    "message": "The project was saved by someone else since you opened it",
+                    "current_version": project.version,
+                },
+            )
 
         await session.commit()
         await session.refresh(project)
@@ -502,6 +528,7 @@ async def move_project(
 
         # Move project
         project.folder_id = move_data.new_folder_id
+        project.version = Project.version + 1
         project.updated_at = datetime.now(timezone.utc)
 
         await session.commit()
