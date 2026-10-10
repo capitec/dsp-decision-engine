@@ -3,7 +3,8 @@
 Pipelines: `flagship` (arithmetic), `fallback` (ten str/date steps that run as Python fallbacks) and `tree` (127
 nodes). Configurations: `fused-mem`, `fused-io` (eager, the io one reads and writes parquet), `host-mem`,
 `host-stream` (scan to sink_parquet), `native-mem`, `native-stream` (hand-written polars) and, for `fallback`,
-`frames-*` (ten frame steps with polars bodies) and `frame1-*` (one frame step). Every run is a child process.
+`frames-*` (ten frame steps with polars bodies) and `frame1-*` (one frame step); `flagship` also has `copy-stream`, a
+plain scan to sink. Every run is a child process.
 
     uv run python benchmarks/polars_engine.py check                       # outputs equal fused, 10k rows
     uv run python benchmarks/polars_engine.py run --sizes 10k 1m --out r.jsonl
@@ -11,6 +12,7 @@ nodes). Configurations: `fused-mem`, `fused-io` (eager, the io one reads and wri
 from __future__ import annotations
 
 import argparse
+import glob
 import json
 import os
 import resource
@@ -242,7 +244,8 @@ def configs(pipe: str) -> list[str]:
     out = []
     for e in engines:
         out += ["fused-mem", "fused-io"] if e == "fused" else [f"{e}-mem", f"{e}-stream"]
-    return out
+    # A scan straight into a sink: what streaming costs in memory before any step runs.
+    return out + (["copy-stream"] if pipe == "flagship" else [])
 
 
 def bind(step, engine: str):
@@ -262,34 +265,28 @@ def runner(pipe: str, engine: str):
     """A function from a LazyFrame (a DataFrame for fused) to the pipeline's output, plus the build seconds."""
     p = PIPELINES[pipe]
     t = time.perf_counter()
-    if engine == "native":
-        return p["native"], 0.0
+    if engine in ("native", "copy"):
+        return (p["native"] if engine == "native" else lambda lf: lf), 0.0
     exe = bind(p["make" if engine in ("fused", "host") else engine](), "fused" if engine == "fused" else "host")
     return exe.run, time.perf_counter() - t
 
 
 # ---- data ------------------------------------------------------------------------------------------------------------
-def data_path(pipe: str, size: str) -> Path:
-    return DATA / f"{pipe}-{size}.parquet"
+def data_path(pipe: str, size: str) -> str:
+    # A size above one chunk is a folder of parquet parts read as a glob: merging them needs more memory than the cap.
+    return str(DATA / f"{pipe}-{size}" / "*.parquet") if SIZES[size] > CHUNK else str(DATA / f"{pipe}-{size}.parquet")
 
 
-def ensure_data(pipe: str, size: str) -> Path:
+def ensure_data(pipe: str, size: str) -> str:
     path = data_path(pipe, size)
-    if path.exists():
+    if glob.glob(path):
         return path
-    DATA.mkdir(parents=True, exist_ok=True)
-    n, parts = SIZES[size], []
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    n = SIZES[size]
     for i, start in enumerate(range(0, n, CHUNK)):
-        part = path.with_suffix(f".part{i}")
+        part = path.replace("*", f"part{i:03d}") if n > CHUNK else path
         PIPELINES[pipe]["gen"](min(CHUNK, n - start), np.random.default_rng([i, 7])).write_parquet(
             part, row_group_size=1_000_000)
-        parts.append(part)
-    if len(parts) == 1:
-        parts[0].rename(path)
-    else:
-        pl.scan_parquet(parts).sink_parquet(path, row_group_size=1_000_000)
-        for part in parts:
-            part.unlink()
     return path
 
 
@@ -404,7 +401,7 @@ def check(a: argparse.Namespace) -> None:
         ref = run(df)
         for cfg in configs(pipe):
             engine, mode = cfg.split("-")
-            if engine == "fused":
+            if engine in ("fused", "copy"):
                 continue
             run, _ = runner(pipe, engine)
             if mode == "mem":
