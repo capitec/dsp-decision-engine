@@ -11,6 +11,8 @@ T = t.TypeVar("T")
 
 
 def _identifier(name: str) -> str:
+    if not name:
+        raise ValueError("no parameter chosen: pick a parameter or type its name")
     # The name becomes a field of the step's params namedtuple.
     if not name.isidentifier() or keyword.iskeyword(name) or name.startswith("_"):
         fixed = name.replace("-", "_").replace(" ", "_").lstrip("_") + ("_" if keyword.iskeyword(name) else "")
