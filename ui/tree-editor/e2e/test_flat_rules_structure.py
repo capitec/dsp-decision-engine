@@ -314,13 +314,14 @@ def test_copying_a_leaf_and_pasting_it_over_another_leaf_saves_and_runs(signed_i
     assert decisions_for(export_document(signed_in, project), {"amount": [50.0, 150.0]}) == ["approve", "approve"]
 
 
-@pytest.mark.xfail(strict=True, reason="deleting the last branch of a cases node leaves otherwise pointing past the end")
 def test_deleting_a_cases_branch_keeps_the_otherwise_index_valid(signed_in: Page):
     open_doc(signed_in, two_branch_cases(1))
     card = rule_card(signed_in)
     card.get_by_title("Delete branch").nth(1).click()
 
-    assert save(signed_in)["validation_errors"] == []
+    reply = save(signed_in)
+    assert reply["validation_errors"] == []
+    assert saved_rule(reply)["otherwise"] == 0  # the only branch left
 
 
 def test_dragging_a_node_grip_does_not_break_the_rule(signed_in: Page):
