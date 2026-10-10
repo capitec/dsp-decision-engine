@@ -1043,7 +1043,9 @@ except EngineError as e:
   numba engine: the same pipeline gives the same answers there); a qualified emit (`.emit("x@path")`; relabel
   the step so the version has its own name); an output polars has no dtype for until it holds values (a plain
   `dict`, a bare `list`, `Any`: annotate a TypedDict or `list[float]`; an `each`'s gathered list needs its
-  items' type and its body's outputs declared); a frame step that fails on an empty
+  items' type and its body's outputs declared); at `collect()`, a batch its declared type cannot hold
+  unchanged (a fraction in an `int` column, a record whose keys differ from its TypedDict's, or come in
+  another order); a frame step that fails on an empty
   frame (the engine runs each frame step once on zero rows to learn its columns), or one that leaves a column
   empty there (declare it: `writes={"band": pl.String}`).
 - `assert_equivalent` checks the polars engine with the others; an engine that refuses a pipeline is skipped
