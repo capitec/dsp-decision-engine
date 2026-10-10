@@ -49,7 +49,7 @@ def test_an_error_in_a_step_keeps_its_type_and_names_the_step(mode):
 def test_interpreted_mode_also_names_the_row_counted_in_the_input_frame():
     guarded = branch(is_big, zero, ratio, modifies=["ratio"], name="b")   # rows 0 and 2 take `ratio`
     with pytest.raises(ZeroDivisionError) as err:
-        flow(guarded).run(FRAME)
+        flow(guarded).run(FRAME, engine="interpreted")   # a fused kernel can only name its steps, not the row
     assert "in step b/ratio, row 2" in notes(err)
 
 
