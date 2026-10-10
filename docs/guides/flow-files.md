@@ -142,7 +142,7 @@ df = pl.DataFrame({"age": [30.0, 16.0, 45.0, 52.0], "income": [8000.0, 20000.0, 
                    "debt": [1000.0, 0.0, 20000.0, 10000.0]})
 print(pipeline.run(df, params=config["params"]))
 exe = pipeline.compile("fused")
-print(exe.score({"age": 52.0, "income": 90000.0, "debt": 10000.0}, config["params"]))
+print(exe.run({"age": 52.0, "income": 90000.0, "debt": 10000.0}, config["params"]))
 print(exe.fallbacks())
 ```
 
@@ -429,7 +429,7 @@ DECIKIT_API__PIPELINE=flow.yaml
 DECIKIT_CONFIG__BASEPATH=configs
 $ decikit build
 decikit: pipeline from flow file /…/flowapp/flow.yaml
-built config version 0.0.0 (pipeline flow.yaml, mode fused)
+built config version 0.0.0 (pipeline flow.yaml, engine fused)
 ```
 
 In-process, pass the path to `RequestHandler`:

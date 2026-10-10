@@ -1,4 +1,5 @@
 import warnings
+from contextlib import nullcontext
 from typing import Any, Literal
 
 import polars as pl
@@ -24,9 +25,9 @@ class Total(ConfigurableStep):
 
 
 @pytest.mark.parametrize("mode", ["stepped", "fused"])
-def test_a_step_declaring_star_kwargs_falls_back_to_python_with_a_warning(mode):
+def test_a_step_declaring_star_kwargs_falls_back_to_python_with_a_warning_in_fused(mode):
     exe = flow(Total(name="s"), name="p").compile(mode)
-    with pytest.warns(FallbackWarning, match="p/s runs in Python"):
+    with pytest.warns(FallbackWarning, match="p/s runs in Python") if mode == "fused" else nullcontext():
         out = exe.run(pl.DataFrame({"a": [1.0, 2.0], "b": [2.0, 3.0]}))
     assert out["s"].to_list() == [3.0, 5.0]
     assert "'**columns'" in exe.fallbacks()["p/s"]
@@ -36,4 +37,4 @@ def test_allow_fallback_silences_the_star_kwargs_warning():
     exe = flow(Total(name="s", declared=True), name="p").compile("fused")
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        assert exe.score({"a": 1.0, "b": 2.0})["s"] == 3.0
+        assert exe.run({"a": 1.0, "b": 2.0})["s"] == 3.0

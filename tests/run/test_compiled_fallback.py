@@ -3,22 +3,28 @@ import ctypes
 import datetime as dt
 import gc
 import warnings
+from contextlib import nullcontext
 
 import numpy as np
 import polars as pl
 import pytest
 
-from decikit.exceptions import FallbackWarning, WiringError
+from decikit.exceptions import EngineError, FallbackWarning, WiringError
 
 from decikit import allow_fallback, branch, flow, missing_as, step
 from decikit.ops import Text
-from decikit._engine import Engine
+from decikit._engine import Engine, FusedEngine, InterpretedEngine, SteppedEngine
 from decikit._engine.boundary._arrow.intrinsics import load_u8
 from decikit._engine.compile import Fallback, Kernel
 from decikit._engine.run.representations import spans
 from decikit.lab.testing import assert_equivalent
 
 COMPILED = ("stepped", "fused")
+
+
+def warned_in_fused(mode, match):
+    # Fused warns about a step outside a shared kernel; stepped only lists it in `fallbacks()`.
+    return pytest.warns(FallbackWarning, match=match) if mode == "fused" else nullcontext()
 
 
 def half(x: float) -> float:
@@ -56,7 +62,7 @@ def test_string_steps_keep_their_semantics_and_run_in_python():
 def test_a_semantic_string_step_splits_the_fused_kernel_and_runs_in_python():
     from numba.core.dispatcher import Dispatcher
 
-    exe = Engine().bind(flow(half, same, doubled, name="p"), mode="fused")
+    exe = FusedEngine().bind(flow(half, same, doubled, name="p"))
     with pytest.warns(FallbackWarning, match="p/same runs in Python, row by row"):
         exe.run(VERSIONS)
     units = [exe.runner.units[c.id] for c in exe.plan.calls]
@@ -66,12 +72,12 @@ def test_a_semantic_string_step_splits_the_fused_kernel_and_runs_in_python():
 
 
 def test_the_warning_is_given_once_per_executable():
-    exe = Engine().bind(flow(same, name="p"), mode="fused")
+    exe = FusedEngine().bind(flow(same, name="p"))
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         exe.run(VERSIONS)
         exe.run(VERSIONS)
-        exe.score({"a_version": "v1", "b_version": "v1"})
+        exe.run({"a_version": "v1", "b_version": "v1"})
     assert len(caught) == 1
 
 
@@ -90,8 +96,8 @@ def as_date(x: float) -> dt.date:
 @pytest.mark.parametrize("mode", COMPILED)
 @pytest.mark.parametrize("fn", [as_dict, as_list, as_date])
 def test_a_python_fallback_keeps_object_outputs_as_python_values(mode, fn):
-    expected = Engine().bind(flow(fn, name="p")).score({"x": 3.0})
-    assert Engine().bind(flow(fn, name="p"), mode=mode).score({"x": 3.0}) == expected
+    expected = InterpretedEngine().bind(flow(fn, name="p")).run({"x": 3.0})
+    assert Engine.resolve(mode)().bind(flow(fn, name="p")).run({"x": 3.0}) == expected
 
 
 def days_to(decision_date: dt.date, x: float) -> float:
@@ -107,7 +113,7 @@ def test_a_step_reading_a_date_or_numba_cannot_read_runs_in_python():
     df = pl.DataFrame({"decision_date": [dt.date(2026, 1, 1)], "x": [2.0]})
     out = assert_equivalent(flow(days_to, checked, name="p"), df)
     assert out["days_to"].to_list() == [2.0] and out["checked"].to_list() == [3.0]
-    exe = Engine().bind(flow(days_to, name="p"), mode="stepped")
+    exe = SteppedEngine().bind(flow(days_to, name="p"))
     exe.run(df)
     assert "reads 'decision_date'" in exe.runner.units[exe.plan.calls[0].id].reason
 
@@ -122,7 +128,7 @@ def as_int(code: int) -> int:
 
 def test_an_input_read_as_int_and_as_float_is_refused_with_a_fix():
     with pytest.raises(WiringError, match="reads input column 'code' as int, but p/as_float reads it as float"):
-        Engine().bind(flow(as_int, as_float, name="p"), mode="fused")
+        FusedEngine().bind(flow(as_int, as_float, name="p"))
 
 
 def total(hist: list[float] = missing_as([])) -> float:
@@ -131,8 +137,8 @@ def total(hist: list[float] = missing_as([])) -> float:
 
 @pytest.mark.parametrize("mode", COMPILED)
 def test_an_empty_list_fill_fills_each_missing_row(mode):
-    exe = Engine().bind(flow(total, name="p"), mode=mode)
-    assert exe.score({"x": 1.0})["total"] == 0.0
+    exe = Engine.resolve(mode)().bind(flow(total, name="p"))
+    assert exe.run({"x": 1.0})["total"] == 0.0
     out = exe.run(pl.DataFrame({"hist": [[1.0, 2.0], None]}, schema={"hist": pl.List(pl.Float64)}))
     assert out["total"].to_list() == [3.0, 0.0]
 
@@ -155,17 +161,18 @@ def has_raw_bytes(value: Text) -> bool:
 
 @pytest.mark.parametrize("mode", COMPILED)
 def test_scalar_string_steps_receive_semantic_strings(mode):
-    exe = Engine().bind(flow(is_priority, name="p"), mode=mode)
+    exe = Engine.resolve(mode)().bind(flow(is_priority, name="p"))
     out = exe.run(pl.DataFrame({"value": ["priority", "other"]}))
     assert out["is_priority"].to_list() == [True, False]
 
 
 @pytest.mark.parametrize("mode", COMPILED)
 def test_scalar_semantic_bytes_fall_back_until_adapter_exists(mode):
-    exe = Engine().bind(flow(is_binary_priority, name="p"), mode=mode)
-    with pytest.warns(UserWarning, match="reads 'value' as bytes: numba can't type a scalar bytes value"):
+    exe = Engine.resolve(mode)().bind(flow(is_binary_priority, name="p"))
+    with warned_in_fused(mode, "reads 'value' as bytes: numba can't type a scalar bytes value"):
         out = exe.run(pl.DataFrame({"value": [b"priority", b"other"]}))
     assert out["is_binary_priority"].to_list() == [True, False]
+    assert "reads 'value' as bytes" in exe.fallbacks()["p/is_binary_priority"]
 
 
 def label(x: float) -> str:
@@ -178,16 +185,18 @@ def echo(value: Text | None) -> Text | None:
 
 @pytest.mark.parametrize("mode", COMPILED)
 def test_str_and_text_outputs_fall_back_and_are_written_as_strings(mode):
-    exe = Engine().bind(flow(label, name="p"), mode=mode)
-    with pytest.warns(FallbackWarning, match="writes 'label' as str, which no kernel stores"):
+    exe = Engine.resolve(mode)().bind(flow(label, name="p"))
+    with warned_in_fused(mode, "writes 'label' as str, which no kernel stores"):
         out = exe.run(pl.DataFrame({"x": [2.0, 0.5]}))
     assert out["label"].to_list() == ["big", "small"]
+    assert exe.fallbacks()["p/label"] == "writes 'label' as str, which no kernel stores"
 
-    exe = Engine().bind(flow(echo, name="p"), mode=mode)
-    with pytest.warns(FallbackWarning, match="writes 'echo' as str, which no kernel stores"):
+    exe = Engine.resolve(mode)().bind(flow(echo, name="p"))
+    with warned_in_fused(mode, "writes 'echo' as str, which no kernel stores"):
         out = exe.run(pl.DataFrame({"value": ["walk-in", None]}))
     assert out["echo"].to_list() == ["walk-in", None]
-    assert exe.score({"value": "broker"})["echo"] == "broker"
+    assert exe.fallbacks()["p/echo"] == "writes 'echo' as str, which no kernel stores"
+    assert exe.run({"value": "broker"})["echo"] == "broker"
 
 
 def test_a_text_output_is_the_same_string_in_every_mode():
@@ -197,24 +206,24 @@ def test_a_text_output_is_the_same_string_in_every_mode():
 
 @pytest.mark.parametrize("mode", COMPILED)
 def test_a_text_input_is_read_as_a_span(mode):
-    exe = Engine(strict_compile=True).bind(flow(has_raw_bytes, name="p"), mode=mode)
+    exe = Engine.resolve(mode)(strict_compile=True).bind(flow(has_raw_bytes, name="p"))
     out = exe.run(pl.DataFrame({"value": ["priority", "other"]}))
     assert out["has_raw_bytes"].to_list() == [True, True]
 
 
 @pytest.mark.parametrize("mode", COMPILED)
-def test_list_input_fallback_warns_and_is_public(mode):
-    exe = Engine().bind(flow(order_total, name="order"), mode=mode)
-    with pytest.warns(UserWarning, match="order/order_total runs in Python, row by row"):
-        assert exe.score({"items": [{"price": 2.0}, {"price": 3.0}]})["order_total"] == 5.0
+def test_list_input_fallback_is_public_and_warns_in_fused(mode):
+    exe = Engine.resolve(mode)().bind(flow(order_total, name="order"))
+    with warned_in_fused(mode, "order/order_total runs in Python, row by row"):
+        assert exe.run({"items": [{"price": 2.0}, {"price": 3.0}]})["order_total"] == 5.0
     assert "reads 'items' as list[dict], which no kernel takes" in exe.fallbacks()["order/order_total"]
 
 
 @pytest.mark.parametrize("mode", COMPILED)
 def test_list_input_fallback_is_rejected_in_strict_mode(mode):
-    exe = Engine(strict_compile=True).bind(flow(order_total, name="order"), mode=mode)
-    with pytest.raises(ValueError, match="order/order_total runs in Python, row by row"):
-        exe.score({"items": [{"price": 2.0}]})
+    exe = Engine.resolve(mode)(strict_compile=True).bind(flow(order_total, name="order"))
+    with pytest.raises(EngineError, match="order/order_total runs in Python, row by row"):
+        exe.run({"items": [{"price": 2.0}]})
 
 
 def byte_sum(value: Text) -> int:
@@ -251,14 +260,14 @@ def test_a_span_keeps_the_bytes_it_borrows_alive_while_a_kernel_reads_them(mode)
 
     df = pl.DataFrame({"value": ["priority", "other"]})
     whole = [sum(b"priority"), sum(b"other")]
-    exe = Engine().bind(flow(byte_sum, name="p"), mode=mode)
+    exe = Engine.resolve(mode)().bind(flow(byte_sum, name="p"))
     assert exe.run(df)["byte_sum"].to_list() == whole
-    assert [exe.score({"value": v})["byte_sum"] for v in ("priority", "other")] == whole
+    assert [exe.run({"value": v})["byte_sum"] for v in ("priority", "other")] == whole
 
     # A branch arm reads a row subset of the spans, and a session override replaces the column.
     per_arm = [sum(b"priority"), ord("o")]
-    assert Engine().bind(gated_bytes, mode=mode).run(df)["n"].to_list() == per_arm
-    s = gated_bytes.session(df, mode=mode)
+    assert Engine.resolve(mode)().bind(gated_bytes).run(df)["n"].to_list() == per_arm
+    s = gated_bytes.session(df, engine=mode)
     s.break_at("by")
     s.resume()
     s.set("value", ["other", "priority"])
@@ -268,9 +277,9 @@ def test_a_span_keeps_the_bytes_it_borrows_alive_while_a_kernel_reads_them(mode)
 
 @pytest.mark.parametrize("mode", COMPILED)
 def test_a_string_step_is_rejected_in_strict_mode_and_the_message_says_how_to_accept_it(mode):
-    exe = Engine(strict_compile=True).bind(flow(is_priority, name="p"), mode=mode)
-    with pytest.raises(ValueError, match=r"p/is_priority runs in Python, row by row.*@allow_fallback"):
-        exe.score({"value": "priority"})
+    exe = Engine.resolve(mode)(strict_compile=True).bind(flow(is_priority, name="p"))
+    with pytest.raises(EngineError, match=r"p/is_priority runs in Python, row by row.*@allow_fallback"):
+        exe.run({"value": "priority"})
 
 
 @allow_fallback
@@ -296,20 +305,20 @@ DECLARED_STEP = allow_fallback(step(priced))
 @pytest.mark.parametrize("mode", COMPILED)
 def test_allow_fallback_is_silent_and_accepted_by_strict(mode, fn, name, expected):
     record = {"items": [{"price": 2.0}], "sector": "private"}
-    exe = Engine(strict_compile=True).bind(flow(fn, name="p"), mode=mode)
+    exe = Engine.resolve(mode)(strict_compile=True).bind(flow(fn, name="p"))
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        assert exe.score(record)[name] == expected
+        assert exe.run(record)[name] == expected
     assert exe.fallbacks()[f"p/{name}"].startswith("@allow_fallback: reads ")
 
 
 @pytest.mark.parametrize("mode", COMPILED)
 def test_fallback_warnings_are_silenced_by_their_category(mode):
-    exe = Engine().bind(flow(order_total, name="order"), mode=mode)
+    exe = Engine.resolve(mode)().bind(flow(order_total, name="order"))
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         warnings.filterwarnings("ignore", category=FallbackWarning)
-        assert exe.score({"items": [{"price": 2.0}]})["order_total"] == 2.0
+        assert exe.run({"items": [{"price": 2.0}]})["order_total"] == 2.0
 
 
 @pytest.mark.parametrize("bad", ["flow", "scorecard", "frame_step"])
@@ -348,10 +357,11 @@ def mixed_list(x: float) -> list[float]:
 
 @pytest.mark.parametrize("mode", COMPILED)
 def test_a_numba_lowering_assert_falls_back_with_a_reason(mode):
-    exe = Engine().bind(flow(mixed_list, name="p"), mode=mode)
-    with pytest.warns(FallbackWarning, match="p/mixed_list runs in Python, row by row: AssertionError"):
+    exe = Engine.resolve(mode)().bind(flow(mixed_list, name="p"))
+    with warned_in_fused(mode, "p/mixed_list runs in Python, row by row: AssertionError"):
         out = exe.run(pl.DataFrame({"x": [2.0, 0.5]}))
     assert out["mixed_list"].to_list() == [[1.0, 2.0], [1.5]]
+    assert exe.fallbacks()["p/mixed_list"].startswith("AssertionError")
 
 
 def mixed_records(x: float) -> list[dict]:
@@ -360,9 +370,10 @@ def mixed_records(x: float) -> list[dict]:
 
 @pytest.mark.parametrize("mode", COMPILED)
 def test_a_numba_boxing_type_error_falls_back_with_a_reason(mode):
-    exe = Engine().bind(flow(mixed_records, name="p"), mode=mode)
-    with pytest.warns(FallbackWarning, match="p/mixed_records runs in Python, row by row: TypeError"):
-        assert exe.score({"x": 1.5})["mixed_records"] == [{"n": 1, "v": "x"}, {"n": 2, "v": 1.5}]
+    exe = Engine.resolve(mode)().bind(flow(mixed_records, name="p"))
+    with warned_in_fused(mode, "p/mixed_records runs in Python, row by row: TypeError"):
+        assert exe.run({"x": 1.5})["mixed_records"] == [{"n": 1, "v": "x"}, {"n": 2, "v": 1.5}]
+    assert exe.fallbacks()["p/mixed_records"].startswith("TypeError")
 
 
 @allow_fallback
@@ -372,8 +383,8 @@ def accepted_mixed_records(x: float) -> list[dict]:
 
 @pytest.mark.parametrize("mode", COMPILED)
 def test_an_accepted_step_numba_cannot_box_runs_under_strict_compile(mode):
-    strict = Engine(strict_compile=True).bind(flow(accepted_mixed_records, name="p"), mode=mode)
-    assert strict.score({"x": 1.5})["accepted_mixed_records"] == [{"n": 1, "v": "x"}, {"n": 2, "v": 1.5}]
+    strict = Engine.resolve(mode)(strict_compile=True).bind(flow(accepted_mixed_records, name="p"))
+    assert strict.run({"x": 1.5})["accepted_mixed_records"] == [{"n": 1, "v": "x"}, {"n": 2, "v": 1.5}]
     # One column holds one type per field, so a frame refuses a number beside text rather than turning it into text.
     with pytest.raises(ValueError, match="field \\[\\].v: holds number and str"):
         strict.run(pl.DataFrame({"x": [1.5]}))
@@ -386,10 +397,10 @@ def asserts_positive(x: float) -> float:
 
 @pytest.mark.parametrize("mode", COMPILED)
 def test_a_step_asserting_at_runtime_still_raises(mode):
-    exe = Engine().bind(flow(asserts_positive, name="p"), mode=mode)
-    assert exe.score({"x": 1.0})["asserts_positive"] == 1.0
+    exe = Engine.resolve(mode)().bind(flow(asserts_positive, name="p"))
+    assert exe.run({"x": 1.0})["asserts_positive"] == 1.0
     with pytest.raises(AssertionError):
-        exe.score({"x": -1.0})
+        exe.run({"x": -1.0})
 
 
 def raises_type_error(x: float) -> float:
@@ -400,7 +411,7 @@ def raises_type_error(x: float) -> float:
 
 @pytest.mark.parametrize("mode", COMPILED)
 def test_a_step_raising_type_error_at_runtime_still_raises(mode):
-    exe = Engine().bind(flow(raises_type_error, name="p"), mode=mode)
+    exe = Engine.resolve(mode)().bind(flow(raises_type_error, name="p"))
     assert exe.fallbacks() == {}
     with pytest.raises(TypeError, match="negative"):
-        exe.score({"x": -1.0})
+        exe.run({"x": -1.0})

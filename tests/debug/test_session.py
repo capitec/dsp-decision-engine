@@ -3,7 +3,7 @@ import polars as pl
 import pytest
 
 from decikit import branch, flow, param, step
-from decikit._engine import Engine
+from decikit._engine import InterpretedEngine
 from decikit._engine.debug import (NodeFinished, NodeVisited, Overridden, ParamsValidated, Paused, RunFinished,
                                   SetValue)
 from decikit._engine.run.runners import InterpretedRunner
@@ -94,7 +94,7 @@ def test_output_before_the_end_is_an_error():
 
 
 def test_executable_session_runs_the_bound_executable():
-    s = Engine().bind(pipeline).session(FRAME, params={"cap_by_income_band": {"cap": 30.0}})
+    s = InterpretedEngine().bind(pipeline).session(FRAME, params={"cap_by_income_band": {"cap": 30.0}})
     s.resume()
     assert s.output()["cap_by_income_band"].to_list() == [60.0, 30.0, 60.0]
     (validated,) = [e for e in s.events if isinstance(e, ParamsValidated)]
@@ -287,7 +287,7 @@ class OnlyCalls:
 
 
 def test_a_runner_with_fewer_checkpoints_still_breaks_steps_and_finishes():
-    exe = Engine().bind(term)
+    exe = InterpretedEngine().bind(term)
     exe.runner = OnlyCalls()
     s = exe.session(TERM_FRAME)
     s.break_at("term/by_sector")           # the branch itself never checkpoints

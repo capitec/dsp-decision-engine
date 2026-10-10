@@ -81,7 +81,7 @@ def test_a_batch_gives_the_answers_single_records_give(handler, raw_sample, para
     frame = events(raw_sample)
     batch = executable.run(frame, params)
     for i, record in enumerate(frame.to_dicts()):
-        single = executable.score(record, params)
+        single = executable.run(record, params)
         assert batch["action_code"][i] == single["action_code"]
         assert batch["fired_rule_ids"][i].to_list() == single["fired_rule_ids"]
         assert batch["shadow_fired_rule_ids"][i].to_list() == single["shadow_fired_rule_ids"]

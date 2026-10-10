@@ -1,4 +1,4 @@
-"""A `dict` input as an Arrow struct: score() latency and batch throughput.
+"""A `dict` input as an Arrow struct: run(record) latency and batch throughput.
 
 `uv run python benchmarks/structs.py`
 """
@@ -67,12 +67,12 @@ def latency(cases: list[tuple]) -> list[tuple[float, float, float]]:
     # Interleaved: a busy box drifts every variant the same way, so p50s stay comparable.
     for exe, record in cases:
         for _ in range(200):
-            exe.score(record)
+            exe.run(record)
     times: list[list[float]] = [[] for _ in cases]
     for _ in range(CALLS):
         for (exe, record), ts in zip(cases, times):
             t = time.perf_counter()
-            exe.score(record)
+            exe.run(record)
             ts.append((time.perf_counter() - t) * 1e6)
     out = []
     for ts in times:
@@ -88,13 +88,13 @@ def main() -> None:
     variants = (
         ("numeric kernel, flat columns (the ceiling)", flat, flat_df, flat_record, "fused"),
         ("`dict`, Python per row (today)", as_dict, struct_df, struct_record, "fused"),
-        ("`dict`, mode='interpreted'", as_dict, struct_df, struct_record, "interpreted"),
+        ("`dict`, engine='interpreted'", as_dict, struct_df, struct_record, "interpreted"),
         ("`Struct[Applicant]` record, in the kernel", as_struct, struct_df, struct_record, "fused"),
-        ("`Struct[Applicant]` record, mode='stepped'", as_struct, struct_df, struct_record, "stepped"),
+        ("`Struct[Applicant]` record, engine='stepped'", as_struct, struct_df, struct_record, "stepped"),
     )
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        exes = [Engine().bind(flow(fn, name="p"), mode=mode) for _, fn, _, _, mode in variants]
+        exes = [Engine.resolve(mode)().bind(flow(fn, name="p")) for _, fn, _, _, mode in variants]
         latencies = latency([(exe, record) for exe, (*_, record, _) in zip(exes, variants)])
         rows = [(label, batch(exe, df), prepare_ms(exe, df), *lat)
                 for (label, _, df, _, _), exe, lat in zip(variants, exes, latencies)]

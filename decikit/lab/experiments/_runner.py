@@ -29,7 +29,7 @@ import polars as pl
 from decikit.lab._describe import describe
 from decikit.lab import checks
 from decikit.lab.data import LoadedData, scan
-from decikit import Engine
+from decikit import FusedEngine, SteppedEngine
 from decikit._engine.params import merge
 from decikit.ir import base_annotation
 from decikit._engine.run.state import State, dtype_of
@@ -236,7 +236,7 @@ class _Local:
         self.patterns, self.ids = selectors["nodes"], set(selectors["ids"])
         self.params = merge(params, sc.params)
         stepped = self.patterns or self.ids or sc.at is not None
-        self.exe = Engine().bind(step, mode="stepped" if stepped else "fused")
+        self.exe = (SteppedEngine() if stepped else FusedEngine()).bind(step)
         # What each node hands a node metric: a call's outputs, a branch's `modifies` names.
         self.writes = {c.node.origin.path: c.writes for c in self.exe.plan.calls}
         self.writes.update((b.node.origin.path, tuple(m.version for m in b.merges))

@@ -58,7 +58,7 @@ df = pl.DataFrame({
 })
 ```
 
-`pipeline.run(df)` gives `term_cap = [54.0, 36.0, 54.0]` and `affordable = [True, False, True]`.
+`pipeline.run(df)` gives `term_cap = [54.0, 36.0, 54.0]` and `affordable = [True, False, True]`. `run` follows the default engine (fused when unset); while you edit and rerun a small frame, `with decikit.engine("interpreted"):` is instant, where a fused `run` binds and builds on every call. Sessions below open interpreted either way.
 
 ## Looking at a flow: `describe`
 
@@ -128,7 +128,7 @@ override@afford/affordable
 - `set(name, value)` overrides an input column or any value produced so far, from here on. `value` is one value for every row or a list with one per row (`None` is null), cast to the declared dtype. The override is recorded as a version produced by `override@<current path>`, so the trail shows who changed what.
 - `output()` is the frame `run` would have returned, overrides applied. It raises `RuntimeError: the run hasn't finished; resume() it first` before the end.
 
-`session` takes the same arguments as `run` plus a mode: `pipeline.session(df, params=doc, mode="stepped")`. Keyword arguments other than these go to `Engine` (for example `params_validation=`). An `Executable` from `compile()` has `exe.session(df, params)` too.
+`session` takes the same arguments as `run` plus an engine, a tag or an instance (it opens interpreted unless given one, and ignores the default engine): `pipeline.session(df, params=doc, engine="stepped")`. For engine options pass an instance: `engine=SteppedEngine(params_validation="lazy")`. An `Executable` from `compile()` has `exe.session(df, params)` too.
 
 ```mermaid
 flowchart LR
@@ -321,12 +321,12 @@ Every mode supports sessions and gives the same answers. What differs is where t
 </div>
 
 ```python
-s = pipeline.session(df, mode="fused")
+s = pipeline.session(df, engine="fused")
 s.break_at("afford/affordability_ratio")
 cp = s.resume()
 print(cp.origin.path, s.events[-1].kernel)
 
-s = pipeline.session(df, mode="fused")
+s = pipeline.session(df, engine="fused")
 s.break_at("afford/affordable")
 s.resume()
 s.value("disposable_income")
@@ -334,10 +334,10 @@ s.value("disposable_income")
 
 ```text
 afford/disposable_income ('afford/disposable_income', 'afford/affordability_ratio', 'afford/term_cap')
-KeyError: "'disposable_income' is computed inside the fused kernel ['afford/disposable_income', 'afford/affordability_ratio', 'afford/term_cap'] and never stored; open the session with mode='stepped' to inspect or set it"
+KeyError: "'disposable_income' is computed inside the fused kernel ['afford/disposable_income', 'afford/affordability_ratio', 'afford/term_cap'] and never stored; open the session with engine='stepped' to inspect or set it"
 ```
 
-A breakpoint on any step of a kernel pauses before the whole kernel, and `Paused.kernel` lists its steps. Values a kernel uses only inside itself are never stored, so `value` and `set` on them raise the `KeyError` above. Open the session with `mode="stepped"` when you need to see inside: stepped compiles each step on its own and pauses at every node. The [compile and fallback guide](compile-and-fallback.md) explains how kernels form, and [Debug internals](../architecture/engine/debug.md) how the session drives each runner.
+A breakpoint on any step of a kernel pauses before the whole kernel, and `Paused.kernel` lists its steps. Values a kernel uses only inside itself are never stored, so `value` and `set` on them raise the `KeyError` above. Open the session with `engine="stepped"` when you need to see inside: stepped compiles each step on its own and pauses at every node. The [compile and fallback guide](compile-and-fallback.md) explains how kernels form, and [Debug internals](../architecture/engine/debug.md) how the session drives each runner.
 
 One consequence: in fused mode, breaking on the second step of a kernel and setting a value the first step reads gives a different answer from interpreted mode, where the first step has already run when you pause.
 
@@ -506,7 +506,7 @@ Test through the decider toolkit, not by calling the step functions: only a run 
 
 | Helper | Asserts |
 |---|---|
-| `assert_equivalent(step, frame, params=None, modes=MODES, script=None)` | every mode gives exactly the same answer, by `run`, by `score` per row and by a session; returns the output frame |
+| `assert_equivalent(step, frame, params=None, engines=None, script=None)` | every engine (interpreted, stepped, fused and polars by default) gives exactly the same answer, by `run` on the frame, by `run` per record and, on the numba engines, by a session; an engine that refuses the pipeline is skipped with a warning; returns the output frame |
 | `corpus(step, baseline=1.0)` | nothing; returns boundary-value frames for every input the flow reads |
 | `no_recompile()` | numba compiles nothing inside the block |
 
@@ -515,33 +515,35 @@ flowchart LR
     F["frame"] --> I["interpreted<br/>run(frame)"]
     F --> S["stepped<br/>run(frame)"]
     F --> U["fused<br/>run(frame)"]
+    F --> L["polars<br/>run(frame.lazy()).collect()"]
     I --> R{"same columns,<br/>dtypes, values?"}
     S --> R
     U --> R
-    I --> P["score(record)<br/>for every row"]
+    L --> R
+    I --> P["run(record)<br/>for every row"]
     I --> Q["session resumed<br/>to the end"]
     P --> R
     Q --> R
     R -- yes --> O["returns the<br/>output frame"]
-    R -- no --> E["AssertionError<br/>naming mode and row"]
+    R -- no --> E["AssertionError<br/>naming engine and row"]
     classDef data fill:#dcfce7,stroke:#16a34a,color:#14532d,stroke-width:1.5px;
     classDef engine fill:#ccfbf1,stroke:#0d9488,color:#134e4a,stroke-width:1.5px;
     classDef err fill:#fee2e2,stroke:#dc2626,color:#7f1d1d,stroke-width:1.5px;
     classDef neutral fill:#f3f4f6,stroke:#6b7280,color:#1f2937,stroke-width:1.5px;
     class F,O data
-    class I,S,U,P,Q engine
+    class I,S,U,L,P,Q engine
     class R neutral
     class E err
 ```
 
 ### `assert_equivalent`
 
-For each mode in `modes` (default `("interpreted", "stepped", "fused")`), it checks against the first mode's `run(frame)`:
+For each engine in `engines` (tags or `Engine` instances; by default every built-in engine: interpreted, stepped, fused and polars), it checks against the first engine's `run(frame)`:
 
-- `run(frame)`: same columns, dtypes and values. NaN equals NaN; nothing else is approximate.
-- `score(record)` for every row: the same dict as that row of `run`.
-- A debug session resumed to the end: the same frame as `run`.
-- With `script`, a second session driven by `script(session)` and then resumed to the end: the same frame in every mode.
+- `run(frame)`, or `run(frame.lazy()).collect()` on the polars engine: same columns, dtypes and values. NaN equals NaN; nothing else is approximate.
+- `run(record)` for every row: the same dict as that row of `run(frame)`. When the pipeline has a frame step, the same dict as a run of a one-row frame of that record: a cross-row step, a rank say, answers one record differently from a batch.
+- On the numba engines, a debug session resumed to the end: the same frame as `run`.
+- On the numba engines, with `script`, a second session driven by `script(session)` and then resumed to the end: the same frame on every one.
 
 ```python
 from decikit.lab.testing import assert_equivalent
@@ -572,7 +574,7 @@ shape: (3, 2)
 [True, False, True]
 ```
 
-The returned frame is the plain run's, not the scripted one. An error in the first mode propagates as it is; `run` raising only in a later mode is reported as a divergence (`run() raised ... in fused mode but not in interpreted`). A failure names the mode and, for `score`, the row and column.
+The returned frame is the plain run's, not the scripted one. An error on the first engine propagates as it is; `run` raising only on a later engine is reported as a divergence (`run() raised ... on the fused engine but not on interpreted`). A later engine that refuses the pipeline with an `EngineError` (the polars engine and an untyped `dict` output, say) is skipped with a warning naming the engine and the reason. A failure names the engine and, for a record run, the row and column. `engines=("fused", "polars")` narrows the list.
 
 ### `corpus`
 
@@ -640,7 +642,7 @@ def build():
 import polars as pl
 import pytest
 
-from decikit import Engine
+from decikit import FusedEngine
 from decikit.lab.testing import assert_equivalent, corpus, no_recompile
 
 from credit import build
@@ -649,10 +651,10 @@ FRAME = pl.DataFrame({"income": [1000.0, 800.0, 0.0], "debt": [500.0, 100.0, 50.
 
 
 def test_worked_example_gives_exact_answers():
-    exe = Engine().bind(build(), mode="fused")
-    assert exe.score({"income": 1000.0, "debt": 350.0}) == {
+    exe = FusedEngine().bind(build())
+    assert exe.run({"income": 1000.0, "debt": 350.0}) == {
         "income": 1000.0, "debt": 350.0, "approved": True}
-    assert exe.score({"income": 1000.0, "debt": 450.0})["approved"] is False
+    assert exe.run({"income": 1000.0, "debt": 450.0})["approved"] is False
 
 
 def test_every_mode_agrees_on_the_sample():
@@ -666,7 +668,7 @@ def test_every_mode_agrees_on_boundary_values(case):
 
 
 def test_retuning_the_limit_never_recompiles():
-    exe = Engine().bind(build(), mode="fused")
+    exe = FusedEngine().bind(build())
     exe.run(FRAME)
     with no_recompile():
         out = exe.run(FRAME, params={"credit": {"approved": {"limit": 0.6}}})

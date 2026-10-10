@@ -159,7 +159,7 @@ sequenceDiagram
     participant S as Session
     H->>R: {"id":3,"cmd":"start",...}
     R->>M: queue
-    M->>S: Engine().bind(step).session(frame, params)<br/>break_at(_checkpoint), break_at(paths)
+    M->>S: InterpretedEngine().bind(step).session(frame, params)<br/>break_at(_checkpoint), break_at(paths)
     M-->>H: Status (paused before the run)
     H->>R: {"id":4,"cmd":"resume"}
     R->>M: queue
@@ -227,7 +227,7 @@ One call node from `loan.py`, as the describe reply carries it:
 
 ### A session and its observers
 
-`start` binds the step in interpreted mode (`Engine().bind(step).session(frame, params)`; see [Debug sessions](engine/debug.md)), then attaches two observers through the session's breakpoint hook. `_checkpoint` is registered first, before any user breakpoint, because `Session` evaluates breakpoints with `any` and stops at the first that says pause; the observer must see every checkpoint. At each checkpoint it records the checkpoint in the `Timeline`, applies any force that is due and evaluates the value breakpoints. It pauses only when a watch fires.
+`start` binds the step in interpreted mode (`InterpretedEngine().bind(step).session(frame, params)`; see [Debug sessions](engine/debug.md)), then attaches two observers through the session's breakpoint hook. `_checkpoint` is registered first, before any user breakpoint, because `Session` evaluates breakpoints with `any` and stops at the first that says pause; the observer must see every checkpoint. At each checkpoint it records the checkpoint in the `Timeline`, applies any force that is due and evaluates the value breakpoints. It pauses only when a watch fires.
 
 The input rows come from, in order: `data` (a path read with `lab.data.read`, one record, or a list of records), `dataset` (a name in the project's datasets folder; both at once is an error), the module's `SAMPLE`, or the build pipeline's `sample_request.json`. `overrides` with an optional `row` change input columns before the run. The data's identity (`InputFingerprint`: name, content hash, columns, row count) is reported in every `Status` so a host can show which data the run is on.
 
@@ -299,7 +299,7 @@ What makes the mirroring work:
 - `node_path()` in `run.py` walks up the calling frames until it finds the interpreted runner's `_call` or `_frame` code object and returns `node.origin.path` from its locals. A function used at two nodes (a step that is also a branch condition) still maps to the node that called it. When the evaluate fails (`decikit` not importable in the debuggee), `pausedAt` falls back to the innermost frame whose file and line fall inside a node's `[python.line, python.endLine]`.
 - A breakpoint dot on a node becomes a source breakpoint at the node's `bodyLine`. In a function used by more than one node it gets the condition `__import__('decikit._tooling.bridge.run', fromlist=['node_path']).node_path() == "<path>"`, so it stops at that node only. `breakpointPaths` maps every source breakpoint back to the nodes whose Python holds it, which is how dots appear when you set a breakpoint in the editor gutter.
 - Tree and table nodes run the decider toolkit's own reference walker, where `justMyCode` never stops, so `userCode` excludes `callKind: "row"` nodes from breakpoint actions.
-- Any Python debug session that pauses inside the shown flow's steps is mirrored, including your own scripts and tests, as long as the pipeline runs interpreted.
+- Any Python debug session that pauses inside the shown flow's steps is mirrored, including your own scripts and tests, as long as the pipeline runs interpreted. `pipeline.run(df)` is fused by default, and a step numba compiles never reaches a Python breakpoint: run it under `with decikit.engine("interpreted"):` or with `engine="interpreted"`.
 
 `run.py` on its own is also a plain runner: `python -m decikit._tooling.bridge.run loan.py --row 1` prints the output frame for that record, and `--row 5` on two rows exits with `--row 5 is out of range: the data has 2 rows`.
 
@@ -367,7 +367,7 @@ A separate web application for editing decision trees: a FastAPI backend (`backe
 
 ## Guarantees and how they are tested
 
-- A run in the bridge matches compiled runs exactly. `tests/bridge/test_parity.py` debugs a flow through the bridge and compares it with `run()` and `score()` in interpreted, stepped and fused modes using `decikit.testing.equivalence.assert_equivalent` (NaN equals NaN, nothing else is approximate). See [Diff and equivalence](../guides/diff-and-equivalence.md).
+- A run in the bridge matches compiled runs exactly. `tests/bridge/test_parity.py` debugs a flow through the bridge and compares it with `run()` on the frame and on each record in interpreted, stepped and fused modes using `decikit.testing.equivalence.assert_equivalent` (NaN equals NaN, nothing else is approximate). See [Diff and equivalence](../guides/diff-and-equivalence.md).
 - The protocol round-trips over real stdio (`test_the_stdio_protocol_round_trips`), and the one-shot form answers datasets from the project's working directory (`test_the_json_lines_protocol_answers_datasets_from_the_project_cwd`).
 - A failing step is reported, not fatal: the reply carries `error` and the events hold the `Error` (`test_a_failing_step_is_reported_not_fatal`).
 - The bridge lives inside `decikit`, launched as `python -m decikit._tooling.bridge`, with no separate distribution (`tests/bridge/test_relocation.py`).

@@ -57,7 +57,7 @@ The rules that shape the public surface (layers, private names, checks, diff, th
 ## Everything on the serving path is thread-safe; nothing else has to be
 
 - One `Executable` is called from many threads, including its first call; `Session`, `TraceSink`, experiments, checks, diff and the bridge are single-caller.
-- Rules: no per-call state on `self`; compile into locals and publish one immutable snapshot; caches are write-once with `setdefault`; module caches use `once(cache, key, build)`; `exe.report` is per thread. A warm `score()` takes no lock.
+- Rules: no per-call state on `self`; compile into locals and publish one immutable snapshot; caches are write-once with `setdefault`; module caches use `once(cache, key, build)`; `exe.report` is per thread. A warm `run(record)` takes no lock.
 - Not relied on: the GIL. The rules hold on a free-threaded build.
 - `tests/serving/test_concurrency.py` and the runner `self`-write test in `test_conventions.py` guard it.
 - See: [Concurrency](../../architecture/engine/concurrency.md)
@@ -80,6 +80,6 @@ The rules that shape the public surface (layers, private names, checks, diff, th
 ## Extension points are registry roots plus entry points
 
 - Seven roots (`ConfigurableStep`, `ConfigStore`, `DatasetProvider`, `Check`, `Metric`, `Plot`, `Block`) resolve a tag by registry, then by `importlib.metadata` entry points in group `decikit.<group>`, and only ever return registered subclasses so config cannot name arbitrary code.
-- Closed on purpose: execution modes (`RUNNERS`) and IR node types. `Callback` is a plain class because callbacks are not saved with an experiment definition.
+- Closed on purpose: IR node types. Engines are a registry root (`Engine`; see `engine.md`). `Callback` is a plain class because callbacks are not saved with an experiment definition.
 - Custom step types build IR with `ctx.call` / `ctx.expand` from `decikit.ir`; relax `ctx.call` before adding a constructor.
 - See: [Package layout](../../architecture/package-layout.md) (extension points), [extending guide](../../guides/extending.md)

@@ -3,7 +3,7 @@
 A runner executes a [Plan](wiring.md) over a `State`. There are three, one per mode, and they share one driver:
 `InterpretedRunner` walks the plan in Python and calls every step row by row, `SteppedRunner` replaces how a call
 runs (a numba kernel per call), and `FusedRunner` also replaces how a sequence, a branch and a loop run (one kernel
-for several calls). Every runner is a generator of checkpoints, so `run`, `score` and a debug session all go
+for several calls). Every runner is a generator of checkpoints, so `run` on a frame or a record and a debug session all go
 through the same code.
 
 The code lives in `decikit/_engine/run/`:
@@ -53,7 +53,7 @@ first, so the rows a write never touches stay null. `read(version, rows=None)` r
 rows; a version never written reads as all null.
 
 The input columns are loaded once, as nullable, by `State.from_frame` (through the [boundary](boundary.md)) or by
-`load_record` on the `score` path. Raw values plus masks are loaded because
+`load_record` on the record path. Raw values plus masks are loaded because
 two steps may read one column with different null policies (`x: float` and `x: float | None`), so the policy is
 applied per reader.
 
@@ -139,7 +139,7 @@ after  credit/affordable                      arm=None rows=None
 after  credit                                 arm=None rows=None
 ```
 
-`Executable.run` and `score` drain the generator with a `for _ in ...: pass`. A [debug session](debug.md) advances
+`Executable.run` drains the generator with a `for _ in ...: pass`. A [debug session](debug.md) advances
 it to a breakpoint, inspects or overrides values in `state`, and advances it again. Nothing in the runner knows
 which of the two is driving it, so a breakpoint sees exactly the state a run would have at that point. Two hooks
 serve the session: `visit` (called with each locator a tree's `reference` reports, so a session can step inside a
@@ -308,8 +308,19 @@ of it:
 `_call` looks up the call's unit and runs it with `_run`; a call with no unit (a frame step) falls through to the
 interpreted `_call`. `_run` validates the params of every call in the unit (they all run on every row the unit runs
 on), reads each external input on the scope's rows, builds or fetches its compiled representation, applies the null
-policy, runs the unit, and writes its outputs. While it builds the snapshot, `_build` warns once per step that falls
-back to Python with a `FallbackWarning`, or raises under `strict=True` unless the step is `@allow_fallback`.
+policy, runs the unit, and writes its outputs.
+
+While it builds the snapshot, `_build` passes every `Fallback` unit to `_report`: `fallbacks` records each step with
+its reason, `strict=True` raises unless the step is `@allow_fallback`, and a `FallbackWarning` is given only when the
+class attribute `loud` is set. `FusedRunner` sets it; `SteppedRunner`, which exists to inspect one node at a time,
+does not.
+
+A kernel can still be refused at its first launch, on a value numba only meets then (a `dict` param, or a step it
+compiles only at that launch, such as one with a table param); it then runs each of its calls in Python. `_build`
+installs `on_split` on every kernel: the kernel calls it before it splits, and it reports the split through
+`_report` (reason `split at launch: <numba error>`) and republishes the snapshot with the new `fallbacks` under the
+lock, once per kernel. Under `strict=True` it raises and the kernel stays whole, so every later launch is refused
+too.
 
 Branches, loops, row subsets, merges, frame steps and scatter-gather are the interpreted code, so stepped mode
 yields exactly the checkpoints interpreted mode does.
@@ -317,7 +328,8 @@ yields exactly the checkpoints interpreted mode does.
 ## Fused: one kernel for several calls
 
 `FusedRunner` sets `fuse = True`, so `compile_plan` groups each innermost sequence of scalar calls into one kernel,
-and adds packed kernels for branches and loops of plain scalar steps. It overrides three methods:
+and adds packed kernels for branches and loops of plain scalar steps; it sets `loud = True`, so every step outside a
+shared kernel warns once. It overrides three methods:
 
 - `_sequence` yields one `before`/`after` pair per kernel, with the origin of the kernel's first call; the later
   calls of that kernel yield nothing. A session that breaks on a later call maps it to its kernel through
@@ -360,7 +372,7 @@ A string input reaches a step in one of three representations (`Representation` 
 `representations.py` keeps the runners in agreement. `span_objects` wraps values as `Text` objects (filling a
 `missing_as` fill on null rows), `spans` builds the `(address, length)` pairs a kernel reads, zero-copy from the input
 frame's Arrow buffers when the version still holds that column, and `despan` turns `Text` back into `str` for
-output. For up to 32 values (the `score` path) `spans` borrows each value's own `bytes` buffer instead of exporting a
+output. For up to 32 values (the record path) `spans` borrows each value's own `bytes` buffer instead of exporting a
 frame, and keeps those buffers alive alongside the result so a kernel never reads freed memory.
 
 `State.representation(version, kind, build)` caches each built representation per version and kind, and drops the
@@ -370,7 +382,7 @@ interpreted step reading `Text` and a compiled one share the key `(RAW_BYTES, "o
 
 ## score without polars
 
-On the record path (no frame steps), `score` builds a `State` over an empty frame with `n=1` and fills it with
+On the record path (no frame steps), `run` builds a `State` over an empty frame with `n=1` and fills it with
 `load_record`, one read-only array per dtype viewed per input, then runs the same `iterate`. Nothing in the runner
 changes: it reads and writes arrays of length one. The output dict is built from `state.read` of each output version.
 The [engine overview](index.md) has the flow and the numbers.

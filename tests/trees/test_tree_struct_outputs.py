@@ -2,7 +2,7 @@
 import polars as pl
 import pytest
 
-from decikit._engine import Engine
+from decikit._engine import Engine, FusedEngine
 from decikit.steps.trees import TreeConfig
 
 TYPE_DEFS = {
@@ -105,15 +105,15 @@ def test_flat_rules_with_every_rule_return_structs_and_lists(run):
 
 
 @pytest.mark.parametrize("mode", ["interpreted", "stepped", "fused"])
-def test_score_returns_records_a_caller_may_edit(mode):
-    exe = Engine().bind(_tree([["Actions", {"type": "List", "inner": ACT}]], [{"Actions": ["Approve"]}, {}]), mode=mode)
-    exe.score({"score": 0.9})["Actions"][0]["Code"] = 99
-    assert exe.score({"score": 0.9})["Actions"] == [APPROVE]
+def test_a_record_run_returns_records_a_caller_may_edit(mode):
+    exe = Engine.resolve(mode)().bind(_tree([["Actions", {"type": "List", "inner": ACT}]], [{"Actions": ["Approve"]}, {}]))
+    exe.run({"score": 0.9})["Actions"][0]["Code"] = 99
+    assert exe.run({"score": 0.9})["Actions"] == [APPROVE]
 
 
 def test_list_outputs_run_in_the_shared_kernel():
     tree = _tree([["Actions", {"type": "List", "inner": ACT}], ["Action", ACT]], [{"Actions": ["Approve"]}, {}])
-    assert Engine().bind(tree, mode="fused").fallbacks() == {}
+    assert FusedEngine().bind(tree).fallbacks() == {}
 
 
 def test_an_unknown_struct_key_is_refused():

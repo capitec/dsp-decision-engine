@@ -1,10 +1,12 @@
-"""Stepped and fused modes: one answer with interpreted, one kernel for run and score, no recompiles."""
+"""Stepped and fused modes: one answer with interpreted, one kernel for a frame and a record run, no recompiles."""
+from contextlib import nullcontext
+
 import polars as pl
 import pytest
 
 from decikit import branch, flow, missing_as, param, step
 from decikit.ops import Text
-from decikit._engine import Engine
+from decikit._engine import Engine, FusedEngine, InterpretedEngine
 from decikit._engine.compile import Kernel
 from decikit._engine.ir.decls import Input, Output
 from decikit._engine.ir.nodes import CallNode
@@ -43,7 +45,7 @@ def test_the_three_modes_agree_exactly_on_the_flagship():
 
 
 def test_fused_runs_the_flagship_as_one_kernel_and_stepped_as_one_per_step():
-    fused, stepped = (Engine().bind(flagship, mode=m) for m in ("fused", "stepped"))
+    fused, stepped = (Engine.resolve(m)().bind(flagship) for m in ("fused", "stepped"))
     fused.run(FRAME)
     stepped.run(FRAME)
     assert len({id(u) for u in fused.runner.units.values()}) == 1
@@ -51,13 +53,13 @@ def test_fused_runs_the_flagship_as_one_kernel_and_stepped_as_one_per_step():
     assert all(isinstance(u, Kernel) for u in fused.runner.units.values())
 
 
-def test_score_and_run_use_the_same_compiled_kernel():
-    exe = Engine().bind(flagship, mode="fused")
+def test_a_record_and_a_frame_run_use_the_same_compiled_kernel():
+    exe = FusedEngine().bind(flagship)
     batch = exe.run(FRAME)
     (unit,) = {id(u): u for u in exe.runner.units.values()}.values()
     kernel, signatures = unit.fn, len(unit.fn.signatures)
-    record = exe.score(ROW)
-    assert Engine().bind(flagship, mode="fused").run(FRAME).equals(batch)
+    record = exe.run(ROW)
+    assert FusedEngine().bind(flagship).run(FRAME).equals(batch)
     (again,) = {id(u): u for u in exe.runner.units.values()}.values()
     assert again.fn is kernel and len(kernel.signatures) == signatures
     assert batch["cap_by_income_band"][1] == record["cap_by_income_band"] == 48.0
@@ -68,25 +70,25 @@ def test_repeated_calls_do_not_rebuild_the_driver(mode):
     def _sub(x: float, y: float) -> float:
         return x - y
 
-    exe = Engine().bind(flow(_sub), mode=mode)
+    exe = Engine.resolve(mode)().bind(flow(_sub))
     frame = pl.DataFrame({"x": [1.0] * 64, "y": [2.0] * 64})
     exe.run(frame)
-    exe.score({"x": 1.0, "y": 2.0})
+    exe.run({"x": 1.0, "y": 2.0})
     with no_recompile():
         for _ in range(3):
             exe.run(frame)
-            exe.score({"x": 1.0, "y": 2.0})
+            exe.run({"x": 1.0, "y": 2.0})
 
 
 @pytest.mark.parametrize("mode", ["stepped", "fused"])
 def test_retuning_never_recompiles(mode):
-    exe = Engine().bind(flagship, mode=mode)
+    exe = Engine.resolve(mode)().bind(flagship)
     exe.run(FRAME)
-    exe.score(ROW)
+    exe.run(ROW)
     with no_recompile():
         retuned = exe.run(FRAME, params={"cap_by_income_band": {"cap": 24.0}})
-        scored = exe.score(ROW, params={"cap_by_income_band": {"cap": 12.0}})
-        back = exe.score(ROW)
+        scored = exe.run(ROW, params={"cap_by_income_band": {"cap": 12.0}})
+        back = exe.run(ROW)
     assert retuned["cap_by_income_band"].to_list() == [60.0, 24.0, 60.0, 24.0]
     assert (scored["cap_by_income_band"], back["cap_by_income_band"]) == (12.0, 48.0)
 
@@ -99,14 +101,14 @@ SECTORS = pl.DataFrame({"sector": ["private", "public", "private", "government"]
 
 
 def test_retuning_a_string_literal_never_recompiles():
-    exe = Engine().bind(flow(sector_rate), mode="fused")
+    exe = FusedEngine().bind(flow(sector_rate))
     exe.run(SECTORS)
     with no_recompile():
         for literal, expected in [("government", [1.0, 1.0, 1.0, 0.9]), ("martian", [1.0] * 4),
                                   ("public", [1.0, 0.9, 1.0, 1.0])]:
             out = exe.run(SECTORS, params={"sector_rate": {"private": literal}})
             assert out["sector_rate"].to_list() == expected
-        assert exe.score({"sector": "public"}, params={"sector_rate": {"private": "public"}})["sector_rate"] == 0.9
+        assert exe.run({"sector": "public"}, params={"sector_rate": {"private": "public"}})["sector_rate"] == 0.9
 
 
 def text_rate(sector: Text, private: Text = param("private"), rate: float = param(0.9, gt=0)) -> float:
@@ -115,7 +117,7 @@ def text_rate(sector: Text, private: Text = param("private"), rate: float = para
 
 @pytest.mark.parametrize("mode", MODES)
 def test_a_text_param_is_tuned_as_a_string(mode):
-    exe = Engine(strict_compile=mode != "interpreted").bind(flow(text_rate), mode=mode)
+    exe = Engine.resolve(mode)(strict_compile=mode != "interpreted").bind(flow(text_rate))
     assert exe.run(SECTORS)["text_rate"].to_list() == [0.9, 1.0, 0.9, 1.0]
     out = exe.run(SECTORS, params={"text_rate": {"private": "government"}})
     assert out["text_rate"].to_list() == [1.0, 1.0, 1.0, 0.9]
@@ -123,13 +125,13 @@ def test_a_text_param_is_tuned_as_a_string(mode):
 
 
 def test_retuning_a_text_param_never_recompiles():
-    exe = Engine().bind(flow(text_rate), mode="fused")
+    exe = FusedEngine().bind(flow(text_rate))
     exe.run(SECTORS)
     with no_recompile():
         for literal, expected in [("government", [1.0, 1.0, 1.0, 0.9]), ("martian", [1.0] * 4),
                                   ("public", [1.0, 0.9, 1.0, 1.0])]:
             assert exe.run(SECTORS, params={"text_rate": {"private": literal}})["text_rate"].to_list() == expected
-        assert exe.score({"sector": "public"}, params={"text_rate": {"private": "public"}})["text_rate"] == 0.9
+        assert exe.run({"sector": "public"}, params={"text_rate": {"private": "public"}})["text_rate"] == 0.9
 
 
 @pytest.mark.parametrize("mode", ["stepped", "fused"])
@@ -137,10 +139,11 @@ def test_a_step_reading_several_string_inputs_runs_in_python(mode):
     def same(a: str, b: str, which: str = param("a")) -> float:
         return 1.0 if a == b or a == which else 0.0
 
-    exe = Engine().bind(flow(same), mode=mode)
-    with pytest.warns(UserWarning, match="same runs in Python, row by row.*as str"):
+    exe = Engine.resolve(mode)().bind(flow(same))
+    with pytest.warns(UserWarning, match="same runs in Python, row by row.*as str") if mode == "fused" else nullcontext():
         out = exe.run(pl.DataFrame({"a": ["x", "y"], "b": ["y", "y"]}))
     assert out["same"].to_list() == [0.0, 1.0]
+    assert "as str" in exe.fallbacks()["same"]
 
 
 @pytest.mark.parametrize("mode", ["stepped", "fused"])
@@ -148,7 +151,7 @@ def test_a_string_param_without_a_string_input_stays_in_the_kernel(mode):
     def speed(x: float, mode: str = param("fast")) -> float:
         return x * 2 if mode == "fast" else x
 
-    exe = Engine(strict_compile=True).bind(flow(speed), mode=mode)
+    exe = Engine.resolve(mode)(strict_compile=True).bind(flow(speed))
     assert exe.run(pl.DataFrame({"x": [1.0]}))["speed"].to_list() == [2.0]
     assert exe.run(pl.DataFrame({"x": [1.0]}), params={"speed": {"mode": "slow"}})["speed"].to_list() == [1.0]
 
@@ -183,7 +186,7 @@ def test_a_null_passed_between_fused_steps_meets_each_readers_policy():
     assert assert_equivalent(flow(maybe_band, band_or_nine), frame)["band_or_nine"].to_list() == [2, 9]
     for m in MODES:
         with pytest.raises(ValueError, match="input 'maybe_band' of step 'strict'"):
-            Engine().bind(flow(maybe_band, strict), mode=m).run(frame)
+            Engine.resolve(m)().bind(flow(maybe_band, strict)).run(frame)
 
 
 def is_big(x: float) -> bool:
@@ -200,7 +203,7 @@ def small(x: float, k: float = param(1.0, ge=0)) -> float:
     return x * k
 
 
-def test_score_equals_run_row_for_row_through_a_branch_and_nulls():
+def test_a_record_run_equals_a_frame_run_row_for_row_through_a_branch_and_nulls():
     def bump(y: float, extra: float | None) -> float:
         return y + (0.0 if extra is None else extra)
 
@@ -218,9 +221,9 @@ def test_a_branch_condition_may_be_a_column_name_in_every_mode():
     by_step = branch(on_card, big, small, modifies=["y"], name="by")
     frame = pl.DataFrame({"x": [1.0, 200.0, 50.0], "on_card": [True, False, True]})
     for m in MODES:
-        assert Engine().bind(by_name, mode=m).run(frame)["y"].to_list() == \
-            Engine().bind(by_step, mode=m).run(frame)["y"].to_list()
-    assert Engine().bind(by_name, mode="interpreted").run(frame)["y"].to_list() == [2.0, 200.0, 100.0]
+        assert Engine.resolve(m)().bind(by_name).run(frame)["y"].to_list() == \
+            Engine.resolve(m)().bind(by_step).run(frame)["y"].to_list()
+    assert InterpretedEngine().bind(by_name).run(frame)["y"].to_list() == [2.0, 200.0, 100.0]
 
 
 def test_fused_lazy_validation_covers_every_step_of_a_kernel_that_runs_and_nothing_else():
@@ -229,7 +232,7 @@ def test_fused_lazy_validation_covers_every_step_of_a_kernel_that_runs_and_nothi
         return y * f
 
     pipeline = flow(branch(is_big, big, small, modifies=["y"], name="by"), scaled, name="p")
-    exe = Engine(params_validation="lazy").bind(pipeline, mode="fused")
+    exe = FusedEngine(params_validation="lazy").bind(pipeline)
     exe.run(pl.DataFrame({"x": [1.0]}), params={"p": {"by": {"big": {"k": -1.0}}}})
     assert exe.report.validated == ["p/by/small", "p/scaled"]
     with pytest.raises(ValueError, match=r"p/by/big: param 'k'"):
@@ -252,9 +255,9 @@ def test_a_row_node_of_400_inputs_answers_in_every_mode():
     frame = pl.DataFrame({f"f{i}": [1.0, float(i)] for i in range(N_WIDE)})
     expected = [sum(range(1, N_WIDE + 1)), sum(i * (i + 1) for i in range(N_WIDE))]
     for m in MODES:
-        exe = Engine().bind(node, mode=m)
+        exe = Engine.resolve(m)().bind(node)
         assert exe.run(frame)["total"].to_list() == expected
-        assert exe.score(frame.row(1, named=True))["total"] == expected[1]
+        assert exe.run(frame.row(1, named=True))["total"] == expected[1]
 
 
 def test_a_scalar_step_of_twenty_inputs_answers_in_every_mode():

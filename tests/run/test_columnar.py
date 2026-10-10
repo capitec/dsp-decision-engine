@@ -9,7 +9,7 @@ import numpy as np
 import polars as pl
 import pytest
 
-from decikit import Engine, branch, flow, loop, missing_as, step
+from decikit import Engine, FusedEngine, SteppedEngine, branch, flow, loop, missing_as, step
 from decikit.ops import Columnar
 from decikit._engine.compile.rows import ARROW_ROWS, build_rows
 from decikit._engine.run.state import from_series
@@ -43,13 +43,13 @@ def test_bundle_total_agrees_across_every_mode():
 
 @pytest.mark.parametrize("mode", MODES)
 def test_a_row_with_no_items_is_zero_items_not_an_error(mode):
-    exe = Engine().bind(flow(bundle_total, name="p"), mode=mode)
-    assert exe.score({"mask": 0, "items": []})["bundle_total"] == 0.0
+    exe = Engine.resolve(mode)().bind(flow(bundle_total, name="p"))
+    assert exe.run({"mask": 0, "items": []})["bundle_total"] == 0.0
 
 
 @pytest.mark.parametrize("mode", ("stepped", "fused"))
 def test_rows_joins_the_shared_array_kernel(mode):
-    exe = Engine().bind(flow(bundle_total, name="p"), mode=mode)
+    exe = Engine.resolve(mode)().bind(flow(bundle_total, name="p"))
     exe.run(FRAME)
     assert exe.fallbacks() == {}
     unit = exe.runner.units[exe.plan.calls[0].id]
@@ -71,7 +71,7 @@ def test_a_loop_reading_rows_packs_into_one_kernel():
     search = loop(more, flow(bundle_total, keep_best, advance, name="body"),
                  carries=["mask", "best"], max_iterations=4, name="search")
     frame = pl.DataFrame({"items": [[{"price": 2.0}, {"price": 3.0}]], "mask": [1], "best": [0.0]})
-    exe = Engine().bind(flow(search, name="p"), mode="fused")
+    exe = FusedEngine().bind(flow(search, name="p"))
     assert exe.run(frame)["best"].to_list() == [5.0]
     assert "p/search" in exe.runner.packed
 
@@ -79,7 +79,7 @@ def test_a_loop_reading_rows_packs_into_one_kernel():
 def test_a_kernel_that_fails_at_run_time_falls_back_to_the_per_row_dispatcher():
     from numba.core.errors import TypingError
 
-    exe = Engine().bind(flow(bundle_total, name="p"), mode="stepped")
+    exe = SteppedEngine().bind(flow(bundle_total, name="p"))
     exe.run(FRAME)
     unit = exe.runner.units[exe.plan.calls[0].id]
     assert unit.ragged, "the setup for this test needs 'items' to have joined the kernel"
@@ -95,7 +95,7 @@ def test_a_kernel_that_fails_at_run_time_falls_back_to_the_per_row_dispatcher():
 def test_rows_runs_compiled_not_interpreted(mode="stepped"):
     from numba.core.dispatcher import Dispatcher
 
-    exe = Engine().bind(flow(bundle_total, name="p"), mode=mode)
+    exe = Engine.resolve(mode)().bind(flow(bundle_total, name="p"))
     exe.run(FRAME)
     unit = exe.runner.units[exe.plan.calls[0].id]
     assert isinstance(unit.fn, Dispatcher)
@@ -173,7 +173,7 @@ def test_an_item_field_of_an_unsupported_type_names_itself_in_the_error():
         return float(len(items.price))
 
     with pytest.raises(TypeError, match="field 'when' is <class 'datetime.date'>"):
-        Engine().bind(flow(uses, name="p"), mode="stepped").run(
+        SteppedEngine().bind(flow(uses, name="p")).run(
             pl.DataFrame({"items": [[{"price": 1.0, "when": date(2024, 1, 1)}]]}))
 
 
@@ -187,7 +187,7 @@ def test_a_nested_item_field_is_refused_at_bind_and_points_at_list_dict():
         return float(len(items.name))
 
     with pytest.raises(TypeError, match=r"field 'tags' is list\[str\].*as list\[dict\]"):
-        Engine().bind(flow(uses, name="p"), mode="stepped")
+        SteppedEngine().bind(flow(uses, name="p"))
 
 
 @pytest.mark.parametrize("dtype,annotation", ((pl.Int64, int), (pl.Float64, float)))
@@ -203,10 +203,10 @@ def test_a_null_item_field_names_the_field_and_the_item_it_is_in(dtype, annotati
 
 @pytest.mark.parametrize("mode", MODES)
 def test_a_null_item_field_raises_in_every_mode_rather_than_summing_as_nan(mode):
-    exe = Engine().bind(flow(total, name="p"), mode=mode)
+    exe = Engine.resolve(mode)().bind(flow(total, name="p"))
     record = {"items": [{"price": 2.0}, {"price": None}]}
     with pytest.raises(ValueError, match=r"'price' is null in item 1 of row 0"):
-        exe.score(record)
+        exe.run(record)
     with pytest.raises(ValueError, match=r"'price' is null in item 1 of row 0"):
         exe.run(pl.DataFrame({"items": [record["items"]]},
                              schema={"items": pl.List(pl.Struct({"price": pl.Float64}))}))
@@ -247,7 +247,7 @@ def first_price(items: Columnar[Item]) -> float:
 def test_a_null_list_is_required_like_any_other_input():
     from decikit._engine.boundary.nulls import MissingInputError
 
-    exe = Engine().bind(flow(total, name="p"), mode="stepped")
+    exe = SteppedEngine().bind(flow(total, name="p"))
     with pytest.raises(MissingInputError, match="'items'"):
         exe.run(NULLS)
 
@@ -270,7 +270,7 @@ def test_missing_as_a_non_empty_list_says_it_cannot_be_held():
         return float(len(items.price))
 
     with pytest.raises(TypeError, match="must be an empty list"):
-        Engine().bind(flow(filled, name="p"), mode="stepped").run(NULLS)
+        SteppedEngine().bind(flow(filled, name="p")).run(NULLS)
 
 
 def test_an_optional_rows_input_gives_the_step_none_for_a_null_list():
@@ -286,7 +286,7 @@ def test_an_optional_rows_input_gives_the_step_none_for_a_null_list():
     assert out["maybe"].to_list() == [5.0, -1.0, 0.0, 7.0]
     # One kernel has one signature, and a namedtuple of array views has no in-band None, so an
     # OPTIONAL Columnar[...] input keeps the per-row dispatcher rather than joining the kernel.
-    exe = Engine().bind(flow(maybe, name="p"), mode="fused")
+    exe = FusedEngine().bind(flow(maybe, name="p"))
     exe.run(NULLS)
     assert "reads 'items' as Columnar[...]" in exe.fallbacks()["p/maybe"]
 
@@ -344,7 +344,7 @@ def test_rows_inside_a_branch_reads_only_its_own_rows():
 
 
 def test_a_session_override_of_a_rows_input_rebuilds_from_the_new_values():
-    exe = Engine().bind(flow(total, name="p"), mode="stepped")
+    exe = SteppedEngine().bind(flow(total, name="p"))
     n = ARROW_ROWS + 2
     s = exe.session(_wide(n))
     s.set("items", [[{"price": 100.0}]] * n)

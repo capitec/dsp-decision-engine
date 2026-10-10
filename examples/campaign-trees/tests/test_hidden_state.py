@@ -3,7 +3,7 @@ import json
 import warnings
 from pathlib import Path
 
-from decikit import ConfigurableStep, Engine
+from decikit import ConfigurableStep, InterpretedEngine
 from decikit.exceptions import HiddenStateWarning
 from decikit.lab import diff
 
@@ -21,7 +21,7 @@ def cap_document(**changes):
 def test_building_the_pipeline_reads_no_hidden_state(tree, rate_card, cap_reductions):
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        Engine().bind(build(tree, rate_card, cap_reductions), mode="interpreted")
+        InterpretedEngine().bind(build(tree, rate_card, cap_reductions))
     assert [str(w.message) for w in caught if issubclass(w.category, HiddenStateWarning)] == []
 
 

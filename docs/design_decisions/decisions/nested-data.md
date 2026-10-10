@@ -21,7 +21,7 @@ Read this before changing how lists of records, structs or strings inside record
 
 - `Ragged` (`compile/rows.py`) holds the unsliced field arrays and `lo[i]`, `hi[i]`; the step gets a namedtuple of views, `items.price[j]`.
 - Why `lo`/`hi`, not `offsets[n+1]`: a branch or loop row subset is two fancy indexes with no child copy, and null-error indexes stay in whole-column coordinates.
-- It costs ~20 us a `score()`; a short list with a light body is faster as `list[dict]`.
+- It costs ~20 us a `run(record)`; a short list with a light body is faster as `list[dict]`.
 - See: [experiment](../experiments/columnar-arrow-read-and-shared-kernel.md), [compile](../../architecture/engine/compile.md)
 
 ## A `Columnar[Item]` step joins the shared kernel
@@ -33,7 +33,7 @@ Read this before changing how lists of records, structs or strings inside record
 ## Arrow read from 256 rows
 
 - `ARROW_ROWS = 256`: a frame-held `list<struct>` column becomes views over Arrow's offsets and child arrays; below that, or for computed values, arrays come from Python values.
-- Why: the read has a ~130 us fixed cost; `score()` has no Arrow source so it is always Python.
+- Why: the read has a ~130 us fixed cost; `run(record)` has no Arrow source so it is always Python.
 - A layout it can't read (`Null`-typed field, null item, `pl.Array`) falls back to the Python read, which raises naming the field.
 - See: [boundary](../../architecture/engine/boundary.md), `boundary/_arrow/nested.py`
 

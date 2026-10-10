@@ -3,13 +3,13 @@ import polars as pl
 import pytest
 
 from decikit import branch, flow, loop, param, step
-from decikit._engine import Engine
+from decikit._engine import FusedEngine
 from decikit.exceptions import WiringError
 from decikit.lab.testing import assert_equivalent
 
 
 def packed(pipeline, frame):
-    exe = Engine().bind(pipeline, "fused")
+    exe = FusedEngine().bind(pipeline)
     exe.run(frame)
     return sorted(exe.runner.packed)
 

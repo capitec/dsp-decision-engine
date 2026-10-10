@@ -5,9 +5,7 @@ import polars as pl
 import pytest
 from polars.testing import assert_frame_equal
 
-from decikit import branch, flow, frame_step, param, step
-from decikit._engine import Engine
-from decikit._engine.polars.engine import PolarsEngine
+from decikit import FusedEngine, PolarsEngine, branch, flow, frame_step, param, step
 from decikit.exceptions import EngineError, ParamsError
 
 
@@ -33,7 +31,7 @@ DF = pl.DataFrame({"income": [1000.0 * (i + 1) for i in range(100)], "debt": [20
 
 
 def fused(pipe, df=DF, params=None):
-    return Engine().bind(pipe, "fused").run(df, params)
+    return FusedEngine().bind(pipe).run(df, params)
 
 
 def streamed(lf: pl.LazyFrame) -> pl.DataFrame:
@@ -250,12 +248,12 @@ def test_fallbacks_are_every_segments_fallbacks():
     pipe = flow(ratio, band, rank_income, grade, name="p")
     host = PolarsEngine().bind(pipe).fallbacks()
     assert sorted(host) == ["p/band", "p/grade"]
-    assert host == Engine().bind(pipe, "fused").fallbacks()
+    assert host == FusedEngine().bind(pipe).fallbacks()
 
 
 def test_dict_record_runs_on_the_segments_engine():
     record = {"income": 1000.0, "debt": 200.0}
-    assert PolarsEngine().bind(PIPE).run(record) == Engine().bind(PIPE, "fused").score(record)
+    assert PolarsEngine().bind(PIPE).run(record) == FusedEngine().bind(PIPE).run(record)
 
 
 def test_dataframe_input_returns_a_collected_dataframe():

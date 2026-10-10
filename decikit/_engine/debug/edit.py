@@ -171,7 +171,7 @@ class Edits:
 
         before, old = self.executable, self.state
         _check_producers(plan, before.plan, label)
-        exe = Executable(plan, before.runner, before.lazy, root)
+        exe = Executable(plan, before.runner, before.lazy, root, engine=before.engine)
         state, params = exe.prepare(self.frame, self.params)
         # A copy, so a failure below leaves the running one as it was.
         runner = copy.copy(self._runner)

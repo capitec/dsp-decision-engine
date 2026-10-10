@@ -89,7 +89,7 @@ decision, so the first build in a fresh checkout compiles the loan flow too):
 
 ```bash
 uv run decikit build
-# built config version 0.1.0 (pipeline governance.pipeline:build, mode fused)
+# built config version 0.1.0 (pipeline governance.pipeline:build, engine fused)
 ```
 
 Serve, and replay the loan decision in [`evidence/loan/`](evidence/loan). The first request for each flow stages that

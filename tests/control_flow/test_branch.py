@@ -3,7 +3,7 @@ import polars as pl
 import pytest
 
 from decikit import branch, dag, flow, frame_step, param, step
-from decikit._engine import Engine
+from decikit._engine import Engine, FusedEngine
 from decikit.exceptions import WiringError
 from decikit.lab.testing import assert_equivalent
 
@@ -12,7 +12,7 @@ MODES = ("interpreted", "stepped", "fused")
 
 def packed(pipeline, frame, **engine_kwargs):
     """The branches and loops a fused run of `pipeline` packed into one kernel each."""
-    exe = Engine(**engine_kwargs).bind(pipeline, "fused")
+    exe = FusedEngine(**engine_kwargs).bind(pipeline)
     exe.run(frame)
     return sorted(exe.runner.packed)
 
@@ -117,7 +117,7 @@ def test_arms_receive_their_declared_types():
 def test_an_int_condition_out_of_range_is_an_error_naming_the_branch(mode):
     rules = branch(band_of, band0, band1, modifies=["price"], name="rules")
     with pytest.raises(ValueError, match="branch rules: the condition picked arm 2 on 1 row"):
-        Engine().bind(rules, mode).run(BANDS)
+        Engine.resolve(mode)().bind(rules).run(BANDS)
 
 
 def test_a_branch_needs_modifies():
@@ -194,7 +194,7 @@ def test_a_branch_nested_in_an_arm_packs_with_it_and_a_sibling_arm_reads_the_inp
 def test_an_invalid_param_in_an_arm_no_row_takes_never_fails_lazily(mode):
     rules = branch(is_employed, flow(after_tax, limit_from_income, name="assessed"), flat_limit,
                    modifies=["limit"], name="rules")
-    exe = Engine(params_validation="lazy").bind(flow(rules), mode)
+    exe = Engine.resolve(mode)(params_validation="lazy").bind(flow(rules))
     everyone_unemployed = EMPLOYMENT.with_columns(employed=pl.lit(False))
     bad = {"rules": {"assessed": {"after_tax": {"rate": "not a number"}}}}
     assert exe.run(everyone_unemployed, params=bad)["limit"].to_list() == [1000.0] * 3
@@ -230,7 +230,7 @@ def test_a_null_a_taken_arm_requires_is_an_error(mode):
     rules = branch(is_private, cap_for_private, cap_for_public, modifies=["term_cap"], name="rules")
     frame = TERM.with_columns(term_cap=pl.Series([60.0, None, 30.0]))
     with pytest.raises(ValueError, match="'term_cap'.*rules/cap_for_public"):
-        Engine().bind(flow(sector_is_private, rules), mode).run(frame)
+        Engine.resolve(mode)().bind(flow(sector_is_private, rules)).run(frame)
 
 
 # --- what doesn't pack -------------------------------------------------------------

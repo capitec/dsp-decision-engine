@@ -10,6 +10,7 @@ import polars as pl
 import pytest
 from click.testing import CliRunner
 
+from decikit import SteppedEngine
 from decikit._tooling.cli import CPU_TARGET_FILE, cli
 from decikit._engine.compile import cpu_target
 from decikit._engine.compile.njit import _DISPATCHERS, _REASONS
@@ -96,8 +97,8 @@ def test_the_built_project_serves_the_generated_handler(project):
     handler.activate()
     live = handler.module_fn()
     day = date(2026, 1, 5)
-    assert live.executable.score({"income": 1000.0, "debt": 500.0, "applied_on": day}, live.params)["approved"] is False
-    assert live.executable.score({"income": 1000.0, "debt": None, "applied_on": day}, live.params)["approved"] is True
+    assert live.executable.run({"income": 1000.0, "debt": 500.0, "applied_on": day}, live.params)["approved"] is False
+    assert live.executable.run({"income": 1000.0, "debt": None, "applied_on": day}, live.params)["approved"] is True
 
 
 def test_build_fails_with_a_clear_message_on_an_invalid_params_document(project):
@@ -142,14 +143,23 @@ def uvicorn_calls(monkeypatch):
 
 
 def test_serve_starts_the_starlette_factory_with_the_given_settings(project, uvicorn_calls):
-    result = CliRunner().invoke(cli, ["serve", "--port", "9001", "--workers", "3", "--mode", "stepped"])
+    result = CliRunner().invoke(cli, ["serve", "--port", "9001", "--workers", "3", "--engine", "stepped"])
     assert result.exit_code == 0, result.output
     assert uvicorn_calls == [(("decikit.serving._servers.starlette:create_app",),
                               {"factory": True, "host": "0.0.0.0", "port": 9001, "workers": 3})]
     # What each worker's app factory builds its handler from; the pipeline comes from the project's .env.
     handler = construct_handler_from_settings()
-    assert (handler.mode, handler.pipeline) == ("stepped", "proj.pipeline:build")
-    assert os.environ["DECIKIT_API__MODE"] == "stepped"
+    assert (handler.engine, handler.pipeline) == (SteppedEngine(), "proj.pipeline:build")
+    assert os.environ["DECIKIT_API__ENGINE__TYPE"] == "stepped"
+
+
+def test_serve_refuses_an_unknown_engine_before_starting_any_worker(project, uvicorn_calls, monkeypatch):
+    result = CliRunner().invoke(cli, ["serve", "--engine", "fsued"])
+    assert result.exit_code == 1 and "Did you mean 'fused'" in result.output
+    monkeypatch.setitem(os.environ, "DECIKIT_API__ENGINE__STRICT", "true")
+    result = CliRunner().invoke(cli, ["serve", "--engine", "fused"])
+    assert result.exit_code == 1 and "strict" in result.output and "Extra inputs" in result.output
+    assert uvicorn_calls == []
 
 
 def test_serve_warns_when_the_build_ran_on_another_cpu(project, uvicorn_calls):
