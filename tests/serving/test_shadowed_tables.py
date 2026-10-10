@@ -98,6 +98,20 @@ def test_the_warning_can_be_switched_off_for_one_table(tmp_path):
     assert stage(tmp_path, allowed, {"p": {"allowed": {"rates": ROWS[:1]}}})[1] == []
 
 
+@pytest.mark.parametrize("params", [["not", "a", "mapping"], {"shared": None}])
+def test_a_malformed_params_document_is_reported_by_validation_not_by_the_warning(tmp_path, monkeypatch, params):
+    def failure(warn: str):
+        monkeypatch.setenv("DECIDER_BUILD__WARN_SHADOWED_TABLES", warn)
+        get_settings.cache_clear()
+        try:
+            stage(tmp_path / warn, seeded_shared, params)
+        except Exception as e:
+            return type(e), str(e)
+        return None
+
+    assert failure("true") == failure("false")
+
+
 def test_allow_override_without_seeded_from_is_refused():
     with pytest.raises(TypeError, match="allow_override only applies with seeded_from"):
         param_table(COLUMNS, default=ROWS, allow_override=True)
