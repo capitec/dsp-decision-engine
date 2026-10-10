@@ -4,7 +4,7 @@ import json
 import re
 
 import pytest
-from playwright.sync_api import Page, expect
+from playwright.sync_api import Locator, Page, expect
 
 from flat_rules_ui import open_flat_rules
 from platform_ui import (
@@ -33,7 +33,7 @@ UNUSUAL_NAMES = {
 }
 
 
-def total_projects_on_overview(page: Page) -> str:
+def total_projects_on_overview(page: Page) -> Locator:
     page.goto("/")
     return page.get_by_text("Total Projects").locator("xpath=following-sibling::*")
 
@@ -107,7 +107,7 @@ def test_opening_a_flat_rule_project_from_the_list_shows_its_editor(signed_in: P
 
 
 def test_list_view_shows_the_same_projects_with_actions(signed_in: Page):
-    create_project(signed_in, "Row one", flat_document(), )
+    create_project(signed_in, "Row one", flat_document())
     open_projects(signed_in)
 
     signed_in.locator("button:has(svg.lucide-list)").click()
