@@ -1032,7 +1032,8 @@ except EngineError as e:
     assert "TypedDict" in str(e)                            # annotate it, then it runs
 ```
 
-- **The answers are fused's.** Columns, dtypes and values equal `pipeline.compile("fused").run(df)`; a step's
+- **The answers are fused's.** Columns, dtypes and values equal `pipeline.compile("fused").run(df)`, except
+  that a column or `each` field fused leaves `Null` for want of a value has its declared dtype; a step's
   error surfaces at `collect()` or the sink with its own type and its `in step <path>` note. The params
   document is validated against the whole pipeline when `run` builds the plan.
 - **A frame step is a pipeline breaker.** It runs once on the whole frame (it may rank, join or group by), so
