@@ -18,10 +18,10 @@ interpreter, else `python3`. `examples/.vscode/settings.json` sets `uv run pytho
 
 ## What it does
 
-**the decider toolkit** in the activity bar has three views.
+**decider toolkit** in the activity bar has three views.
 
 - **Flows**: every `flow.yaml` (a top-level `flow:` and `steps:`), and every
-  Python file that imports the decider toolkit and defines `def build()`,
+  Python file that imports `decikit` and defines `def build()`,
   `pipeline = flow(...)` or a `*_pipeline()` factory. Click one to show it; ▷
   debugs it. CodeLenses above each pipeline do the same.
 - **Structure**: the shown flow as a tree, with an icon per node type. Click a

@@ -216,7 +216,7 @@ CRS010 markup_rate pricing/fee fee: rate 15.0 is outside 0 to 1
 The check `no_float_money` resolved through the `decikit.checks` entry point the same way, and the step's own `check` hook added `CRS010`.
 
 !!! warning "Pin the decider toolkit dependency"
-    The example package above lists no dependencies, because the environment that installs it already has the decider toolkit. Given a bare `dependencies = ["decikit"]`, a fresh `uv` environment resolved decider 0.0.1, an old release without `ConfigurableStep`, and `from decikit import ConfigurableStep` failed with `ImportError`. Pin the version your projects run, or leave the decider toolkit to the host environment.
+    The example package above lists no dependencies, because the environment that installs it already has the decider toolkit. Given a bare `dependencies = ["decikit"]`, a fresh `uv` environment installs whatever release the package index offers, which can be older than the API you use: an early 0.0.1 release had no `ConfigurableStep`, and the import failed with `ImportError`. Pin the version your projects run, or leave the decider toolkit to the host environment.
 
 ## A check
 
