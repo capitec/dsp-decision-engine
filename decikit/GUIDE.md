@@ -1041,8 +1041,8 @@ except EngineError as e:
 - **Refused, with an `EngineError` saying what to do:** `trace=` and `session()` (debug and trace on the
   numba engine: the same pipeline gives the same answers there); a qualified emit (`.emit("x@path")`; relabel
   the step so the version has its own name); an output polars has no dtype for until it holds values (a plain
-  `dict`, a bare `list`, `Any`: annotate a TypedDict or `list[float]`; an `each`'s gathered list, which only the
-  numba engine runs); a frame step that fails on an empty
+  `dict`, a bare `list`, `Any`: annotate a TypedDict or `list[float]`; an `each`'s gathered list needs its
+  items' type and its body's outputs declared); a frame step that fails on an empty
   frame (the engine runs each frame step once on zero rows to learn its columns), or one that leaves a column
   empty there (declare it: `writes={"band": pl.String}`).
 - `assert_equivalent` checks the polars engine with the others; an engine that refuses a pipeline is skipped

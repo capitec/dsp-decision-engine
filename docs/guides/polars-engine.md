@@ -108,7 +108,7 @@ to do instead.
 | `session()` | a session pauses between nodes; polars runs the plan on its own | debug with `pipeline.session(df)` |
 | `.emit("x@path")`, a qualified emit | the output holds plain column names | relabel the step so that version has its own name |
 | an output with no polars dtype until it holds values: a plain `dict`, a bare `list`, `Any` | polars needs every column's type before the first row arrives | annotate it: a TypedDict, `list[float]`, `str` |
-| an `each` whose gathered list leaves a segment or is an output | the list's item fields are known only once it holds items | run the pipeline on the numba engine |
+| an `each` whose body writes a value with no polars dtype, or whose list's items have no declared type | the gathered list is the item's fields plus the body's values, typed before any row arrives | annotate the body step, or the step that writes the list (`list[Item]` with `Item` a TypedDict) |
 | a frame step that fails on an empty frame | the engine runs each frame step once on zero rows to learn the columns it returns | make it accept an empty frame |
 | a frame step that leaves a column empty on zero rows | its dtype is unknown until values arrive | declare it: `@frame_step(writes={"band": pl.String})` |
 
