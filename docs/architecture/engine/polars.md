@@ -95,7 +95,10 @@ def run(self, data, params=None, trace=None):
   (`validate_output_schema=True`, order included). The schema comes from running the segment on a zero-row
   frame of its input schema, minus `unneeded`.
 - **The batch function** runs the segment's executable on the batch, drops `unneeded`, and casts any column
-  of `nulls` that came back `Null` to its declared dtype.
+  of `nulls` that came back with another dtype to its declared one. polars casts a struct by field name
+  (dropping a field the target lacks, null-filling one the batch lacks) and a float to an int by truncation,
+  so the cast is kept only when every struct has the declared fields in the declared order and casting back
+  gives the batch's values; otherwise the batch raises an `EngineError` naming the column and both dtypes.
 - **Emission.** Streamable segments are `streamable=True`; frame-step segments `streamable=False`, which
   polars runs once on all rows. Every node turns off predicate, projection and slice pushdown, which older polars
   enabled by default: a filter or `head` on the plan must not reach below a frame step. Under `collect()` every segment runs once on the whole frame.
@@ -108,8 +111,17 @@ annotation in the segment's plan: a polars dtype (a frame step's declared `write
 is, and otherwise `declared_dtype` maps it (`str` to `String`, `date` to `Date`, a TypedDict to a `Struct`).
 The column goes into `nulls`, so a batch where it is all null is cast to that dtype. An annotation with no
 dtype (`dict`, bare `list`, `Any`) is refused with an `EngineError` naming the column, its writer and what to
-annotate. An `each`'s gathered list has no annotation that could name it (its items' fields
-are known only from the data), so the error says to run the pipeline on the numba engine instead.
+annotate.
+
+An `each`'s gathered list (`_gathered`) is typed as the gather builds it: `List(Struct)` of every field of
+the item, in its order, then each value the body writes (`ScatterGather.new_fields`), a field the body
+rewrites keeping its place. The item's dtype comes from the segment's input schema when the list is an
+input, from the declared type of the step that writes it otherwise (`list[TypedDict]`, `Struct`), and from
+the enclosing item for a nested `each`, which recurses. Each body value takes its annotation's dtype. On
+data the fused engine gives `List(Null)` for a batch of empty lists and a `Null` field no item fills, so the
+batch function casts every batch whose dtype differs; items whose fields differ from the declaration, in
+name or order (a step's dicts with their keys in another order), raise instead. A body value or an item with no declared type is
+refused with an `EngineError` naming the `each` and the step to annotate.
 
 ## Errors
 
@@ -121,6 +133,7 @@ are known only from the data), so the error says to run the pipeline on the numb
 | a segment that does not wire on its own | `bind` | `EngineError` wrapping the `WiringError` |
 | a frame step raising on zero rows | `run` | `EngineError` with the original chained; found by the driver's `in frame step <path>` note |
 | a column with no knowable dtype | `run` | `EngineError` naming the column and its writer |
+| a batch its declared dtype cannot hold unchanged (a fraction for an int, a record's fields in another name or order) | `collect()` or the sink | `EngineError` naming the column and both dtypes |
 | input that is none of dict, `DataFrame`, `LazyFrame` | `run` | `TypeError` naming the accepted types |
 | a step raising inside a batch | `collect()` or the sink | the step's own exception, its notes intact: polars re-raises the Python exception object unwrapped, in memory, streaming and sinks |
 | `params_validation` differing from `segments.params_validation` | `PolarsEngine(...)` | pydantic `ValidationError` |

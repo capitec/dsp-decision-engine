@@ -243,17 +243,6 @@ def test_untyped_dict_output_is_refused_with_what_to_annotate():
         PolarsEngine().bind(flow(details, name="p")).run(DF.lazy())
 
 
-def test_each_output_is_refused_without_asking_to_annotate_it():
-    def heavy(weight: float = missing_as(0.0)) -> bool:
-        return weight > 20.0
-
-    pipe = flow(each("items", flow(heavy, name="item"), name="items"), name="order")
-    df = pl.DataFrame({"items": [[{"weight": 1.0}, {"weight": 30.0}], []]})
-    with pytest.raises(EngineError, match="'items', the list order/items gathers with each, has no dtype") as e:
-        PolarsEngine().bind(pipe).run(df.lazy())
-    assert "Annotate" not in str(e.value)
-
-
 def test_untyped_value_read_inside_its_segment_needs_no_dtype():
     def details(income: float) -> dict:
         return {"income": income}
@@ -349,3 +338,12 @@ def test_two_threads_share_one_polars_executable():
     for i in range(2):
         for out in got[i]:
             assert_frame_equal(out, want[i])
+
+
+def test_batch_value_its_declared_dtype_cannot_hold_is_refused_not_truncated():
+    def scaled(df: pl.DataFrame) -> pl.DataFrame:
+        return df.with_columns(pl.Series("x", [v / 7 for v in df["income"]]))
+
+    pipe = flow(frame_step(scaled, reads=["income"], writes={"x": pl.Int64}), name="p")
+    with pytest.raises(EngineError, match="'x' came back as Float64.*declared Int64"):
+        PolarsEngine().bind(pipe).run(DF.lazy()).collect()
