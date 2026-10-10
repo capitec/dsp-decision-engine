@@ -41,7 +41,7 @@ How each kind is found:
 - **JSON files**: every `*.json` in the repo that `TreeConfig.load` accepts as it is or wrapped
   (`test_every_tree_json_file_in_the_repo_is_in_the_list` keeps the list complete). The step document files are
   imported as their `tree` (the round trip) and as the file a user would pick
-  (`test_step_document_file_imports_its_tree_or_is_refused_clearly`).
+  (`test_step_document_file_imports_its_tree`).
 - **Docs samples**: what the guide's and the docs' examples pass to `TreeConfig.load`: JSON blocks as written, and
   Python blocks that call it, run at collection with `TreeConfig` and `pl` in scope (stdout silenced); a block that
   fails keeps what it loaded first.
