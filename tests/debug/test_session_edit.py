@@ -8,7 +8,9 @@ import pytest
 from decikit import ConfigurableStep, SteppedEngine, Value, branch, flow, step
 from decikit._engine.debug import COMMAND, EVENT_LOG, Delete, Edited, Paused, Replace
 from decikit.exceptions import WiringError
-from decikit.lab.testing import MODES, no_recompile
+from decikit.lab.testing import no_recompile
+
+MODES = ("interpreted", "stepped", "fused")
 
 CALLS: Counter = Counter()
 

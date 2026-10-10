@@ -506,7 +506,7 @@ Test through the decider toolkit, not by calling the step functions: only a run 
 
 | Helper | Asserts |
 |---|---|
-| `assert_equivalent(step, frame, params=None, modes=MODES, script=None)` | every mode gives exactly the same answer, by `run` on the frame, by `run` per record and by a session; returns the output frame |
+| `assert_equivalent(step, frame, params=None, engines=None, script=None)` | every engine (interpreted, stepped, fused and polars by default) gives exactly the same answer, by `run` on the frame, by `run` per record and, on the numba engines, by a session; an engine that refuses the pipeline is skipped with a warning; returns the output frame |
 | `corpus(step, baseline=1.0)` | nothing; returns boundary-value frames for every input the flow reads |
 | `no_recompile()` | numba compiles nothing inside the block |
 
@@ -515,33 +515,35 @@ flowchart LR
     F["frame"] --> I["interpreted<br/>run(frame)"]
     F --> S["stepped<br/>run(frame)"]
     F --> U["fused<br/>run(frame)"]
+    F --> L["polars<br/>run(frame.lazy()).collect()"]
     I --> R{"same columns,<br/>dtypes, values?"}
     S --> R
     U --> R
+    L --> R
     I --> P["run(record)<br/>for every row"]
     I --> Q["session resumed<br/>to the end"]
     P --> R
     Q --> R
     R -- yes --> O["returns the<br/>output frame"]
-    R -- no --> E["AssertionError<br/>naming mode and row"]
+    R -- no --> E["AssertionError<br/>naming engine and row"]
     classDef data fill:#dcfce7,stroke:#16a34a,color:#14532d,stroke-width:1.5px;
     classDef engine fill:#ccfbf1,stroke:#0d9488,color:#134e4a,stroke-width:1.5px;
     classDef err fill:#fee2e2,stroke:#dc2626,color:#7f1d1d,stroke-width:1.5px;
     classDef neutral fill:#f3f4f6,stroke:#6b7280,color:#1f2937,stroke-width:1.5px;
     class F,O data
-    class I,S,U,P,Q engine
+    class I,S,U,L,P,Q engine
     class R neutral
     class E err
 ```
 
 ### `assert_equivalent`
 
-For each mode in `modes` (default `("interpreted", "stepped", "fused")`), it checks against the first mode's `run(frame)`:
+For each engine in `engines` (tags or `Engine` instances; by default every built-in engine: interpreted, stepped, fused and polars), it checks against the first engine's `run(frame)`:
 
-- `run(frame)`: same columns, dtypes and values. NaN equals NaN; nothing else is approximate.
-- `run(record)` for every row: the same dict as that row of `run(frame)`.
-- A debug session resumed to the end: the same frame as `run`.
-- With `script`, a second session driven by `script(session)` and then resumed to the end: the same frame in every mode.
+- `run(frame)`, or `run(frame.lazy()).collect()` on the polars engine: same columns, dtypes and values. NaN equals NaN; nothing else is approximate.
+- `run(record)` for every row: the same dict as that row of `run(frame)`. When the pipeline has a frame step, the same dict as a run of a one-row frame of that record: a cross-row step, a rank say, answers one record differently from a batch.
+- On the numba engines, a debug session resumed to the end: the same frame as `run`.
+- On the numba engines, with `script`, a second session driven by `script(session)` and then resumed to the end: the same frame on every one.
 
 ```python
 from decikit.lab.testing import assert_equivalent
@@ -572,7 +574,7 @@ shape: (3, 2)
 [True, False, True]
 ```
 
-The returned frame is the plain run's, not the scripted one. An error in the first mode propagates as it is; `run` raising only in a later mode is reported as a divergence (`run() raised ... in fused mode but not in interpreted`). A failure names the mode and, for a record run, the row and column.
+The returned frame is the plain run's, not the scripted one. An error on the first engine propagates as it is; `run` raising only on a later engine is reported as a divergence (`run() raised ... on the fused engine but not on interpreted`). A later engine that refuses the pipeline with an `EngineError` (the polars engine and an untyped `dict` output, say) is skipped with a warning naming the engine and the reason. A failure names the engine and, for a record run, the row and column. `engines=("fused", "polars")` narrows the list.
 
 ### `corpus`
 

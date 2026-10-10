@@ -8,7 +8,7 @@ from numba.extending import overload
 from decikit import flow, missing_as, param
 from decikit.ops import decimal
 from decikit.ops.decimal import Currency
-from decikit._engine import Engine, SteppedEngine
+from decikit._engine import Engine, FusedEngine, SteppedEngine
 from decikit._engine.debug import Session
 from decikit._engine.run import Executable
 from decikit.lab.testing import assert_equivalent, corpus, no_recompile
@@ -93,7 +93,7 @@ def bumped(x: float) -> float:
 
 
 def test_a_mode_that_computes_differently_fails_naming_the_mode_and_both_values():
-    with pytest.raises(AssertionError, match="stepped mode differs from interpreted") as e:
+    with pytest.raises(AssertionError, match=r"run\(\) on the stepped engine differs from interpreted") as e:
         assert_equivalent(flow(bumped), pl.DataFrame({"x": [1.0, 5.0]}))
     assert "2.0" in str(e.value) and "3.0" in str(e.value)
 
@@ -116,7 +116,7 @@ def test_a_record_run_disagreeing_with_a_frame_run_fails_naming_the_row(monkeypa
         return out | {"scaled": out["scaled"] + (record["a"] == 20.0)}
 
     monkeypatch.setattr(Executable, "_run_record", off_by_one)
-    with pytest.raises(AssertionError, match=r"run\(record\) of row 1 in interpreted mode differs.*'scaled'.*39.0.*38.0"):
+    with pytest.raises(AssertionError, match=r"run\(record\) of row 1 on the interpreted engine differs.*'scaled'.*39.0.*38.0"):
         assert_equivalent(pipeline, FRAME)
 
 
@@ -128,7 +128,7 @@ def test_a_session_disagreeing_with_run_fails(monkeypatch):
         return out.with_columns(pl.col("scaled") * 2) if type(self.executable.runner).__name__ == "FusedRunner" else out
 
     monkeypatch.setattr(Session, "output", stale)
-    with pytest.raises(AssertionError, match="session resumed to the end in fused mode differs from run"):
+    with pytest.raises(AssertionError, match="session resumed to the end on the fused engine differs from run"):
         assert_equivalent(pipeline, FRAME)
 
 
@@ -149,7 +149,7 @@ def test_a_scripted_session_diverging_across_modes_fails():
         if type(s.executable.runner).__name__ == "SteppedRunner":
             s.set("a", 0.0)
 
-    with pytest.raises(AssertionError, match="scripted session in stepped mode differs from interpreted"):
+    with pytest.raises(AssertionError, match="scripted session on the stepped engine differs from interpreted"):
         assert_equivalent(pipeline, FRAME, script=per_mode)
 
 
@@ -163,8 +163,8 @@ def test_a_breakpoint_on_a_later_step_of_a_fused_kernel_agrees_across_modes():
     assert_equivalent(pipeline, FRAME, script=override_scaled_input)
 
 
-def test_modes_can_be_narrowed():
-    out = assert_equivalent(flow(bumped), pl.DataFrame({"x": [1.0]}), modes=("stepped", "fused"))
+def test_engines_can_be_narrowed_by_tag_or_instance():
+    out = assert_equivalent(flow(bumped), pl.DataFrame({"x": [1.0]}), engines=("stepped", FusedEngine()))
     assert out["bumped"].to_list() == [3.0]
 
 

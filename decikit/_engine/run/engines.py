@@ -158,3 +158,7 @@ def engine(which: str | Engine) -> Iterator[None]:
         yield
     finally:
         _default.reset(token)
+
+
+# Lazy, because its module imports this one.
+Engine.lazy({"polars": "decikit._engine.polars.engine"})
