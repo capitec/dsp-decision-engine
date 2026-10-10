@@ -2,14 +2,14 @@
 from __future__ import annotations
 
 import warnings
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from typing import TypedDict
 
 import numpy as np
 import polars as pl
 import pytest
 
-from decikit import Engine, FusedEngine, flow, missing_as
+from decikit import Engine, FusedEngine, allow_fallback, flow, missing_as
 from decikit.ops import Columnar, Struct
 from decikit.ops import Text
 from decikit.exceptions import FallbackWarning
@@ -360,6 +360,21 @@ def test_an_all_null_output_keeps_its_declared_dtype_in_every_mode(annotation, d
     nothing.__annotations__["return"] = annotation | None
     assert assert_equivalent(flow(nothing, name="p"), FRAME)["nothing"].dtype == dtype
     assert assert_equivalent(flow(nothing, name="p"), FRAME.clear())["nothing"].dtype == dtype
+
+
+UNSTORED = [(date, pl.Date), (datetime, pl.Datetime("us")), (time, pl.Time), (timedelta, pl.Null), (bytes, pl.Binary),
+            (np.datetime64, pl.Null), (np.timedelta64, pl.Null)]
+
+
+@pytest.mark.parametrize("annotation, dtype", UNSTORED, ids=[a.__name__ for a, _ in UNSTORED])
+def test_a_step_declaring_an_output_no_kernel_column_holds_runs_in_python_in_every_engine(annotation, dtype):
+    def nothing(x: float):
+        return None  # numba compiles this body whatever the declared type
+
+    nothing.__annotations__["return"] = annotation | None
+    pipeline = flow(allow_fallback(nothing), name="p")
+    assert assert_equivalent(pipeline, pl.DataFrame({"x": [1.0, 2.0]}))["nothing"].dtype == dtype
+    assert "which no kernel stores" in FusedEngine().bind(pipeline).fallbacks()["p/nothing"]
 
 
 def as_int64(x: float) -> np.int64:
