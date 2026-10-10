@@ -256,9 +256,11 @@ def _series(name: str, values: np.ndarray, valid: np.ndarray | None, annotation:
             # beside a float) is the same number; its strict inference would truncate a later float.
             return pl.Series(name, values, dtype=_typed_dtype(annotation), strict=False)
         try:
-            return pl.Series(name, values)
+            s = pl.Series(name, values)
         except TypeError:
-            return pl.Series(name, values, strict=False)
+            s = pl.Series(name, values, strict=False)
+        # Only nulls (or no rows) infer `Null`: the declared type keeps the schema the pipeline's, not the data's.
+        return s.cast(dtype) if dtype is not None and s.dtype == pl.Null else s
     if values.dtype.names is not None:
         # A struct output is a record per row; polars reads dicts (not tuples) for a Struct
         # with nulls, so spell each row as the dict a step returns.

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import warnings
-from datetime import date
+from datetime import date, datetime, time
 from typing import TypedDict
 
 import polars as pl
@@ -345,3 +345,17 @@ def out_list_of_dicts(sector: str) -> list[dict]:
                          ids=["out_bytes", "out_list_of_dicts"])
 def test_the_remaining_output_shapes_come_back_the_same_in_every_mode(fn, expected):
     assert assert_equivalent(flow(fn, name="p"), FRAME)[fn.__name__].to_list() == expected
+
+
+NULL_OUTPUTS = [(str, pl.String), (bytes, pl.Binary), (date, pl.Date), (datetime, pl.Datetime("us")),
+                (time, pl.Time)]
+
+
+@pytest.mark.parametrize("annotation, dtype", NULL_OUTPUTS, ids=[a.__name__ for a, _ in NULL_OUTPUTS])
+def test_an_all_null_output_keeps_its_declared_dtype_in_every_mode(annotation, dtype):
+    def nothing(sector: str):
+        return None
+
+    nothing.__annotations__["return"] = annotation | None
+    assert assert_equivalent(flow(nothing, name="p"), FRAME)["nothing"].dtype == dtype
+    assert assert_equivalent(flow(nothing, name="p"), FRAME.clear())["nothing"].dtype == dtype
