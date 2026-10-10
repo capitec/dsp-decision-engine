@@ -71,11 +71,11 @@ class Hub:
         self._validate_soon(project_id, room)
 
     def leave(self, project_id: uuid.UUID, client: Client) -> None:
+        # The room stays: a client joining right now is added to this room object once it is caught up.
+        # ponytail: one small Room per project opened on this process; evict idle rooms under their lock if it grows
         room = self.rooms.get(project_id)
         if room is not None:
             room.clients.discard(client)
-            if not room.clients:
-                del self.rooms[project_id]
 
     def pump_soon(self, project_id: uuid.UUID) -> None:
         """Send this project's new versions to its sockets here (coalesced: one fetch serves many calls)."""
