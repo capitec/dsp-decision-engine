@@ -119,7 +119,7 @@ export const UnaryConditionForm: React.FC<UnaryConditionFormProps> = ({
             onChange={(newValues) => onChange({ ...condition, values: newValues } as any)}
             availableParameters={availableParameters}
             label=""
-            placeholder="Type integers and press Enter"
+            placeholder="Type numbers and press Enter"
             onManageParameters={onManageParameters}
             showManageParameters={true}
           />

@@ -101,7 +101,6 @@ def test_isin_integers_save_sorted_and_run(signed_in: Page):
     assert approved(export_document(signed_in, project), {"count": [0, 1, 3, 4]}) == [False, True, True, False]
 
 
-@pytest.mark.xfail(strict=True, reason="the IsIn field truncates 1.5 to 1 without saying so")
 def test_isin_decimal_value_is_not_silently_truncated(signed_in: Page):
     open_doc(signed_in)
     card = unary_rule(signed_in, "isin")

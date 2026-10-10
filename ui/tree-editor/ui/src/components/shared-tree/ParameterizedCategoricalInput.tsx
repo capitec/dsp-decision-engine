@@ -77,7 +77,7 @@ export const ParameterizedCategoricalInput: React.FC<ParameterizedCategoricalInp
   availableParameters = [],
   label,
   showLabel = true,
-  placeholder = "Type integers and press Enter",
+  placeholder = "Type numbers and press Enter",
   disabled = false,
   className = "",
   onManageParameters,
@@ -175,8 +175,8 @@ export const ParameterizedCategoricalInput: React.FC<ParameterizedCategoricalInp
   const handleChipChange = (stringValues: string[]) => {
     // Parse, validate, deduplicate and sort categories
     const categories = stringValues
-      .map(s => parseInt(s, 10))
-      .filter(n => !isNaN(n))
+      .map(s => Number(s))
+      .filter(n => Number.isFinite(n))
       .filter((val, idx, arr) => arr.indexOf(val) === idx) // Remove duplicates
       .sort((a, b) => a - b); // Sort for consistent display
 
@@ -286,10 +286,10 @@ export const ParameterizedCategoricalInput: React.FC<ParameterizedCategoricalInp
                 onChange={handleChipChange}
                 placeholder={placeholder}
                 className="text-sm"
-                validator={(val) => !isNaN(parseInt(val.trim(), 10))}
+                validator={(val) => val.trim() !== '' && Number.isFinite(Number(val.trim()))}
                 formatter={(val) => {
-                  const num = parseInt(val.trim(), 10);
-                  return isNaN(num) ? val : num.toString();
+                  const num = Number(val.trim());
+                  return Number.isFinite(num) ? num.toString() : val;
                 }}
                 disabled={disabled}
               />

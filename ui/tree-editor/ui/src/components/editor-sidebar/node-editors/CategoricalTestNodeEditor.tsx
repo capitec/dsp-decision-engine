@@ -87,7 +87,7 @@ export const CategoricalTestNodeEditor: React.FC<CategoricalTestNodeEditorProps>
                   }}
                   availableParameters={availableParameters}
                   label={`Values (sourceIndex=${getCasesNodeBranchSourceIndex(idx)})`}
-                  placeholder="Type integers and press Enter"
+                  placeholder="Type numbers and press Enter"
                   onManageParameters={() => setParametersDialogOpen(true)}
                   showManageParameters={true}
                 />
