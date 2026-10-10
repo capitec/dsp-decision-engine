@@ -89,8 +89,14 @@ class Hub:
     async def _pump(self, project_id: uuid.UUID, room: Room) -> None:
         while room.dirty:
             room.dirty = False
-            async with room.lock:
-                await self._send_rows(project_id, room)
+            try:
+                async with room.lock:
+                    await self._send_rows(project_id, room)
+            except Exception as e:
+                # No other notification may come for this version, so the pump itself tries again.
+                logger.warning("live fan-out project=%s failed, retrying: %s", project_id, e)
+                room.dirty = True
+                await asyncio.sleep(1)
         self._validate_soon(project_id, room)
 
     async def _send_rows(self, project_id: uuid.UUID, room: Room) -> None:
