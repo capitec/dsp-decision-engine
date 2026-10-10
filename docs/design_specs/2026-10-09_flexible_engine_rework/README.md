@@ -1,7 +1,8 @@
 # Flexible engine rework
 
-Status: proposal, 2026-10-09. Nothing in this folder is built. Read it before starting any of the work it
-describes, and update it as decisions change.
+Status: being implemented on branch `engine/flexible-rework` (not merged), base commit `44232809`
+(`feature/python-api-redesign` after the decikit rename and the integration merge), started 2026-10-10. Read it
+before starting any of the work it describes, and update it as decisions change.
 
 ## What it proposes
 
