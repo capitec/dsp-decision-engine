@@ -5,9 +5,9 @@ and the docstrings (`help(decikit)`, `help(decikit.flow)`, ...) are current.
 `decikit guide` prints this guide.
 
 The decider toolkit builds decision pipelines (credit, pricing, fraud rules, campaigns)
-from plain Python functions. A pipeline's `run` takes a polars frame or one
-record (a dict), interpreted or compiled with numba, and serves over
-HTTP with `decikit serve`.
+from plain Python functions. A pipeline runs over a polars frame or one
+record (a dict), both through `run`, interpreted or compiled with numba,
+and serves over HTTP with `decikit serve`.
 
 ## Mental model
 
