@@ -1,0 +1,632 @@
+{
+ "valid": [],
+ "ui_only_node_fields": [
+  {
+   "type": "int_type",
+   "loc": [
+    "prioritized_flat_rule",
+    "rules",
+    1,
+    "rule",
+    "unary",
+    "condition",
+    ">",
+    "threshold",
+    "int"
+   ],
+   "msg": "Input should be a valid integer",
+   "input": {
+    "param": "hi",
+    "editMode": true
+   }
+  },
+  {
+   "type": "float_type",
+   "loc": [
+    "prioritized_flat_rule",
+    "rules",
+    1,
+    "rule",
+    "unary",
+    "condition",
+    ">",
+    "threshold",
+    "float"
+   ],
+   "msg": "Input should be a valid number",
+   "input": {
+    "param": "hi",
+    "editMode": true
+   }
+  },
+  {
+   "type": "extra_forbidden",
+   "loc": [
+    "prioritized_flat_rule",
+    "rules",
+    1,
+    "rule",
+    "unary",
+    "condition",
+    ">",
+    "threshold",
+    "ParamRef",
+    "editMode"
+   ],
+   "msg": "Extra inputs are not permitted",
+   "input": true
+  }
+ ],
+ "empty_composite": [
+  {
+   "type": "value_error",
+   "loc": [
+    "prioritized_flat_rule",
+    "rules",
+    1,
+    "rule",
+    "composite"
+   ],
+   "msg": "Value error, a composite needs at least one condition",
+   "input": {
+    "type": "composite",
+    "op": "and",
+    "conditions": [],
+    "then": {
+     "type": "leaf",
+     "result_idx": 0
+    }
+   },
+   "ctx": {
+    "error": "a composite needs at least one condition"
+   }
+  }
+ ],
+ "not_with_two_conditions": [
+  {
+   "type": "value_error",
+   "loc": [
+    "prioritized_flat_rule",
+    "rules",
+    0,
+    "rule",
+    "composite"
+   ],
+   "msg": "Value error, NOT operator must have exactly 1 condition",
+   "input": {
+    "type": "composite",
+    "op": "not",
+    "conditions": [
+     {
+      "type": "unary",
+      "feature": "x",
+      "op": ">",
+      "threshold": 1
+     },
+     {
+      "type": "unary",
+      "feature": "x",
+      "op": ">",
+      "threshold": 1
+     }
+    ],
+    "then": {
+     "type": "leaf",
+     "result_idx": 0
+    },
+    "otherwise": null
+   },
+   "ctx": {
+    "error": "NOT operator must have exactly 1 condition"
+   }
+  }
+ ],
+ "between_without_bounds": [
+  {
+   "type": "value_error",
+   "loc": [
+    "prioritized_flat_rule",
+    "rules",
+    0,
+    "rule",
+    "unary",
+    "condition",
+    "between"
+   ],
+   "msg": "Value error, At least one of min or max must be specified",
+   "input": {
+    "type": "unary",
+    "feature": "x",
+    "op": "between"
+   },
+   "ctx": {
+    "error": "At least one of min or max must be specified"
+   }
+  }
+ ],
+ "empty_param_name": [
+  {
+   "type": "int_type",
+   "loc": [
+    "prioritized_flat_rule",
+    "rules",
+    0,
+    "rule",
+    "unary",
+    "condition",
+    ">",
+    "threshold",
+    "int"
+   ],
+   "msg": "Input should be a valid integer",
+   "input": {
+    "param": ""
+   }
+  },
+  {
+   "type": "float_type",
+   "loc": [
+    "prioritized_flat_rule",
+    "rules",
+    0,
+    "rule",
+    "unary",
+    "condition",
+    ">",
+    "threshold",
+    "float"
+   ],
+   "msg": "Input should be a valid number",
+   "input": {
+    "param": ""
+   }
+  },
+  {
+   "type": "value_error",
+   "loc": [
+    "prioritized_flat_rule",
+    "rules",
+    0,
+    "rule",
+    "unary",
+    "condition",
+    ">",
+    "threshold",
+    "ParamRef",
+    "param"
+   ],
+   "msg": "Value error, no parameter chosen: pick a parameter or type its name",
+   "input": "",
+   "ctx": {
+    "error": "no parameter chosen: pick a parameter or type its name"
+   }
+  }
+ ],
+ "bad_op": [
+  {
+   "type": "union_tag_invalid",
+   "loc": [
+    "prioritized_flat_rule",
+    "rules",
+    0,
+    "rule",
+    "unary",
+    "condition"
+   ],
+   "msg": "Input tag '~~' found using 'op' does not match any of the expected tags: '<=', '<', '==', '>', '>=', '!=', 'between', 'isin', 'string_match', 'is_true', 'is_false'",
+   "input": {
+    "type": "unary",
+    "feature": "x",
+    "op": "~~",
+    "threshold": 1
+   },
+   "ctx": {
+    "discriminator": "'op'",
+    "tag": "~~",
+    "expected_tags": "'<=', '<', '==', '>', '>=', '!=', 'between', 'isin', 'string_match', 'is_true', 'is_false'"
+   }
+  }
+ ],
+ "result_idx_out_of_range": [
+  {
+   "loc": [],
+   "msg": "tree node '0.0': result_idx 9 is not a row of the output (2 rows, or -1 for the default)",
+   "type": "build_error"
+  }
+ ],
+ "cases_otherwise_out_of_range": [
+  {
+   "type": "value_error",
+   "loc": [
+    "prioritized_flat_rule",
+    "rules",
+    0,
+    "rule",
+    "cases:ranges"
+   ],
+   "msg": "Value error, branch index 7 is out of range for 2 branch(es)",
+   "input": {
+    "type": "cases",
+    "feature": "x",
+    "op": "ranges",
+    "end_logic": "lower_inclusive",
+    "strict": false,
+    "conditions": [
+     {
+      "when": {
+       "min": null,
+       "max": 0.5
+      },
+      "then": 0
+     }
+    ],
+    "branches": [
+     {
+      "type": "leaf",
+      "result_idx": 0
+     },
+     {
+      "type": "leaf",
+      "result_idx": 0
+     }
+    ],
+    "otherwise": 7
+   },
+   "ctx": {
+    "error": "branch index 7 is out of range for 2 branch(es)"
+   }
+  }
+ ],
+ "nested_composite_bad_threshold": [
+  {
+   "type": "int_type",
+   "loc": [
+    "prioritized_flat_rule",
+    "rules",
+    0,
+    "rule",
+    "composite",
+    "conditions",
+    1,
+    "unary",
+    ">",
+    "threshold",
+    "int"
+   ],
+   "msg": "Input should be a valid integer",
+   "input": {
+    "param": "1bad"
+   }
+  },
+  {
+   "type": "float_type",
+   "loc": [
+    "prioritized_flat_rule",
+    "rules",
+    0,
+    "rule",
+    "composite",
+    "conditions",
+    1,
+    "unary",
+    ">",
+    "threshold",
+    "float"
+   ],
+   "msg": "Input should be a valid number",
+   "input": {
+    "param": "1bad"
+   }
+  },
+  {
+   "type": "value_error",
+   "loc": [
+    "prioritized_flat_rule",
+    "rules",
+    0,
+    "rule",
+    "composite",
+    "conditions",
+    1,
+    "unary",
+    ">",
+    "threshold",
+    "ParamRef",
+    "param"
+   ],
+   "msg": "Value error, param name '1bad' must be a Python identifier not starting with '_'; rename it, e.g. '1bad'",
+   "input": "1bad",
+   "ctx": {
+    "error": "param name '1bad' must be a Python identifier not starting with '_'; rename it, e.g. '1bad'"
+   }
+  }
+ ],
+ "cases_when_missing_patterns": [
+  {
+   "type": "value_error",
+   "loc": [
+    "prioritized_flat_rule",
+    "rules",
+    0,
+    "rule",
+    "cases:string_match",
+    "conditions",
+    0,
+    "when",
+    "function-after[_bounds(), RangeCondition]"
+   ],
+   "msg": "Value error, At least one of min or max must be specified",
+   "input": {},
+   "ctx": {
+    "error": "At least one of min or max must be specified"
+   }
+  },
+  {
+   "type": "missing",
+   "loc": [
+    "prioritized_flat_rule",
+    "rules",
+    0,
+    "rule",
+    "cases:string_match",
+    "conditions",
+    0,
+    "when",
+    "StringMatchCondition",
+    "patterns"
+   ],
+   "msg": "Field required",
+   "input": {}
+  },
+  {
+   "type": "missing",
+   "loc": [
+    "prioritized_flat_rule",
+    "rules",
+    0,
+    "rule",
+    "cases:string_match",
+    "conditions",
+    0,
+    "when",
+    "IsInCondition",
+    "values"
+   ],
+   "msg": "Field required",
+   "input": {}
+  }
+ ],
+ "parameter_not_an_object": [
+  {
+   "type": "model_type",
+   "loc": [
+    "prioritized_flat_rule",
+    "parameters",
+    "p"
+   ],
+   "msg": "Input should be a valid dictionary or instance of ParameterInfo",
+   "input": 5,
+   "ctx": {
+    "class_name": "ParameterInfo"
+   }
+  }
+ ],
+ "output_dtypes_not_a_list": [
+  {
+   "type": "list_type",
+   "loc": [
+    "prioritized_flat_rule",
+    "output",
+    "dtypes",
+    "list[tuple[str, tagged-union[str,...,...]]]"
+   ],
+   "msg": "Input should be a valid list",
+   "input": "A"
+  },
+  {
+   "type": "dict_type",
+   "loc": [
+    "prioritized_flat_rule",
+    "output",
+    "dtypes",
+    "dict[str,tagged-union[str,...,...]]"
+   ],
+   "msg": "Input should be a valid dictionary",
+   "input": "A"
+  }
+ ],
+ "input_schema_entry_malformed": [
+  {
+   "type": "missing",
+   "loc": [
+    "prioritized_flat_rule",
+    "input_schema",
+    "list[tuple[str, tagged-union[str,...,...]]]",
+    0,
+    1
+   ],
+   "msg": "Field required",
+   "input": [
+    "x"
+   ]
+  },
+  {
+   "type": "dict_type",
+   "loc": [
+    "prioritized_flat_rule",
+    "input_schema",
+    "dict[str,tagged-union[str,...,...]]"
+   ],
+   "msg": "Input should be a valid dictionary",
+   "input": [
+    [
+     "x"
+    ]
+   ]
+  }
+ ],
+ "empty_feature_name": [
+  {
+   "type": "model_type",
+   "loc": [
+    "prioritized_flat_rule",
+    "rules",
+    0,
+    "rule",
+    "unary",
+    "condition",
+    ">",
+    "feature",
+    "function-after[_parse(), ComputedFeature]"
+   ],
+   "msg": "Input should be a valid dictionary or instance of ComputedFeature",
+   "input": "",
+   "ctx": {
+    "class_name": "ComputedFeature"
+   }
+  },
+  {
+   "type": "string_too_short",
+   "loc": [
+    "prioritized_flat_rule",
+    "rules",
+    0,
+    "rule",
+    "unary",
+    "condition",
+    ">",
+    "feature",
+    "constrained-str"
+   ],
+   "msg": "String should have at least 1 character",
+   "input": "",
+   "ctx": {
+    "min_length": 1
+   }
+  }
+ ],
+ "rules_sharing_a_name_in_all_mode": [
+  {
+   "type": "value_error",
+   "loc": [
+    "prioritized_flat_rule"
+   ],
+   "msg": "Value error, rules ['Same'] share a name; in mode 'all' each rule's output columns are prefixed with its name, so give every rule its own",
+   "input": {
+    "name": "output",
+    "mode": "all",
+    "rules": [
+     {
+      "root": "0",
+      "name": "Same"
+     },
+     {
+      "root": "1",
+      "name": "Same"
+     }
+    ],
+    "nodes": {
+     "0.0": {
+      "data": {
+       "type": "leaf",
+       "id": null,
+       "result_idx": 0
+      },
+      "children": []
+     },
+     "0": {
+      "data": {
+       "type": "unary",
+       "id": null,
+       "condition": {
+        "type": "unary",
+        "feature": "x",
+        "threshold": 1,
+        "op": ">"
+       }
+      },
+      "children": [
+       "0.0",
+       null
+      ]
+     },
+     "1.0": {
+      "data": {
+       "type": "leaf",
+       "id": null,
+       "result_idx": 0
+      },
+      "children": []
+     },
+     "1": {
+      "data": {
+       "type": "unary",
+       "id": null,
+       "condition": {
+        "type": "unary",
+        "feature": "x",
+        "threshold": 1,
+        "op": ">"
+       }
+      },
+      "children": [
+       "1.0",
+       null
+      ]
+     }
+    },
+    "output": {
+     "data": [
+      {
+       "Action": "Alert",
+       "Severity": 1,
+       "Tier": "gold"
+      },
+      {
+       "Action": "Block",
+       "Severity": 2,
+       "Tier": "silver"
+      }
+     ],
+     "default": {
+      "Action": "Allow",
+      "Severity": 0,
+      "Tier": "silver"
+     },
+     "dtypes": [
+      [
+       "Action",
+       "string"
+      ],
+      [
+       "Severity",
+       "Int64"
+      ],
+      [
+       "Tier",
+       {
+        "type": "Custom",
+        "type_id": "tier"
+       }
+      ]
+     ],
+     "type_defs": {
+      "tier": {
+       "name": "tier",
+       "type": "categorical",
+       "definition": {
+        "categories": [
+         "gold",
+         "silver"
+        ]
+       }
+      }
+     }
+    }
+   },
+   "ctx": {
+    "error": "rules ['Same'] share a name; in mode 'all' each rule's output columns are prefixed with its name, so give every rule its own"
+   }
+  }
+ ]
+}
