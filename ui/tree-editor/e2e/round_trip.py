@@ -24,19 +24,13 @@ class RoundTrip:
 
 
 SLOW = {"fraud-shadow", "generated-200"}
-# Trees that cannot make the trip at all, so every check of them fails for this reason.
-SINGLE_FLAT_RULE = ("the editor has no project type for a one-rule `flat_rule` document decikit runs (400: Unsupported "
-                    "document format 'flat_rule'): needs a decision: convert to a one-rule prioritized set or refuse "
-                    "clearly")
-CANNOT_TRIP = {tree.id: SINGLE_FLAT_RULE for tree in TREES if tree.document.get("type") == "flat_rule"}
 # Not run: opening them takes the browser past the 3 GB the e2e runs are capped at, which kills the whole run.
 TOO_BIG = {tree_id: "the flat-rule editor renders all 521 rules at once and runs out of memory (3 GB) opening them"
            for tree_id in ("fraud-live", "generated-521")}
 
 
 def cases(known: dict[str, str], trees: list[RealTree] = TREES) -> list:
-    """Every tree (or `trees`) as a test case, expected to fail where `known` (or CANNOT_TRIP) says why."""
-    known = {**CANNOT_TRIP, **known}
+    """Every tree (or `trees`) as a test case, expected to fail where `known` says why."""
     return [pytest.param(tree, id=tree.id, marks=[
         *([pytest.mark.xfail(run=False, reason=TOO_BIG[tree.id])] if tree.id in TOO_BIG else []),
         *([pytest.mark.xfail(strict=True, reason=known[tree.id])] if tree.id in known else []),
@@ -49,7 +43,9 @@ _done: dict[str, RoundTrip | AssertionError] = {}
 
 
 def expected_items(tree: RealTree) -> int:
-    return len(tree.document["rules"] if tree.flat else tree.document["nodes"])
+    if not tree.flat:
+        return len(tree.document["nodes"])
+    return len(tree.document.get("rules") or [tree.document["rule"]])  # a `flat_rule` holds one
 
 
 def round_trip(page: Page, tree: RealTree) -> RoundTrip:

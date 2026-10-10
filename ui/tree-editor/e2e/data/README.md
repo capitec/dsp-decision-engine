@@ -74,6 +74,8 @@ rest exactly (as sorted-key JSON lines, so a failure shows the differing lines):
 | normalised | why |
 |---|---|
 | `metadata.project_id`, `name`, `project_type`, `exported_at`, `decikit_version` | the export stamps them, and fills in `name` with the project's name when the document has none; `test_real_tree_export_keeps_the_documents_own_name` checks a document's own name on its own |
+| a `flat_rule` as `prioritized_flat_rule`, `mode: first_match`, `rules: [its rule]` | the import holds one rule that way (the flat-rule editor edits rule sets); decikit runs both alike |
+| an unnamed rule in a `first_match` set named `Rule <n>` | the flat-rule editor names every rule; only `all` mode names output columns after rules, where the rename is a known failure (`test_unnamed_rules_in_all_mode_keep_their_output_columns`) |
 | `id` values that are UUIDs | the flat-rule editor gives every node without an id a random one. decikit names unnamed nodes by path (`"0.1"`), so a `path_output`/`trace_output` over unnamed flat-rule nodes would change; no document here relies on that |
 | keys whose value is `null` | decikit reads `null` and absent alike |
 | numbers as floats | the browser writes `720.0` as `720`; the param schemas (`parameters()`) are compared separately in the run test |
