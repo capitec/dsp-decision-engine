@@ -246,8 +246,6 @@ export type UnaryCondition =
       match_type: 'exact' | 'starts_with' | 'contains' | 'ends_with' | 'regex';
       case_sensitive?: boolean;
     })
-  | ({ op: 'is_null' } & { feature: string })
-  | ({ op: 'is_not_null' } & { feature: string })
   | ({ op: 'is_true' } & { feature: string })
   | ({ op: 'is_false' } & { feature: string });
 

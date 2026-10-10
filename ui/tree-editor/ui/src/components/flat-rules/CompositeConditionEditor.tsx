@@ -95,7 +95,7 @@ export const CompositeConditionEditor: React.FC<CompositeConditionEditorProps> =
                       updatedCond = { type: 'unary', op: value, feature, values: [] };
                     } else if (value === 'string_match') {
                       updatedCond = { type: 'unary', op: value, feature, patterns: [''], match_type: 'exact', case_sensitive: true, trim_whitespace: false };
-                    } else if (value === 'is_null' || value === 'is_not_null' || value === 'is_true' || value === 'is_false') {
+                    } else if (value === 'is_true' || value === 'is_false') {
                       updatedCond = { type: 'unary', op: value, feature };
                     }
                   }
@@ -117,8 +117,6 @@ export const CompositeConditionEditor: React.FC<CompositeConditionEditorProps> =
                   <SelectItem value="between">Between</SelectItem>
                   <SelectItem value="isin">IsIn</SelectItem>
                   <SelectItem value="string_match">String Match</SelectItem>
-                  <SelectItem value="is_null">Is Null</SelectItem>
-                  <SelectItem value="is_not_null">Is Not Null</SelectItem>
                   <SelectItem value="is_true">Is True</SelectItem>
                   <SelectItem value="is_false">Is False</SelectItem>
                   <SelectItem value="and">AND</SelectItem>

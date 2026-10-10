@@ -412,10 +412,6 @@ const getUnaryOptions = (nodeData: any, variables: VariableMap): EdgeOption[] =>
     } else {
       label = `${formatValue(patterns)}${caseIcon}`;
     }
-  } else if (op === "is_null") {
-    label = "is null";
-  } else if (op === "is_not_null") {
-    label = "not null";
   } else if (op === "is_true") {
     label = "is true";
   } else if (op === "is_false") {

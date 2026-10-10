@@ -27,7 +27,6 @@ interface UnaryConditionFormProps {
  * - Range: between
  * - Membership: isin
  * - String: string_match
- * - Null checks: is_null, is_not_null
  * - Boolean checks: is_true, is_false
  */
 export const UnaryConditionForm: React.FC<UnaryConditionFormProps> = ({

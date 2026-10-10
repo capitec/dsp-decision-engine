@@ -387,7 +387,7 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
                     newCondition = { type: 'unary', op: newOp, feature: currentFeature, values: [] };
                   } else if (newOp === 'string_match') {
                     newCondition = { type: 'unary', op: newOp, feature: currentFeature, patterns: [''], match_type: 'exact', case_sensitive: true, trim_whitespace: false };
-                  } else if (newOp === 'is_null' || newOp === 'is_not_null' || newOp === 'is_true' || newOp === 'is_false') {
+                  } else if (newOp === 'is_true' || newOp === 'is_false') {
                     newCondition = { type: 'unary', op: newOp, feature: currentFeature };
                   }
 

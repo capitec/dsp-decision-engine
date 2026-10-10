@@ -56,7 +56,7 @@ export const UnaryNodeEditor: React.FC<UnaryNodeEditorProps> = ({ node }) => {
                 newCondition = { op: newOp, feature: condition.feature || '', values: [] };
               } else if (newOp === 'string_match') {
                 newCondition = { op: newOp, feature: condition.feature || '', patterns: [''], match_type: 'exact', case_sensitive: true, trim_whitespace: false };
-              } else if (newOp === 'is_null' || newOp === 'is_not_null' || newOp === 'is_true' || newOp === 'is_false') {
+              } else if (newOp === 'is_true' || newOp === 'is_false') {
                 newCondition = { op: newOp, feature: condition.feature || '' };
               }
 
