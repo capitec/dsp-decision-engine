@@ -30,7 +30,10 @@ class Kernel:
     without params need none), and stores the versions it keeps in `values`.
     Values only used inside the kernel are never stored. A version declared
     `T | None` also stores its validity mask in `valid`. If numba can't
-    compile the calls together, they run one by one in Python from then on.
+    compile the calls together, they run one by one in Python from then on,
+    as one `Fallback` each with the reason `"split at launch: <error>"`;
+    `on_split`, when set, is called with those fallbacks first and may raise
+    to refuse the split.
 
     Example::
 
@@ -39,14 +42,17 @@ class Kernel:
         unit.run(values, {}, bundles, n)
     """
 
-    __slots__ = ("calls", "fn", "reads", "optional", "ragged", "sinks", "writes", "_masked", "_layout",
-                 "_tables", "_python", "_trace", "_trace_fn")
+    __slots__ = ("calls", "fn", "reads", "optional", "ragged", "sinks", "writes", "declared", "on_split",
+                 "_masked", "_layout", "_tables", "_python", "_trace", "_trace_fn")
     # Whether a kernel numba can't build runs its calls one by one instead.
     splits = True
 
     def __init__(self, calls, fn, reads, optional, writes, masked, layout, choices, ragged=(), sinks=(),
-                 trace=None):
+                 trace=None, declared=()):
         self.calls: tuple[Call, ...] = calls
+        # Per call, whether `@allow_fallback` accepts it running in Python.
+        self.declared: tuple[bool, ...] = declared or (False,) * len(calls)
+        self.on_split = None
         self.fn = fn
         self.reads: tuple[NodeVersion, ...] = reads
         self.optional: tuple[NodeVersion, ...] = optional
@@ -106,8 +112,13 @@ class Kernel:
                 raise
             # Each call compiled alone, but not together (a value numba can't
             # type only reaches it here), so run them one by one in Python.
-            reason = f"{type(e).__name__}: {e}"
-            self._python = tuple(Fallback(c, getattr(c.node.fn, "py_func", c.node.fn), reason) for c in self.calls)
+            reason = f"split at launch: {type(e).__name__}: {e}"
+            python = tuple(Fallback(c, getattr(c.node.fn, "py_func", c.node.fn), reason, d)
+                           for c, d in zip(self.calls, self.declared))
+            if self.on_split is not None:
+                # Before the split: a refusal leaves the kernel whole, so the next launch is refused too.
+                self.on_split(python)
+            self._python = python
             return self.run(values, valid, bundles, n)
         for (v, _), out, table in zip(self.writes, outs, self._tables):
             values[v.id] = out if table is None else coded(out, table, valid, v.id)
@@ -476,5 +487,5 @@ def _kernel(compiled: list, keep) -> Kernel:
     # exactly `n * len(calls)` STEP events; refs are the plan-global call refs.
     trace = (tuple(specs), tuple(outputs), (), tuple(c.id + 1 for c in calls), 1, True)
     return Kernel(calls, fn, tuple(lay.reads), tuple(lay.optional), tuple(writes), tuple(masked), tuple(lay.layout),
-                  tuple(choices), tuple(lay.ragged), tuple(lay.sinks), trace)
+                  tuple(choices), tuple(lay.ragged), tuple(lay.sinks), trace, tuple(d for *_, d in compiled))
 

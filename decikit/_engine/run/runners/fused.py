@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from typing import Iterable, Iterator
 
-from decikit._engine.compile import FALLBACK_ERRORS, ArmOutOfRange, compile_packed
+from decikit._engine.compile import FALLBACK_ERRORS, ArmOutOfRange
 from decikit._engine.run.params import RunParams
 from decikit._engine.run.runners.base import Checkpoint
 from decikit._engine.run.runners.interpreted import _Scope
-from decikit._engine.run.runners.stepped import Compiled, SteppedRunner, _external
+from decikit._engine.run.runners.stepped import Compiled, SteppedRunner
 from decikit._engine.run.state import State, all_set
-from decikit._engine.wiring.plan import Branch, Call, Loop, Plan, Sequence
+from decikit._engine.wiring.plan import Branch, Call, Loop, Sequence
 
 
 class FusedRunner(SteppedRunner):
@@ -22,6 +22,10 @@ class FusedRunner(SteppedRunner):
     kernels of their own, and frame steps, other branches and loops run in
     Python, as in stepped mode.
 
+    Unlike stepped mode, every step that runs outside a shared kernel warns
+    once with a `FallbackWarning`, a kernel that splits at its first launch
+    included, unless it is `@allow_fallback`.
+
     Example::
 
         exe = Engine().bind(pipeline, mode="fused")
@@ -29,12 +33,7 @@ class FusedRunner(SteppedRunner):
     """
 
     fuse = True
-
-    def _build(self, plan: Plan, lazy: bool) -> Compiled:
-        compiled = super()._build(plan, lazy)
-        packed = compile_packed(plan, lazy, compiled.python)
-        compiled.reads.update((id(k), _external(k)) for k in packed.values())
-        return compiled._replace(packed=packed)
+    loud = True
 
     def _sequence(self, seq: Sequence, state: State, params: RunParams, scope: _Scope) -> Iterator[Checkpoint]:
         units = scope.ctx.compiled.units

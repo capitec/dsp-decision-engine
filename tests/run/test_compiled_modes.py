@@ -1,4 +1,6 @@
 """Stepped and fused modes: one answer with interpreted, one kernel for run and score, no recompiles."""
+from contextlib import nullcontext
+
 import polars as pl
 import pytest
 
@@ -138,9 +140,10 @@ def test_a_step_reading_several_string_inputs_runs_in_python(mode):
         return 1.0 if a == b or a == which else 0.0
 
     exe = Engine().bind(flow(same), mode=mode)
-    with pytest.warns(UserWarning, match="same runs in Python, row by row.*as str"):
+    with pytest.warns(UserWarning, match="same runs in Python, row by row.*as str") if mode == "fused" else nullcontext():
         out = exe.run(pl.DataFrame({"a": ["x", "y"], "b": ["y", "y"]}))
     assert out["same"].to_list() == [0.0, 1.0]
+    assert "as str" in exe.fallbacks()["same"]
 
 
 @pytest.mark.parametrize("mode", ["stepped", "fused"])

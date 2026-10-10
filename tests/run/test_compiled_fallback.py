@@ -3,6 +3,7 @@ import ctypes
 import datetime as dt
 import gc
 import warnings
+from contextlib import nullcontext
 
 import numpy as np
 import polars as pl
@@ -19,6 +20,11 @@ from decikit._engine.run.representations import spans
 from decikit.lab.testing import assert_equivalent
 
 COMPILED = ("stepped", "fused")
+
+
+def warned_in_fused(mode, match):
+    # Fused warns about a step outside a shared kernel; stepped only lists it in `fallbacks()`.
+    return pytest.warns(FallbackWarning, match=match) if mode == "fused" else nullcontext()
 
 
 def half(x: float) -> float:
@@ -163,9 +169,10 @@ def test_scalar_string_steps_receive_semantic_strings(mode):
 @pytest.mark.parametrize("mode", COMPILED)
 def test_scalar_semantic_bytes_fall_back_until_adapter_exists(mode):
     exe = Engine().bind(flow(is_binary_priority, name="p"), mode=mode)
-    with pytest.warns(UserWarning, match="reads 'value' as bytes: numba can't type a scalar bytes value"):
+    with warned_in_fused(mode, "reads 'value' as bytes: numba can't type a scalar bytes value"):
         out = exe.run(pl.DataFrame({"value": [b"priority", b"other"]}))
     assert out["is_binary_priority"].to_list() == [True, False]
+    assert "reads 'value' as bytes" in exe.fallbacks()["p/is_binary_priority"]
 
 
 def label(x: float) -> str:
@@ -179,14 +186,16 @@ def echo(value: Text | None) -> Text | None:
 @pytest.mark.parametrize("mode", COMPILED)
 def test_str_and_text_outputs_fall_back_and_are_written_as_strings(mode):
     exe = Engine().bind(flow(label, name="p"), mode=mode)
-    with pytest.warns(FallbackWarning, match="writes 'label' as str, which no kernel stores"):
+    with warned_in_fused(mode, "writes 'label' as str, which no kernel stores"):
         out = exe.run(pl.DataFrame({"x": [2.0, 0.5]}))
     assert out["label"].to_list() == ["big", "small"]
+    assert exe.fallbacks()["p/label"] == "writes 'label' as str, which no kernel stores"
 
     exe = Engine().bind(flow(echo, name="p"), mode=mode)
-    with pytest.warns(FallbackWarning, match="writes 'echo' as str, which no kernel stores"):
+    with warned_in_fused(mode, "writes 'echo' as str, which no kernel stores"):
         out = exe.run(pl.DataFrame({"value": ["walk-in", None]}))
     assert out["echo"].to_list() == ["walk-in", None]
+    assert exe.fallbacks()["p/echo"] == "writes 'echo' as str, which no kernel stores"
     assert exe.score({"value": "broker"})["echo"] == "broker"
 
 
@@ -203,9 +212,9 @@ def test_a_text_input_is_read_as_a_span(mode):
 
 
 @pytest.mark.parametrize("mode", COMPILED)
-def test_list_input_fallback_warns_and_is_public(mode):
+def test_list_input_fallback_is_public_and_warns_in_fused(mode):
     exe = Engine().bind(flow(order_total, name="order"), mode=mode)
-    with pytest.warns(UserWarning, match="order/order_total runs in Python, row by row"):
+    with warned_in_fused(mode, "order/order_total runs in Python, row by row"):
         assert exe.score({"items": [{"price": 2.0}, {"price": 3.0}]})["order_total"] == 5.0
     assert "reads 'items' as list[dict], which no kernel takes" in exe.fallbacks()["order/order_total"]
 
@@ -349,9 +358,10 @@ def mixed_list(x: float) -> list[float]:
 @pytest.mark.parametrize("mode", COMPILED)
 def test_a_numba_lowering_assert_falls_back_with_a_reason(mode):
     exe = Engine().bind(flow(mixed_list, name="p"), mode=mode)
-    with pytest.warns(FallbackWarning, match="p/mixed_list runs in Python, row by row: AssertionError"):
+    with warned_in_fused(mode, "p/mixed_list runs in Python, row by row: AssertionError"):
         out = exe.run(pl.DataFrame({"x": [2.0, 0.5]}))
     assert out["mixed_list"].to_list() == [[1.0, 2.0], [1.5]]
+    assert exe.fallbacks()["p/mixed_list"].startswith("AssertionError")
 
 
 def mixed_records(x: float) -> list[dict]:
@@ -361,8 +371,9 @@ def mixed_records(x: float) -> list[dict]:
 @pytest.mark.parametrize("mode", COMPILED)
 def test_a_numba_boxing_type_error_falls_back_with_a_reason(mode):
     exe = Engine().bind(flow(mixed_records, name="p"), mode=mode)
-    with pytest.warns(FallbackWarning, match="p/mixed_records runs in Python, row by row: TypeError"):
+    with warned_in_fused(mode, "p/mixed_records runs in Python, row by row: TypeError"):
         assert exe.score({"x": 1.5})["mixed_records"] == [{"n": 1, "v": "x"}, {"n": 2, "v": 1.5}]
+    assert exe.fallbacks()["p/mixed_records"].startswith("TypeError")
 
 
 @allow_fallback
