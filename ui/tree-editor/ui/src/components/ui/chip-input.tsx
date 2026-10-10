@@ -166,6 +166,7 @@ export const ChipInput: React.FC<ChipInputProps> = ({
               <span>{value}</span>
               {!disabled && (
                 <X
+                  data-testid="chip-remove"
                   className="h-3 w-3 cursor-pointer hover:text-destructive"
                   onClick={(e) => {
                     e.stopPropagation();
