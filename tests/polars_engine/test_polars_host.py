@@ -5,7 +5,7 @@ import polars as pl
 import pytest
 from polars.testing import assert_frame_equal
 
-from decikit import FusedEngine, PolarsEngine, branch, flow, frame_step, param, step
+from decikit import FusedEngine, PolarsEngine, branch, each, flow, frame_step, missing_as, param, step
 from decikit.exceptions import EngineError, ParamsError
 
 
@@ -241,6 +241,17 @@ def test_untyped_dict_output_is_refused_with_what_to_annotate():
 
     with pytest.raises(EngineError, match="'details', written by p/details as dict.*TypedDict"):
         PolarsEngine().bind(flow(details, name="p")).run(DF.lazy())
+
+
+def test_each_output_is_refused_without_asking_to_annotate_it():
+    def heavy(weight: float = missing_as(0.0)) -> bool:
+        return weight > 20.0
+
+    pipe = flow(each("items", flow(heavy, name="item"), name="items"), name="order")
+    df = pl.DataFrame({"items": [[{"weight": 1.0}, {"weight": 30.0}], []]})
+    with pytest.raises(EngineError, match="'items', the list order/items gathers with each, has no dtype") as e:
+        PolarsEngine().bind(pipe).run(df.lazy())
+    assert "Annotate" not in str(e.value)
 
 
 def test_untyped_value_read_inside_its_segment_needs_no_dtype():
