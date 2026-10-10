@@ -63,7 +63,7 @@ Prints the getting-started guide that ships inside the installed package (`decik
 
 ```text
 $ decikit guide | head -3
-# decikit: getting started
+# Decider toolkit: getting started
 
 Don't read the repo's `docs/` folder: it describes an older version. This guide
 ```
