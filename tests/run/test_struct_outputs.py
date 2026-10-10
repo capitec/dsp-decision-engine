@@ -6,7 +6,7 @@ from typing import TypedDict
 import polars as pl
 import pytest
 
-from decikit import Engine, flow, loop, step
+from decikit import Engine, allow_fallback, branch, flow, loop, step
 from decikit.ops import Columnar, Struct
 from decikit.lab.testing import assert_equivalent
 
@@ -77,6 +77,21 @@ def test_a_struct_a_later_step_reads_splits_the_kernel_and_agrees_across_modes()
                             pl.DataFrame({"rate": [0.1, 0.2], "code": [1, 2]}))
     assert out["reads_offer"].to_list() == [2.0, 4.0]
     assert out["offer"].to_list() == [{"rate": 0.1, "code": 1}, {"rate": 0.2, "code": 2}]
+
+
+def positive(rate: float) -> bool:
+    return rate > 0.0
+
+
+@allow_fallback
+def offer_rate(offer: dict | None) -> float:
+    return offer["rate"] if offer else -1.0
+
+
+def test_a_struct_a_branch_leaves_null_on_some_rows_is_read_by_field_in_every_mode():
+    pipeline = flow(branch(positive, best_tuple, modifies=["offer"], name="priced"), offer_rate, name="order")
+    out = assert_equivalent(pipeline, pl.DataFrame({"rate": [0.1, -0.2], "code": [1, 2]}))
+    assert out["offer_rate"].to_list() == [0.1, -1.0]
 
 
 def test_a_struct_can_be_a_loop_carry_and_packs_into_one_kernel():
