@@ -190,7 +190,7 @@ export const UnaryConditionForm: React.FC<UnaryConditionFormProps> = ({
               value={(condition as any).match_type || 'exact'}
               onValueChange={(value) => onChange({ ...condition, match_type: value } as any)}
             >
-              <SelectTrigger className="w-32 h-8">
+              <SelectTrigger className="w-32 h-8" data-testid="match-type">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
