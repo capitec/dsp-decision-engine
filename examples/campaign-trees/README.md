@@ -170,7 +170,7 @@ The pre-assessment prices candidate loans from two tables that are table params 
 `credit_core`'s credit life table), each with a version param beside it. Their defaults are those rows, so `params.json` does not
 repeat them; a params document may replace either. The lookups are `loan_granting`'s `RateCardTable` and `CreditLifeTable`, which
 index a table once per params bundle. The step name and every params path that existed before are unchanged. A diff of two builds
-compares the 63 360 rate card rows, which takes about two seconds.
+compares the 63 360 rate card rows column by column, which takes about a tenth of a second.
 
 ## Edit a tree
 
