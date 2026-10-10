@@ -273,3 +273,26 @@ def _orders_disagree(docs, at):
     common = set(keys[0]) & set(keys[1]) & set(keys[2])
     base, mine, theirs = ([k for k in ks if k in common] for ks in keys)
     return base != mine != theirs != base
+
+
+def rebase_orders(mine, base, current):
+    """`mine` with each order op that kept the relative order of base's keys (it only placed new keys) rewritten
+    onto the order in `current`, so merging it does not undo a reorder made since `base`."""
+    rebased = []
+    for op in mine:
+        if op.get("op") == "order":
+            at = _split(op["path"])
+            try:
+                old, now = _keys(at, _walk(base, at)), _keys(at, _walk(current, at))
+            except _Dropped:
+                old = now = None
+            given = op["value"]
+            if old is not None and now is not None and _kept_order(old, given):
+                op = {**op, "value": reconcile(given, now)}
+        rebased.append(op)
+    return rebased
+
+
+def _kept_order(old, new):
+    old_set, new_set = set(old), set(new)
+    return [k for k in new if k in old_set] == [k for k in old if k in new_set]
