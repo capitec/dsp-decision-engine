@@ -14,6 +14,14 @@ Regenerate the UI's API client against the running backend with `./generate-tsx-
 
 Every project has a `version` that each save of its document bumps (a rename or move leaves it). The editors send the version they loaded as `base_version` when they save; if someone else saved first, the server answers 409 (`detail.current_version`) and the editor keeps the edits and tells the user to reload. An API caller that omits `base_version` still overwrites.
 
+Every document save is also logged as a version in `project_ops` (the ops that made it) and announced on the Postgres
+channel `project_ops`. With `DSP_LIVE_COLLAB=true` the flat-rule editor edits live over `WS
+/api/v1/projects/{id}/live`: it pushes each edit about 150 ms after typing pauses, every open editor receives every
+version in order, two edits to different fields are both kept, the last writer wins on the same field, and an edit
+inside a rule someone else changed or deleted is discarded and its author told. A header badge shows Live or
+Reconnecting...; Save waits until the server has every edit. READ access receives, WRITE sends. A REST save reaches open
+editors as one whole-document replace. The node editor still saves over REST. The log is never trimmed yet.
+
 ## Tests
 
 Unit tests:
@@ -60,6 +68,10 @@ cd ../e2e && ./stack.sh up            # Postgres on 55432, backend and UI on htt
 `E2E_PORT`, `E2E_PG_PORT`, `E2E_RUNTIME=docker` and `E2E_SERVE_PORT` (the first `decikit serve` port, 8650) let
 stacks run side by side; temp files and browser profiles go to `E2E_TMPDIR` (`/var/tmp/dtmp-ui-e2e`), not `/tmp`.
 The team tests insert their teams with `psql` in the stack's container and skip without it.
+
+`E2E_NODES=2` starts a second backend on `E2E_PORT+1` (same Postgres, logins shared through the `persisted-cache` provider), `DSP_LIVE_COLLAB=true`
+turns live editing on, and `./stack.sh restart` restarts the backends but keeps Postgres. `test_live_collab.py` runs only
+on such a stack (`E2E_NODES=2 DSP_LIVE_COLLAB=true ./stack.sh up`); the rest of the suite expects live editing off.
 
 With docker compose, `docker compose --profile e2e run --rm e2e` runs the whole suite against the dev stack;
 `-e PYTEST_ADDOPTS="-m smoke"` picks a subset. The suite was run under podman with `stack.sh`; the compose route is
