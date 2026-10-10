@@ -8,6 +8,7 @@ from seed import create_project, get_project
 
 
 def open_projects(page: Page) -> None:
+    """Go to the project list and wait until it has loaded."""
     page.goto("/projects")
     expect(page.get_by_role("heading", level=1, name="All Projects")).to_be_visible()
     expect(page.get_by_text("Loading projects...")).to_be_hidden()
@@ -19,6 +20,7 @@ def toast(page: Page, text: str) -> Locator:
 
 
 def project_card(page: Page, name: str) -> Locator:
+    """The grid card of the project called exactly `name`."""
     return page.get_by_test_id("project-card").filter(has=page.get_by_text(name, exact=True))
 
 
@@ -28,7 +30,8 @@ def project_action(page: Page, name: str, item: str) -> None:
     page.get_by_role("menuitem", name=item, exact=True).click()
 
 
-def open_project(page: Page, name: str) -> None:
+def open_from_list(page: Page, name: str) -> None:
+    """Press Open Project on the card of the project `name`."""
     project_card(page, name).get_by_role("button", name="Open Project").click()
 
 
@@ -44,6 +47,7 @@ def rename_project(page: Page, name: str, new_name: str, description: str | None
 
 
 def delete_project(page: Page, name: str) -> None:
+    """Delete the project `name` from its card menu and confirm."""
     project_action(page, name, "Delete")
     page.get_by_role("alertdialog").get_by_role("button", name="Delete Project").click()
 
@@ -62,6 +66,7 @@ def folder_action(page: Page, name: str, item: str) -> None:
 
 
 def expand_folder(page: Page, name: str) -> None:
+    """Show the subfolders of the folder `name` in the sidebar."""
     folder_row(page, name).get_by_label("Expand folder").click()
 
 
@@ -72,6 +77,7 @@ def select_folder(page: Page, name: str) -> None:
 
 
 def select_all_projects(page: Page) -> None:
+    """Leave any folder: the list shows every project."""
     page.get_by_text("All Projects", exact=True).first.click()
     expect(page.get_by_role("heading", level=1, name="All Projects")).to_be_visible()
 
@@ -159,6 +165,7 @@ def first_held(page: Page, held: list) -> Route:
 
 
 def press_save(page: Page) -> None:
+    """Press the editor's Save button without waiting for the outcome."""
     page.get_by_role("button", name="Save", exact=True).click()
 
 

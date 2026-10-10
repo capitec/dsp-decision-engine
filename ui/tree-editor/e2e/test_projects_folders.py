@@ -12,7 +12,7 @@ from platform_ui import (
     delete_project,
     first_held,
     folder_row,
-    open_project,
+    open_from_list,
     open_projects,
     project_action,
     project_card,
@@ -100,7 +100,7 @@ def test_opening_a_flat_rule_project_from_the_list_shows_its_editor(signed_in: P
     create_project(signed_in, "Opened", flat_document())
     open_projects(signed_in)
 
-    open_project(signed_in, "Opened")
+    open_from_list(signed_in, "Opened")
 
     expect(signed_in).to_have_url(re.compile(r"/flat-rules/"))
     expect(signed_in.get_by_role("button", name="Add Rule")).to_be_visible()
