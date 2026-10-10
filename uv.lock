@@ -751,7 +751,7 @@ wheels = [
 ]
 
 [[package]]
-name = "decider"
+name = "decikit"
 source = { editable = "." }
 dependencies = [
     { name = "click" },

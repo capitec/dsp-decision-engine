@@ -6,10 +6,10 @@ from typing import TypedDict
 import polars as pl
 import pytest
 
-from decider import Engine, flow, optimise, param, step
-from decider.ops import Columnar, Struct
-from decider.exceptions import WiringError
-from decider.lab.testing import assert_equivalent
+from decikit import Engine, flow, optimise, param, step
+from decikit.ops import Columnar, Struct
+from decikit.exceptions import WiringError
+from decikit.lab.testing import assert_equivalent
 
 MODES = ("interpreted", "stepped", "fused")
 
@@ -177,3 +177,9 @@ def test_a_record_carries_through_a_tie_to_the_earlier_candidate():
     out = assert_equivalent(record_pipeline(), frame)
     assert out["best_index"].to_list() == [3]
     assert out["record"].to_list() == [{"total": 4.0, "weight": 2.0}]
+
+
+def test_a_record_optimise_compiles_without_a_fallback():
+    exe = Engine(strict_compile=True).bind(record_pipeline(), mode="fused")
+    assert exe.fallbacks() == {}
+    assert exe.score({"items": [{"price": 2.0, "weight": 1.0}]})["record"] == {"total": 2.0, "weight": 1.0}

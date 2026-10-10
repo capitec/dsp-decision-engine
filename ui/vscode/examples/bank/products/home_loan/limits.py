@@ -1,5 +1,5 @@
 """Home loan: secured, 60 to 360 months, loan-to-value limits. Limits: product caps and the offer."""
-from decider import flow, param, step
+from decikit import flow, param, step
 
 
 def hl_product_cap(grade: int, cap: float = param(5000000.0)) -> float:

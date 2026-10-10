@@ -1,7 +1,7 @@
 # Local dev with live reload:   docker compose up            (UI on :3000, API on :8000)
 # End-to-end tests:             docker compose --profile e2e run --rm e2e
 #
-# The repo root is mounted, so edits to decider/, backend/ and ui/ reload without a rebuild.
+# The repo root is mounted, so edits to decikit/, backend/ and ui/ reload without a rebuild.
 
 x-repo: &repo
   volumes:
@@ -34,8 +34,8 @@ services:
       UV_LINK_MODE: copy
     command: >
       sh -c "uv run --no-project --with-requirements requirements.txt --with-editable /repo
-      sh -c 'alembic upgrade head && uvicorn dsp_decider.asgi:app --host 0.0.0.0 --port 8000
-      --reload --reload-dir /repo/ui/tree-editor/backend --reload-dir /repo/decider'"
+      sh -c 'alembic upgrade head && uvicorn dsp_decikit.asgi:app --host 0.0.0.0 --port 8000
+      --reload --reload-dir /repo/ui/tree-editor/backend --reload-dir /repo/decikit'"
     ports:
       - "8000:8000"
     depends_on:

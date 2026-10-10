@@ -2,11 +2,11 @@ from typing import Annotated, Optional
 
 import polars as pl
 
-from decider import Engine, flow, param
-from decider.ops import Duration, Percent
-from decider._engine.ir.decls import NullPolicy, base_annotation
-from decider._engine.params.harvest import harvest
-from decider.ops.measures import DecimalSpec, metadata_of
+from decikit import Engine, flow, param
+from decikit.ops import Duration, Percent
+from decikit._engine.ir.decls import NullPolicy, base_annotation
+from decikit._engine.params.harvest import harvest
+from decikit.ops.measures import DecimalSpec, metadata_of
 
 
 def instalment(loan: Annotated[float, Duration()], rate: Annotated[float, Percent()] = param(0.12)) -> Annotated[float, Duration()]:

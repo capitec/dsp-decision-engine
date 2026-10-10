@@ -8,10 +8,10 @@ import numpy as np
 import polars as pl
 import pytest
 
-from decider import Engine, allow_fallback, flow, missing_as, param, step
-from decider.ops import Columnar
-from decider._engine.compile.rows import ARROW_ROWS, build_rows
-from decider.lab.testing import assert_equivalent
+from decikit import Engine, allow_fallback, flow, missing_as, param, step
+from decikit.ops import Columnar
+from decikit._engine.compile.rows import ARROW_ROWS, build_rows
+from decikit.lab.testing import assert_equivalent
 
 MODES = ("interpreted", "stepped", "fused")
 COMPILED = ("stepped", "fused")

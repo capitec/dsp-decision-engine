@@ -1,7 +1,7 @@
 """Income: bands, stability and what is left each month."""
 import math  # noqa: F401
 
-from decider import dag, param, step  # noqa: F401
+from decikit import dag, param, step  # noqa: F401
 
 
 def gross_income_band(gross_income: float, low: float = param(19200.0), mid: float = param(22800.0), high: float = param(27000.0)) -> float:

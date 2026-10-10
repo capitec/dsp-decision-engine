@@ -6,8 +6,8 @@ Tracing is off by default. A run without a sink captures nothing and, in a compi
 
 ```python
 import polars as pl
-from decider import flow, param
-from decider.trace import Kind, TraceSink
+from decikit import flow, param
+from decikit.trace import Kind, TraceSink
 
 def ratio(income: float, debt: float) -> float:
     return debt / income
@@ -40,10 +40,10 @@ def disposable_income(net_income: float, expenses: float) -> float:
     return net_income - expenses
 ```
 
-You do not invent them. `decider ids` writes one into every `@step(...)` decorator, `step(...)` and `frame_step(...)` call, and named `flow`, `dag`, `branch`, `loop`, `each` and `optimise` that lacks one, and changes no other byte. It refuses to run on a dirty git tree, so the change is one reviewable diff:
+You do not invent them. `decikit ids` writes one into every `@step(...)` decorator, `step(...)` and `frame_step(...)` call, and named `flow`, `dag`, `branch`, `loop`, `each` and `optimise` that lacks one, and changes no other byte. It refuses to run on a dirty git tree, so the change is one reviewable diff:
 
 ```text
-$ decider ids lending
+$ decikit ids lending
 added 5 id(s) in 1 file(s)
   lending/pipeline.py:5  disposable_income  ->  id=61960951899c
   lending/pipeline.py:10  instalment_ratio  ->  id=f18ff80f85b3
@@ -62,8 +62,8 @@ Ids are additive. With `id=None`, the default, names, paths, the params document
 
 ```python
 import polars as pl
-from decider import branch, flow, param, step
-from decider.trace import TraceSink
+from decikit import branch, flow, param, step
+from decikit.trace import TraceSink
 
 
 @step(id="a1b2c3d4e5f6")
@@ -151,8 +151,8 @@ Order is guaranteed within one record's events. Across records the order is the 
 
 ```python
 import polars as pl
-from decider import flow, frame_step, loop, step
-from decider.trace import TraceSink
+from decikit import flow, frame_step, loop, step
+from decikit.trace import TraceSink
 
 @frame_step(reads=["client_id"], writes=["bureau_score"])
 def join_bureau(df: pl.DataFrame) -> pl.DataFrame:
@@ -205,7 +205,7 @@ Tracing never changes the answer: the result is the same with and without a sink
 
 ## Reading a decision back
 
-Group events by `record`, and resolve each event's step against the current flow with `decider.lab.resolve_step`. A durable reference resolves by `(flow_id, step_id)`, so it survives renames; without ids it falls back to the path.
+Group events by `record`, and resolve each event's step against the current flow with `decikit.lab.resolve_step`. A durable reference resolves by `(flow_id, step_id)`, so it survives renames; without ids it falls back to the path.
 
 ```mermaid
 flowchart TD
@@ -226,9 +226,9 @@ flowchart TD
 ```python
 from collections import defaultdict
 import polars as pl
-from decider import describe
-from decider.lab import StepRef, resolve_step
-from decider.trace import TraceSink
+from decikit import describe
+from decikit.lab import StepRef, resolve_step
+from decikit.trace import TraceSink
 
 sink = TraceSink()
 big = pl.DataFrame({"net_income": [9200.0, 4100.0, 15000.0], "expenses": [3100.0, 1500.0, 6000.0],
@@ -257,11 +257,11 @@ To see the values behind the decision, replay the record in a [debug session](de
 
 ## Adapters
 
-`decider` emits evidence; it does not store, redact or deliver it. That is the adapter's job. An adapter is any object with `accept(events)`; `TraceSink(adapter)` calls it as events arrive, on the request path.
+`decikit` emits evidence; it does not store, redact or deliver it. That is the adapter's job. An adapter is any object with `accept(events)`; `TraceSink(adapter)` calls it as events arrive, on the request path.
 
 ```python
 import json
-from decider.trace import TraceSink
+from decikit.trace import TraceSink
 
 class JsonLines:
     def __init__(self, path):
@@ -325,7 +325,7 @@ print(sink.status(), [(e.origin.path, e.record) for e in sink.events()])
 
 A compiled kernel whose event count is known in advance (one without a packed branch or loop, where the count depends on the data) declares how many trace events it will write. After it runs, the sink compares that with what it actually wrote. A shortfall means an optimisation dropped a trace point, and evidence is missing. With `strict=True` (the default) the run raises `TraceLossError` with the message `trace conservation failed: <written> of <expected> declared events were captured; an optimisation dropped a trace point`.
 
-With `TraceSink(strict=False)` the shortfall is added to `dropped` and the run continues. You should never see this error; if you do, it is a bug in decider's code generation, so report it with the flow that triggered it.
+With `TraceSink(strict=False)` the shortfall is added to `dropped` and the run continues. You should never see this error; if you do, it is a bug in the decider toolkit's code generation, so report it with the flow that triggered it.
 
 ## Limits
 

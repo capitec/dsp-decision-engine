@@ -4,8 +4,8 @@ import pickle
 
 import pytest
 
-from decider.ops import decimal
-from decider.ops.decimal import Currency, Decimal, Rounding
+from decikit.ops import decimal
+from decikit.ops.decimal import Currency, Decimal, Rounding
 
 CTX = stdlib.Context(prec=200)
 MODE = {Rounding.HALF_UP: stdlib.ROUND_HALF_UP, Rounding.HALF_EVEN: stdlib.ROUND_HALF_EVEN, Rounding.DOWN: stdlib.ROUND_DOWN}

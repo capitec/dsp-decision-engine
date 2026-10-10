@@ -31,7 +31,7 @@
   <!-- fingerprint recipe -->
   <text x="540" y="48" font-size="16" font-weight="600" fill="#1f2937">How the fingerprint is computed</text>
   <rect x="540" y="66" width="420" height="44" rx="9" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
-  <text x="556" y="93" font-size="14" fill="#1f2937">b"decider-frame-v1\n"  (format tag)</text>
+  <text x="556" y="93" font-size="14" fill="#1f2937">b"decikit-frame-v1\n"  (format tag)</text>
   <rect x="540" y="124" width="420" height="44" rx="9" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
   <text x="556" y="151" font-size="14" fill="#1f2937">str(frame.schema)  (names, dtypes, order)</text>
   <rect x="540" y="182" width="420" height="44" rx="9" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>

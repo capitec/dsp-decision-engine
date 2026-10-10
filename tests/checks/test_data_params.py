@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import polars as pl
 
-from decider import flow, missing_as, param
-from decider.lab import checks
+from decikit import flow, missing_as, param
+from decikit.lab import checks
 
 MISSING = ["missing_required"]
 UNKNOWN = ["invalid_params_doc"]

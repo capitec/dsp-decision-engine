@@ -1,7 +1,7 @@
 """Stability: employment, address and age."""
 import math  # noqa: F401
 
-from decider import dag, param, step  # noqa: F401
+from decikit import dag, param, step  # noqa: F401
 
 
 def age_band(age: float, low: float = param(2.0), mid: float = param(15.8), high: float = param(21.2)) -> float:

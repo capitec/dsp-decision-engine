@@ -16,10 +16,10 @@ from typing import TypedDict
 import numpy as np
 import polars as pl
 
-from decider import Engine, flow
-from decider.ops import Columnar
-from decider._engine.compile.rows import build_rows
-from decider._engine.run.state import from_series
+from decikit import Engine, flow
+from decikit.ops import Columnar
+from decikit._engine.compile.rows import build_rows
+from decikit._engine.run.state import from_series
 
 N = int(sys.argv[1]) if len(sys.argv) > 1 else 200_000
 ITEMS = int(sys.argv[2]) if len(sys.argv) > 2 else 3
@@ -136,7 +136,7 @@ def end_to_end():
 
 def builders():
     """The three builders at every size; the Arrow read is forced, to show where it wins."""
-    from decider._engine.compile import rows as rows_mod
+    from decikit._engine.compile import rows as rows_mod
 
     threshold = rows_mod.ARROW_ROWS
     print(f"\n{'rows':>8}{'v0 (copy loop)':>18}{'python values':>16}{'arrow':>10}{'from_series':>14}")

@@ -1,6 +1,6 @@
 import pytest
 
-from decider._settings import get_settings
+from decikit._settings import get_settings
 
 
 @pytest.fixture(autouse=True)

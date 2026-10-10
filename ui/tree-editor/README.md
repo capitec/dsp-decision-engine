@@ -5,10 +5,10 @@ Web editor for decision trees: a FastAPI backend (`backend/`), a React UI (`ui/`
 ## Develop
 
 ```bash
-docker compose up        # UI on :3000, API on :8000, live reload for ui/, backend/ and decider/
+docker compose up        # UI on :3000, API on :8000, live reload for ui/, backend/ and decikit/
 ```
 
-Postgres, migrations and `decider` (editable, from this checkout) are handled by the compose file. Sign up on the login page; the first run installs dependencies, so give it a minute.
+Postgres, migrations and `decikit` (editable, from this checkout) are handled by the compose file. Sign up on the login page; the first run installs dependencies, so give it a minute.
 
 Regenerate the UI's API client against the running backend with `./generate-tsx-api-client.sh`.
 
@@ -21,7 +21,7 @@ cd backend && uv run --with-requirements requirements.txt --with ../../.. --with
 cd ui && pnpm test
 ```
 
-End to end (drives a real browser through the main user stories, and runs the tree it exports with `decider`):
+End to end (drives a real browser through the main user stories, and runs the tree it exports with `decikit`):
 
 ```bash
 docker compose --profile e2e run --rm e2e
@@ -35,7 +35,7 @@ cd e2e && E2E_BASE_URL=http://localhost:3000 uv run --with-requirements requirem
 
 ## Image
 
-The image installs `decider` from the wheel in `dist/`, so build the wheel first and run docker from the repo root:
+The image installs `decikit` from the wheel in `dist/`, so build the wheel first and run docker from the repo root:
 
 ```bash
 uv build
@@ -43,4 +43,4 @@ docker build -f ui/tree-editor/Dockerfile -t decider-tree-editor .
 docker run -p 8000:8000 decider-tree-editor
 ```
 
-Releases push `decider-tree-editor:<version>` with the same version as the `decider` wheel. Settings are read from environment variables and `config.yaml` (see `backend/dsp_decider/settings.py`).
+Releases push `decider-tree-editor:<version>` with the same version as the `decikit` wheel. Settings are read from environment variables and `config.yaml` (see `backend/dsp_decikit/settings.py`).

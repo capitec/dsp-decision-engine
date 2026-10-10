@@ -9,12 +9,12 @@ import pytest
 from polars.testing import assert_frame_equal
 from pydantic import TypeAdapter
 
-from decider import ConfigurableStep, Engine, ParamRef, Value, flow, step
-from decider import _engine as engine
-from decider.config import JsonFileStore
-from decider._engine.ir import ParamDecl
-from decider._registry import import_path
-from decider.steps import StepRef
+from decikit import ConfigurableStep, Engine, ParamRef, Value, flow, step
+from decikit import _engine as engine
+from decikit.config import JsonFileStore
+from decikit._engine.ir import ParamDecl
+from decikit._registry import import_path
+from decikit.steps import StepRef
 
 
 def _threshold(x: float, threshold: float, above: float, below: float) -> float:

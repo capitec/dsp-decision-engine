@@ -1,0 +1,1138 @@
+{
+ "config_version": "0.1.0",
+ "decision_date": "2026-09-24",
+ "decision_id": "d5f5f6b0-3f8a-4f2a-9c4b-2f6e7a1b0003-v2",
+ "documents": {
+  "calibration_scale_adjustments": "b02e0c4e054bc6cf",
+  "params": "0d6be6a81b6b1cb2",
+  "probability_of_default_adjustments": "17fb9cb1e3185841",
+  "probability_of_default_for_grading_adjustments": "fab72bc110a09428",
+  "rate_card_flex_loan": "8436d2139a7e3a24",
+  "reason_codes": "671b4db1e20e2783",
+  "score_adjustments": "59b9d24553b41641"
+ },
+ "flow": "loan",
+ "mode": "fused",
+ "params": {
+  "loan_granting": {
+   "affordability_assessment": {
+    "capacity": {
+     "overlay": {
+      "apply_max_affordable_instalment_adjustments": {
+       "adjustment_stack_enabled": true
+      }
+     },
+     "proposal_verdict": {
+      "marginal_band": 0.05
+     }
+    },
+    "evidence": {
+     "applicant1_income": {
+      "income_haircut_applied": {
+       "haircut_bureau_estimated": 0.3,
+       "haircut_declared": 0.2,
+       "haircut_payslip": 0.05,
+       "haircut_statement_high_confidence": 0.1,
+       "haircut_statement_low_confidence": 0.25,
+       "statement_confidence_threshold": 0.7
+      }
+     },
+     "applicant2_income": {
+      "income_haircut_applied": {
+       "haircut_bureau_estimated": 0.3,
+       "haircut_declared": 0.2,
+       "haircut_payslip": 0.05,
+       "haircut_statement_high_confidence": 0.1,
+       "haircut_statement_low_confidence": 0.25,
+       "statement_confidence_threshold": 0.7
+      }
+     },
+     "bureau_is_stale": {
+      "staleness_window_days": 45,
+      "staleness_window_days_mortgage": 14
+     },
+     "household_income": {
+      "minor_contribution_threshold": 0.1
+     },
+     "minimum_income_tier": {
+      "minimum_tier_arrangement": 5,
+      "minimum_tier_limit_increase": 4,
+      "minimum_tier_new_application": 3,
+      "minimum_tier_scenario": 3
+     }
+    }
+   },
+   "assessment_mode_code": {
+    "mode": 1
+   },
+   "cap_waterfall": {
+    "cap_bands": [
+     {
+      "amount": -1,
+      "decline": true,
+      "grade": -1,
+      "hi": 7,
+      "lo": 6,
+      "rule": 25,
+      "term": -1
+     },
+     {
+      "amount": 80000,
+      "decline": false,
+      "grade": -1,
+      "hi": 5,
+      "lo": 4,
+      "rule": 150,
+      "term": -1
+     },
+     {
+      "amount": 60000,
+      "decline": false,
+      "grade": -1,
+      "hi": 1,
+      "lo": 0,
+      "rule": 140,
+      "term": -1
+     },
+     {
+      "amount": -1,
+      "decline": true,
+      "grade": -1,
+      "hi": 3,
+      "lo": -1000000000.0,
+      "rule": 175,
+      "term": -1
+     },
+     {
+      "amount": 25000,
+      "decline": false,
+      "grade": -1,
+      "hi": 6,
+      "lo": 3,
+      "rule": 175,
+      "term": -1
+     },
+     {
+      "amount": 70000,
+      "decline": false,
+      "grade": -1,
+      "hi": 24,
+      "lo": 6,
+      "rule": 175,
+      "term": -1
+     },
+     {
+      "amount": 40000,
+      "decline": false,
+      "grade": 8,
+      "hi": 1000000000.0,
+      "lo": 3,
+      "rule": 210,
+      "term": -1
+     },
+     {
+      "amount": 120000,
+      "decline": false,
+      "grade": 9,
+      "hi": 3,
+      "lo": 2,
+      "rule": 210,
+      "term": -1
+     },
+     {
+      "amount": -1,
+      "decline": true,
+      "grade": -1,
+      "hi": 1000000000.0,
+      "lo": 10,
+      "rule": 240,
+      "term": -1
+     },
+     {
+      "amount": 30000,
+      "decline": false,
+      "grade": -1,
+      "hi": 10,
+      "lo": 6,
+      "rule": 240,
+      "term": -1
+     },
+     {
+      "amount": 50000,
+      "decline": false,
+      "grade": -1,
+      "hi": 2,
+      "lo": 1,
+      "rule": 305,
+      "term": -1
+     },
+     {
+      "amount": 100000,
+      "decline": false,
+      "grade": -1,
+      "hi": 6,
+      "lo": 5,
+      "rule": 330,
+      "term": -1
+     },
+     {
+      "amount": 150000,
+      "decline": false,
+      "grade": -1,
+      "hi": 7,
+      "lo": 6,
+      "rule": 330,
+      "term": 60
+     }
+    ],
+    "uplift_authority_ceiling": 250000.0,
+    "uplift_authority_reference": "CC-2026-14",
+    "uplift_max_pct": 0.25
+   },
+   "eligibility": {
+    "gate_employment_type": {
+     "first_excluded_type": 5.0
+    },
+    "gate_insolvency_seasoning": {
+     "seasoning_months": 24.0
+    },
+    "gate_max_age_at_maturity": {
+     "maximum_age_at_maturity": 75.0
+    },
+    "gate_min_age": {
+     "minimum_age": 18.0
+    },
+    "gate_product_channel": {
+     "partner_minimum_amount": 10000.0
+    },
+    "gate_residency": {
+     "first_excluded_class": 5
+    }
+   },
+   "employer_on_watchlist": {
+    "watchlist": [
+     {
+      "employer_id": 90001
+     },
+     {
+      "employer_id": 90002
+     }
+    ]
+   },
+   "fraud_handling_code": {
+    "bypass_amount_ceiling": 15000.0,
+    "bypass_tenure_floor_months": 24.0,
+    "fraud_timeout_ms": 800.0
+   },
+   "offer_set": {
+    "average_ead": 0.55,
+    "dedup_tolerance": 0.02,
+    "effective_rate_ceiling": 0.6,
+    "funding_cost": 0.0875,
+    "lgd": 0.72,
+    "minimum_instalment": 150.0,
+    "minimum_offer_amount": 2000.0
+   },
+   "recommendation_objective": {
+    "recommendation_objective": "largest_amount"
+   },
+   "scoring": {
+    "apply_calibration_scale_adjustments": {
+     "adjustment_stack_enabled": true
+    },
+    "apply_probability_of_default_adjustments": {
+     "adjustment_stack_enabled": true
+    },
+    "apply_probability_of_default_for_grading_adjustments": {
+     "adjustment_stack_enabled": true
+    },
+    "apply_score_adjustments": {
+     "adjustment_stack_enabled": true
+    },
+    "retail_unsecured": {
+     "bureau_score": {
+      "bureau_high": 750.0,
+      "bureau_low": 500.0,
+      "bureau_mid": 650.0
+     }
+    }
+   },
+   "solve_terms": {
+    "evaluation_ceiling_per_term": 24
+   },
+   "statutory_ceiling": {
+    "margin_over_repo": 0.21,
+    "repo_rate": 0.07
+   },
+   "total_cost_ratio_threshold": {
+    "total_cost_ratio_threshold": 1.85
+   }
+  },
+  "shared": {
+   "permitted_terms": [
+    {
+     "new_to_bank": true,
+     "term": 6
+    },
+    {
+     "new_to_bank": true,
+     "term": 12
+    },
+    {
+     "new_to_bank": true,
+     "term": 18
+    },
+    {
+     "new_to_bank": true,
+     "term": 24
+    },
+    {
+     "new_to_bank": true,
+     "term": 36
+    },
+    {
+     "new_to_bank": true,
+     "term": 48
+    },
+    {
+     "new_to_bank": true,
+     "term": 60
+    },
+    {
+     "new_to_bank": true,
+     "term": 72
+    },
+    {
+     "new_to_bank": false,
+     "term": 84
+    }
+   ]
+  }
+ },
+ "request": {
+  "accounts_in_arrears_count": 0,
+  "administration_order_flag": false,
+  "applicant1_bureau_accounts": [
+   {
+    "account_type_code": 10,
+    "balance": 8500.0,
+    "closed": false,
+    "instalment": 450.0,
+    "is_internal": false,
+    "limit": 15000.0,
+    "months_in_arrears": 0,
+    "opened_date": "2022-03-01"
+   }
+  ],
+  "applicant1_declared_expenses": {
+   "accommodation": 3500.0,
+   "food": 1800.0,
+   "transport": 900.0
+  },
+  "applicant1_dependants_count": 2,
+  "applicant1_internal_accounts": [
+   {
+    "account_type_code": 1,
+    "balance": 22000.0,
+    "closed": false,
+    "instalment": 1150.0,
+    "is_internal": true,
+    "months_in_arrears": 0,
+    "opened_date": "2021-06-15"
+   }
+  ],
+  "applicant1_payslip_income": 18500.0,
+  "applicant1_variable_pay_history": [
+   1450.0,
+   1600.0,
+   1300.0
+  ],
+  "applicant_age_years": 38.0,
+  "bureau_account_count": 7,
+  "bureau_as_of_date": "2026-09-20",
+  "bureau_consent_given": true,
+  "bureau_enquiry_count_60d": 3,
+  "bureau_history_months": 48.0,
+  "bureau_response_status": "ok",
+  "bureau_score": 480,
+  "campaign_id": 4471,
+  "campaign_is_preapproved": true,
+  "channel_code": 4,
+  "court_ordered_deductions": 0.0,
+  "credit_life_substitution_declared": false,
+  "debt_review_status_code": 0,
+  "deceased_flag": false,
+  "decision_date": "2026-09-24",
+  "decision_id": "d5f5f6b0-3f8a-4f2a-9c4b-2f6e7a1b0003-v2",
+  "employer_id": 5001,
+  "employment_type_code": 1,
+  "estate_flag": false,
+  "exclusion_list_hits": [],
+  "fraud_reason_codes": [],
+  "fraud_response_ms": 210.0,
+  "fraud_verdict_code": 1,
+  "group_exposure_limit": 180000.0,
+  "has_adverse_internal_history": false,
+  "has_contractual_capacity": true,
+  "in_flight_application_count": 0,
+  "insolvency_status_code": 0,
+  "internal_exposure_total": 22000.0,
+  "internal_tenure_months": 41.0,
+  "is_duplicate_application": false,
+  "is_joint_application": false,
+  "months_employed": 41.0,
+  "product_code": 10,
+  "requested_amount": 120000.0,
+  "requested_term_months": 60,
+  "residency_code": 1,
+  "revolving_utilisation": 0.8,
+  "worst_arrears_months": 2.0
+ },
+ "response": {
+  "accounts_in_arrears_count": 0,
+  "accounts_in_arrears_count_score": 15.0,
+  "adjustment_set_id": "AS-03-2026.09",
+  "adjustments_applied": [
+   "ADJ-03-002",
+   "ADJ-03-003",
+   "ADJ-03-004"
+  ],
+  "administration_order_flag": false,
+  "affordability_accounts_in_arrears_count": 0,
+  "affordability_adjustment_set_id": "AS-02-2026.09",
+  "affordability_adjustments_applied": [
+   "ADJ-02-2026-001"
+  ],
+  "affordability_binding_constraint_code": 1,
+  "affordability_buffer_applied": 0.35,
+  "affordability_decline_reason_codes": [],
+  "affordability_primary_reason_code": null,
+  "affordability_reason_registry_version": "affordability-reasons-2026.09",
+  "affordability_revolving_utilisation": 0.5667,
+  "affordability_verdict_code": 1,
+  "affordability_worst_arrears_months": 0,
+  "amount_cap": 100000.0,
+  "amount_cap_binding_rule_id": "CAP-0420",
+  "amount_cap_chain": [
+   {
+    "rule_id": "seed",
+    "value": 500000.0
+   },
+   {
+    "rule_id": "CAP-0100",
+    "value": 80000.0
+   },
+   {
+    "rule_id": "CAP-0420",
+    "value": 100000.0
+   }
+  ],
+  "appetite_cell_id": "appetite@appetite-2026.09#10|1|12",
+  "appetite_max_ratio": 0.09,
+  "appetite_min_price": 23.0,
+  "applicant1_bureau_accounts": [
+   {
+    "account_type_code": 10,
+    "balance": 8500.0,
+    "closed": false,
+    "instalment": 450.0,
+    "is_internal": false,
+    "limit": 15000.0,
+    "months_in_arrears": 0,
+    "opened_date": "2022-03-01"
+   }
+  ],
+  "applicant1_declared_expenses": {
+   "accommodation": 3500.0,
+   "food": 1800.0,
+   "transport": 900.0
+  },
+  "applicant1_dependants_count": 2,
+  "applicant1_income_haircut_applied": 0.05,
+  "applicant1_income_source_code": 2,
+  "applicant1_internal_accounts": [
+   {
+    "account_type_code": 1,
+    "balance": 22000.0,
+    "closed": false,
+    "instalment": 1150.0,
+    "is_internal": true,
+    "months_in_arrears": 0,
+    "opened_date": "2021-06-15"
+   }
+  ],
+  "applicant1_payslip_income": 18500.0,
+  "applicant1_tax_table_cell_id": "tax_table@tax@2026#1",
+  "applicant1_tax_table_version": "tax@2026",
+  "applicant1_variable_pay_history": [
+   1450.0,
+   1600.0,
+   1300.0
+  ],
+  "applicant2_income_haircut_applied": 0.0,
+  "applicant2_income_source_code": 0,
+  "applicant2_tax_table_cell_id": "tax_table@tax@2026#0",
+  "applicant_age_years": 38.0,
+  "applicant_age_years_score": 5.0,
+  "applicant_income_evidence_gap": 0,
+  "base_score": 600.0,
+  "buffer_grid_cell_id": "buffer_grid@buffer-grid-2026.09#10|12",
+  "bureau_account_count": 7,
+  "bureau_as_of_date": "2026-09-20",
+  "bureau_availability_code": 0,
+  "bureau_consent_given": true,
+  "bureau_enquiry_count_60d": 3,
+  "bureau_history_months": 48.0,
+  "bureau_is_stale": false,
+  "bureau_referral_required": false,
+  "bureau_response_status": "ok",
+  "bureau_score": 480,
+  "bureau_score_score": -40.0,
+  "calibration_cell_id": "calibration@cal-2026.09#1",
+  "calibration_scale_adjustment_set_id": "AS-03-2026.09",
+  "calibration_scale_unadjusted": 60.0,
+  "calibration_version": "cal-2026.09",
+  "campaign_id": 4471,
+  "campaign_is_preapproved": true,
+  "channel_code": 4,
+  "consent_verdict": 1,
+  "court_ordered_deductions": 0.0,
+  "credit_life_substitution_declared": false,
+  "data_quality_verdict": 0,
+  "debt_review_status_code": 0,
+  "deceased_flag": false,
+  "decision_date": "2026-09-24",
+  "decision_id": "d5f5f6b0-3f8a-4f2a-9c4b-2f6e7a1b0003-v2",
+  "decline_reason_codes": [
+   1183,
+   4101,
+   4105
+  ],
+  "dependants_count": 2.0,
+  "dependants_count_score": 5.0,
+  "discretionary_income": 8213.5,
+  "discretionary_income_after": NaN,
+  "eligibility_decline_reasons": [],
+  "eligibility_gate_verdicts": {
+   "administration_order": "pass",
+   "capacity": "pass",
+   "debt_review": "pass",
+   "deceased_estate": "pass",
+   "duplicate_application": "pass",
+   "employment_type": "pass",
+   "exclusion_lists": "pass",
+   "in_flight_application": "pass",
+   "insolvency": "pass",
+   "insolvency_seasoning": "pass",
+   "max_age_at_maturity": "pass",
+   "min_age": "pass",
+   "product_channel": "pass",
+   "residency": "pass"
+  },
+  "employer_id": 5001,
+  "employment_type_code": 1,
+  "employment_type_code_score": 10.0,
+  "estate_flag": false,
+  "evidence_sufficiency_code": 0,
+  "exclusion_list_hits": [],
+  "existing_obligations": 1600.0,
+  "expense_basis_code": 1,
+  "fee_caps_cell_id": "fee_caps@fee_caps@2026#caps",
+  "final_validation_failures": [
+   "grade_within_the_worst_acceptable"
+  ],
+  "final_validation_passed": false,
+  "fraud_bypass_applied": false,
+  "fraud_handling_code": 1,
+  "fraud_reason_codes": [],
+  "fraud_response_ms": 210.0,
+  "fraud_verdict_code": 1,
+  "gross_monthly_income": 17575.0,
+  "group_exposure_limit": 180000.0,
+  "has_adverse_internal_history": false,
+  "has_any_offer": true,
+  "has_contractual_capacity": true,
+  "has_refer_account": false,
+  "in_flight_application_count": 0,
+  "income_haircut_applied": 0.05,
+  "income_source_code": 2,
+  "income_variability_ratio": 0.0845,
+  "income_verification_tier": 2,
+  "initiation_fee_cap": 6500.0,
+  "insolvency_status_code": 0,
+  "internal_exposure_total": 22000.0,
+  "internal_norm_cell_id": "expense_norms.internal@norms.internal@2026#10|10",
+  "internal_tenure_months": 41.0,
+  "is_duplicate_application": false,
+  "is_eligible": true,
+  "is_joint_application": false,
+  "is_thin_file": false,
+  "living_expenses": 6200.0,
+  "max_affordable_instalment": 4804.9,
+  "max_affordable_instalment_unadjusted": 5338.78,
+  "minimum_income_tier": 3,
+  "monthly_service_fee_cap": 69.0,
+  "months_employed": 41.0,
+  "months_employed_score": 20.0,
+  "net_monthly_income": 16013.5,
+  "norm_table_version": "norms.internal@2026",
+  "obligation_account_type_codes": [
+   1,
+   10
+  ],
+  "obligation_is_internal": [
+   true,
+   false
+  ],
+  "obligation_monthly_amounts": [
+   1150.0,
+   450.0
+  ],
+  "obligation_treatment_codes": [
+   1,
+   2
+  ],
+  "obligations_external": 450.0,
+  "obligations_internal": 1150.0,
+  "offers": [
+   {
+    "amount_financed": 26120.0,
+    "binding_constraint_code": "BIND-AFF",
+    "credit_life_premium": 104.48,
+    "effective_annual_rate": 0.238,
+    "evaluation_count": 12,
+    "initiation_fee": 2420.0,
+    "instalment": 4804.37,
+    "is_recommended": false,
+    "monthly_service_fee": 69.0,
+    "nominal_annual_rate": 0.2154,
+    "offered_amount": 23700.0,
+    "rate_card_version": "rc-2026.09",
+    "rate_cell_id": "rate_card.flex_loan@rc-2026.09#4|0|12",
+    "term_months": 6,
+    "total_cost_of_credit": 31246.22
+   },
+   {
+    "amount_financed": 48560.0,
+    "binding_constraint_code": "BIND-AFF",
+    "credit_life_premium": 194.24,
+    "effective_annual_rate": 0.2395,
+    "evaluation_count": 12,
+    "initiation_fee": 4460.0,
+    "instalment": 4800.24,
+    "is_recommended": false,
+    "monthly_service_fee": 69.0,
+    "nominal_annual_rate": 0.2166,
+    "offered_amount": 44100.0,
+    "rate_card_version": "rc-2026.09",
+    "rate_cell_id": "rate_card.flex_loan@rc-2026.09#8|4|12",
+    "term_months": 12,
+    "total_cost_of_credit": 62062.88
+   },
+   {
+    "amount_financed": 67920.0,
+    "binding_constraint_code": "BIND-AFF",
+    "credit_life_premium": 271.68,
+    "effective_annual_rate": 0.2408,
+    "evaluation_count": 12,
+    "initiation_fee": 6220.0,
+    "instalment": 4797.4,
+    "is_recommended": false,
+    "monthly_service_fee": 69.0,
+    "nominal_annual_rate": 0.2177,
+    "offered_amount": 61700.0,
+    "rate_card_version": "rc-2026.09",
+    "rate_cell_id": "rate_card.flex_loan@rc-2026.09#11|8|12",
+    "term_months": 18,
+    "total_cost_of_credit": 92573.2
+   },
+   {
+    "amount_financed": 84600.0,
+    "binding_constraint_code": "BIND-AFF",
+    "credit_life_premium": 350.0,
+    "effective_annual_rate": 0.2421,
+    "evaluation_count": 12,
+    "initiation_fee": 6500.0,
+    "instalment": 4802.88,
+    "is_recommended": false,
+    "monthly_service_fee": 69.0,
+    "nominal_annual_rate": 0.2188,
+    "offered_amount": 78100.0,
+    "rate_card_version": "rc-2026.09",
+    "rate_cell_id": "rate_card.flex_loan@rc-2026.09#14|12|12",
+    "term_months": 24,
+    "total_cost_of_credit": 121769.12
+   },
+   {
+    "amount_financed": 106500.0,
+    "binding_constraint_code": "BIND-CAP",
+    "credit_life_premium": 350.0,
+    "effective_annual_rate": 0.2448,
+    "evaluation_count": 1,
+    "initiation_fee": 6500.0,
+    "instalment": 4491.79,
+    "is_recommended": true,
+    "monthly_service_fee": 69.0,
+    "nominal_annual_rate": 0.221,
+    "offered_amount": 100000.0,
+    "rate_card_version": "rc-2026.09",
+    "rate_cell_id": "rate_card.flex_loan@rc-2026.09#18|21|12",
+    "term_months": 36,
+    "total_cost_of_credit": 168204.44
+   }
+  ],
+  "outcome_code": 4,
+  "primary_reason_code": 1183,
+  "probability_of_default": 0.7005559604012579,
+  "probability_of_default_adjustment_set_id": "AS-03-2026.09",
+  "probability_of_default_for_grading_adjustment_set_id": "AS-03-2026.09",
+  "probability_of_default_for_grading_unadjusted": 0.7005559604012579,
+  "probability_of_default_unadjusted": 0.5189303410379688,
+  "product_code": 10,
+  "reason_registry_version": "loan-granting-reasons-2026.09",
+  "recommendation_objective": "largest_amount",
+  "recommended_offer": {
+   "amount_financed": 106500.0,
+   "binding_constraint_code": "BIND-CAP",
+   "credit_life_premium": 350.0,
+   "effective_annual_rate": 0.2448,
+   "evaluation_count": 1,
+   "initiation_fee": 6500.0,
+   "instalment": 4491.79,
+   "is_recommended": true,
+   "monthly_service_fee": 69.0,
+   "nominal_annual_rate": 0.221,
+   "offered_amount": 100000.0,
+   "rate_card_version": "rc-2026.09",
+   "rate_cell_id": "rate_card.flex_loan@rc-2026.09#18|21|12",
+   "term_months": 36,
+   "total_cost_of_credit": 168204.44
+  },
+  "referral_queue_code": 0,
+  "requested_amount": 120000.0,
+  "requested_term_months": 60,
+  "residency_code": 1,
+  "residual_floor_amount": 1400.0,
+  "residual_floor_cell_id": "residual_floor@residual-floor-2026.09#2",
+  "revolving_utilisation": 0.8,
+  "revolving_utilisation_score": -20.0,
+  "risk_grade": 12,
+  "risk_grade_boundary_hi": null,
+  "risk_grade_boundary_lo": 0.5,
+  "risk_grade_cell_id": "risk_grade@rg-2026.09#10|1|12",
+  "risk_grade_version": "rg-2026.09",
+  "score": 595.0,
+  "score_raw": 595.0,
+  "score_reason_codes": [
+   4101,
+   4105
+  ],
+  "score_unadjusted": 595.0,
+  "scorecard_id": 1011,
+  "segment_code": 1.0,
+  "solve_total_evaluations": 53,
+  "statutory_ceiling": 0.28,
+  "statutory_deductions": 1561.5,
+  "statutory_norm_cell_id": "expense_norms.statutory@norms.statutory@2025#10",
+  "suppressed_terms": [
+   {
+    "reason": "minimum viable offer rules",
+    "reason_codes": [
+     1603
+    ],
+    "term_months": 48
+   },
+   {
+    "reason": "minimum viable offer rules",
+    "reason_codes": [
+     1603,
+     1604
+    ],
+    "term_months": 60
+   },
+   {
+    "reason": "minimum viable offer rules",
+    "reason_codes": [
+     1603,
+     1604
+    ],
+    "term_months": 72
+   },
+   {
+    "reason": "minimum viable offer rules",
+    "reason_codes": [
+     1603,
+     1604
+    ],
+    "term_months": 84
+   }
+  ],
+  "suppression_reason_codes": [
+   1603,
+   1604
+  ],
+  "term_cap": 84.0,
+  "term_cap_binding_rule_id": null,
+  "term_cap_chain": [
+   {
+    "rule_id": "seed",
+    "value": 84.0
+   }
+  ],
+  "term_solutions": [
+   {
+    "amount": 23700.0,
+    "binding_constraint_code": "BIND-AFF",
+    "evaluation_count": 12,
+    "pricing": {
+     "amount_financed": 26120.0,
+     "credit_life_capped": false,
+     "credit_life_cell_id": "credit_life@cl-2026.09#3",
+     "credit_life_premium": 104.48,
+     "effective_annual_rate": 0.238,
+     "initiation_fee": 2420.0,
+     "initiation_fee_capped": false,
+     "instalment": 4804.37,
+     "monthly_service_fee": 69.0,
+     "nominal_annual_rate": 0.2154,
+     "offered_amount": 23700.0,
+     "priced": true,
+     "rate_addon_bps": 0.0,
+     "rate_card_version": "rc-2026.09",
+     "rate_cell_id": "rate_card.flex_loan@rc-2026.09#4|0|12",
+     "risk_grade": 12,
+     "term_months": 6,
+     "total_cost_of_credit": 31246.22,
+     "within_statutory_ceiling": true
+    },
+    "term_months": 6
+   },
+   {
+    "amount": 44100.0,
+    "binding_constraint_code": "BIND-AFF",
+    "evaluation_count": 12,
+    "pricing": {
+     "amount_financed": 48560.0,
+     "credit_life_capped": false,
+     "credit_life_cell_id": "credit_life@cl-2026.09#3",
+     "credit_life_premium": 194.24,
+     "effective_annual_rate": 0.2395,
+     "initiation_fee": 4460.0,
+     "initiation_fee_capped": false,
+     "instalment": 4800.24,
+     "monthly_service_fee": 69.0,
+     "nominal_annual_rate": 0.2166,
+     "offered_amount": 44100.0,
+     "priced": true,
+     "rate_addon_bps": 0.0,
+     "rate_card_version": "rc-2026.09",
+     "rate_cell_id": "rate_card.flex_loan@rc-2026.09#8|4|12",
+     "risk_grade": 12,
+     "term_months": 12,
+     "total_cost_of_credit": 62062.88,
+     "within_statutory_ceiling": true
+    },
+    "term_months": 12
+   },
+   {
+    "amount": 61700.0,
+    "binding_constraint_code": "BIND-AFF",
+    "evaluation_count": 12,
+    "pricing": {
+     "amount_financed": 67920.0,
+     "credit_life_capped": false,
+     "credit_life_cell_id": "credit_life@cl-2026.09#3",
+     "credit_life_premium": 271.68,
+     "effective_annual_rate": 0.2408,
+     "initiation_fee": 6220.0,
+     "initiation_fee_capped": false,
+     "instalment": 4797.4,
+     "monthly_service_fee": 69.0,
+     "nominal_annual_rate": 0.2177,
+     "offered_amount": 61700.0,
+     "priced": true,
+     "rate_addon_bps": 0.0,
+     "rate_card_version": "rc-2026.09",
+     "rate_cell_id": "rate_card.flex_loan@rc-2026.09#11|8|12",
+     "risk_grade": 12,
+     "term_months": 18,
+     "total_cost_of_credit": 92573.2,
+     "within_statutory_ceiling": true
+    },
+    "term_months": 18
+   },
+   {
+    "amount": 78100.0,
+    "binding_constraint_code": "BIND-AFF",
+    "evaluation_count": 12,
+    "pricing": {
+     "amount_financed": 84600.0,
+     "credit_life_capped": true,
+     "credit_life_cell_id": "credit_life@cl-2026.09#4",
+     "credit_life_premium": 350.0,
+     "effective_annual_rate": 0.2421,
+     "initiation_fee": 6500.0,
+     "initiation_fee_capped": true,
+     "instalment": 4802.88,
+     "monthly_service_fee": 69.0,
+     "nominal_annual_rate": 0.2188,
+     "offered_amount": 78100.0,
+     "priced": true,
+     "rate_addon_bps": 0.0,
+     "rate_card_version": "rc-2026.09",
+     "rate_cell_id": "rate_card.flex_loan@rc-2026.09#14|12|12",
+     "risk_grade": 12,
+     "term_months": 24,
+     "total_cost_of_credit": 121769.12,
+     "within_statutory_ceiling": true
+    },
+    "term_months": 24
+   },
+   {
+    "amount": 100000.0,
+    "binding_constraint_code": "BIND-CAP",
+    "evaluation_count": 1,
+    "pricing": {
+     "amount_financed": 106500.0,
+     "credit_life_capped": true,
+     "credit_life_cell_id": "credit_life@cl-2026.09#4",
+     "credit_life_premium": 350.0,
+     "effective_annual_rate": 0.2448,
+     "initiation_fee": 6500.0,
+     "initiation_fee_capped": true,
+     "instalment": 4491.79,
+     "monthly_service_fee": 69.0,
+     "nominal_annual_rate": 0.221,
+     "offered_amount": 100000.0,
+     "priced": true,
+     "rate_addon_bps": 0.0,
+     "rate_card_version": "rc-2026.09",
+     "rate_cell_id": "rate_card.flex_loan@rc-2026.09#18|21|12",
+     "risk_grade": 12,
+     "term_months": 36,
+     "total_cost_of_credit": 168204.44,
+     "within_statutory_ceiling": true
+    },
+    "term_months": 36
+   },
+   {
+    "amount": 100000.0,
+    "binding_constraint_code": "BIND-CAP",
+    "evaluation_count": 1,
+    "pricing": {
+     "amount_financed": 106500.0,
+     "credit_life_capped": true,
+     "credit_life_cell_id": "credit_life@cl-2026.09#4",
+     "credit_life_premium": 350.0,
+     "effective_annual_rate": 0.2468,
+     "initiation_fee": 6500.0,
+     "initiation_fee_capped": true,
+     "instalment": 3789.45,
+     "monthly_service_fee": 69.0,
+     "nominal_annual_rate": 0.2226,
+     "offered_amount": 100000.0,
+     "priced": true,
+     "rate_addon_bps": 0.0,
+     "rate_card_version": "rc-2026.09",
+     "rate_cell_id": "rate_card.flex_loan@rc-2026.09#18|29|12",
+     "risk_grade": 12,
+     "term_months": 48,
+     "total_cost_of_credit": 188393.6,
+     "within_statutory_ceiling": true
+    },
+    "term_months": 48
+   },
+   {
+    "amount": 100000.0,
+    "binding_constraint_code": "BIND-CAP",
+    "evaluation_count": 1,
+    "pricing": {
+     "amount_financed": 106500.0,
+     "credit_life_capped": true,
+     "credit_life_cell_id": "credit_life@cl-2026.09#5",
+     "credit_life_premium": 350.0,
+     "effective_annual_rate": 0.249,
+     "initiation_fee": 6500.0,
+     "initiation_fee_capped": true,
+     "instalment": 3387.12,
+     "monthly_service_fee": 69.0,
+     "nominal_annual_rate": 0.2244,
+     "offered_amount": 100000.0,
+     "priced": true,
+     "rate_addon_bps": 0.0,
+     "rate_card_version": "rc-2026.09",
+     "rate_cell_id": "rate_card.flex_loan@rc-2026.09#18|38|12",
+     "risk_grade": 12,
+     "term_months": 60,
+     "total_cost_of_credit": 209727.2,
+     "within_statutory_ceiling": true
+    },
+    "term_months": 60
+   },
+   {
+    "amount": 100000.0,
+    "binding_constraint_code": "BIND-CAP",
+    "evaluation_count": 1,
+    "pricing": {
+     "amount_financed": 106500.0,
+     "credit_life_capped": true,
+     "credit_life_cell_id": "credit_life@cl-2026.09#5",
+     "credit_life_premium": 350.0,
+     "effective_annual_rate": 0.2509,
+     "initiation_fee": 6500.0,
+     "initiation_fee_capped": true,
+     "instalment": 3132.99,
+     "monthly_service_fee": 69.0,
+     "nominal_annual_rate": 0.226,
+     "offered_amount": 100000.0,
+     "priced": true,
+     "rate_addon_bps": 0.0,
+     "rate_card_version": "rc-2026.09",
+     "rate_cell_id": "rate_card.flex_loan@rc-2026.09#18|46|12",
+     "risk_grade": 12,
+     "term_months": 72,
+     "total_cost_of_credit": 232075.28,
+     "within_statutory_ceiling": true
+    },
+    "term_months": 72
+   },
+   {
+    "amount": 100000.0,
+    "binding_constraint_code": "BIND-CAP",
+    "evaluation_count": 1,
+    "pricing": {
+     "amount_financed": 106500.0,
+     "credit_life_capped": true,
+     "credit_life_cell_id": "credit_life@cl-2026.09#5",
+     "credit_life_premium": 350.0,
+     "effective_annual_rate": 0.2529,
+     "initiation_fee": 6500.0,
+     "initiation_fee_capped": true,
+     "instalment": 2964.07,
+     "monthly_service_fee": 69.0,
+     "nominal_annual_rate": 0.2276,
+     "offered_amount": 100000.0,
+     "priced": true,
+     "rate_addon_bps": 0.0,
+     "rate_card_version": "rc-2026.09",
+     "rate_cell_id": "rate_card.flex_loan@rc-2026.09#18|54|12",
+     "risk_grade": 12,
+     "term_months": 84,
+     "total_cost_of_credit": 255481.88,
+     "within_statutory_ceiling": true
+    },
+    "term_months": 84
+   }
+  ],
+  "total_cost_ratio_threshold": 1.85,
+  "total_exposure": 30500.0,
+  "uplift_authority_reference": "CC-2026-14",
+  "uplift_restrained_by_rule_id": null,
+  "waterfall_decline_reason_codes": [
+   1183
+  ],
+  "waterfall_rules": [
+   {
+    "changes": {},
+    "owner": "Unsecured Lending Product",
+    "rule_id": "CAP-0025",
+    "status": "evaluated_did_not_bind"
+   },
+   {
+    "changes": {
+     "amount": [
+      500000.0,
+      80000.0
+     ]
+    },
+    "owner": "Credit Risk Policy",
+    "rule_id": "CAP-0100",
+    "status": "bound"
+   },
+   {
+    "changes": {},
+    "owner": "Credit Risk Policy",
+    "rule_id": "CAP-0150",
+    "status": "not_applicable"
+   },
+   {
+    "changes": {},
+    "owner": "Unsecured Lending Product",
+    "rule_id": "CAP-0140",
+    "status": "not_applicable"
+   },
+   {
+    "changes": {},
+    "owner": "Credit Risk Policy",
+    "rule_id": "CAP-0175",
+    "status": "evaluated_did_not_bind"
+   },
+   {
+    "changes": {
+     "grade": [
+      12.0,
+      9.0
+     ]
+    },
+    "owner": "Credit Risk Policy",
+    "rule_id": "CAP-0210",
+    "status": "bound"
+   },
+   {
+    "changes": {},
+    "owner": "Credit Risk Policy",
+    "rule_id": "CAP-0240",
+    "status": "evaluated_did_not_bind"
+   },
+   {
+    "changes": {},
+    "owner": "Credit Risk Policy",
+    "rule_id": "CAP-0118",
+    "status": "coincident"
+   },
+   {
+    "changes": {},
+    "owner": "Credit Systems",
+    "rule_id": "CAP-0305",
+    "status": "not_applicable"
+   },
+   {
+    "changes": {},
+    "owner": "Unsecured Lending Product",
+    "rule_id": "CAP-0330",
+    "status": "evaluated_did_not_bind"
+   },
+   {
+    "changes": {},
+    "owner": "Credit Systems",
+    "rule_id": "CAP-0361",
+    "status": "evaluated_did_not_bind"
+   },
+   {
+    "changes": {
+     "amount": [
+      80000.0,
+      100000.0
+     ]
+    },
+    "owner": "Unsecured Lending Product",
+    "rule_id": "CAP-0420",
+    "status": "raised"
+   }
+  ],
+  "worst_acceptable_grade": 9.0,
+  "worst_acceptable_grade_binding_rule_id": "CAP-0210",
+  "worst_acceptable_grade_chain": [
+   {
+    "rule_id": "seed",
+    "value": 12.0
+   },
+   {
+    "rule_id": "CAP-0210",
+    "value": 9.0
+   }
+  ],
+  "worst_arrears_months": 2.0,
+  "worst_arrears_months_score": 0.0
+ }
+}

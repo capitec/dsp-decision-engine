@@ -2,9 +2,9 @@
 import polars as pl
 import pytest
 
-from decider._engine import Engine
-from decider.exceptions import MissingInputError
-from decider.steps.trees import TreeConfig
+from decikit._engine import Engine
+from decikit.exceptions import MissingInputError
+from decikit.steps.trees import TreeConfig
 
 MODES = ("interpreted", "stepped", "fused")
 

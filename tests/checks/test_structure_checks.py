@@ -4,11 +4,11 @@ import sys
 import polars as pl
 import pytest
 
-from decider import branch, flow, frame_step, loop, param, step
-from decider.lab import checks
-from decider.ops.decimal import Currency
-from decider.steps.tables import DecisionTableConfig
-from decider.steps.trees import TreeConfig
+from decikit import branch, flow, frame_step, loop, param, step
+from decikit.lab import checks
+from decikit.ops.decimal import Currency
+from decikit.steps.tables import DecisionTableConfig
+from decikit.steps.trees import TreeConfig
 
 OUT = {"data": [{"o": 0}, {"o": 1}], "default": {"o": -1}, "dtypes": [["o", "Int64"]]}
 STRUCTURE = ["unreachable_branch", "dead_output", "shadowed_write", "unused_input", "unbounded_loop",
@@ -124,12 +124,12 @@ def test_a_tree_whose_branches_all_matter_is_quiet():
 
 
 def test_without_z3_a_tree_is_skipped_not_an_error(monkeypatch):
-    monkeypatch.delitem(sys.modules, "decider.lab.diff._smt", raising=False)
+    monkeypatch.delitem(sys.modules, "decikit.lab.diff._smt", raising=False)
     monkeypatch.setitem(sys.modules, "z3", None)
     report = checks.run(flow(_tree((_gt(5), 1, 0)), name="term"), ["unreachable_branch"])
     assert not report.findings
     (s,) = report.skipped
-    assert (s.code, "decider[prove]" in s.reason, "term/t" in s.reason) == ("DCD201", True, True)
+    assert (s.code, "decikit[prove]" in s.reason, "term/t" in s.reason) == ("DCD201", True, True)
 
 
 def test_a_tree_the_encoding_cannot_model_is_skipped_with_the_reason():

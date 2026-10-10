@@ -6,12 +6,12 @@ import polars as pl
 import pytest
 from numba import typeof
 
-from decider import flow
-from decider._engine import Engine
-from decider._engine.compile import compile_call
-from decider._engine.ir.context import to_ir
-from decider.lab.testing import no_recompile
-from decider.steps.trees import TreeConfig
+from decikit import flow
+from decikit._engine import Engine
+from decikit._engine.compile import compile_call
+from decikit._engine.ir.context import to_ir
+from decikit.lab.testing import no_recompile
+from decikit.steps.trees import TreeConfig
 
 MATCH_TYPES = ("exact", "starts_with", "ends_with", "contains", "regex")
 HIT = {"data": [{"hit": 0}, {"hit": 1}], "default": {"hit": -1}, "dtypes": [["hit", "Int64"]]}

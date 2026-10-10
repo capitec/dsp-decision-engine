@@ -9,13 +9,13 @@ import polars as pl
 import pytest
 from numba.core.serialize import dumps, loads
 
-import decider._engine.params.bundles as bundles
-import decider._engine.params.validate as validate
-from decider import flow, param
-from decider._engine import Engine
-from decider._engine.params import ParamsError, bundle_class
-from decider._engine.params.bundles import _decode, _encode
-from decider.lab.testing import assert_equivalent
+import decikit._engine.params.bundles as bundles
+import decikit._engine.params.validate as validate
+from decikit import flow, param
+from decikit._engine import Engine
+from decikit._engine.params import ParamsError, bundle_class
+from decikit._engine.params.bundles import _decode, _encode
+from decikit.lab.testing import assert_equivalent
 
 # --- the class ------------------------------------------------------------------
 
@@ -135,10 +135,10 @@ def test_two_nodes_sharing_a_key_agree_across_modes():
 _CHILD = textwrap.dedent("""
     import contextlib, io, json
     import polars as pl
-    from decider._engine import Engine
-    from decider._engine.ir.decls import Input, Output, ParamDecl
-    from decider._engine.ir.nodes import CallNode
-    from decider._engine.ir.origin import Origin
+    from decikit._engine import Engine
+    from decikit._engine.ir.decls import Input, Output, ParamDecl
+    from decikit._engine.ir.nodes import CallNode
+    from decikit._engine.ir.origin import Origin
 
     def band(row, params, consts):
         return (int(row[0] > params.cut),)

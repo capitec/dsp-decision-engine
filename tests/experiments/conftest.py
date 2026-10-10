@@ -3,7 +3,7 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
-from decider import flow, param
+from decikit import flow, param
 
 
 def ratio(income: float, debt: float) -> float:

@@ -1,4 +1,4 @@
-"""A `decider.loop` over bundle masks whose body sums the bundle's items, three ways.
+"""A `decikit.loop` over bundle masks whose body sums the bundle's items, three ways.
 
 The body reads `items: Columnar[Item]`, sliced out of flat per-field arrays inside the
 loop's own kernel, so the loop packs. The hand-written `@njit` search is the ceiling.
@@ -16,8 +16,8 @@ import numba
 import numpy as np
 import polars as pl
 
-from decider import Engine, flow, loop, step
-from decider.ops import Columnar
+from decikit import Engine, flow, loop, step
+from decikit.ops import Columnar
 
 ITEMS = int(sys.argv[1]) if len(sys.argv) > 1 else 9
 ORDERS = int(sys.argv[2]) if len(sys.argv) > 2 else 100

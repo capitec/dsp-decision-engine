@@ -5,13 +5,13 @@ import typing as t
 import pytest
 from pydantic import BaseModel, TypeAdapter, ValidationError
 
-from decider import step
-from decider import _engine as engine
-from decider._engine.ir.decls import Input, Output, ParamDecl
-from decider._engine.ir.nodes import CallNode
-from decider._registry import import_path
-from decider.steps import ConfigurableStep, ParamRef, StepRef, Value
-from decider.steps._sequential import SequentialStep
+from decikit import step
+from decikit import _engine as engine
+from decikit._engine.ir.decls import Input, Output, ParamDecl
+from decikit._engine.ir.nodes import CallNode
+from decikit._registry import import_path
+from decikit.steps import ConfigurableStep, ParamRef, StepRef, Value
+from decikit.steps._sequential import SequentialStep
 
 
 class Threshold(ConfigurableStep):

@@ -2,11 +2,11 @@
 import polars as pl
 import pytest
 
-from decider import _engine as engine
-from decider._engine import Engine
-from decider._engine.compile import kernel
-from decider.steps.expr import parse
-from decider.steps.trees import TreeConfig, _walker as walker
+from decikit import _engine as engine
+from decikit._engine import Engine
+from decikit._engine.compile import kernel
+from decikit.steps.expr import parse
+from decikit.steps.trees import TreeConfig, _walker as walker
 
 FRAME = pl.DataFrame({"x": [25.0, 15.0], "y": [10.0, 10.0]})
 

@@ -23,7 +23,7 @@ describe('tree validation parser', () => {
     expect(parsed[0].message).toContain('1bad');
   });
 
-  it('maps node index to the saved node id and skips decider tags', () => {
+  it('maps node index to the saved node id and skips decikit tags', () => {
     const parsed = parseValidationErrors(
       [
         e(['v3', 'nodes', 1, 'data', 'composite'], 'a composite needs at least one condition'),
@@ -54,7 +54,7 @@ describe('tree validation parser', () => {
 describe('flat rule validation parser', () => {
   const base = ['prioritized_flat_rule', 'rules', 0, 'rule'];
 
-  it('strips decider tags so paths match the editor rule structure', () => {
+  it('strips decikit tags so paths match the editor rule structure', () => {
     const parsed = parseFlatRuleValidationErrors([
       e([...base, 'composite', 'conditions', 0, 'unary', '<', 'threshold', 'int']),
       e([...base, 'composite', 'conditions', 0, 'unary', '<', 'threshold', 'float']),

@@ -36,7 +36,7 @@ const isAllowedListItem = (inner: PolarsType, defs: UITypeDefs): boolean => {
   return def?.type === 'struct' && isFlatStruct(def, defs);
 };
 
-/** Why `fieldType` can't be a field of a struct type, or null when decider accepts it. */
+/** Why `fieldType` can't be a field of a struct type, or null when decikit accepts it. */
 export const structFieldProblem = (fieldType: PolarsType, defs: UITypeDefs): string | null => {
   const id = customId(fieldType);
   if (id !== null) return defs[id]?.type === 'struct' ? NESTED_STRUCT_MESSAGE : null;
@@ -50,7 +50,7 @@ export const structFieldProblem = (fieldType: PolarsType, defs: UITypeDefs): str
 export const isAllowedStructField = (fieldType: PolarsType, defs: UITypeDefs): boolean =>
   structFieldProblem(fieldType, defs) === null;
 
-/** Field name -> problem, for every field of `typeDef` decider would refuse. */
+/** Field name -> problem, for every field of `typeDef` decikit would refuse. */
 export const structFieldProblems = (typeDef: UITypeDefStruct, defs: UITypeDefs): Record<string, string> => {
   const problems: Record<string, string> = {};
   for (const [name, t] of typeDef.definition.fields) {

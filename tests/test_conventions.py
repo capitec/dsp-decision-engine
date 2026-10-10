@@ -15,21 +15,21 @@ from tests.conventions_allowlists import (
     UPWARD_IMPORT,
 )
 
-DECIDER = Path(__file__).resolve().parent.parent / "decider"
+DECIKIT = Path(__file__).resolve().parent.parent / "decikit"
 MAX_LINES = 500
-ALLOWLIST: dict[str, str] = {}  # {path relative to decider/: reason}
+ALLOWLIST: dict[str, str] = {}  # {path relative to decikit/: reason}
 BANNED = re.compile(r"doc \d\d|§|EXPERIMENTS")
 
 
 def _files():
-    return sorted(DECIDER.rglob("*.py"))
+    return sorted(DECIKIT.rglob("*.py"))
 
 
 def test_no_file_over_500_lines_unless_allowlisted():
     long = [
         f"{rel} ({n} lines)"
         for p in _files()
-        if (rel := p.relative_to(DECIDER).as_posix()) not in ALLOWLIST
+        if (rel := p.relative_to(DECIKIT).as_posix()) not in ALLOWLIST
         and (n := len(p.read_text().splitlines())) > MAX_LINES
     ]
     assert not long, "split these into packages or allowlist them with a reason:\n" + "\n".join(long)
@@ -37,7 +37,7 @@ def test_no_file_over_500_lines_unless_allowlisted():
 
 def test_no_references_to_docs_or_experiments():
     hits = [
-        f"{p.relative_to(DECIDER)}:{i}: {line.strip()}"
+        f"{p.relative_to(DECIKIT)}:{i}: {line.strip()}"
         for p in _files()
         for i, line in enumerate(p.read_text().splitlines(), 1)
         if BANNED.search(line)
@@ -69,7 +69,7 @@ def _is_private(segment):
 
 
 def _parts(p):
-    return p.relative_to(DECIDER).with_suffix("").parts
+    return p.relative_to(DECIKIT).with_suffix("").parts
 
 
 def _dotted(p):
@@ -86,13 +86,13 @@ def _tree(p):
 
 
 def _exists(module):
-    base = DECIDER.parent.joinpath(*module.split("."))
+    base = DECIKIT.parent.joinpath(*module.split("."))
     return base.with_suffix(".py").exists() or (base / "__init__.py").exists()
 
 
 def _imports(p):
-    """Yield (lineno, imported module, private name or None) for every decider import in a file, nested ones included."""
-    package = ["decider", *_parts(p)[:-1]]
+    """Yield (lineno, imported module, private name or None) for every decikit import in a file, nested ones included."""
+    package = ["decikit", *_parts(p)[:-1]]
     for node in ast.walk(_tree(p)):
         if isinstance(node, ast.Import):
             mods = [(a.name, None) for a in node.names]
@@ -108,7 +108,7 @@ def _imports(p):
         else:
             continue
         for module, name in mods:
-            if module == "decider" or module.startswith("decider."):
+            if module == "decikit" or module.startswith("decikit."):
                 yield node.lineno, module, name
 
 
@@ -146,7 +146,7 @@ def _public(p):
 
 
 def test_public_modules_define_all():
-    missing = {p.relative_to(DECIDER).as_posix() for p in _modules() if _public(p) and _all_names(p) is None}
+    missing = {p.relative_to(DECIKIT).as_posix() for p in _modules() if _public(p) and _all_names(p) is None}
     _fail("add __all__ to these public modules, or make the module private with a leading underscore",
           missing - NO_ALL.keys())
     _stale(NO_ALL, missing, "NO_ALL")
@@ -154,7 +154,7 @@ def test_public_modules_define_all():
 
 def test_public_packages_stay_within_all_budget():
     big = {
-        p.parent.relative_to(DECIDER).as_posix() or "."
+        p.parent.relative_to(DECIKIT).as_posix() or "."
         for p in _modules()
         if p.name == "__init__.py" and _public(p) and len(_all_names(p) or ()) > ALL_BUDGET
     }
@@ -170,7 +170,7 @@ def test_no_private_imports_across_packages():
         deep = any(_is_private(s) for s in parts[2:]) or name is not None
         engine_leak = len(parts) > 1 and parts[1] == ENGINE and top not in CORE
         if engine_leak or (deep and len(parts) > 1 and top != parts[1]):
-            bad[f"{_dotted(p)} -> {module[len('decider.'):]}{'.' + name if name else ''}"] = line
+            bad[f"{_dotted(p)} -> {module[len('decikit.'):]}{'.' + name if name else ''}"] = line
     _fail("import the public name instead, or allowlist the import with a reason",
           [f"{k} (line {v})" for k, v in bad.items() if k not in PRIVATE_IMPORT])
     _stale(PRIVATE_IMPORT, bad, "PRIVATE_IMPORT")
@@ -186,7 +186,7 @@ def test_every_top_level_package_has_a_layer():
 
 def test_imports_only_go_down_the_layer_map():
     bad = {
-        f"{_dotted(p)} -> {module.removeprefix('decider.')} (line {line})": f"{_dotted(p)} -> {module.removeprefix('decider.')}"
+        f"{_dotted(p)} -> {module.removeprefix('decikit.')} (line {line})": f"{_dotted(p)} -> {module.removeprefix('decikit.')}"
         for p, line, module, _, unit in _edges()
         if LAYER[_unit(p)] < LAYER[unit]
     }
@@ -214,7 +214,7 @@ def test_no_import_cycles_between_packages_in_a_layer():
 
 
 def _runner_files():
-    d = DECIDER / ENGINE / "run"
+    d = DECIKIT / ENGINE / "run"
     return [p for p in [d / "engine.py", *sorted((d / "runners").glob("*.py"))] if p.exists()]
 
 
@@ -254,7 +254,7 @@ def test_runners_and_executable_keep_no_per_call_state():
             for fn in (n for n in cls.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))):
                 if fn.name not in LOCKED_METHODS:
                     for line, what in _mutations(fn):
-                        bad[f"{p.relative_to(DECIDER).as_posix()}::{cls.name}.{fn.name}"] = f"{what} (line {line})"
+                        bad[f"{p.relative_to(DECIKIT).as_posix()}::{cls.name}.{fn.name}"] = f"{what} (line {line})"
     _fail("keep per-call state in locals or the State object; only __init__ and the locked compile may write self",
           [f"{k}: {v}" for k, v in bad.items() if k not in SHARED_STATE])
     _stale(SHARED_STATE, bad, "SHARED_STATE")
@@ -264,7 +264,7 @@ def test_runners_and_executable_keep_no_per_call_state():
 
 
 def _kernel_dirs(p):
-    rel = p.relative_to(DECIDER).as_posix()
+    rel = p.relative_to(DECIKIT).as_posix()
     return rel.startswith(f"{ENGINE}/compile/semantics/"), rel.startswith("ops/")
 
 
@@ -278,18 +278,18 @@ def test_kernel_decorators_live_in_the_kernel_library():
                     d = d.func if isinstance(d, ast.Call) else d
                     name = d.attr if isinstance(d, ast.Attribute) else getattr(d, "id", "")
                     if (name in KERNEL_DECORATORS and not semantics) or (name == JITABLE and not (semantics or ops)):
-                        bad.setdefault(p.relative_to(DECIDER).as_posix(), set()).add(name)
-    _fail("register overloads and intrinsics in _engine/compile/semantics/ and jitable helpers in decider/ops/, or allowlist the file",
+                        bad.setdefault(p.relative_to(DECIKIT).as_posix(), set()).add(name)
+    _fail("register overloads and intrinsics in _engine/compile/semantics/ and jitable helpers in decikit/ops/, or allowlist the file",
           [f"{k}: {sorted(v)}" for k, v in bad.items() if k not in KERNEL_DECORATOR])
     _stale(KERNEL_DECORATOR, bad, "KERNEL_DECORATOR")
 
 
 def test_cache_salt_covers_every_semantics_span_decimal_type_and_ops_file():
-    compile_dir = DECIDER / ENGINE / "compile"
-    files = {*(compile_dir / "semantics").rglob("*.py"), *(DECIDER / "ops").rglob("*.py")}
+    compile_dir = DECIKIT / ENGINE / "compile"
+    files = {*(compile_dir / "semantics").rglob("*.py"), *(DECIKIT / "ops").rglob("*.py")}
     files |= {compile_dir / "span.py", compile_dir / "decimal_type.py"}
-    files = sorted(files, key=lambda p: p.relative_to(DECIDER).as_posix())
-    salt = importlib.import_module(f"decider.{ENGINE}.compile.semantics").SALT
+    files = sorted(files, key=lambda p: p.relative_to(DECIKIT).as_posix())
+    salt = importlib.import_module(f"decikit.{ENGINE}.compile.semantics").SALT
     assert salt == hashlib.sha256(b"".join(p.read_bytes() for p in files)).hexdigest(), (
         "SALT must hash every file under semantics/ and ops/ plus span.py and decimal_type.py, found by walking"
     )

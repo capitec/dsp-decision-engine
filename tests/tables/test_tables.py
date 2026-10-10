@@ -2,11 +2,11 @@
 import polars as pl
 import pytest
 
-from decider import flow
-from decider._engine import Engine
-from decider.steps.tables import DecisionTableConfig
-from decider.steps.tables.schema import BoundMode
-from decider.steps.trees.schema import RangeEndLogic
+from decikit import flow
+from decikit._engine import Engine
+from decikit.steps.tables import DecisionTableConfig
+from decikit.steps.tables.schema import BoundMode
+from decikit.steps.trees.schema import RangeEndLogic
 
 BANDS = [{"lo": None, "hi": 30.0, "pts": 1}, {"lo": 30.0, "hi": 70.0, "pts": 2}, {"lo": 70.0, "hi": None, "pts": 3}]
 
@@ -256,3 +256,53 @@ def test_each_group_of_equal_keys_is_its_own_band_ladder_with_open_edges(run):
 def test_a_gap_or_open_edge_inside_one_group_is_rejected(rows, message):
     with pytest.raises(ValueError, match=message):
         _graded(rows)
+
+
+def test_packing_string_outputs_does_not_compare_every_choice_per_row():
+    from decikit.steps.tables._encode import Shape, dtypes, pack
+
+    comparisons = 0
+
+    class Counted(str):
+        __hash__ = str.__hash__
+
+        def __eq__(self, other):
+            nonlocal comparisons
+            comparisons += 1
+            return str.__eq__(self, other)
+
+    n = 2000
+    ids = [Counted(f"cell{i}") for i in range(n)]
+    table = DecisionTableConfig(
+        name="t", columns={"k": "Float64", "cell": "String"}, rows=[{"k": 0.0, "cell": "x"}],
+        expression={"type": "eq", "variable": "v", "value_column": "k"}, outputs=["cell"])
+    shape = Shape(table.expression, [("cell", "str", tuple(ids))], dtypes(table.columns), {"v": "float"})
+    pack([{"k": float(i), "cell": c} for i, c in enumerate(ids)], shape)
+    assert comparisons < 10 * n
+
+
+def _grid(inf=float("inf"), **row_2) -> DecisionTableConfig:
+    rows = [{"a_lo": a0, "a_hi": a1, "t_lo": t0, "t_hi": t1, "pts": 10 * i + j}
+            for i, (a0, a1) in enumerate([(-inf, 100.0), (100.0, inf)])
+            for j, (t0, t1) in enumerate([(-inf, 12.0), (12.0, inf)])]
+    rows[2].update(row_2)
+    return DecisionTableConfig(
+        name="grid", columns={"a_lo": "Float64", "a_hi": "Float64", "t_lo": "Float64", "t_hi": "Float64",
+                              "pts": "Int64"}, rows=rows,
+        expression={"type": "and", "expressions": [
+            {"type": "between", "variable": "amount", "lower_bound_column": "a_lo", "upper_bound_column": "a_hi",
+             "allow_gaps": True},
+            {"type": "between", "variable": "term", "lower_bound_column": "t_lo", "upper_bound_column": "t_hi",
+             "allow_gaps": True}]},
+        outputs=["pts"], default=[-1])
+
+
+def test_two_band_dimensions_with_infinite_outer_edges_pick_the_cell(run):
+    frame = pl.DataFrame({"amount": [50.0, 50.0, 500.0, 500.0], "term": [6.0, 24.0, 6.0, 24.0]})
+    assert run(_grid(), frame)["pts"].to_list() == [0, 1, 10, 11]
+
+
+def test_an_open_edge_that_borrows_an_empty_band_from_the_row_before_is_rejected():
+    # Row 2 starts the second amount's term bands, but its ladder is the whole table: its lower would be row 1's inf.
+    with pytest.raises(ValueError, match=r"Row 2: band \(inf, 12.0\) is empty"):
+        _grid(t_lo=None)

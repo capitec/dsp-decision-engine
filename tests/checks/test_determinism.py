@@ -4,8 +4,8 @@ import time
 from datetime import datetime as dt
 from time import time as now
 
-from decider import flow, step
-from decider.lab import checks
+from decikit import flow, step
+from decikit.lab import checks
 
 
 def _found(pipeline, alias):

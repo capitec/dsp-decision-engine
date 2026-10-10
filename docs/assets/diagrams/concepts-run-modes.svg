@@ -49,7 +49,7 @@
   <text x="20" y="328" font-size="16" font-weight="600" fill="#134e4a">fused</text>
   <text x="20" y="350" font-size="14" fill="#134e4a">one kernel per run</text>
   <text x="20" y="368" font-size="14" fill="#134e4a">of steps; default for</text>
-  <text x="20" y="386" font-size="14" fill="#134e4a">decider serve</text>
+  <text x="20" y="386" font-size="14" fill="#134e4a">decikit serve</text>
   <rect x="230" y="304" width="360" height="80" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
   <rect x="610" y="304" width="170" height="80" rx="10" fill="#fee2e2" stroke="#dc2626" stroke-width="1.5"/>
   <rect x="800" y="304" width="170" height="80" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>

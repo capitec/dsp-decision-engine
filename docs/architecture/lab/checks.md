@@ -1,6 +1,6 @@
 # Checks internals
 
-`decider.lab.checks` runs diagnostics over a flow and returns a structured `Report`. Most checks read the step
+`decikit.lab.checks` runs diagnostics over a flow and returns a structured `Report`. Most checks read the step
 source and the IR without running anything. A few need a frame, and a few run the flow. Every check has a stable
 code, every finding points at a node through the same `StepRef` that [`describe`](index.md) produces, and the
 project's `checks.yaml` decides what runs and what fails the build. The [checks guide](../../guides/checks.md)
@@ -8,19 +8,19 @@ covers using them; this page covers how they work.
 
 | File | What it holds |
 |---|---|
-| `decider/lab/checks/__init__.py` | The public names: `Check`, `CheckContext`, `check`, `run`, `catalogue`, `standard`, `Finding`, `Report`, `Severity`, `SkippedCheck`, `Suppression` |
-| `decider/lab/checks/_base.py` | `Check` (the registry root), the lazy alias table, `STANDARD`, `CheckContext`, the `@check` decorator, `registered()` |
-| `decider/lab/checks/_run.py` | `run`, the `ConfigurableStep` hook pass, `catalogue` |
-| `decider/lab/checks/_config.py` | `ChecksConfig`, `build`, `find_config`, `load_config` |
-| `decider/lab/checks/_report.py` | `Severity`, `Suppression`, `Finding`, `SkippedCheck`, `Report` with `to_text` and `to_sarif` |
-| `decider/lab/checks/_ast.py` | `Source`, `parse`, `source_file`: a step function's parsed source |
-| `decider/lab/checks/_builtin/determinism.py` | DCD001 to DCD003 |
-| `decider/lab/checks/_builtin/numeric/` | DCD101 to DCD110: `_scope.py` (type and bound inference), `money.py`, `floats.py` |
-| `decider/lab/checks/_builtin/structure.py` | DCD201 to DCD208, including the z3 pass over trees and tables |
-| `decider/lab/checks/_builtin/params.py` | DCD301 to DCD304 |
-| `decider/lab/checks/_builtin/ids.py` | DCD401 to DCD403 |
-| `decider/lab/checks/_builtin/data.py` | DCD502, DCD503, DCD504, DCD506: checks that need a frame |
-| `decider/lab/checks/_builtin/runtime.py` | DCD501, DCD505: checks that run the flow over generated cases |
+| `decikit/lab/checks/__init__.py` | The public names: `Check`, `CheckContext`, `check`, `run`, `catalogue`, `standard`, `Finding`, `Report`, `Severity`, `SkippedCheck`, `Suppression` |
+| `decikit/lab/checks/_base.py` | `Check` (the registry root), the lazy alias table, `STANDARD`, `CheckContext`, the `@check` decorator, `registered()` |
+| `decikit/lab/checks/_run.py` | `run`, the `ConfigurableStep` hook pass, `catalogue` |
+| `decikit/lab/checks/_config.py` | `ChecksConfig`, `build`, `find_config`, `load_config` |
+| `decikit/lab/checks/_report.py` | `Severity`, `Suppression`, `Finding`, `SkippedCheck`, `Report` with `to_text` and `to_sarif` |
+| `decikit/lab/checks/_ast.py` | `Source`, `parse`, `source_file`: a step function's parsed source |
+| `decikit/lab/checks/_builtin/determinism.py` | DCD001 to DCD003 |
+| `decikit/lab/checks/_builtin/numeric/` | DCD101 to DCD110: `_scope.py` (type and bound inference), `money.py`, `floats.py` |
+| `decikit/lab/checks/_builtin/structure.py` | DCD201 to DCD208, including the z3 pass over trees and tables |
+| `decikit/lab/checks/_builtin/params.py` | DCD301 to DCD304 |
+| `decikit/lab/checks/_builtin/ids.py` | DCD401 to DCD403 |
+| `decikit/lab/checks/_builtin/data.py` | DCD502, DCD503, DCD504, DCD506: checks that need a frame |
+| `decikit/lab/checks/_builtin/runtime.py` | DCD501, DCD505: checks that run the flow over generated cases |
 
 ## A check is a registry module
 
@@ -33,7 +33,7 @@ path, lazy built-ins, a JSON Schema per check for editor forms, and validation o
 | `type` | `Literal` field | The alias config names it by (`"division_by_variable"`) |
 | `code` | `ClassVar[str]` | Stable code, never reused. Built-ins are `DCD` plus a family digit; a third-party check uses its own prefix |
 | `needs_data` | `ClassVar[bool]` | The runner skips it, and lists it in `report.skipped`, when no `data=` is given |
-| `executes` | `ClassVar[bool]` | It runs the flow. Shown by `catalogue()` and `decider check --list`; the runner does not gate on it |
+| `executes` | `ClassVar[bool]` | It runs the flow. Shown by `catalogue()` and `decikit check --list`; the runner does not gate on it |
 | `severity` | field, default `warning` | The default, overridable per instance or per config entry |
 | `run(ctx)` | abstract | Yields `Finding`s, normally built with `ctx.finding(...)` |
 
@@ -42,8 +42,8 @@ error naming the check.
 
 The 34 built-ins are registered lazily. `_base.py` calls `Check.lazy({...})` with every alias mapped to the module
 that defines it, so `checks.run(pipeline, ["bare_round"])` imports only `_builtin/numeric`. `registered()` is the
-full list: it loads every `decider.checks` entry point (that is how an installed package ships checks), then
-resolves every name in `Check.json_schema()`. `catalogue()`, `decider check --list` and `DCD403` use it.
+full list: it loads every `decikit.checks` entry point (that is how an installed package ships checks), then
+resolves every name in `Check.json_schema()`. `catalogue()`, `decikit check --list` and `DCD403` use it.
 
 `checks.check(code, severity, alias)` turns a generator function `f(ctx)` into a check without a class. It builds
 a `Check` subclass with `type(...)`, a `Literal` alias (the function name by default) and `run` delegating to the
@@ -66,7 +66,7 @@ determinism, `1` numeric, `2` structure, `3` params, `4` ids, `5` runtime) and c
 four data checks in `_builtin/data.py` are listed as `runtime`:
 
 ```text
-$ decider check --list
+$ decikit check --list
 DCD001  wall_clock  determinism  warning
 DCD002  impure  determinism  warning
 DCD003  mutates_input  determinism  warning
@@ -121,7 +121,7 @@ flowchart LR
 | `steps` | `step_map(pipeline)`: the step object behind each node path, used for configurable steps |
 | `nodes` | Every IR node in pre-order |
 | `outputs` | `(output frame, {output column: producing CallNode})` from one run over `frame` with `params`, or `None` when the run raises; the exception is kept on `ctx.crash` |
-| `calls()` | Call nodes of authored code. Nodes whose function's module starts with `decider.steps` are skipped, because AST checks over generated tree, table and scorecard kernels are noise |
+| `calls()` | Call nodes of authored code. Nodes whose function's module starts with `decikit.steps` are skipped, because AST checks over generated tree, table and scorecard kernels are noise |
 | `source(node)` | The parsed `Source` of the node's function, cached by function identity, or `None` when the source can't be read |
 | `finding(node, message, fix=None, *, line=None, code=None, check=None, severity=None, **detail)` | A `Finding` with code, alias and severity from the running check, the node's `StepRef`, file and line filled in, and `suppressed` set when the node or an ancestor suppresses it |
 | `node` | Set while a configurable step's hook or the z3 pass runs: the node being checked |
@@ -157,7 +157,7 @@ flowchart TD
   classDef error fill:#fee2e2,stroke:#dc2626,color:#7f1d1d,stroke-width:1.5px;
 ```
 
-`run(pipeline, checks=None, *, config=None, data=None, params=None)` in `decider/lab/checks/_run.py`:
+`run(pipeline, checks=None, *, config=None, data=None, params=None)` in `decikit/lab/checks/_run.py`:
 
 1. Policy. `config=` names a file and `load_config` reads it; otherwise `find_config()` looks for the project's.
    With neither, there is no config.
@@ -170,7 +170,7 @@ flowchart TD
 4. Each check in order. A `needs_data` check with no `data=` becomes a `SkippedCheck` with the reason
    `needs data=; none was given`. Otherwise the runner sets `ctx._current` (so `ctx.finding` knows the code,
    alias and severity) and drains `check.run(ctx)`. Anything that isn't a `Finding` raises
-   `DeciderError: check '<alias>' yielded <type>, not a Finding`. An exception inside a check propagates and ends
+   `DecikitError: check '<alias>' yielded <type>, not a Finding`. An exception inside a check propagates and ends
    the run: there is no per-check isolation.
 5. The hook pass. For each step in `ctx.steps` that is a `ConfigurableStep`, the runner sets `ctx.node` to that
    step's node and collects `step.check(ctx)`. The base class returns nothing; a step type overrides it to check
@@ -185,12 +185,12 @@ flowchart TD
 
 `find_config(start=None)` expands the `checks_path` setting, default `"${PROJECT_ROOT}/checks.yaml"`, with the
 same `project_root` rule datasets use (the nearest ancestor with `configs/`, else the cwd; see [Data](data.md)).
-The environment variable is `DECIDER_CHECKS_PATH`. It returns the first of that path, its `.json` sibling and its
+The environment variable is `DECIKIT_CHECKS_PATH`. It returns the first of that path, its `.json` sibling and its
 `.yml` sibling that exists.
 
 `load_config(path)` reads JSON for a `.json` file and YAML otherwise (PyYAML, an optional dependency; a missing
 install raises the usual missing-dependency error). An empty file is an empty config. Every problem is a
-`DeciderError` that names the file:
+`DecikitError` that names the file:
 
 ```text
 Error: .../proj/checks.yaml: invalid checks config:
@@ -206,7 +206,7 @@ checks.0
 | `extends` | `"standard"` | `"standard"` or `null`. With `null`, only `checks` run |
 | `checks` | `[]` | Check entries, each validated through the registry: an alias with options and severity, or an import path |
 | `disable` | `[]` | Aliases or codes switched off project-wide |
-| `fail_on` | `error` | The default gate for `Report.fail_on()` and `decider check` |
+| `fail_on` | `error` | The default gate for `Report.fail_on()` and `decikit check` |
 
 `instances()` builds the list. Entries in `checks` are deduplicated by `(type, options)`, so two entries of one
 type with different options both run. A type that appears in `checks` replaces the `standard` entry of that type,
@@ -228,11 +228,11 @@ fail_on: error
 ```
 
 ```text
-$ decider check risky:pipeline --select DCD4
+$ decikit check risky:pipeline --select DCD4
 error DCD401 durable_ids: flow 'loan' has no committed durable id
-    fix: run `decider ids`
+    fix: run `decikit ids`
 error DCD401 durable_ids: loan/affordability has no committed durable id
-    fix: run `decider ids`
+    fix: run `decikit ids`
 ...
 loan: 0 info, 0 warning, 5 error
 $ echo $?
@@ -266,7 +266,7 @@ flowchart LR
   S -- yes --> K["kept in report.findings<br/>shown with (suppressed by ...)"]:::neutral
   S -- no --> C["counted in report.counts"]:::tooling
   C --> G{"severity rank >= floor?"}:::neutral
-  G -- yes --> X["fail_on(floor) is True<br/>decider check exits 1"]:::error
+  G -- yes --> X["fail_on(floor) is True<br/>decikit check exits 1"]:::error
   G -- no --> OK["passes"]:::data
   classDef tooling fill:#ede9fe,stroke:#7c3aed,color:#4c1d95,stroke-width:1.5px;
   classDef neutral fill:#f3f4f6,stroke:#6b7280,color:#1f2937,stroke-width:1.5px;
@@ -291,7 +291,7 @@ flowchart LR
 `Report` holds the `flow`, `findings`, `skipped` and `gate`. `counts` tallies unsuppressed findings per severity.
 `fail_on(severity=None)` is true when an unsuppressed finding is at least that severe, defaulting to `gate`. `ok`
 is `not fail_on("error")` and ignores `gate`: a project with `fail_on: warning` can have `report.ok` true while
-`decider check` exits 1. The model uses `extra="ignore"` so a dumped report, which includes the computed `ok` and
+`decikit check` exits 1. The model uses `extra="ignore"` so a dumped report, which includes the computed `ok` and
 `counts`, loads back.
 
 Running `standard` over a small loan flow with a few defects gives this text form (paths shortened; the first line
@@ -299,7 +299,7 @@ is a finding suppressed on the step):
 
 ```python
 import time
-from decider import flow, param, step
+from decikit import flow, param, step
 
 def affordability(income: float, debt: float) -> float:
     return debt / income
@@ -325,7 +325,7 @@ risky.py:17: warning DCD001 wall_clock: loan/stamp reads time.time(); a wall-clo
 risky.py:21: warning DCD101 int64_overflow: loan/scaled: principal * factor is a product in int64, which wraps silently
     fix: bound the operands, or compute in float64 (exact to 2**53)
 risky.py:12: warning DCD103 bare_round: loan/instalment: round(principal * (1 + rate) / months, 2) rounds differently in Python and compiled modes on .xx5
-    fix: use decider.ops.decimal.round(x, n, Rounding.HALF_UP)
+    fix: use decikit.ops.decimal.round(x, n, Rounding.HALF_UP)
 risky.py:7: warning DCD104 division_by_variable: loan/affordability: debt / income divides by income, which may be zero
     fix: guard it (`if b != 0`), use max(b, eps), or bound the param with gt=0
 risky.py:12: warning DCD104 division_by_variable: loan/instalment: principal * (1 + rate) / months divides by months, which may be zero
@@ -335,15 +335,15 @@ info DCD301 param_unconstrained: param 'rate' of loan/instalment has no bounds
 info DCD301 param_unconstrained: param 'factor' of loan/scaled has no bounds
     fix: add `ge=`/`le=` so a bad params document is refused
 warning DCD401 durable_ids: flow 'loan' has no committed durable id
-    fix: run `decider ids`
+    fix: run `decikit ids`
 warning DCD401 durable_ids: loan/affordability has no committed durable id
-    fix: run `decider ids`
+    fix: run `decikit ids`
 warning DCD401 durable_ids: loan/instalment has no committed durable id
-    fix: run `decider ids`
+    fix: run `decikit ids`
 warning DCD401 durable_ids: loan/stamp has no committed durable id
-    fix: run `decider ids`
+    fix: run `decikit ids`
 warning DCD401 durable_ids: loan/scaled has no committed durable id
-    fix: run `decider ids`
+    fix: run `decikit ids`
 risky.py:16: info DCD204 unused_input: loan/stamp: argument 'income' is never used
     fix: remove the argument; if it only orders this step after its producer, keep it and suppress this check
 loan: 3 info, 9 warning, 0 error, 1 suppressed
@@ -352,7 +352,7 @@ loan: 3 info, 9 warning, 0 error, 1 suppressed
 `report.ok` is `True` and `report.fail_on("warning")` is `True`. The order follows the check list, not the source.
 
 `to_sarif()` produces SARIF 2.1.0, which GitHub code scanning and the VS Code SARIF viewer read. Rules are the
-distinct codes with the alias as `name`; `info` maps to `note`. Each result's `partialFingerprints["decider/v1"]` is
+distinct codes with the alias as `name`; `info` maps to `note`. Each result's `partialFingerprints["decikit/v1"]` is
 `flow_id/step_id/code`, falling back to the report's flow id or name and to the step path when ids are missing, so a
 result keeps its identity across edits once ids are committed. A suppressed finding carries an `inSource`
 suppression:
@@ -362,7 +362,7 @@ suppression:
  "ruleId": "DCD001",
  "level": "warning",
  "message": {"text": "loan/stamp reads time.time(); a wall-clock read makes the flow non-deterministic"},
- "partialFingerprints": {"decider/v1": "loan/loan/stamp/DCD001"},
+ "partialFingerprints": {"decikit/v1": "loan/loan/stamp/DCD001"},
  "locations": [{"physicalLocation": {"artifactLocation": {"uri": "risky.py"}, "region": {"startLine": 17}}}],
  "suppressions": [{"kind": "inSource", "justification": "wall_clock on loan/stamp"}]
 }
@@ -379,7 +379,7 @@ keeps a nested function's indentation and `ast.parse` rejects it. It returns `No
 and stays quiet. `Source.line(node)` turns an AST line number into a file line.
 
 The numeric checks need more than syntax: whether `cents` is an int, whether `months` is known to be positive.
-`decider/lab/checks/_builtin/numeric/_scope.py` builds a `Scope` per step function from the IR:
+`decikit/lab/checks/_builtin/numeric/_scope.py` builds a `Scope` per step function from the IR:
 
 - `types` maps each name to `int`, `float`, `decimal` (a `Decimal` or `Currency`) or unknown. Inputs and params
   come from their annotations, constants from `node.consts`, and local assignments by inference: the right-hand
@@ -432,9 +432,9 @@ Driving the same steps by hand prints each intermediate value:
 
 ```python
 import ast
-from decider.lab.checks import CheckContext
-from decider.lab.checks._builtin.numeric._scope import scopes
-from decider.lab.checks._config import build
+from decikit.lab.checks import CheckContext
+from decikit.lab.checks._builtin.numeric._scope import scopes
+from decikit.lab.checks._config import build
 
 [check] = build(["division_by_variable"])
 print(type(check).__module__, type(check).__name__, check.code, check.severity)
@@ -451,7 +451,7 @@ print(finding.code, finding.check, finding.step.path, finding.line)
 ```
 
 ```text
-decider.lab.checks._builtin.numeric.money DivisionByVariable DCD104 Severity.WARNING
+decikit.lab.checks._builtin.numeric.money DivisionByVariable DCD104 Severity.WARNING
 ['loan/affordability']
 start line 10 inputs {'income': <class 'float'>, 'debt': <class 'float'>}
 types {'income': 'float', 'debt': 'float'} positive set()
@@ -538,8 +538,8 @@ registered classes whose `run` yields nothing, so they exist for the catalogue, 
 their findings come from `unreachable_branch`, which is in `standard`. `disable: [table_overlap]` drops them
 through the runner's final filter.
 
-The z3 pass imports `decider.lab.diff._smt` at call time. Without the `prove` extra it adds a `SkippedCheck`
-(`install decider[prove] to check this step's branches`) and moves on. A step the encoding can't model is skipped
+The z3 pass imports `decikit.lab.diff._smt` at call time. Without the `prove` extra it adds a `SkippedCheck`
+(`install decikit[prove] to check this step's branches`) and moves on. A step the encoding can't model is skipped
 with the solver's reason, and a table too large to compare in pairs skips DCD207 for that table. With z3
 installed, a four-row pricing table with a covered row, an overlap and a gap below zero gives:
 
@@ -648,14 +648,14 @@ The [checks guide](../../guides/checks.md) has the user-level recipes. The mecha
   if it reads `ctx.frame`, and yield `ctx.finding(...)` from `run`. Options are ordinary pydantic fields and show
   up in `catalogue()`'s schema.
 - Config names it by alias once its module is imported, or by `"package.module:Class"` at any time. An installed
-  package can register its module under the `decider.checks` entry-point group so `registered()` sees it.
+  package can register its module under the `decikit.checks` entry-point group so `registered()` sees it.
 - Use `ctx.calls()` and `ctx.source(node)` rather than walking the IR yourself, so generated kernels are skipped and
   sources are parsed once per run.
 - Put machine-readable values in `**detail`; editors and SARIF consumers read them.
 
 ## Why it is shaped this way
 
-The redesign replaced two packages (`decider.check` and `decider.checks`) that imported
+The redesign replaced two packages (`decikit.check` and `decikit.checks`) that imported
 each other; checks that were plain callables with no stable code, configuration, suppression or listing; three
 report shapes; an IR rebuilt by every check; findings with a weaker step reference that couldn't join to
 `describe()` nodes; a numeric check that was pure AST with no type knowledge, so it flagged `cents * rate / 12`
@@ -663,11 +663,11 @@ and missed `a / b` and bare `round()`; and no CLI or gate, so CI had to write Py
 
 The redesign made a check a registry module so JSON, VS Code and MCP can name and configure it, built one shared
 context, gave every finding the contract `StepRef`, and made the numeric checks read types and bounds from the
-IR. Two rules shape the API: decider reports and the client decides (`Report.ok` and `--fail-on` are
+IR. Two rules shape the API: the decider toolkit reports and the client decides (`Report.ok` and `--fail-on` are
 the gate; default severity is advice), and nothing is skipped silently (a check that needs data and didn't get it
 is in `report.skipped`). The suppression lives on the step (there are no inline `# ignore` comments and no suppressions by id in config), so it moves with the step
 and is reviewed in the same diff. Check policy lives in `checks.yaml` beside `configs/` and not inside it, because
-`configs/` is the versioned runtime store that `decider serve` stages and activates, and check policy is never
+`configs/` is the versioned runtime store that `decikit serve` stages and activates, and check policy is never
 served.
 
 ## Where to go next

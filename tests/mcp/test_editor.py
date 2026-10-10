@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from decider._tooling.mcp import Policy, build_server
-from decider._tooling.mcp._editor import EditorBridge, editor_dir, ws_hash
+from decikit._tooling.mcp import Policy, build_server
+from decikit._tooling.mcp._editor import EditorBridge, editor_dir, ws_hash
 from tests.mcp.test_mcp import _call, _tools
 
 
@@ -113,7 +113,7 @@ def test_ws_hash_is_stable_and_resolves_symlinks(tmp_path):
 def test_editor_dir_is_owner_only(tmp_path, monkeypatch):
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     d = editor_dir()
-    assert d == tmp_path / ".decider" / "editor"
+    assert d == tmp_path / ".decikit" / "editor"
     assert (d.stat().st_mode & 0o777) == 0o700
 
 
@@ -217,15 +217,15 @@ def test_debug_evaluate_is_redacted_unless_raw_is_enabled(tmp_path):
     assert win.actions == [{"kind": "debug_evaluate", "expression": "income"}]
 
 
-@pytest.mark.parametrize("env, raw", [({"DECIDER_MCP_RAW": "1"}, True), ({}, False)])
+@pytest.mark.parametrize("env, raw", [({"DECIKIT_MCP_RAW": "1"}, True), ({}, False)])
 def test_mcp_command_reads_raw_from_the_environment(monkeypatch, env, raw):
     from click.testing import CliRunner
 
-    from decider._tooling import mcp as mcp_pkg
-    from decider._tooling.cli import cli
+    from decikit._tooling import mcp as mcp_pkg
+    from decikit._tooling.cli import cli
 
     seen = []
     monkeypatch.setattr(mcp_pkg, "run_stdio", lambda raw: seen.append(raw))
-    monkeypatch.delenv("DECIDER_MCP_RAW", raising=False)
+    monkeypatch.delenv("DECIKIT_MCP_RAW", raising=False)
     assert CliRunner().invoke(cli, ["mcp"], env=env).exit_code == 0
     assert seen == [raw]

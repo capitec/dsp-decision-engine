@@ -1,6 +1,6 @@
 # Architecture overview
 
-Decider turns plain Python functions into a decision pipeline. The same pipeline runs over a polars frame or one
+The decider toolkit turns plain Python functions into a decision pipeline. The same pipeline runs over a polars frame or one
 record at a time, in plain Python or compiled with numba, and it can be served, stepped through in a debugger,
 traced, checked, diffed against another version and run as an experiment without changing its code. All of that
 works because every feature reads one structure: the IR, a small tree of nodes that each step produces for itself.
@@ -33,7 +33,7 @@ with a fill for nulls.
 
 ```python
 import polars as pl
-from decider import Engine, branch, flow, param, step, missing_as
+from decikit import Engine, branch, flow, param, step, missing_as
 
 
 def disposable_income(net_income: float, expenses: float) -> float:
@@ -89,7 +89,7 @@ Six stages sit between that code and that frame.
 
 ### The authoring layer
 
-A step is anything that can sit in a pipeline. `Step` is the abstract base in `decider/steps/_base.py`, and every
+A step is anything that can sit in a pipeline. `Step` is the abstract base in `decikit/steps/_base.py`, and every
 constructor (`step`, `frame_step`, `flow`, `dag`, `branch`, `loop`, `each`, `optimise`) returns a frozen, slotted
 dataclass subclass of it. `ConfigurableStep` is the one pydantic subclass: it loads from JSON, so trees, decision
 tables and scorecards are documents. A plain function converts to a `FunctionStep` wherever a step is expected.
@@ -103,7 +103,7 @@ step type and how its signature is read.
 
 `to_ir()` turns a step into IR. Every step type implements it, and each one returns fully expanded nodes: a tree
 config's `to_ir` returns the tree's row node directly, a `dag` returns its members already sorted. The node types are
-a closed set in `decider/_engine/ir/nodes.py`:
+a closed set in `decikit/_engine/ir/nodes.py`:
 
 | Node | Made by | Holds |
 |---|---|---|
@@ -120,7 +120,7 @@ debugger. They never enter a compile cache key. The IR data model itself is on [
 
 ### Wiring
 
-`decider/_engine/wiring/resolve.py` walks the IR in execution order and binds every name a node reads to the version
+`decikit/_engine/wiring/resolve.py` walks the IR in execution order and binds every name a node reads to the version
 of that name it reads. Each write makes a new `NodeVersion`, so a waterfall of three steps writing `limit` leaves
 three versions, and an emit of `limit@*` can return all of them. A name nothing produced yet is an input column. The
 result is a `Plan`: the resolved tree, every call, every version, the input columns and the outputs. Typos, reads of
@@ -140,7 +140,7 @@ which holds the plan, one runner for the mode and the params caches. The three r
 - `FusedRunner` subclasses that and compiles each innermost sequence of plain scalar steps into one kernel, and a
   branch or loop of plain scalar steps into one packed kernel when it can. It pauses at kernel boundaries only.
 
-All three give the same answers, and `decider.lab.testing.assert_equivalent` checks it. A step a kernel can't hold (one reading or
+All three give the same answers, and `decikit.lab.testing.assert_equivalent` checks it. A step a kernel can't hold (one reading or
 writing a plain `str`, a `date` or a `list`, or a body numba can't type) runs in Python for that step only and says so
 with a `FallbackWarning`. [Runners](engine/runners.md) traces the driver; [Compilation](engine/compile.md) and
 [Kernels](engine/kernels.md) cover what compiling means.
@@ -180,7 +180,7 @@ print(loan.parameters().defaults())
 
 ### The boundary
 
-Kernels read typed numpy arrays. `decider/_engine/boundary/` gets them out of a polars frame through one Arrow C stream
+Kernels read typed numpy arrays. `decikit/_engine/boundary/` gets them out of a polars frame through one Arrow C stream
 export, read by a vendored nanoarrow shim compiled on first import, with a cast first for dtypes that need one. A
 required input that holds a null raises `MissingInputError` naming the input, the step path and the row count. The
 single-record path skips polars: `score()` writes the dict's values straight into one-row arrays. [The data
@@ -194,11 +194,11 @@ boundary](engine/boundary.md) covers both.
 *Imports only go down. A dashed border marks a private package (a leading underscore in its path).*
 </div>
 
-`decider/` is one package with four populated layers, and `tests/test_conventions.py` fails when an import
+`decikit/` is one package with four populated layers, and `tests/test_conventions.py` fails when an import
 points up, when two packages in one layer import each other, or when a package outside the core reaches into
-`decider._engine`. The core (layer 1) is what you need to write and run a pipeline. The libraries (layer 3, all
-under `decider.lab`) are what you do to a flow away from serving. The tooling (layer 4) is the HTTP server and the
-programs `decider` launches: the CLI, the MCP server and the editor bridge. [Package layout](package-layout.md) walks
+`decikit._engine`. The core (layer 1) is what you need to write and run a pipeline. The libraries (layer 3, all
+under `decikit.lab`) are what you do to a flow away from serving. The tooling (layer 4) is the HTTP server and the
+programs `decikit` launches: the CLI, the MCP server and the editor bridge. [Package layout](package-layout.md) walks
 every file; [Foundation packages](foundation.md) covers layer 0.
 
 ## Lifecycle of a build
@@ -368,22 +368,22 @@ flowchart LR
 
 | Tool | Where | What it reads |
 |---|---|---|
-| Debug sessions | `decider/_engine/debug/`, public as `decider.debug.Session` | the runner generator: one `Checkpoint` per node; overrides become new versions in `State` |
-| Decision tracing | `decider/_engine/trace/`, public as `decider.trace` | `run(df, trace=sink)`; events keyed by call index, joined with each call's `Origin` |
-| Describe | `decider/lab/_describe.py` | `to_ir` for nodes and `resolve` for the data edges between them |
-| Checks | `decider/lab/checks/` | `CheckContext` exposes the IR, the resolved plan, the `step_map` and, for runtime checks, an interpreted run |
-| Diff | `decider/lab/diff/` | an IR content hash per node (the function's fingerprint, consts, inputs, outputs, params); trees and tables as z3 terms |
-| Testing | `decider/lab/testing/` | `Engine.bind` in every mode, then `run`, `score` and a session must agree |
-| Experiments | `decider/lab/experiments/` | an `Executable` in fused or stepped mode per scenario, fed in batches |
-| Serving | `decider/serving/` | `Engine().bind(...)` per config version, `score(record, params)` per request |
-| Editor bridge | `decider/_tooling/bridge/` | `to_ir` and `step_map` for the flow panel, a `Session` for stepping, `session.replace` for hot edits |
-| MCP | `decider/_tooling/mcp/` | `Engine().bind(step)` for runs, traces and sessions an agent asks for |
+| Debug sessions | `decikit/_engine/debug/`, public as `decikit.debug.Session` | the runner generator: one `Checkpoint` per node; overrides become new versions in `State` |
+| Decision tracing | `decikit/_engine/trace/`, public as `decikit.trace` | `run(df, trace=sink)`; events keyed by call index, joined with each call's `Origin` |
+| Describe | `decikit/lab/_describe.py` | `to_ir` for nodes and `resolve` for the data edges between them |
+| Checks | `decikit/lab/checks/` | `CheckContext` exposes the IR, the resolved plan, the `step_map` and, for runtime checks, an interpreted run |
+| Diff | `decikit/lab/diff/` | an IR content hash per node (the function's fingerprint, consts, inputs, outputs, params); trees and tables as z3 terms |
+| Testing | `decikit/lab/testing/` | `Engine.bind` in every mode, then `run`, `score` and a session must agree |
+| Experiments | `decikit/lab/experiments/` | an `Executable` in fused or stepped mode per scenario, fed in batches |
+| Serving | `decikit/serving/` | `Engine().bind(...)` per config version, `score(record, params)` per request |
+| Editor bridge | `decikit/_tooling/bridge/` | `to_ir` and `step_map` for the flow panel, a `Session` for stepping, `session.replace` for hot edits |
+| MCP | `decikit/_tooling/mcp/` | `Engine().bind(step)` for runs, traces and sessions an agent asks for |
 
 ## Map of the architecture section
 
 | Page | What it covers |
 |---|---|
-| [Package layout](package-layout.md) | every package and file in `decider/`, the layer rule and how the tests enforce it |
+| [Package layout](package-layout.md) | every package and file in `decikit/`, the layer rule and how the tests enforce it |
 | [Foundation packages](foundation.md) | `ops`, `_serde`, `_registry`, `_settings`, `_suggest` and the exception hierarchy |
 | [Steps and the IR](steps-and-ir.md) | the Step classes, how each one lowers to IR, `step_map` and origins |
 | [The engine](engine/index.md) | how the engine's parts fit, from IR to `Executable` |
@@ -411,5 +411,5 @@ flowchart LR
 | [Experiments](lab/experiments.md) | definitions, runner, metrics, plots and reports |
 | [Serving](serving.md) | `RequestHandler`, request parsing and the HTTP servers |
 | [Config store](config-store.md) | versioned params and documents, stage and activate |
-| [Tooling](tooling.md) | the `decider` CLI and the MCP server |
+| [Tooling](tooling.md) | the `decikit` CLI and the MCP server |
 | [Editor bridge](editor-bridge.md) | the JSON-lines protocol behind the VS Code and JupyterLab debuggers |

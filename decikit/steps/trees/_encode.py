@@ -1,0 +1,500 @@
+"""A `Tree` as the arrays the compiled walker reads, plus the inputs, params and outputs of its row node."""
+from __future__ import annotations
+
+import math
+import typing as t
+from dataclasses import dataclass, field
+
+import numpy as np
+
+from decikit._engine.compile.outputs import lookup
+from decikit._engine.ir.decls import Input, NullPolicy, Output, ParamDecl
+from decikit.steps.expr._postfix import to_postfix
+from decikit.steps.trees._ops import EQ, GE, GT, LE, LT, NE, OPCODE
+from decikit.steps.trees.schema import (
+    CasesIsIn,
+    CasesRanges,
+    CasesStringMatch,
+    CompositeNode,
+    ComputedFeature,
+    Feature,
+    LeafNode,
+    LogicOp,
+    NullHandling,
+    RangeEndLogic,
+    StringMatchType,
+    Tree,
+    UnaryBetween,
+    UnaryIsFalse,
+    UnaryIsIn,
+    UnaryIsTrue,
+    UnaryNode,
+    UnaryStringMatch,
+)
+from decikit.steps.trees.schema.conditions import find
+from decikit.steps.trees._reference import TRACE
+from decikit.steps.trees._trace import counts, paths
+from decikit.steps.trees._walker import (
+    CMP_B, CMP_E, CMP_F, CMP_I, CONTAINS, EXACT, LEAF, MATCH, NULL_INT, PREFIX, SUFFIX, WIDTH,
+)
+from decikit.steps._values import ParamRef
+
+KINDS = ("float", "int", "bool", "str")
+_MODES = {StringMatchType.exact: EXACT, StringMatchType.starts_with: PREFIX, StringMatchType.ends_with: SUFFIX,
+          StringMatchType.contains: CONTAINS}
+TYPES = {"float": float, "int": int, "bool": bool, "str": str}
+ALIASES = {
+    **{k: k for k in KINDS},
+    **dict.fromkeys(("float64", "float32"), "float"),
+    **dict.fromkeys(("int64", "int32", "int16", "int8", "uint64", "uint32", "uint16", "uint8"), "int"),
+    "boolean": "bool",
+    **dict.fromkeys(("string", "utf8", "categorical", "enum"), "str"),
+}
+
+
+def kind_of(spelling: t.Any, what: str) -> str:
+    """`float`, `int`, `bool` or `str` for a Python type or a polars dtype name (`"Int64"`, `"String"`, ...)."""
+    name = spelling.__name__ if isinstance(spelling, type) else str(spelling)
+    kind = ALIASES.get(name.strip().lower())
+    if kind is None:
+        raise ValueError(f"{what}: {spelling!r} is not a type a tree understands; "
+                         "use float, int, bool or str (or Float64, Int64, Boolean, String)")
+    return kind
+
+
+def _feature_demands(feature: Feature, demand: str, where: str) -> t.Iterator[tuple[str, str, str]]:
+    if isinstance(feature.root, str):
+        yield feature.root, demand, where
+        return
+    if demand == "str":
+        raise ValueError(f"{where}: string_match on the computed feature {str(feature)!r}; "
+                         "a computed feature is a number, so match a string column instead")
+    for name in sorted(feature.root.expr.dependencies()):
+        yield name, "expr", where
+
+
+def _condition_demands(c: t.Any, where: str) -> t.Iterator[tuple[str, str, str]]:
+    if isinstance(c, CompositeNode):
+        for sub in c.conditions:
+            yield from _condition_demands(sub, where)
+    else:
+        demand = ("bool" if isinstance(c, (UnaryIsTrue, UnaryIsFalse))
+                  else "str" if isinstance(c, UnaryStringMatch) else "number")
+        yield from _feature_demands(c.feature, demand, where)
+
+
+def _demands(tree: Tree) -> t.Iterator[tuple[str, str, str]]:
+    for nid, node in tree.nodes.items():
+        data, where = node.data, f"tree node {nid!r}"
+        if isinstance(data, UnaryNode):
+            yield from _condition_demands(data.condition, where)
+        elif isinstance(data, CompositeNode):
+            yield from _condition_demands(data, where)
+        elif not isinstance(data, LeafNode):
+            demand = "str" if isinstance(data, CasesStringMatch) else "number"
+            yield from _feature_demands(data.feature, demand, where)
+
+
+_REFUSED = {
+    ("number", "str"): "a numeric comparison on the string feature {f!r}; use string_match",
+    ("number", "bool"): "a threshold on the boolean feature {f!r}; use is_true / is_false",
+    ("bool", "str"): "is_true / is_false on the string feature {f!r}; use string_match",
+    ("str", "float"): "string_match on the {k} feature {f!r}; declare it str in feature_types",
+    ("str", "int"): "string_match on the {k} feature {f!r}; declare it str in feature_types",
+    ("str", "bool"): "string_match on the {k} feature {f!r}; declare it str in feature_types",
+    ("expr", "int"): "the computed feature reads the {k} feature {f!r}; computed features are float arithmetic",
+    ("expr", "bool"): "the computed feature reads the {k} feature {f!r}; computed features are float arithmetic",
+    ("expr", "str"): "the computed feature reads the {k} feature {f!r}; computed features are float arithmetic",
+}
+
+
+def feature_kinds(tree: Tree, declared: t.Mapping[str, str]) -> dict[str, str]:
+    """Each feature the tree reads and its kind: declared, else inferred from how the tree uses it.
+
+    `string_match` makes a feature `str`; only `is_true`/`is_false` makes it
+    `bool`; anything else is `float`. Uses that make no sense for the kind
+    (`<` on a string, a threshold on a bool) are errors naming the node.
+    """
+    demands: dict[str, list[tuple[str, str]]] = {}
+    for name, demand, where in _demands(tree):
+        demands.setdefault(name, []).append((demand, where))
+    if unknown := sorted(set(declared) - set(demands)):
+        raise ValueError(f"feature_types names {unknown}, which the tree does not read; it reads {sorted(demands)}")
+    kinds = {}
+    for name, uses in sorted(demands.items()):
+        seen = {d for d, _ in uses}
+        kind = declared.get(name) or ("str" if "str" in seen else "bool" if seen == {"bool"} else "float")
+        for demand, where in uses:
+            if (demand, kind) in _REFUSED:
+                raise ValueError(f"{where}: " + _REFUSED[demand, kind].format(f=name, k=kind))
+        kinds[name] = kind
+    return kinds
+
+
+@dataclass
+class Program:
+    """What `to_ir` needs from a tree: the row node's inputs, params, outputs and consts.
+
+    `python` is true when the tree matches a string with a regex, without
+    case, or trimmed, which compares no bytes; its row node then runs the
+    Python walker in every mode and `consts` is empty.
+    """
+
+    inputs: tuple[Input, ...]
+    params: tuple[ParamDecl, ...]
+    outputs: tuple[Output, ...]
+    consts: tuple[tuple[str, t.Any], ...]
+    python: bool
+    kinds: dict[str, str]
+    # Per output: (rule slot, column, or None for the leaf and TRACE for the path, string choices, a list
+    # column's `lookup`, or None); slot -1 is first-match.
+    columns: tuple[tuple[int, t.Optional[str], t.Optional[tuple[str, ...]]], ...]
+    # The arrays `consts` holds the addresses of: whoever holds the row node must keep these alive.
+    arrays: list[np.ndarray]
+
+
+@dataclass
+class _Encoder:
+    tree: Tree
+    kinds: dict[str, str]
+    value: t.Callable[..., t.Any]
+    rows: list[list[int]] = field(default_factory=list)
+    thr: dict[str, list] = field(default_factory=lambda: {"float": [], "int": []})
+    params: dict[str, ParamDecl] = field(default_factory=dict)
+    exprs: list[tuple[str, list, int]] = field(default_factory=list)
+    econst: list[float] = field(default_factory=list)
+    patterns: list[bytes] = field(default_factory=list)
+    groups: list[int] = field(default_factory=lambda: [0])
+    python: bool = False
+    default: t.Optional[int] = None
+    # Leaf node id -> its position in every output's values; a leaf with result_idx -1 has none.
+    leaves: dict[str, int] = field(default_factory=dict)
+    # With a trace output, each node's number of paths to an end; empty without one.
+    counts: dict[str, int] = field(default_factory=dict)
+    # Nodes that compile to no rows, whose branches a trace can't tell apart.
+    blind: list[str] = field(default_factory=list)
+
+    def slot(self, name: str) -> int:
+        kind = self.kinds[name]
+        return sorted(f for f, k in self.kinds.items() if k == kind).index(name)
+
+    def add(self, *row: int) -> int:
+        self.rows.append([*row, 0, 0, 0, 0, 0, 0, 0, 0, 0][:WIDTH])
+        return len(self.rows) - 1
+
+    def test(self, kind: int, slot: int, op: int, thr: int, then: int, other: int, flip: bool) -> int:
+        # A null feature makes the test unknown, which only a NOT tells apart
+        # from false: `flip` is true under an odd number of NOTs, where the
+        # node's otherwise branch is this row's `then`.
+        return self.add(kind, slot, op, thr, then, other, then if flip else other)
+
+    def param(self, ref: ParamRef, kind: str, where: str) -> ParamDecl:
+        decl = self.value(ref, TYPES[kind])
+        seen = self.params.setdefault(decl.name, decl)
+        if seen.annotation is not decl.annotation:
+            raise ValueError(f"{where}: param {decl.name!r} is used as {seen.annotation.__name__} and as "
+                             f"{kind}; one param has one type, so split it into two")
+        return seen
+
+    def threshold(self, value: t.Any, kind: str, where: str) -> int:
+        if isinstance(value, ParamRef):
+            self.param(value, kind, where)
+            same = [n for n, d in self.params.items() if d.annotation is TYPES[kind]]
+            return -1 - same.index(value.param)
+        if kind == "int":
+            if isinstance(value, bool) or int(value) != value:
+                raise ValueError(f"{where}: threshold {value!r} is not a whole number, but the feature is an int")
+            value = int(value)
+        consts = self.thr[kind]
+        consts.append(float(value) if kind == "float" else value)
+        return len(consts) - 1
+
+    def expression(self, computed: ComputedFeature) -> int:
+        for k, (source, _, _) in enumerate(self.exprs):
+            if source == computed.expression:
+                return k
+        rows, depth = to_postfix(computed.expr, self.slot, self.econst)
+        self.exprs.append((computed.expression, rows, depth))
+        return len(self.exprs) - 1
+
+    def compare(self, feature: Feature, op: int, value: t.Any, then: int, other: int, where: str,
+                flip: bool = False) -> int:
+        if isinstance(feature.root, ComputedFeature):
+            return self.test(CMP_E, self.expression(feature.root), op, self.threshold(value, "float", where),
+                             then, other, flip)
+        kind = self.kinds[feature.root]
+        return self.test(CMP_I if kind == "int" else CMP_F, self.slot(feature.root), op,
+                         self.threshold(value, kind, where), then, other, flip)
+
+    def truth(self, feature: Feature, op: int, then: int, other: int, where: str, flip: bool) -> int:
+        if isinstance(feature.root, str) and self.kinds[feature.root] == "bool":
+            return self.test(CMP_B, self.slot(feature.root), op, self.threshold(0, "int", where), then, other, flip)
+        kind = "float" if isinstance(feature.root, ComputedFeature) else self.kinds[feature.root]
+        return self.compare(feature, op, 0 if kind == "int" else 0.0, then, other, where, flip)
+
+    def isin(self, feature: Feature, values: t.Any, then: int, other: int, where: str, flip: bool = False) -> int:
+        if isinstance(values, ParamRef):
+            return self.compare(feature, EQ, values, then, other, where, flip)
+        for v in reversed(values):
+            other = self.compare(feature, EQ, v, then, other, where, flip)
+        return other
+
+    def between(self, feature: Feature, bounds: t.Any, ops: tuple[int, int], then: int, other: int,
+                where: str, flip: bool = False) -> int:
+        if bounds.max is not None:
+            then = self.compare(feature, ops[1], bounds.max, then, other, where, flip)
+        if bounds.min is not None:
+            then = self.compare(feature, ops[0], bounds.min, then, other, where, flip)
+        return then
+
+    def match(self, feature: Feature, patterns: t.Sequence[t.Any], node: t.Any, then: int, other: int,
+              where: str) -> int:
+        refs = [self.threshold(p, "str", where) for p in patterns if isinstance(p, ParamRef)]
+        if node.match_type not in _MODES or not node.case_sensitive or node.trim_whitespace:
+            self.python = True
+            return then
+        literals = [p.encode() for p in patterns if not isinstance(p, ParamRef)]
+        if literals:
+            self.patterns += literals
+            self.groups.append(len(self.patterns))
+            refs.insert(0, len(self.groups) - 2)
+        # A null string's match is plain true or false, so a NOT flips it like any other.
+        hit = getattr(node, "null_handling", None) is NullHandling.match
+        for g in reversed(refs):
+            other = self.add(MATCH, self.slot(feature.root), _MODES[node.match_type], g, then, other,
+                             then if hit else other)
+        return other
+
+    def condition(self, c: t.Any, then: int, other: int, where: str, flip: bool = False) -> int:
+        if isinstance(c, CompositeNode):
+            if c.op is LogicOp.NOT:
+                return self.condition(c.conditions[0], other, then, where, not flip)
+            for sub in reversed(c.conditions):
+                if c.op is LogicOp.AND:
+                    then = self.condition(sub, then, other, where, flip)
+                else:
+                    other = self.condition(sub, then, other, where, flip)
+            return then if c.op is LogicOp.AND else other
+        if isinstance(c, (UnaryIsTrue, UnaryIsFalse)):
+            return self.truth(c.feature, NE if isinstance(c, UnaryIsTrue) else EQ, then, other, where, flip)
+        if isinstance(c, UnaryBetween):
+            return self.between(c.feature, c, (GE, LE), then, other, where, flip)
+        if isinstance(c, UnaryIsIn):
+            return self.isin(c.feature, c.values, then, other, where, flip)
+        if isinstance(c, UnaryStringMatch):
+            return self.match(c.feature, c.patterns, c, then, other, where)
+        return self.compare(c.feature, OPCODE[c.op], c.threshold, then, other, where, flip)
+
+    def node(self, nid: str, entries: dict[str, int]) -> int:
+        node = self.tree.nodes[nid]
+        data, where = node.data, f"tree node {nid!r}"
+        if isinstance(data, LeafNode):
+            if not -1 <= data.result_idx < len(self.tree.output.data):
+                raise ValueError(f"{where}: result_idx {data.result_idx} is not a row of the output "
+                                 f"({len(self.tree.output.data)} rows, or -1 for the default)")
+            return self.add(LEAF, -1 if data.result_idx < 0 else self.leaves.setdefault(nid, len(self.leaves)))
+        children = [entries[c] if c is not None else self.leaf() for c in node.children]
+        start = len(self.rows)
+        entry = self.branches(data, children, where)
+        if self.counts:
+            self.weigh(nid, node.children, children, start)
+        return entry
+
+    def weigh(self, nid: str, kids: t.Sequence[t.Optional[str]], entries: list[int], start: int) -> None:
+        # Ball-Larus path numbering: the jump into branch i weighs the path counts of branches 0..i-1,
+        # so the weights along any root-to-end path sum to its index among the root's paths.
+        if len(self.rows) == start:
+            self.blind.append(nid)
+        weight: dict[int, int] = {}
+        total = 0
+        for kid, entry in zip(kids, entries):
+            # Two branches into one row are the same node sequence, so either weight names it.
+            weight.setdefault(entry, total)
+            total += 1 if kid is None else self.counts[kid]
+        for row in self.rows[start:]:
+            row[7:10] = [weight[x] if x < start else 0 for x in row[4:7]]
+
+    def branches(self, data: t.Any, children: list[int], where: str) -> int:
+        if isinstance(data, UnaryNode):
+            return self.condition(data.condition, children[0], children[1], where)
+        if isinstance(data, CompositeNode):
+            return self.condition(data, children[0], children[1], where)
+        entry = children[-1]
+        for i in reversed(range(len(data.conditions))):
+            when = data.conditions[i]
+            if isinstance(data, CasesRanges):
+                ops = (GE, LT) if data.end_logic is RangeEndLogic.lower_inclusive else (GT, LE)
+                entry = self.between(data.feature, when, ops, children[i], entry, where)
+            elif isinstance(data, CasesIsIn):
+                entry = self.isin(data.feature, when.values, children[i], entry, where)
+            else:
+                entry = self.match(data.feature, when.patterns, data, children[i], entry, where)
+        return entry
+
+    def leaf(self) -> int:
+        if self.default is None:
+            self.default = self.add(LEAF, -1)
+        return self.default
+
+    def roots(self, order: t.Sequence[str]) -> list[int]:
+        entries: dict[str, int] = {}
+        for nid in order:
+            entries[nid] = self.node(nid, entries)
+        return [entries[r.root] for r in self.tree.rules]
+
+
+def _post_order(tree: Tree) -> list[str]:
+    # Iterative, so a chain of any depth encodes.
+    order, seen = [], set()
+    stack = [(r.root, False) for r in reversed(tree.rules)]
+    while stack:
+        nid, done = stack.pop()
+        if done:
+            order.append(nid)
+        elif nid not in seen:
+            seen.add(nid)
+            stack.append((nid, True))
+            stack += [(c, False) for c in tree.nodes[nid].children if c is not None and c not in seen]
+    return order
+
+
+def _output_values(tree: Tree, leaves: t.Iterable[str]) -> t.Iterator[tuple[str, str, t.Any, list]]:
+    # One value per leaf, not per output row, so the leaf index a walk ends at also names the leaf.
+    rows = [*(tree.output.data[tree.nodes[nid].data.result_idx] for nid in leaves), tree.output.default or {}]
+    for column, dtype in tree.output.column_types():
+        kind = kind_of(dtype, f"output column {column!r}") if isinstance(dtype, str) else "list"
+        yield column, kind, dtype, [row.get(column) for row in rows]
+
+
+def _outputs(tree: Tree, leaves: t.Sequence[str], path: t.Optional[str], trace: t.Optional[str],
+             order: t.Sequence[str]) -> tuple[list[Output], list[tuple], list[tuple]]:
+    # Per output: its declaration, (rule slot, kind, values, validity or None), and what the reference returns.
+    for name, label in ((path, "path_output"), (trace, "trace_output")):
+        if name in tree.output.columns:
+            raise ValueError(f"{label} {name!r} is also an output column of the tree; name it something else")
+    if path is not None and path == trace:
+        raise ValueError(f"path_output and trace_output are both {path!r}; give them different names")
+    ends = paths(tree, order) if trace is not None else {}
+    outputs, values, columns = [], [], []
+    slots = [(-1, "")] if tree.mode == "first_match" else [
+        (k, f"{r.name or f'rule_{k}'}.") for k, r in enumerate(tree.rules)]
+    for slot, prefix in slots:
+        for column, kind, dtype, row_values in _output_values(tree, leaves):
+            name = prefix + column
+            if kind == "list":
+                outputs.append(Output(name, table := lookup(row_values, dtype)))
+                values.append((slot, "int", [-1 if v is None else k for k, v in enumerate(row_values)], None))
+                columns.append((slot, column, table))
+                continue
+            if kind == "str":
+                texts = [None if v is None else str(v) for v in row_values]
+                choices = tuple(dict.fromkeys(v for v in texts if v is not None))
+                # ponytail: a column that is always null still needs one choice to be a Literal.
+                outputs.append(Output(name, t.Literal[choices or ("",)]))
+                values.append((slot, "int", [-1 if v is None else choices.index(v) for v in texts], None))
+                columns.append((slot, column, choices))
+                continue
+            valid = [int(v is not None) for v in row_values]
+            outputs.append(Output(name, TYPES[kind] if all(valid) else TYPES[kind] | None))
+            values.append((slot, kind, [0 if v is None else TYPES[kind](v) for v in row_values],
+                           None if all(valid) else valid))
+            columns.append((slot, column, None))
+        if path is not None:
+            # A column of `None` marks the path column: the reference answers with the leaf id itself.
+            outputs.append(Output(prefix + path, t.Literal[tuple(leaves) or ("",)]))
+            values.append((slot, "int", [*range(len(leaves)), -1], None))
+            columns.append((slot, None, tuple(leaves)))
+        if trace is not None:
+            # First-match numbers every rule's paths as one list, rule by rule; the walker adds each rule's base.
+            every = [p for r in (tree.rules if slot < 0 else tree.rules[slot:slot + 1]) for p in ends[r.root]]
+            index = {p: k for k, p in enumerate(dict.fromkeys(every))}
+            # With no rules nothing is walked: path number 0 reads -1, a null.
+            outputs.append(Output(prefix + trace, t.Literal[tuple(index) or ("",)]))
+            values.append((slot, "trace", [index[p] for p in every] or [-1], None))
+            columns.append((slot, TRACE, tuple(index)))
+    if not outputs:
+        raise ValueError("the tree's output declares no columns (output.dtypes is empty)")
+    return outputs, values, columns
+
+
+def _pack(enc: _Encoder, roots: list[int], values: list[tuple]) -> tuple[tuple, list]:
+    # Everything the walker reads, packed into one int64, one float64 and one
+    # byte array: it gets their addresses, so no array crosses its per-row call.
+    ints: list[int] = []
+    # Where each rule's path numbers start in a first-match trace: after every earlier rule's paths.
+    sizes = [enc.counts.get(r.root, 0) for r in enc.tree.rules]
+    bases = [sum(sizes[:k]) for k in range(len(sizes))]
+    floats: list[float] = []
+
+    def put(seq: list, into: list) -> int:
+        into.extend(seq)
+        return len(into) - len(seq)
+
+    layout = (
+        put([x for row in enc.rows for x in row], ints),
+        put(list(enc.thr["int"]), ints),
+        put(list(roots) + bases, ints),
+        len(roots),
+        put([x for _, rows, _ in enc.exprs for row in rows for x in row], ints),
+        put(np.cumsum([0] + [len(rows) for _, rows, _ in enc.exprs]).tolist(), ints),
+        put(np.cumsum([0] + [len(p) for p in enc.patterns]).tolist(), ints),
+        put(list(enc.groups), ints),
+        put(list(enc.thr["float"]), floats),
+        put(list(enc.econst), floats),
+        max((d for _, _, d in enc.exprs), default=1),
+    )
+    specs = []
+    for slot, kind, vals, valid in values:
+        if kind == "trace":
+            specs.append((slot, put(vals, ints)))
+            continue
+        where = floats if kind == "float" else ints
+        spec = (slot, put([float(v) if kind == "float" else int(v) for v in vals], where), len(vals),
+                {"float": 0.0, "bool": False}.get(kind, 0))
+        specs.append(spec if valid is None else (*spec, put(valid, ints)))
+    arrays = [np.array(ints or [0], np.int64), np.array(floats or [0.0], np.float64),
+              np.frombuffer(b"".join(enc.patterns) or bytes(1), np.uint8).copy()]
+    consts = (("ints", arrays[0].ctypes.data), ("floats", arrays[1].ctypes.data), ("chars", arrays[2].ctypes.data),
+              ("layout", layout), ("outputs", tuple(specs)))
+    return consts, arrays
+
+
+def _input(name: str, kind: str, nulls: str, strict: set[str]) -> Input:
+    if kind == "str":
+        return Input(name, bytes) if name in strict else Input(name, bytes | None, NullPolicy.OPTIONAL)
+    if nulls == "error":
+        return Input(name, TYPES[kind])
+    if kind == "bool":
+        return Input(name, bool | None, NullPolicy.OPTIONAL)
+    # A fill rather than an Optional: each Optional column is one more mask array per kernel launch.
+    return Input(name, TYPES[kind], NullPolicy.MISSING_AS, math.nan if kind == "float" else NULL_INT)
+
+
+def encode(tree: Tree, feature_types: t.Mapping[str, str], value: t.Callable[..., t.Any],
+           nulls: str = "otherwise", path: t.Optional[str] = None, trace: t.Optional[str] = None) -> Program:
+    """The row node of `tree`, with `value` turning a `ParamRef` into a `ParamDecl` (`IRContext.value`).
+
+    `nulls` is `TreeConfig.null_handling`: `"error"` makes numeric and
+    boolean features required inputs. `path` is `TreeConfig.path_output`,
+    `trace` `TreeConfig.trace_output`.
+
+    Example::
+
+        program = encode(config.tree.to_tree(), {"income_cents": "int"}, ctx.value)
+    """
+    kinds = feature_kinds(tree, {k: kind_of(v, f"feature_types[{k!r}]") for k, v in feature_types.items()})
+    order = _post_order(tree)
+    enc = _Encoder(tree, kinds, value, counts=counts(tree, order) if trace is not None else {})
+    roots = enc.roots(order)
+    if enc.blind and not enc.python:
+        raise ValueError(f"trace_output: tree node {enc.blind[0]!r} tests nothing, so the walker can't tell its "
+                         "branches apart; give it a condition or remove it")
+    rank = {k: i for i, k in enumerate(KINDS)}
+    strict = {str(c.feature) for node in tree.nodes.values() for c in find(node.data, UnaryStringMatch)
+              if c.null_handling is NullHandling.error}
+    inputs = tuple(_input(name, kind, nulls, strict)
+                   for name, kind in sorted(kinds.items(), key=lambda nk: (rank[nk[1]], nk[0])))
+    params = tuple(sorted(enc.params.values(), key=lambda d: rank[d.annotation.__name__]))
+    outputs, values, columns = _outputs(tree, list(enc.leaves), path, trace, order)
+    consts, arrays = ((), []) if enc.python else _pack(enc, roots, values)
+    return Program(inputs, params, tuple(outputs), consts, enc.python, kinds, tuple(columns), arrays)

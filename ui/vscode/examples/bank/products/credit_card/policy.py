@@ -1,5 +1,5 @@
 """Credit card: revolving limit, rate by grade. Policy rules: each rule declines an application for one reason."""
-from decider import flow, param, step
+from decikit import flow, param, step
 
 
 @step(output="cc_min_age")

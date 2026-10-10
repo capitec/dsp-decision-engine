@@ -7,10 +7,10 @@ import pytest
 
 pytest.importorskip("z3")
 
-from decider import flow  # noqa: E402
-from decider.lab import diff
-from decider.steps.tables import DecisionTableConfig  # noqa: E402
-from decider.steps.trees import TreeConfig  # noqa: E402
+from decikit import flow  # noqa: E402
+from decikit.lab import diff
+from decikit.steps.tables import DecisionTableConfig  # noqa: E402
+from decikit.steps.trees import TreeConfig  # noqa: E402
 
 OUT = {"data": [{"o": 0}, {"o": 1}], "default": {"o": -1}, "dtypes": [["o", "Int64"]]}
 
@@ -74,6 +74,27 @@ def test_an_int_feature_compares_exactly_so_greater_than_five_is_at_least_six():
     assert diff.prove(tree((cond("n", ">", 5), 1, 0), **ints), tree((cond("n", ">=", 6), 1, 0), **ints)).identical is True
     proof = diff.prove(tree((cond("n", ">", 5), 1, 0), **ints), tree((cond("n", ">=", 7), 1, 0), **ints))
     assert proof.identical is None and proof.evidence.counterexample == {"n": 6}
+
+
+def test_int_trees_with_thresholds_differing_by_one_near_2_60_have_a_counterexample():
+    ints = {"feature_types": {"n": "int"}}
+    big = lambda v: tree((cond("n", ">=", v), 1, 0), **ints)  # noqa: E731
+    proof = diff.prove(big(2**60), big(2**60 + 1))
+    assert proof.identical is None and proof.evidence.counterexample == {"n": 2**60}
+    assert diff.prove(big(2**60 + 1), big(2**60 + 1)).identical is True
+
+
+def test_declared_int_tables_differing_by_one_near_2_60_have_a_counterexample():
+    def by_id(code):
+        return DecisionTableConfig.load({
+            "type": "decision_table", "name": "t", "columns": {"id": "Int64", "o": "Float64"},
+            "rows": [{"id": code, "o": 1.0}], "variable_types": {"x": "int"},
+            "expression": {"type": "eq", "variable": "x", "value_column": "id"}, "outputs": ["o"], "default": [0.0]})
+
+    proof = diff.prove(by_id(2**60), by_id(2**60 + 1))
+    assert proof.identical is None
+    assert proof.evidence.counterexample["x"] in (2**60, 2**60 + 1)
+    assert diff.prove(by_id(2**60), by_id(2**60)).identical is True
 
 
 def test_not_over_the_opposite_comparison_is_identical_even_for_a_null():
@@ -165,7 +186,7 @@ def test_a_tree_with_a_param_falls_back_with_a_reason():
 def test_without_z3_the_proof_stops_at_the_hash_and_says_how_to_install_it(monkeypatch):
     monkeypatch.setitem(sys.modules, "z3", None)
     proof = diff.prove(tree((cond("x", ">", 5), 1, 0)), tree((cond("x", ">", 6), 1, 0)))
-    assert (proof.tier, proof.identical) == ("none", None) and "decider[prove]" in proof.reason
+    assert (proof.tier, proof.identical) == ("none", None) and "decikit[prove]" in proof.reason
 
 
 def _random_spec(rng, depth=2):

@@ -1,5 +1,5 @@
-import { App, type EditorMessage, type FromUI, type ToUI } from "@decider/ui";
-import "@decider/ui/style.css";
+import { App, type EditorMessage, type FromUI, type ToUI } from "@decikit/ui";
+import "@decikit/ui/style.css";
 import { createRoot } from "react-dom/client";
 import "./theme.css";
 

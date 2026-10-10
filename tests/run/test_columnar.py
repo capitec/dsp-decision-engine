@@ -9,11 +9,11 @@ import numpy as np
 import polars as pl
 import pytest
 
-from decider import Engine, branch, flow, loop, missing_as, step
-from decider.ops import Columnar
-from decider._engine.compile.rows import ARROW_ROWS, build_rows
-from decider._engine.run.state import from_series
-from decider.lab.testing import assert_equivalent
+from decikit import Engine, branch, flow, loop, missing_as, step
+from decikit.ops import Columnar
+from decikit._engine.compile.rows import ARROW_ROWS, build_rows
+from decikit._engine.run.state import from_series
+from decikit.lab.testing import assert_equivalent
 
 MODES = ("interpreted", "stepped", "fused")
 
@@ -245,7 +245,7 @@ def first_price(items: Columnar[Item]) -> float:
 
 
 def test_a_null_list_is_required_like_any_other_input():
-    from decider._engine.boundary.nulls import MissingInputError
+    from decikit._engine.boundary.nulls import MissingInputError
 
     exe = Engine().bind(flow(total, name="p"), mode="stepped")
     with pytest.raises(MissingInputError, match="'items'"):

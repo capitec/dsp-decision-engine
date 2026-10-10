@@ -6,10 +6,10 @@ import polars as pl
 import pytest
 from pydantic import ValidationError
 
-from decider.lab.data import DatasetError
-from decider._tooling.bridge.bridge import Bridge
-from decider.lab.experiments import Experiment, ExperimentDef, run
-from decider.lab.experiments._experiments import InputSpec
+from decikit.lab.data import DatasetError
+from decikit._tooling.bridge.bridge import Bridge
+from decikit.lab.experiments import Experiment, ExperimentDef, run
+from decikit.lab.experiments._experiments import InputSpec
 
 
 @pytest.fixture
@@ -18,7 +18,7 @@ def project(tmp_path, monkeypatch):
     (tmp_path / "datasets").mkdir()
     pl.DataFrame({"income": [1000.0] * 3, "debt": [0.0, 200.0, 400.0]}).write_parquet(tmp_path / "datasets" / "loans.parquet")
     (tmp_path / "credit.py").write_text(
-        "from decider import flow, param\n"
+        "from decikit import flow, param\n"
         "def ratio(income, debt):\n"
         "    return debt / income if income > 0 else 1.0\n"
         "def approved(ratio, limit=param(0.4)):\n"

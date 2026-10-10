@@ -1,5 +1,5 @@
 """The Python steps `flow.yaml` names. Set a breakpoint in any of them, then Debug flow."""
-from decider import param, step
+from decikit import param, step
 
 
 def eligible(score: float, min_score: float = param(50.0)) -> bool:

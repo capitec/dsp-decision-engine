@@ -2,9 +2,9 @@
 import sys
 from typing import Literal
 
-from decider import ConfigurableStep, flow, step
-from decider.lab import checks
-from decider.lab.checks import Check, Severity
+from decikit import ConfigurableStep, flow, step
+from decikit.lab import checks
+from decikit.lab.checks import Check, Severity
 
 
 @step(output="fee")
@@ -59,7 +59,7 @@ def no_wide_flows(ctx):
 
 
 def test_a_decorated_function_is_a_check_with_its_alias_and_code():
-    from decider.lab.checks import catalogue
+    from decikit.lab.checks import catalogue
 
     report = checks.run(flow(fee, _second, name="term"), [no_wide_flows])
     (found,) = report.findings
@@ -70,7 +70,7 @@ def test_a_decorated_function_is_a_check_with_its_alias_and_code():
 def test_a_third_party_check_loads_from_an_entry_point(tmp_path, monkeypatch):
     (tmp_path / "ep_checks.py").write_text('''
 from typing import Literal
-from decider.lab.checks import Check
+from decikit.lab.checks import Check
 
 class EpCheck(Check):
     type: Literal["ep_check"] = "ep_check"
@@ -82,7 +82,7 @@ class EpCheck(Check):
     dist = tmp_path / "ep_checks-1.0.dist-info"
     dist.mkdir()
     (dist / "METADATA").write_text("Metadata-Version: 2.1\nName: ep-checks\nVersion: 1.0\n")
-    (dist / "entry_points.txt").write_text("[decider.checks]\nep_check = ep_checks:EpCheck\n")
+    (dist / "entry_points.txt").write_text("[decikit.checks]\nep_check = ep_checks:EpCheck\n")
     monkeypatch.syspath_prepend(str(tmp_path))
     monkeypatch.delitem(sys.modules, "ep_checks", raising=False)
     assert "ep_checks" not in sys.modules

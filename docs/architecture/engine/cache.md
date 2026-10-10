@@ -6,11 +6,11 @@ notebook re-runs and processes, without ever serving machine code that no longer
 source. Fallback is the other half of the same decision: when numba refuses a step, that step runs
 in Python and says so, and the steps around it stay compiled.
 
-The code is in `decider/_engine/compile/njit.py` (`jit`, the salted disk cache, `compile_call`,
+The code is in `decikit/_engine/compile/njit.py` (`jit`, the salted disk cache, `compile_call`,
 `FALLBACK_ERRORS`), `compile/fingerprint.py` (`fingerprint`, `cpu_target`), `compile/kernel.py`
 (the fused kernel cache) and `compile/units.py` (`Fallback`). The [stepped runner](runners.md)
-turns fallbacks into warnings, `Engine(strict_compile=True)` in `decider/_engine/run/engine.py`
-turns them into errors, and `decider build` and `decider serve` in `decider/_tooling/cli/` record
+turns fallbacks into warnings, `Engine(strict_compile=True)` in `decikit/_engine/run/engine.py`
+turns them into errors, and `decikit build` and `decikit serve` in `decikit/_tooling/cli/` record
 and check the CPU target. How a compiled kernel is assembled is on [compilation](compile.md).
 
 ## Three caches
@@ -24,7 +24,7 @@ and check the CPU target. How a compiled kernel is assembled is on [compilation]
 Two smaller ones sit beside them: `_REASONS` remembers why a `(content key, signature)` failed to
 compile, so a refused step is not retried, and the [Arrow shim](boundary.md) has its own
 content-keyed build cache. All in-process caches are filled through `once()` in
-`decider/_engine/concurrency.py`: reads take no lock, and a build runs once under the cache's lock
+`decikit/_engine/concurrency.py`: reads take no lock, and a build runs once under the cache's lock
 however many threads ask (see [concurrency](concurrency.md)).
 
 <div class="diagram" markdown>
@@ -41,9 +41,18 @@ however many threads ask (see [concurrency](concurrency.md)).
   the process's hash seed), and the argument layout;
 - the value of every closure cell;
 - every global the function reads: a function by its own content (recursively), a module by name
-  plus the functions and submodules the code reaches through it (so editing `rates.rate` changes a
-  caller of `rates.rate(x)`), a literal by value, a numpy array or polars frame by its data, and
-  anything else by identity.
+  plus the functions, submodules and data the code reaches through it (so editing `rates.rate`
+  changes a caller of `rates.rate(x)`, and editing `rates.LIMIT` changes a caller of `rates.LIMIT`),
+  a literal by value, a numpy array or polars frame by its data, a class by `module:qualname` plus
+  its own methods (by bytecode) and constants (an enum also by its members), an enum member by class
+  and name, a date, Decimal, regex or `lru_cache` wrapper (by the function it wraps) by value, a tuple,
+  list, dict or set by its contents, and anything else by identity;
+- a function of the standard library or an installed package is keyed by module, qualname, the
+  package version, its own bytecode and its closure values, not walked: its helpers and constants
+  are not the step's data. Two lambdas of one module, or two closures from one factory, share a
+  qualname, so the code and closure keep them apart. A wrapper such as a decorator still keys the
+  function it closes over. The decider toolkit's own functions are walked, and so is the step function itself,
+  wherever it is installed.
 
 It leaves out the function's name, file and line, and the node's origin path. Real output:
 
@@ -76,7 +85,9 @@ get different keys: keying on the bytecode alone would compile `make_rule(2.0)` 
 answer with its threshold for `make_rule(3.0)` too.
 
 `fingerprint(fn, strict=True)` raises `ValueError` instead of keying an object by identity, for
-callers that need a key stable across processes. A captured polars frame is hashed row by row on
+callers that need a key stable across processes. `hidden_state(fn)` runs the same walk and lists
+those objects (and the `dict`, `list` and `set` globals the key does see by value but a step can
+edit in place), so `Engine.bind` can warn about them and the key cannot disagree with the warning. A captured polars frame is hashed row by row on
 every call (a `ponytail:` comment in the source puts it at about 0.5 ms for a small frame and 13 ms
 per million rows).
 
@@ -120,13 +131,13 @@ The two additions close gaps in numba's own key:
   HIT returning the pre-edit answer (49.39775 instead of 49.29765). `fingerprint` hashes the
   constants.
 - numba's key covers the step's own bytecode and none of the overloads its code calls. `SALT` covers
-  every file under `compile/semantics/`, `span.py`, `decimal_type.py` and `decider/ops/`, so an
+  every file under `compile/semantics/`, `span.py`, `decimal_type.py` and `decikit/ops/`, so an
   edit to how `round` or a `Decimal` compiles misses every step once
   ([kernel semantics](kernels.md) lists the files).
 
 numba also invalidates an index whose source file's `(mtime, size)` changed, and its key includes
 the CPU target. `_TolerantIndexFile` treats an index it cannot unpickle (one written by another
-decider version naming a type that has since moved) as empty, so it is rewritten instead of
+decider toolkit version naming a type that has since moved) as empty, so it is rewritten instead of
 crashing the load.
 
 A function with a closure, or one defined where there is no file (a notebook cell, `exec`), gets
@@ -146,7 +157,7 @@ the step dispatchers, and a closure over a dispatcher never hits numba's disk ca
 The fused kernel compile therefore stays in every new process. In this run of a one-step pipeline,
 the first `score()` of a fresh process took 391 ms with a cold step cache and 345 ms with the step
 loaded from disk; most of that is building the kernel around it. Serving pays it during warm-up:
-`decider build`, and each serving worker as it stages a config version, score a warm-up record
+`decikit build`, and each serving worker as it stages a config version, score a warm-up record
 through every kernel, and a worker answers `/ping` only after that (see [serving](../serving.md)).
 
 ### The CPU target
@@ -159,13 +170,13 @@ returns that tuple:
 x86_64-unknown-linux-gnu  raptorlake  +64bit,+adx,+aes,-amx-avx512,-amx-bf16,...
 ```
 
-`decider build` writes it after its warm-up, next to numba's disk cache (in `NUMBA_CACHE_DIR` when
-that is set, else in the project's code path). `decider serve` compares it
-with the host and, when they differ, warns that `decider build` ran for another CPU, that numba's
+`decikit build` writes it after its warm-up, next to numba's disk cache (in `NUMBA_CACHE_DIR` when
+that is set, else in the project's code path). `decikit serve` compares it
+with the host and, when they differ, warns that `decikit build` ran for another CPU, that numba's
 disk cache won't hit, and that every worker will compile at startup. It is a warning, since warm-up
-still compiles everything before the worker answers. `NUMBA_CPU_NAME=generic` was rejected
-as the fix: it makes entries portable but gives up the instruction
-selection small kernels depend on.
+still compiles everything before the worker answers. The engine leaves `NUMBA_CPU_NAME` to the
+deployment; the container image sets it to `generic` by default, which makes entries portable at a
+per-record cost that measured below 3% (see the serving decisions).
 
 ## Python fallback
 
@@ -179,8 +190,9 @@ it, so the steps before and after it stay compiled (see the grouping rules on
 lowering and unsupported-feature errors. `UnsupportedBytecodeError` is what numba 0.67 raises for
 an `import` inside a step, and it does not subclass `NumbaError`. Around `dispatcher.compile(sig)`
 alone, `compile_call` also catches `NotImplementedError` (numba's bytecode reader meeting an opcode
-it lacks, such as `LOAD_COMMON_CONSTANT` on Python 3.14) and a bare `AssertionError` (numba's own
-lowering asserts). Compiling runs no step code, so neither can come from the step.
+it lacks, such as `LOAD_COMMON_CONSTANT` on Python 3.14), a bare `AssertionError` (numba's own
+lowering asserts) and a `TypeError` (numba boxing a literal it can't hash, such as a list of dicts with
+mixed value types). Compiling runs no step code, so none of them can come from the step.
 
 Anything else raises. A runtime error inside a compiled step propagates, with a note naming the
 step, exactly as in interpreted mode:
@@ -211,7 +223,7 @@ flowchart TD
     helper -->|"no"| types{"an input or output<br/>no kernel holds?<br/>(str, date, list, dict)"}:::engine
     types -->|"yes"| py
     types -->|"no"| probe["probe the signature,<br/>dispatcher.compile(sig)"]:::engine
-    probe --> err{"NumbaError,<br/>UnsupportedBytecodeError,<br/>NotImplementedError,<br/>AssertionError?"}:::engine
+    probe --> err{"NumbaError,<br/>UnsupportedBytecodeError,<br/>NotImplementedError,<br/>AssertionError, TypeError?"}:::engine
     err -->|"yes"| py
     err -->|"no"| shape{"Columnar input outside<br/>a plain scalar call?"}:::engine
     shape -->|"yes"| per["Fallback: compiled,<br/>one call per row"]:::error
@@ -263,7 +275,7 @@ outside the shared kernel: ...`. `exe.fallbacks()` reports both kinds by step pa
   tables, scorecards, branches and loops fall back as a whole, so the decorator on one raises
   `TypeError`; filter the warning category for those.
 - `Engine(strict_compile=True)` turns an unaccepted Python fallback into an error at the first
-  run. It raises a plain `ValueError` (not a `DeciderError`):
+  run. It raises a plain `ValueError` (not a `DecikitError`):
 
 ```text
 ValueError : loan/uses_regex runs in Python, row by row:
@@ -308,10 +320,10 @@ sequenceDiagram
 
 | Symptom | Cause | What to do |
 |---|---|---|
-| every worker compiles at startup | the CPU target differs from the `decider build` host, or `SALT` changed with a decider upgrade | run `decider build` on the serving host type |
+| every worker compiles at startup | the CPU target differs from the `decikit build` host, or `SALT` changed with a decider toolkit upgrade | run `decikit build` on the serving host type |
 | a step is recompiled after a harmless rename | the file moved: numba's disk cache is keyed by file path and line | expected once; the in-process cache still shares it |
 | a step never hits the disk cache | it has a closure, or it was defined without a file | move it to module level in a `.py` file |
-| a `FallbackWarning` names numba's long candidate listing | a typing error, for example a `Decimal` mixed with a float | read the decider line in the middle of the listing ([kernel semantics](kernels.md)) |
+| a `FallbackWarning` names numba's long candidate listing | a typing error, for example a `Decimal` mixed with a float | read the decider toolkit line in the middle of the listing ([kernel semantics](kernels.md)) |
 | a `ZeroDivisionError` with a note listing several steps | a runtime error in a fused kernel | rerun in `mode="stepped"` to see which step |
 
 `dispatcher.stats.cache_hits` and `cache_misses` (the dispatcher from `jit(fn)`) show whether a

@@ -8,8 +8,8 @@ import type { Action } from "./agentActions";
 const MAX_REQUEST = 1 << 20;
 const HANDLER_TIMEOUT = 60_000;
 
-/** The default home of every window's socket and token: the directory decider's MCP server looks in. */
-export const editorDir = () => path.join(os.homedir(), ".decider", "editor");
+/** The default home of every window's socket and token: the directory decikit's MCP server looks in. */
+export const editorDir = () => path.join(os.homedir(), ".decikit", "editor");
 
 /** The file name the MCP server derives from a folder: a hash of its real path. */
 export const folderHash = (folder: string) => crypto.createHash("sha256").update(fs.realpathSync(folder)).digest("hex").slice(0, 16);

@@ -4,12 +4,12 @@ import json
 import polars as pl
 import yaml
 
-from decider import branch, flow, loop
-from decider._engine import step_map
-from decider.steps.flowfile import load_flow
-from decider.steps._configurable import ConfigurableStep
-from decider.steps.trees import expr_condition
-from decider.lab.testing import assert_equivalent
+from decikit import branch, flow, loop
+from decikit._engine import step_map
+from decikit.steps.flowfile import load_flow
+from decikit.steps._configurable import ConfigurableStep
+from decikit.steps.trees import expr_condition
+from decikit.lab.testing import assert_equivalent
 from tests.flowfile import components as comp
 
 FRAME = pl.DataFrame({
@@ -138,7 +138,7 @@ def test_a_referenced_file_may_name_the_components_passed_as_an_argument(tmp_pat
 
 
 def test_suppress_checks_keys_reach_the_origins(tmp_path):
-    from decider._engine import to_ir
+    from decikit._engine import to_ir
 
     doc = {
         "flow": "credit", "components": "tests.flowfile.components", "suppress_checks": ["DCD101"],
@@ -162,6 +162,6 @@ def test_suppress_checks_keys_reach_the_origins(tmp_path):
 
 
 def _iter(root):
-    from decider._engine.ir.nodes import iter_nodes
+    from decikit._engine.ir.nodes import iter_nodes
 
     return iter_nodes(root)

@@ -5,9 +5,9 @@ import numpy as np
 import polars as pl
 import pytest
 
-from decider import branch, flow, frame_step, loop, step
-from decider._engine import Engine
-from decider._engine.run import Checkpoint
+from decikit import branch, flow, frame_step, loop, step
+from decikit._engine import Engine
+from decikit._engine.run import Checkpoint
 
 
 def seed(requested_term: float) -> float:
@@ -78,6 +78,34 @@ def test_a_checkpoint_carries_the_node_origin(bind):
     state, params = exe.prepare(_frame(2))
     first = next(exe.runner.iterate(exe.plan, state, params))
     assert isinstance(first, Checkpoint) and first.origin is exe.plan.root.node.origin
+
+
+@pytest.mark.parametrize("mode", ["interpreted", "stepped", "fused"])
+def test_a_quiet_run_yields_a_none_per_node_and_computes_the_same_output(mode):
+    exe = Engine().bind(by_sector, mode=mode)
+    loud, params = exe.prepare(_frame(2))
+    quiet, _ = exe.prepare(_frame(2))
+    stops = list(exe.runner.iterate(exe.plan, loud, params))
+    nones = list(exe.runner.iterate(exe.plan, quiet, params, quiet=True))
+    assert len(nones) == len(stops) and set(nones) == {None}
+    assert exe.output(loud).equals(exe.output(quiet))
+
+
+@pytest.mark.parametrize("mode", ["interpreted", "stepped", "fused"])
+def test_a_runner_subclass_overriding_iterate_without_quiet_still_runs_and_sees_checkpoints(mode):
+    exe = Engine().bind(by_sector, mode=mode)
+    seen = []
+
+    class Counting(type(exe.runner)):
+        def iterate(self, plan, state, params, trace=None, table=None):
+            for checkpoint in super().iterate(plan, state, params, trace, table):
+                seen.append(checkpoint)
+                yield checkpoint
+
+    exe.runner.__class__ = Counting
+    assert exe.run(_frame(2))["term_cap"].to_list() == [54.0, 60.0]
+    assert exe.score({"requested_term": 72.0, "sector_code": 1})["term_cap"] == 54.0
+    assert seen and all(isinstance(c, Checkpoint) for c in seen)
 
 
 def test_a_session_can_stop_before_a_node_and_inspect_after_it(bind):
@@ -241,9 +269,9 @@ def test_a_frame_step_inside_an_arm_sees_only_that_arms_rows(bind):
 
 
 def test_a_row_node_without_a_reference_is_called_with_row_params_and_consts(bind):
-    from decider._engine.ir.decls import Input, Output
-    from decider._engine.ir.nodes import CallNode
-    from decider._engine.ir.origin import Origin
+    from decikit._engine.ir.decls import Input, Output
+    from decikit._engine.ir.nodes import CallNode
+    from decikit._engine.ir.origin import Origin
 
     def kernel(row, params, consts):
         return (row[0] * consts[0],)
@@ -276,8 +304,8 @@ def test_state_records_an_override_as_a_new_version(bind):
 
 def test_a_compiled_representation_is_rebuilt_after_its_values_change():
     # A loop body writes the same version every iteration: a cached span or code array is stale.
-    from decider._engine.run.state import State
-    from decider._engine.wiring import resolve
+    from decikit._engine.run.state import State
+    from decikit._engine.wiring import resolve
 
     plan = resolve(flow(lambda x: x, name="p"))
     state = State.from_frame(plan, pl.DataFrame({"x": [1.0, 2.0]}))

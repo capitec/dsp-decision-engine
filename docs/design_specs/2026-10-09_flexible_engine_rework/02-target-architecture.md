@@ -6,11 +6,11 @@ supports. The reasons for each choice are in [03-design-choices.md](03-design-ch
 ```mermaid
 flowchart TB
     U["pipeline.run(x, engine=None)"]:::author --> D{"type of x"}:::ir
-    D -- "dict or pl.DataFrame" --> DEF["the default engine<br/>(decider.engine(...); fused when unset)"]:::ir
+    D -- "dict or pl.DataFrame" --> DEF["the default engine<br/>(decikit.engine(...); fused when unset)"]:::ir
     DEF --> N
     D -- "pl.LazyFrame" --> P
     D -- "Spark DataFrame" --> S
-    subgraph R["Engine registry (BaseRegistryModule, group decider.engines)"]
+    subgraph R["Engine registry (BaseRegistryModule, group decikit.engines)"]
         N["NumbaEngine<br/>Interpreted · Stepped · Fused<br/>the existing driver, kernels and State, unchanged"]:::engine
         P["PolarsEngine<br/>v1: host — fused sub-plans in map_batches, split at frame steps<br/>v2: + native expressions from polars bodies<br/>LazyFrame in, LazyFrame out"]:::engine
         S["SparkEngine (last)<br/>same segmenter → mapInArrow boundaries"]:::engine
@@ -54,10 +54,10 @@ class PolarsEngine(Engine):
 - `Engine.resolve("fused")` is the alias lookup; `Step.compile("fused")` becomes
   `Engine.resolve(mode)().bind(self)`, and `compile(FusedEngine(strict_compile=True))` takes an instance.
 - `APISettings.engine` is an `EngineSettings(type="fused", extra="allow")` document and `RequestHandler`
-  holds the built `Engine`, mirroring `DeciderConfigSettings.get()`. `DECIDER_API__ENGINE__TYPE=fused
-  DECIDER_API__ENGINE__STRICT_COMPILE=true` works; today neither setting is reachable from serving.
-- Built-ins register through `Engine.lazy({...})` so `import decider` still imports no numba; third parties
-  ship an engine as an entry point in `decider.engines`.
+  holds the built `Engine`, mirroring `DecikitConfigSettings.get()`. `DECIKIT_API__ENGINE__TYPE=fused
+  DECIKIT_API__ENGINE__STRICT_COMPILE=true` works; today neither setting is reachable from serving.
+- Built-ins register through `Engine.lazy({...})` so `import decikit` still imports no numba; third parties
+  ship an engine as an entry point in `decikit.engines`.
 - `capabilities().modes` in the bridge and the engine list in `assert_equivalent` read the registry instead
   of `RUNNERS`.
 
@@ -82,8 +82,8 @@ def _(start: pl.Expr, as_of: pl.Expr) -> pl.Expr:
     return (as_of.dt.year() - start.dt.year()) * 12 + as_of.dt.month() - start.dt.month()
 ```
 
-- `impl(engine)` stores the body on the function object (`__decider_impls__`), beside `@allow_fallback`'s
-  marker in `decider/steps/_helpers.py`; `decider.impl(fn, "polars")` is the form for a plain function.
+- `impl(engine)` stores the body on the function object (`__decikit_impls__`), beside `@allow_fallback`'s
+  marker in `decikit/steps/_helpers.py`; `decikit.impl(fn, "polars")` is the form for a plain function.
   Storing it on the function means `.named()` and `.relabel()` copies keep it.
 - `FunctionStep.to_ir` reads the marker into `CallNode.impls: tuple[tuple[str, Callable], ...]`, a new field
   beside `fn` and `reference`. The IR node set is unchanged.
@@ -178,7 +178,7 @@ because a session exists to pause at every node and inside trees; `session(df, e
 production runs.
 
 ```python
-with decider.engine("interpreted"):            # instant; what you see is what runs
+with decikit.engine("interpreted"):            # instant; what you see is what runs
     pipeline.run(df)
 ```
 
@@ -194,8 +194,8 @@ Serving ignores the default; the handler holds its engine document.
   `pyspark.sql.functions` only if polars bodies earned their place first.
 - Pipelines are record by record: a `frame_step` raises "cross-row steps are not supported on Spark; run them
   in the job between pipelines". Loops and trees are boundaries, so they just work.
-- Lives outside `decider/_engine` (pyspark is optional): either `decider[spark]` with a lazy alias, or an
-  out-of-tree `decider-spark` package registering through `decider.engines`, which is also the first proof
+- Lives outside `decikit/_engine` (pyspark is optional): either `decikit[spark]` with a lazy alias, or an
+  out-of-tree `decikit-spark` package registering through `decikit.engines`, which is also the first proof
   of the plugin story.
 
 ## Feature matrix

@@ -1,15 +1,16 @@
-"""A pipeline served the way `decider serve` finds one: `def build(...)` in the file,
+"""A pipeline served the way `decikit serve` finds one: `def build(...)` in the file,
 its documents from the latest `configs/<version>/` next to it, instead of a module-level
 `pipeline = flow(...)` with its own `PARAMS`/`SAMPLE`.
 """
 import json
+import glob
 import os
 import sys
 
 import pytest
 
 HERE = os.path.dirname(__file__)
-from decider._tooling.bridge.bridge import Bridge
+from decikit._tooling.bridge.bridge import Bridge
 
 TABLE_DOC = {
     "type": "decision_table", "name": "bands",
@@ -27,7 +28,7 @@ def _write(path, text):
 
 def test_find_pipelines_lists_a_top_level_build(tmp_path):
     pipeline = tmp_path / "pipeline.py"
-    pipeline.write_text("from decider import flow\n\n\ndef label(score: float) -> str:\n    return str(score)\n\n\ndef build():\n    return flow(label, name='bands')\n")
+    pipeline.write_text("from decikit import flow\n\n\ndef label(score: float) -> str:\n    return str(score)\n\n\ndef build():\n    return flow(label, name='bands')\n")
     d = Bridge().describe(str(pipeline))
     assert {"name": "build", "line": 8, "kind": "build", "status": "pipeline"} in d["pipelines"]
     assert d["pipeline"] == "build"
@@ -35,7 +36,7 @@ def test_find_pipelines_lists_a_top_level_build(tmp_path):
 
 def test_find_pipelines_lists_a_zero_arg_factory_and_reports_its_size(tmp_path):
     pipeline = tmp_path / "pipeline.py"
-    pipeline.write_text("from decider import flow\n\n\ndef label(score: float) -> str:\n    return str(score)\n\n\ndef make_pipeline():\n    return flow(label, name='bands')\n")
+    pipeline.write_text("from decikit import flow\n\n\ndef label(score: float) -> str:\n    return str(score)\n\n\ndef make_pipeline():\n    return flow(label, name='bands')\n")
     d = Bridge().describe(str(pipeline))
     assert {"name": "make_pipeline", "line": 8, "kind": "factory", "status": "pipeline"} in d["pipelines"]
     assert d["pipeline"] == "make_pipeline"
@@ -44,7 +45,7 @@ def test_find_pipelines_lists_a_zero_arg_factory_and_reports_its_size(tmp_path):
 
 def test_find_pipelines_reports_an_unassembled_step_and_a_needy_factory_as_invalid(tmp_path):
     pipeline = tmp_path / "pipeline.py"
-    pipeline.write_text("from decider import flow, step\n\n\n"
+    pipeline.write_text("from decikit import flow, step\n\n\n"
                         "@step(output='x')\n"
                         "def lone(x: float) -> float:\n"
                         "    return x\n\n\n"
@@ -64,7 +65,7 @@ def test_find_pipelines_reports_an_unassembled_step_and_a_needy_factory_as_inval
 
 def test_a_file_with_only_invalid_candidates_reports_why(tmp_path):
     pipeline = tmp_path / "pipeline.py"
-    pipeline.write_text("from decider import flow, step\n\n\n"
+    pipeline.write_text("from decikit import flow, step\n\n\n"
                         "@step(output='x')\n"
                         "def lone(x: float) -> float:\n"
                         "    return x\n")
@@ -74,8 +75,8 @@ def test_a_file_with_only_invalid_candidates_reports_why(tmp_path):
 
 def test_a_build_with_a_configurable_step_runs_with_its_config_params_and_sample(tmp_path):
     _write(tmp_path / "pipeline.py",
-           "from decider import flow, param\n"
-           "from decider.steps.tables import DecisionTableConfig  # registers 'decision_table'\n\n\n"
+           "from decikit import flow, param\n"
+           "from decikit.steps.tables import DecisionTableConfig  # registers 'decision_table'\n\n\n"
            "def label(band: str, prefix: str = param('x-')) -> str:\n"
            "    return prefix + band\n\n\n"
            "def build(tree):\n"
@@ -96,7 +97,7 @@ def test_a_build_with_a_configurable_step_runs_with_its_config_params_and_sample
 
 def test_a_zero_arg_build_runs_with_its_config_params_and_sample(tmp_path):
     _write(tmp_path / "pipeline.py",
-           "from decider import flow, param\n\n\n"
+           "from decikit import flow, param\n\n\n"
            "def label(score: float, prefix: str = param('x-')) -> str:\n"
            "    return f'{prefix}{score}'\n\n\n"
            "def build():\n"
@@ -112,7 +113,7 @@ def test_a_zero_arg_build_runs_with_its_config_params_and_sample(tmp_path):
 
 def test_the_modules_own_params_and_sample_still_win_over_the_config(tmp_path):
     _write(tmp_path / "pipeline.py",
-           "from decider import flow, param\n\n"
+           "from decikit import flow, param\n\n"
            "PARAMS = {'bands': {'label': {'prefix': 'module-'}}}\n"
            "SAMPLE = [{'score': 9.0}]\n\n\n"
            "def label(score: float, prefix: str = param('x-')) -> str:\n"
@@ -136,37 +137,33 @@ def test_a_build_missing_its_config_document_raises_a_clear_error(tmp_path):
 
 
 def test_a_build_with_no_configs_dir_is_called_with_no_arguments(tmp_path):
-    _write(tmp_path / "pipeline.py", "from decider import flow\n\n\ndef label(score: float) -> str:\n    return str(score)\n\n\ndef build():\n    return flow(label, name='bands')\n")
+    _write(tmp_path / "pipeline.py", "from decikit import flow\n\n\ndef label(score: float) -> str:\n    return str(score)\n\n\ndef build():\n    return flow(label, name='bands')\n")
     d = Bridge().describe(str(tmp_path / "pipeline.py"))
     assert d["values"] == {}
 
 
 def test_a_build_with_no_data_at_all_raises_a_clear_error(tmp_path):
-    _write(tmp_path / "pipeline.py", "from decider import flow\n\n\ndef label(score: float) -> str:\n    return str(score)\n\n\ndef build():\n    return flow(label, name='bands')\n")
+    _write(tmp_path / "pipeline.py", "from decikit import flow\n\n\ndef label(score: float) -> str:\n    return str(score)\n\n\ndef build():\n    return flow(label, name='bands')\n")
     with pytest.raises(ValueError, match="no data"):
         Bridge().trace(str(tmp_path / "pipeline.py"))
 
 
-EXAMPLES = os.path.join(HERE, "..", "..", "example_projects")
+EXAMPLES = os.path.join(HERE, "..", "..", "examples")
 
 
-def test_describe_and_trace_the_affordability_and_credit_limit_example_projects():
-    """A smoke check on two real `def build(...)` projects, `credit_core` (project 00) on the path
-    exactly as their own SERVE.md documents for serving or testing them."""
-    shared = os.path.join(EXAMPLES, "00-shared-credit-core", "sonnet")
-    sys.path.insert(0, shared)
-    try:
-        for project in ("02-affordability", "07-credit-limit-management"):
-            pipeline = os.path.join(EXAMPLES, project, "sonnet", "pipeline.py")
-            assert Bridge().describe(pipeline)["pipeline"] == "build"
-            assert Bridge().trace(pipeline)["error"] is None
-    finally:
-        sys.path.remove(shared)
+def test_describe_and_trace_the_affordability_and_credit_limit_examples(monkeypatch):
+    """A smoke check on two real `def build(...)` projects that import their sibling examples by package name."""
+    for project in sorted(glob.glob(os.path.join(EXAMPLES, "*", ""))):
+        monkeypatch.syspath_prepend(project)
+    for project, package in (("affordability", "assessment"), ("credit-limit-management", "limit_mgmt")):
+        pipeline = os.path.join(EXAMPLES, project, package, "pipeline.py")
+        assert Bridge().describe(pipeline)["pipeline"] == "build"
+        assert Bridge().trace(pipeline)["error"] is None
 
 
 def test_an_edited_step_of_a_build_pipeline_is_swapped_in_mid_run(tmp_path):
     pipeline = tmp_path / "pipeline.py"
-    pipeline.write_text("from decider import flow\n\n\ndef double(x: float) -> float:\n    return x * 2\n\n\n"
+    pipeline.write_text("from decikit import flow\n\n\ndef double(x: float) -> float:\n    return x * 2\n\n\n"
                         "def build():\n    return flow(double, name='f')\n")
     _write(tmp_path / "configs" / "0.0.0" / "params.json", "{}")
     _write(tmp_path / "sample_request.json", json.dumps({"x": 3.0}))

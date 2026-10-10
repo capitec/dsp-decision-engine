@@ -8,11 +8,11 @@ from typing import TypedDict
 import polars as pl
 import pytest
 
-from decider import Engine, flow, missing_as
-from decider.ops import Columnar, Struct
-from decider.ops import Text
-from decider.exceptions import FallbackWarning
-from decider.lab.testing import assert_equivalent
+from decikit import Engine, flow, missing_as
+from decikit.ops import Columnar, Struct
+from decikit.ops import Text
+from decikit.exceptions import FallbackWarning
+from decikit.lab.testing import assert_equivalent
 
 COMPILED = ("stepped", "fused")
 

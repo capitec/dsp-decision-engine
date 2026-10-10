@@ -29,14 +29,14 @@
 
   <rect x="26" y="310" width="298" height="50" rx="8" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
   <text x="38" y="332" font-size="15" font-weight="600" fill="#4c1d95">.env</text>
-  <text x="38" y="351" font-size="13" fill="#4c1d95">DECIDER_* settings for build and serve</text>
+  <text x="38" y="351" font-size="13" fill="#4c1d95">DECIKIT_* settings for build and serve</text>
 
   <rect x="26" y="368" width="298" height="38" rx="8" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
   <text x="38" y="392" font-size="15" font-weight="600" fill="#7c2d00">tests/, conftest.py, README.md</text>
 
   <!-- build -->
   <rect x="400" y="40" width="210" height="150" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
-  <text x="416" y="66" font-size="16" font-weight="600" fill="#134e4a">decider build</text>
+  <text x="416" y="66" font-size="16" font-weight="600" fill="#134e4a">decikit build</text>
   <text x="416" y="92" font-size="14" fill="#134e4a">import build()</text>
   <text x="416" y="114" font-size="14" fill="#134e4a">load latest version</text>
   <text x="416" y="136" font-size="14" fill="#134e4a">validate params</text>
@@ -45,7 +45,7 @@
 
   <!-- serve -->
   <rect x="400" y="230" width="210" height="176" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
-  <text x="416" y="256" font-size="16" font-weight="600" fill="#4c1d95">decider serve</text>
+  <text x="416" y="256" font-size="16" font-weight="600" fill="#4c1d95">decikit serve</text>
   <text x="416" y="282" font-size="14" fill="#4c1d95">per worker:</text>
   <text x="416" y="304" font-size="14" fill="#4c1d95">construct Handler</text>
   <text x="416" y="326" font-size="14" fill="#4c1d95">stage() + activate()</text>

@@ -1,5 +1,5 @@
 """Credit origination: features, trees, one arm per product, then the decision."""
-from decider import branch, flow
+from decikit import branch, flow
 
 from bank.decision import decision, product_arm
 from bank.features import behaviour, debt, derived, household, income, stability
@@ -22,5 +22,5 @@ origination = flow(features, risk, pricing_inputs, product, decision, name="orig
 
 
 def build():
-    """The origination pipeline: `decider build` and `decider serve` call this for each config version."""
+    """The origination pipeline: `decikit build` and `decikit serve` call this for each config version."""
     return origination

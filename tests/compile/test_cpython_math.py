@@ -5,9 +5,9 @@ import random
 import polars as pl
 from numba import njit
 
-from decider import flow
-from decider._engine import Engine
-from decider._engine.compile.semantics.numbers import cpython_round
+from decikit import flow
+from decikit._engine import Engine
+from decikit._engine.compile.semantics.numbers import cpython_round
 
 # Decimal halves: the double sits just below or above the .5 (or on it, 0.125),
 # and numba's scale-round-unscale gets some of them wrong (2.675, 1234.565).

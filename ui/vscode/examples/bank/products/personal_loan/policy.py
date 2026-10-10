@@ -1,5 +1,5 @@
 """Personal loan: unsecured, 6 to 84 months. Policy rules: each rule declines an application for one reason."""
-from decider import flow, param, step
+from decikit import flow, param, step
 
 
 @step(output="pl_min_age")

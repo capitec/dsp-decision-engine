@@ -10,7 +10,7 @@ lands, the bullets that survive move to `docs/design_decisions/decisions/engine.
 - Why: an engine is a settings document, and the registry already gives settings-driven construction
   (`ConfigStore.resolve(type).model_validate(doc)`), entry-point discovery, lazy built-ins and `json_schema()`
   for UI forms. It closes a real gap today: `strict_compile` and `params_validation` cannot be set for
-  `decider serve`. A dict with `register` would give extensibility and nothing else. The cost is pydantic on
+  `decikit serve`. A dict with `register` would give extensibility and nothing else. The cost is pydantic on
   `Engine`, which holds settings only, so nothing awkward moves onto a model.
 
 ## 2. Three thin subclasses, not one `NumbaEngine(mode=...)`
@@ -64,7 +64,7 @@ lands, the bullets that survive move to `docs/design_decisions/decisions/engine.
 
 ## 8. `impl` is a marker on the function, not a second `def` under the same name
 
-- Chosen: `@tenure.impl("polars")` and `decider.impl(fn, "polars")`, stored on the function object like
+- Chosen: `@tenure.impl("polars")` and `decikit.impl(fn, "polars")`, stored on the function object like
   `@allow_fallback`.
 - Alternative: `@step(engine="polars") def tenure(...)` twice, the decorator finding the earlier `tenure` by
   `(module, qualname)` in a global table, the way `typing.overload` works.
@@ -90,12 +90,12 @@ lands, the bullets that survive move to `docs/design_decisions/decisions/engine.
 
 ## 11. `Step.run` follows the default engine; the default is fused when nothing is set
 
-- Chosen: a `ContextVar` set with `decider.engine(...)`, read by `Step.run` and `compile` when
+- Chosen: a `ContextVar` set with `decikit.engine(...)`, read by `Step.run` and `compile` when
   `engine=None`; `FusedEngine()` when unset. A `LazyFrame` or Spark input picks its engine by type regardless.
 - Alternatives: keep `Step.run` interpreted (today); a process-global setter.
 - Why: `run` should be fast and behave like serving, and a notebook should be able to switch everything with
   one line. A setter is a footgun under threads; `contextvars` is how polars, numpy and `decimal` scope such
-  settings. The cost is a first-call compile wait on a cold cache; `with decider.engine("interpreted")` is one
+  settings. The cost is a first-call compile wait on a cold cache; `with decikit.engine("interpreted")` is one
   line away. Decided 2026-10-09.
 - `Step.session()` does not follow the default: it opens interpreted unless given an engine. A session exists
   to pause at every node and inside trees, which fused cannot do; `session(df, engine="fused")` is explicit.

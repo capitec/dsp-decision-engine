@@ -6,7 +6,7 @@ for one record. The boundary moves values from one to the other with one export 
 few copies and Python calls as it can, applies each input's null policy, and refuses what it
 cannot read by naming the column.
 
-It lives in `decider/_engine/boundary/`:
+It lives in `decikit/_engine/boundary/`:
 
 | File | What it holds |
 |---|---|
@@ -23,7 +23,7 @@ It lives in `decider/_engine/boundary/`:
 | `boundary/_arrow/doctor.py` | `available()` and `diagnose()` |
 | `boundary/_arrow/c/shim.c`, `vendor/` | the C shim and vendored nanoarrow 0.9.0 |
 
-The runners call it from `State.from_frame` in `decider/_engine/run/state.py`, from the span
+The runners call it from `State.from_frame` in `decikit/_engine/run/state.py`, from the span
 builder in `run/representations.py`, and from `build_struct` and `build_ragged` in
 `compile/structs.py` and `compile/rows.py`. What the kernel does with the arrays is on
 [compilation](compile.md); what a span or a decimal means inside it is on [kernel
@@ -275,12 +275,12 @@ flowchart TD
 ```
 
 The shim is a plain shared library, not a CPython extension, compiled on first import with `$CC`
-(default `cc`) into `$XDG_CACHE_HOME/decider/arrow-shim/` (default `~/.cache/decider/arrow-shim/`).
+(default `cc`) into `$XDG_CACHE_HOME/decikit/arrow-shim/` (default `~/.cache/decikit/arrow-shim/`).
 The file name carries the first 16 hex digits of a sha256 over the compiler, the flags, the machine
 and the bytes of the C sources and header, so an edit can never load a stale build. The write goes
 to a temp file and `os.replace`, so two processes importing at once never load a half-written file.
-nanoarrow is compiled with `NANOARROW_NAMESPACE=DeciderArrow`, so every exported symbol is `sm_*` or
-`DeciderArrow*`, and another nanoarrow in the process (pyarrow, adbc) cannot interpose on it.
+nanoarrow is compiled with `NANOARROW_NAMESPACE=DecikitArrow`, so every exported symbol is `sm_*` or
+`DecikitArrow*`, and another nanoarrow in the process (pyarrow, adbc) cannot interpose on it.
 
 `diagnose()` reports what is installed and never raises:
 
@@ -290,15 +290,15 @@ nanoarrow is compiled with `NANOARROW_NAMESPACE=DeciderArrow`, so every exported
  "nanoarrow": "0.9.0",
  "vendor_pin": "nanoarrow 0.9.0 (apache-arrow-nanoarrow-0.9.0.tar.gz,
                 released 2026-07-31)",
- "extension": "/home/sholto/.cache/decider/arrow-shim/shim-6576b11e908bd9df.so"
+ "extension": "/home/sholto/.cache/decikit/arrow-shim/shim-6576b11e908bd9df.so"
 }
 ```
 
 There is no pure-Python path for the boundary. A machine without a C compiler gets one
-`ImportError`: `decider's compiled Arrow shim could not be loaded on <platform> / <interpreter>
+`ImportError`: `decikit's compiled Arrow shim could not be loaded on <platform> / <interpreter>
 (<machine>): <cause>. There is no pure-Python path for the data boundary. Install a C compiler (set
 CC to choose one) so the shim is built on first import.` Nothing is re-exported from
-`decider._engine.boundary`, so importing the package does not build the shim; `extract`,
+`decikit._engine.boundary`, so importing the package does not build the shim; `extract`,
 `explain_boundary`, `view` and `kernels` need it, while `plan`, `nulls`, `intrinsics` and
 `diagnose()` do not.
 
@@ -377,7 +377,7 @@ fused mode, on a loaded machine where p99 and 1M times moved by up to 50% betwee
 Before the change, a one-row flagship run spent 105 µs in `State.from_frame`; afterwards about
 60 µs, of which the polars export itself (`get_schema` and `get_next`) was about 10 µs. Whether an Arrow request body could reach a kernel with no copy was
 measured too: polars
-copies on `read_ipc_stream` before decider sees anything, and at one row the copy that remains is a
+copies on `read_ipc_stream` before the decider toolkit sees anything, and at one row the copy that remains is a
 few dozen bytes. The codec was worth about 2 µs of a 39.4 µs request, so requests stay JSON and go
 through `score()`.
 
@@ -387,7 +387,7 @@ through `score()`.
   column cannot cross, without raising.
 - `FrameView(FramePlan(...)).bind(df).describe()` shows storage type, offset, null count,
   validity, variadic buffers and dictionary per column.
-- `decider._engine.boundary._arrow.diagnose()` shows whether the shim loaded, from which file, and
+- `decikit._engine.boundary._arrow.diagnose()` shows whether the shim loaded, from which file, and
   the vendored nanoarrow pin.
 - A column that is wrong only on a sliced or multi-chunk frame points at offsets: the shim reads
   each child's own offset, and `tests/boundary/test_boundary_extract.py` pins that fresh, sliced

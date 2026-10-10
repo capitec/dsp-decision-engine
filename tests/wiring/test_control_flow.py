@@ -3,10 +3,10 @@ from __future__ import annotations
 
 import pytest
 
-from decider import branch, flow, frame_step, loop, step
-from decider._engine.wiring import Branch, Call, Loop, Sequence, interface, resolve
-from decider._engine import to_ir
-from decider.exceptions import WiringError
+from decikit import branch, flow, frame_step, loop, step
+from decikit._engine.wiring import Branch, Call, Loop, Sequence, interface, resolve
+from decikit._engine import to_ir
+from decikit.exceptions import WiringError
 
 
 def is_private(sector_code: int) -> bool:

@@ -14,16 +14,16 @@
   <!-- server -->
   <rect x="40" y="100" width="600" height="60" rx="9" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
   <text x="60" y="125" font-size="15" font-weight="600" fill="#4c1d95">uvicorn + starlette, or sanic: one process per worker</text>
-  <text x="60" y="147" font-size="13" fill="#4c1d95">decider serve --workers N  ·  ServeSettings (host, port, workers, server)</text>
+  <text x="60" y="147" font-size="13" fill="#4c1d95">decikit serve --workers N  ·  ServeSettings (host, port, workers, server)</text>
 
   <!-- app -->
   <rect x="40" y="180" width="600" height="60" rx="9" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
-  <text x="60" y="205" font-size="15" font-weight="600" fill="#4c1d95">create_app(handler)  ·  decider/serving/_servers/</text>
-  <text x="60" y="227" font-size="13" fill="#4c1d95">predict, ping, DeciderError handler (core.error_response)</text>
+  <text x="60" y="205" font-size="15" font-weight="600" fill="#4c1d95">create_app(handler)  ·  decikit/serving/_servers/</text>
+  <text x="60" y="227" font-size="13" fill="#4c1d95">predict, ping, DecikitError handler (core.error_response)</text>
 
   <!-- handler -->
   <rect x="40" y="260" width="600" height="120" rx="9" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
-  <text x="60" y="285" font-size="15" font-weight="600" fill="#4c1d95">RequestHandler.process_fn  ·  decider/serving/_handler.py</text>
+  <text x="60" y="285" font-size="15" font-weight="600" fill="#4c1d95">RequestHandler.process_fn  ·  decikit/serving/_handler.py</text>
   <rect x="58" y="302" width="128" height="60" rx="8" fill="#ffffff" stroke="#7c3aed" stroke-width="1.5"/>
   <text x="122" y="327" font-size="14" text-anchor="middle" fill="#4c1d95">input_fn</text>
   <text x="122" y="347" font-size="12" text-anchor="middle" fill="#4c1d95">_parse.py</text>
@@ -48,7 +48,7 @@
   <!-- engine -->
   <rect x="40" y="480" width="600" height="60" rx="9" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
   <text x="60" y="505" font-size="15" font-weight="600" fill="#134e4a">Executable.score(record, params)  ·  Executable.run(frame, params)</text>
-  <text x="60" y="527" font-size="13" fill="#134e4a">decider/_engine/run/engine.py, mode from DECIDER_API__MODE (fused)</text>
+  <text x="60" y="527" font-size="13" fill="#134e4a">decikit/_engine/run/engine.py, mode from DECIKIT_API__MODE (fused)</text>
 
   <!-- stack arrows -->
   <line x1="340" y1="80" x2="340" y2="98" stroke="#4b5563" stroke-width="1.5" marker-end="url(#a)"/>

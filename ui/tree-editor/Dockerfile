@@ -1,4 +1,4 @@
-# Build from the repo root, after `uv build` has put the decider wheel in dist/:
+# Build from the repo root, after `uv build` has put the decikit wheel in dist/:
 #   docker build -f ui/tree-editor/Dockerfile -t decider-tree-editor .
 
 FROM node:24-alpine AS ui-builder
@@ -28,20 +28,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl \
 RUN addgroup --gid 1000 appgroup && \
     adduser --uid 1000 --gid 1000 --disabled-password --gecos "" appuser
 
-COPY dist /tmp/decider/
+COPY dist /tmp/decikit/
 COPY ui/tree-editor/backend/requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir /tmp/decider/*.whl -r requirements.txt && \
-    rm -rf /tmp/decider
+RUN pip install --no-cache-dir /tmp/decikit/*.whl -r requirements.txt && \
+    rm -rf /tmp/decikit
 
 # ponytail: migrations run from this image; split into a job image if it grows
 COPY ui/tree-editor/backend/alembic ./alembic
 COPY ui/tree-editor/backend/alembic.ini ./alembic.ini
-COPY ui/tree-editor/backend/dsp_decider ./dsp_decider
+COPY ui/tree-editor/backend/dsp_decikit ./dsp_decikit
 COPY --from=ui-builder /app/ui/tree-editor/ui/build ./ui/build
 
-RUN mkdir -p /app/logs /var/cache/dsp-decider && \
-    chown -R appuser:appgroup /app /var/cache/dsp-decider && \
-    chmod -R 755 /var/cache/dsp-decider
+RUN mkdir -p /app/logs /var/cache/dsp-decikit && \
+    chown -R appuser:appgroup /app /var/cache/dsp-decikit && \
+    chmod -R 755 /var/cache/dsp-decikit
 
 USER appuser
 
@@ -55,4 +55,4 @@ ENV PYTHONUNBUFFERED=1
 ENV DSP_UI_BUILD_PATH=/app/ui/build
 
 ENTRYPOINT [ "uvicorn" ]
-CMD ["dsp_decider.asgi:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["dsp_decikit.asgi:app", "--host", "0.0.0.0", "--port", "8000"]

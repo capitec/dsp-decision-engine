@@ -2,8 +2,8 @@
 import polars as pl
 import pytest
 
-from decider import branch, flow, step
-from decider._engine.debug import EVENT_LOG, NodeFinished, Paused, RunFinished
+from decikit import branch, flow, step
+from decikit._engine.debug import EVENT_LOG, NodeFinished, Paused, RunFinished
 
 MODES = ("interpreted", "stepped", "fused")
 

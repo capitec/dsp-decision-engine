@@ -1,0 +1,247 @@
+{
+  "type": "reason_codes",
+  "name": "rank_reasons",
+  "version": "loan-granting-reasons-2026.09",
+  "codes": [
+    {
+      "code": 1210,
+      "severity_rank": 1,
+      "description": "Application-fraud verdict declined",
+      "is_regulatory": true
+    },
+    {
+      "code": 1160,
+      "severity_rank": 2,
+      "description": "Sanctions list match",
+      "is_regulatory": true
+    },
+    {
+      "code": 1161,
+      "severity_rank": 3,
+      "description": "Internal fraud exclusion list match",
+      "is_regulatory": true
+    },
+    {
+      "code": 1162,
+      "severity_rank": 4,
+      "description": "Staff restriction list match",
+      "is_regulatory": true
+    },
+    {
+      "code": 1163,
+      "severity_rank": 5,
+      "description": "Litigation exclusion list match",
+      "is_regulatory": true
+    },
+    {
+      "code": 1164,
+      "severity_rank": 6,
+      "description": "Other exclusion list match",
+      "is_regulatory": true
+    },
+    {
+      "code": 1150,
+      "severity_rank": 7,
+      "description": "Applicant recorded as deceased or under estate administration",
+      "is_regulatory": true
+    },
+    {
+      "code": 1142,
+      "severity_rank": 8,
+      "description": "Sequestrated and not yet rehabilitated",
+      "is_regulatory": true
+    },
+    {
+      "code": 1141,
+      "severity_rank": 9,
+      "description": "Active administration order",
+      "is_regulatory": true
+    },
+    {
+      "code": 1140,
+      "severity_rank": 10,
+      "description": "Under debt review",
+      "is_regulatory": true
+    },
+    {
+      "code": 1170,
+      "severity_rank": 11,
+      "description": "Duplicate application within 24 hours",
+      "is_regulatory": true
+    },
+    {
+      "code": 1171,
+      "severity_rank": 12,
+      "description": "An unconcluded Flex Loan or consolidation application exists",
+      "is_regulatory": true
+    },
+    {
+      "code": 1112,
+      "severity_rank": 13,
+      "description": "No contractual capacity",
+      "is_regulatory": true
+    },
+    {
+      "code": 1111,
+      "severity_rank": 14,
+      "description": "Would exceed the maximum age at maturity",
+      "is_regulatory": true
+    },
+    {
+      "code": 1110,
+      "severity_rank": 15,
+      "description": "Below the minimum age",
+      "is_regulatory": true
+    },
+    {
+      "code": 1120,
+      "severity_rank": 16,
+      "description": "Residency class not permitted for this product",
+      "is_regulatory": true
+    },
+    {
+      "code": 1130,
+      "severity_rank": 17,
+      "description": "Employment type not permitted for this product",
+      "is_regulatory": true
+    },
+    {
+      "code": 1102,
+      "severity_rank": 18,
+      "description": "Product not available on this channel",
+      "is_regulatory": true
+    },
+    {
+      "code": 1183,
+      "severity_rank": 20,
+      "description": "Beyond the Bank's risk appetite",
+      "is_regulatory": true
+    },
+    {
+      "code": 1180,
+      "severity_rank": 21,
+      "description": "Channel closed to this product by policy",
+      "is_regulatory": true
+    },
+    {
+      "code": 1181,
+      "severity_rank": 22,
+      "description": "Employment tenure below the minimum policy threshold",
+      "is_regulatory": true
+    },
+    {
+      "code": 1182,
+      "severity_rank": 23,
+      "description": "Excessive recent credit enquiries",
+      "is_regulatory": true
+    },
+    {
+      "code": 1310,
+      "severity_rank": 30,
+      "description": "No amount at any term is affordable",
+      "is_regulatory": false
+    },
+    {
+      "code": 1320,
+      "severity_rank": 31,
+      "description": "Affordability could not be determined",
+      "is_regulatory": true
+    },
+    {
+      "code": 1201,
+      "severity_rank": 35,
+      "description": "Bureau-enquiry consent not present or expired",
+      "is_regulatory": true
+    },
+    {
+      "code": 1420,
+      "severity_rank": 36,
+      "description": "The solve reached its evaluation ceiling without a proven maximum",
+      "is_regulatory": true
+    },
+    {
+      "code": 1601,
+      "severity_rank": 40,
+      "description": "Offer amount below the product minimum",
+      "is_regulatory": false
+    },
+    {
+      "code": 1602,
+      "severity_rank": 41,
+      "description": "Offer instalment below the minimum viable instalment",
+      "is_regulatory": false
+    },
+    {
+      "code": 1603,
+      "severity_rank": 42,
+      "description": "Total cost ratio exceeds the policy threshold",
+      "is_regulatory": false
+    },
+    {
+      "code": 1604,
+      "severity_rank": 43,
+      "description": "Scheduled charges would exceed the amount advanced (in duplum)",
+      "is_regulatory": true
+    },
+    {
+      "code": 1605,
+      "severity_rank": 44,
+      "description": "Effective annual rate exceeds the suppression ceiling",
+      "is_regulatory": false
+    },
+    {
+      "code": 1700,
+      "severity_rank": 50,
+      "description": "Final validation could not re-derive the offer",
+      "is_regulatory": true
+    },
+    {
+      "code": 4101,
+      "severity_rank": 61,
+      "description": "Low score: Bureau score",
+      "is_regulatory": false
+    },
+    {
+      "code": 4102,
+      "severity_rank": 62,
+      "description": "Low score: Months employed",
+      "is_regulatory": false
+    },
+    {
+      "code": 4103,
+      "severity_rank": 63,
+      "description": "Low score: Months in arrears",
+      "is_regulatory": false
+    },
+    {
+      "code": 4104,
+      "severity_rank": 64,
+      "description": "Low score: Accounts in arrears",
+      "is_regulatory": false
+    },
+    {
+      "code": 4105,
+      "severity_rank": 65,
+      "description": "Low score: Revolving utilisation",
+      "is_regulatory": false
+    },
+    {
+      "code": 4106,
+      "severity_rank": 66,
+      "description": "Low score: Age",
+      "is_regulatory": false
+    },
+    {
+      "code": 4107,
+      "severity_rank": 67,
+      "description": "Low score: Dependants",
+      "is_regulatory": false
+    },
+    {
+      "code": 4108,
+      "severity_rank": 68,
+      "description": "Low score: Employment type",
+      "is_regulatory": false
+    }
+  ]
+}

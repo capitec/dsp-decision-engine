@@ -2,7 +2,7 @@ import re
 
 import pytest
 
-from decider.steps import expr
+from decikit.steps import expr
 
 
 def _evaluate(source: str, **names):

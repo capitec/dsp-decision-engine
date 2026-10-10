@@ -7,13 +7,13 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from decider import ConfigurableStep
-from decider._tooling.mcp import Policy, build_server
-from decider._tooling.mcp import _trees as t
+from decikit import ConfigurableStep
+from decikit._tooling.mcp import Policy, build_server
+from decikit._tooling.mcp import _trees as t
 
 ROOT = Path(__file__).resolve().parents[2]
 BANK = ROOT / "ui/vscode/examples/bank/trees"
-LIVE = ROOT / "example_projects/01-transaction-fraud/sonnet/configs/0.1.0/live_rules.json"
+LIVE = ROOT / "tests/mcp/data/flat_rules.json"
 
 SMALL = {"type": "tree", "name": "risk", "tree": {
     "nodes": [{"id": "root", "data": {"type": "unary", "condition": {"op": ">", "feature": "ratio", "threshold": 0.7}}},

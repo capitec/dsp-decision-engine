@@ -1,10 +1,10 @@
-"""decider diff: exit 0 when nothing differs, 1 when something does."""
+"""decikit diff: exit 0 when nothing differs, 1 when something does."""
 import json
 
 import polars as pl
 from click.testing import CliRunner
 
-from decider._tooling.cli import cli
+from decikit._tooling.cli import cli
 
 ENTRY = "shop.pipeline:build"
 

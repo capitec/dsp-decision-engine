@@ -69,7 +69,7 @@ either engine's default.
 - For an engine that refuses the pipeline (a `frame_step` on Spark), the refusal is reported as a skip, not a
   divergence; raising only in a later engine is a divergence, as today.
 
-`MODES` in `decider/lab/testing/_equivalence.py` goes; the engine list comes from the registry's built-ins
+`MODES` in `decikit/lab/testing/_equivalence.py` goes; the engine list comes from the registry's built-ins
 through a public facade, so the lab does not import `_engine`.
 
 ## What the tests must cover before the contract is claimed

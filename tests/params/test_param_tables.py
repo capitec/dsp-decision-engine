@@ -3,10 +3,10 @@ import numpy as np
 import polars as pl
 import pytest
 
-from decider import Engine, ParamRef, ParamTable, flow, param, param_table
-from decider.exceptions import ParamsError
-from decider.steps._values import TableRef
-from decider.lab.testing import no_recompile
+from decikit import Engine, ParamRef, ParamTable, flow, param, param_table
+from decikit.exceptions import ParamsError
+from decikit.steps._values import TableRef
+from decikit.lab.testing import no_recompile
 
 ROWS = [{"floor": 0, "rate": 0.2}, {"floor": 600, "rate": 0.1}]
 

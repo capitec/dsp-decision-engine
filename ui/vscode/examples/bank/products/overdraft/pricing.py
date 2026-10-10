@@ -1,6 +1,6 @@
 """Overdraft on a salary account. Pricing: the base rate by term, a loading by risk grade, fees by amount, capped by regulation."""
-from decider import dag, flow, param, step
-from decider.steps.tables import DecisionTableConfig
+from decikit import dag, flow, param, step
+from decikit.steps.tables import DecisionTableConfig
 
 od_base_rates = DecisionTableConfig(
     name="od_base_rates",

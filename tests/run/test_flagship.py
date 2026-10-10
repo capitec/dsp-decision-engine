@@ -4,9 +4,9 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
-from decider import flow, param
-from decider._engine import Engine
-from decider._engine.params import ParamsError
+from decikit import flow, param
+from decikit._engine import Engine
+from decikit._engine.params import ParamsError
 
 
 def disposable_income(net_income: float, expenses: float) -> float:

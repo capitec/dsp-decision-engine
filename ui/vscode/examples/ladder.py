@@ -1,5 +1,5 @@
 """A plain step that loops over a parameter table: a rate ladder by bureau score."""
-from decider import ParamTable, flow, param_table
+from decikit import ParamTable, flow, param_table
 
 
 def rate(score: int, ladder: ParamTable = param_table({"floor": int, "rate": float},

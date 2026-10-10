@@ -6,9 +6,9 @@ import json
 import polars as pl
 import pytest
 
-from decider.steps._values import ParamRef
-from decider.steps.scorecard import ScorecardConfig
-from decider.steps.scorecard._config import (
+from decikit.steps._values import ParamRef
+from decikit.steps.scorecard import ScorecardConfig
+from decikit.steps.scorecard._config import (
     AdjustedVariable,
     BoundBin,
     ConstantScore,
@@ -183,7 +183,7 @@ def test_a_variable_may_appear_only_once():
 
 @pytest.mark.parametrize("mode", ["stepped", "fused"])
 def test_value_bins_match_strings_in_compiled_modes(mode):
-    from decider._engine import Engine
+    from decikit._engine import Engine
 
     sc = _sc([ScoredVariable(variable_name="status", bins=[ValuesBin(value=50.0, items=["vip"])],
                              default=DefaultBin(value=0.0))])

@@ -6,10 +6,10 @@ from functools import lru_cache
 import pytest
 from numba import njit
 
-import decider._engine.compile.njit  # noqa: F401  (registers the decimal type and overloads)
-from decider._engine.compile.semantics.decimals import raw, wrapper
-from decider.ops import decimal
-from decider.ops.decimal import Decimal, Rounding
+import decikit._engine.compile.njit  # noqa: F401  (registers the decimal type and overloads)
+from decikit._engine.compile.semantics.decimals import raw, wrapper
+from decikit.ops import decimal
+from decikit.ops.decimal import Decimal, Rounding
 
 CTX = stdlib.Context(prec=200)
 HALF_EVEN = stdlib.ROUND_HALF_EVEN

@@ -7,10 +7,10 @@ import polars as pl
 import pytest
 from numba.core import event
 
-from decider import flow, step
-from decider._engine.debug import Edited, Paused, ReloadFailed
-from decider._engine.debug.hot import ModuleWatcher
-from decider.lab.testing import MODES
+from decikit import flow, step
+from decikit._engine.debug import Edited, Paused, ReloadFailed
+from decikit._engine.debug.hot import ModuleWatcher
+from decikit.lab.testing import MODES
 
 FRAME = pl.DataFrame({"net_income": [9200.0, 4100.0], "expenses": [3100.0, 1500.0], "instalment": [1200.0, 800.0]})
 
@@ -73,7 +73,7 @@ def test_inserting_and_deleting_steps_are_add_and_delete_edits():
 
 
 def test_a_changed_param_default_counts_as_a_change():
-    from decider import param
+    from decikit import param
 
     def cap(ratio: float, most: float = param(2.0)) -> float:
         return min(ratio, most)
@@ -97,7 +97,7 @@ def test_a_reload_that_doesnt_wire_changes_nothing():
 
 
 NOTEBOOK = [
-    "import polars as pl\nfrom decider import flow",
+    "import polars as pl\nfrom decikit import flow",
     "def helper(x):\n    return x * 1.0",
     "def ratio(disposable_income: float, instalment: float) -> float:\n    return helper(disposable_income / instalment)",
     "def disposable_income(net_income: float, expenses: float) -> float:\n    return net_income - expenses",
@@ -130,7 +130,7 @@ def test_a_notebook_cell_redefining_a_helper_is_picked_up_by_a_watch_that_rebuil
 
 
 PIPELINE = """
-from decider import flow
+from decikit import flow
 from {pkg}.features import ratio
 
 def disposable_income(net_income: float, expenses: float) -> float:
@@ -185,7 +185,7 @@ def test_editing_an_imported_module_on_disk_reloads_the_pipeline_without_stale_r
 DATA = """
 import numpy as np
 import polars as pl
-from decider import flow, frame_step
+from decikit import flow, frame_step
 
 BUREAU = pl.DataFrame({{"client_id": [1, 2], "bureau_score": [{scores}]}})
 WEIGHTS = np.array([1.0, 2.0])

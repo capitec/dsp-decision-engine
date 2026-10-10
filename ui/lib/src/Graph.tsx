@@ -165,7 +165,7 @@ export function Graph({ ir, open, selected, onSelect, onToggle, onReveal, nodes,
       <svg onPointerDown={panStart} onPointerMove={panMove} onPointerUp={panEnd} onPointerLeave={panEnd}>
         <defs>
           <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--decider-fg)" />
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--decikit-fg)" />
           </marker>
         </defs>
         <g transform={`translate(${view.x},${view.y}) scale(${view.k})`}>

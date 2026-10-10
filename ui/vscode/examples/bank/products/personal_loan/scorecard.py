@@ -1,5 +1,5 @@
 """Personal loan: unsecured, 6 to 84 months. Application scorecard: points per characteristic, summed into a score."""
-from decider import flow, param, step
+from decikit import flow, param, step
 
 
 def pl_pts_bureau_score(bureau_score: float, cut_1: float = param(0.34), cut_2: float = param(0.64), cut_3: float = param(0.72),

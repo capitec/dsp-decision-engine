@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from decider.lab.experiments import Job, JobHandle, JobStatus, PartialResult
-from decider.lab.experiments._jobs import TERMINAL_STATUSES
+from decikit.lab.experiments import Job, JobHandle, JobStatus, PartialResult
+from decikit.lab.experiments._jobs import TERMINAL_STATUSES
 
 
 def test_job_starts_queued_and_immutable():

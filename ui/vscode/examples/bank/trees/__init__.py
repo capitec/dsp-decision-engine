@@ -1,7 +1,7 @@
 """Decision trees, loaded from their JSON documents."""
 from pathlib import Path
 
-from decider.steps.trees import TreeConfig
+from decikit.steps.trees import TreeConfig
 
 _HERE = Path(__file__).parent
 bureau_grade = TreeConfig.load((_HERE / "bureau_grade.json").read_text())

@@ -1,7 +1,7 @@
 """decider_old's own tree fixtures give decider_old's answers."""
 import polars as pl
 
-from decider.steps.trees import TreeConfig
+from decikit.steps.trees import TreeConfig
 
 
 def tree(nodes: list, edges: list, output: dict, name: str = "t") -> TreeConfig:

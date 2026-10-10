@@ -2,9 +2,9 @@
 import polars as pl
 import pytest
 
-from decider.exceptions import MissingInputError
-from decider.steps.trees import TreeConfig
-from decider.steps.trees.schema import (
+from decikit.exceptions import MissingInputError
+from decikit.steps.trees import TreeConfig
+from decikit.steps.trees.schema import (
     CasesBranch,
     CasesIsInRule,
     CasesRangesRule,

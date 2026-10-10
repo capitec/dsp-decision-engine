@@ -2,10 +2,10 @@
 import polars as pl
 import pytest
 
-from decider import branch, flow, loop, param, step
-from decider._engine import Engine
-from decider.exceptions import WiringError
-from decider.lab.testing import assert_equivalent
+from decikit import branch, flow, loop, param, step
+from decikit._engine import Engine
+from decikit.exceptions import WiringError
+from decikit.lab.testing import assert_equivalent
 
 
 def packed(pipeline, frame):

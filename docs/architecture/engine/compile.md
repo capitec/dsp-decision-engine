@@ -4,7 +4,7 @@ The `stepped` and `fused` modes run each step's Python body as machine code over
 batch costs one loop per kernel instead of one interpreter call per row and step. The compiler
 turns the calls of a resolved plan into numba kernels, groups consecutive scalar steps into one
 kernel in `fused` mode, and packs whole branches and loops into one kernel when every call inside
-can be compiled. It lives in `decider/_engine/compile/`.
+can be compiled. It lives in `decikit/_engine/compile/`.
 
 The compiler does not decide when a unit runs. The [stepped and fused runners](runners.md) walk
 the plan and call each unit's `run`. What arithmetic means inside a kernel (rounding, `**`,
@@ -70,7 +70,7 @@ and a branch:
 
 ```python
 import polars as pl
-from decider import branch, flow, frame_step, param, step
+from decikit import branch, flow, frame_step, param, step
 
 def disposable_income(net_income: float, expenses: float) -> float:
     return net_income - expenses

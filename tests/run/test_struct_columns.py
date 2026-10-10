@@ -8,10 +8,10 @@ import numpy as np
 import polars as pl
 import pytest
 
-from decider import Engine, branch, flow, frame_step, missing_as, step
-from decider.ops import Struct
-from decider.exceptions import MissingInputError, WiringError
-from decider.lab.testing import assert_equivalent
+from decikit import Engine, branch, flow, frame_step, missing_as, step
+from decikit.ops import Struct
+from decikit.exceptions import MissingInputError, WiringError
+from decikit.lab.testing import assert_equivalent
 
 MODES = ("interpreted", "stepped", "fused")
 COMPILED = ("stepped", "fused")
