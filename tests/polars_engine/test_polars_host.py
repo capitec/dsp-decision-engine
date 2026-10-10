@@ -338,3 +338,12 @@ def test_two_threads_share_one_polars_executable():
     for i in range(2):
         for out in got[i]:
             assert_frame_equal(out, want[i])
+
+
+def test_batch_value_its_declared_dtype_cannot_hold_is_refused_not_truncated():
+    def scaled(df: pl.DataFrame) -> pl.DataFrame:
+        return df.with_columns(pl.Series("x", [v / 7 for v in df["income"]]))
+
+    pipe = flow(frame_step(scaled, reads=["income"], writes={"x": pl.Int64}), name="p")
+    with pytest.raises(EngineError, match="'x' came back as Float64.*declared Int64"):
+        PolarsEngine().bind(pipe).run(DF.lazy()).collect()

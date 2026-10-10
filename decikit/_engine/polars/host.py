@@ -295,4 +295,26 @@ def _run_batch(exe: Executable, doc: Mapping | None, unneeded: tuple[str, ...], 
         out = out.drop(unneeded)
     # An each's list holds whatever dtypes its items' values gave, `Null` for a field no item fills.
     fix = {c: t for c, t in nulls.items() if out.schema[c] != t}
-    return out.cast(fix) if fix else out
+    if not fix:
+        return out
+    cast = out.cast(fix, strict=False)
+    for c, t in fix.items():
+        # polars casts a struct by field name, dropping or nulling a field, and a float to an int by truncation.
+        if not (_same_fields(out.schema[c], t) and cast[c].cast(out.schema[c], strict=False).equals(out[c])):
+            raise EngineError(
+                f"'{c}' came back as {out.schema[c]}, which its declared {t} cannot hold without changing a value "
+                f"or a field, and the polars engine fixes every column's dtype before any row arrives. Return "
+                f"values of the declared type, a record's fields in the declared order, or run the pipeline on "
+                f"the numba engine.")
+    return cast
+
+
+def _same_fields(got: pl.DataType, want: pl.DataType) -> bool:
+    if got == pl.Null:
+        return True
+    if isinstance(want, pl.Struct):
+        return (isinstance(got, pl.Struct) and [f.name for f in got.fields] == [f.name for f in want.fields]
+                and all(_same_fields(a.dtype, b.dtype) for a, b in zip(got.fields, want.fields)))
+    if isinstance(want, (pl.List, pl.Array)):
+        return isinstance(got, (pl.List, pl.Array)) and _same_fields(got.inner, want.inner)
+    return not isinstance(got, (pl.Struct, pl.List, pl.Array))
