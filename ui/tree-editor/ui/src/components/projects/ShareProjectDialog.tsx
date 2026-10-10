@@ -277,7 +277,7 @@ export const ShareProjectDialog: React.FC<ShareProjectDialogProps> = ({
             ) : (
               <div className="space-y-3">
                 {existingShares.map((share) => (
-                  <div key={share.id} className="flex items-center justify-between p-4 border rounded-lg">
+                  <div key={share.id} data-testid="share-row" className="flex items-center justify-between p-4 border rounded-lg">
                     <div className="flex items-center space-x-3">
                       {share.share_type === 'user' ? (
                         <UserIcon className="w-5 h-5 text-muted-foreground" />
@@ -318,6 +318,7 @@ export const ShareProjectDialog: React.FC<ShareProjectDialogProps> = ({
                         size="sm"
                         onClick={() => handleRemoveShare(share.id)}
                         disabled={loading}
+                        data-testid="share-remove"
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>

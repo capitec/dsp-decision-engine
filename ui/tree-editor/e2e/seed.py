@@ -36,3 +36,46 @@ def export_document(page: Page, project_id: str) -> dict:
     r = page.request.get(f"/api/v1/projects/{project_id}/export")
     assert r.ok, r.text()
     return r.json()
+
+
+def create_folder(page: Page, name: str, parent_id: str | None = None, description: str | None = None) -> dict:
+    """POST /api/v1/folders; returns the created folder."""
+    body = {"name": name, "parent_id": parent_id, "description": description}
+    r = page.request.post("/api/v1/folders", data={k: v for k, v in body.items() if v is not None})
+    assert r.ok, r.text()
+    return r.json()
+
+
+def list_folders(page: Page) -> list[dict]:
+    r = page.request.get("/api/v1/folders")
+    assert r.ok, r.text()
+    return r.json()
+
+
+def list_projects(page: Page, **query) -> dict:
+    """GET /api/v1/projects (a page of results: `items`, `total`, `pages`)."""
+    r = page.request.get("/api/v1/projects", params=query)
+    assert r.ok, r.text()
+    return r.json()
+
+
+def my_id(page: Page) -> str:
+    r = page.request.get("/api/v1/user/profile")
+    assert r.ok, r.text()
+    return r.json()["id"]
+
+
+def share_project(page: Page, project_id: str, user_id: str, access_mode: str = "read") -> dict:
+    """Share a project with one user."""
+    r = page.request.post(f"/api/v1/projects/{project_id}/shares",
+                          data={"share_type": "user", "user_id": user_id, "access_mode": access_mode})
+    assert r.ok, r.text()
+    return r.json()
+
+
+def share_folder(page: Page, folder_id: str, user_id: str, access_mode: str = "read") -> dict:
+    """Share a folder (and everything in it) with one user."""
+    r = page.request.post(f"/api/v1/folders/{folder_id}/shares",
+                          data={"share_type": "user", "user_id": user_id, "access_mode": access_mode})
+    assert r.ok, r.text()
+    return r.json()

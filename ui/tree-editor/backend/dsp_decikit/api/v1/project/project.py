@@ -182,6 +182,11 @@ async def _check_project_access(
 # ================================
 
 
+def _newest_first(projects: t.List[ProjectResponse]) -> t.List[ProjectResponse]:
+    # Paging slices this list, so its order must not depend on how Postgres happens to return rows.
+    return sorted(projects, key=lambda p: (p.updated_at, p.id), reverse=True)
+
+
 @router.get("/projects", response_model=Page[ProjectResponse])
 async def list_projects(
     current_user: SessionInfo = Depends(get_current_user_session),
@@ -225,7 +230,7 @@ async def list_projects(
                     )
                 )
 
-            return paginate(project_responses, params)
+            return paginate(_newest_first(project_responses), params)
 
         # Get user's teams for shared project lookup
         user_teams = await get_user_teams(current_user)
@@ -309,7 +314,7 @@ async def list_projects(
                 )
                 seen_project_ids.add(project.id)
 
-        return paginate(project_responses, params)
+        return paginate(_newest_first(project_responses), params)
 
 
 @router.post("/projects", response_model=ProjectCreateResponse)
