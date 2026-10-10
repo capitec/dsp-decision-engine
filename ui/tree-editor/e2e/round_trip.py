@@ -34,14 +34,14 @@ TOO_BIG = {tree_id: "the flat-rule editor renders all 521 rules at once and runs
            for tree_id in ("fraud-live", "generated-521")}
 
 
-def cases(known: dict[str, str]) -> list:
-    """Every tree as a test case, expected to fail where `known` (or CANNOT_TRIP) says why."""
+def cases(known: dict[str, str], trees: list[RealTree] = TREES) -> list:
+    """Every tree (or `trees`) as a test case, expected to fail where `known` (or CANNOT_TRIP) says why."""
     known = {**CANNOT_TRIP, **known}
     return [pytest.param(tree, id=tree.id, marks=[
         *([pytest.mark.xfail(run=False, reason=TOO_BIG[tree.id])] if tree.id in TOO_BIG else []),
         *([pytest.mark.xfail(strict=True, reason=known[tree.id])] if tree.id in known else []),
         *([pytest.mark.slow] if tree.id in SLOW else []),
-    ]) for tree in TREES]
+    ]) for tree in trees]
 
 
 # A tree that fails its trip fails every check of it with the same error, without trying again.

@@ -69,7 +69,7 @@ rest exactly (as sorted-key JSON lines, so a failure shows the differing lines):
 
 | normalised | why |
 |---|---|
-| `metadata.project_id`, `name`, `project_type`, `exported_at`, `decikit_version` in an export | the export stamps them; it writes the project's name over `metadata.name`, so a source's own `metadata.name` shows up as lost |
+| `metadata.project_id`, `name`, `project_type`, `exported_at`, `decikit_version` | the export stamps them, writing the project's name over the document's own `metadata.name`; `test_real_tree_export_keeps_the_documents_own_name` checks that name on its own (a known failure) |
 | `id` values that are UUIDs | the flat-rule editor gives every node without an id a random one. decikit names unnamed nodes by path (`"0.1"`), so a `path_output`/`trace_output` over unnamed flat-rule nodes would change; no document here relies on that |
 | keys whose value is `null` | decikit reads `null` and absent alike |
 | numbers as floats | the browser writes `720.0` as `720`; the param schemas (`parameters()`) are compared separately in the run test |
@@ -79,7 +79,7 @@ rest exactly (as sorted-key JSON lines, so a failure shows the differing lines):
 | v3 `nodes[].position` | layout only; the tree editor lays out nodes that have none |
 | v3 `edges[].data.sourceIndex` as a list | decikit reads `0` as `[0]` |
 | v3 `edges[].id` | decikit never reads it; the tree editor fills in missing ones |
-| `input_schema`, `subtrees` when the source has none | the editor fills them in (decikit never reads `input_schema`; one subtree naming the only root changes nothing). When the source has them they must come back as they were (`own_parts`), and features the editor adds must carry the type decikit reads them as |
+| `input_schema`, `subtrees` when the source has none | the editor fills them in (decikit never reads `input_schema`; one subtree naming the only root changes nothing). When the source has them, `subtrees` must come back as they were and `input_schema` must keep every feature it lists, in order, with its type (`own_parts`); the editor may add the features the tree reads that it leaves out, and every feature the editor adds must carry the type decikit reads it as |
 | `parameters_col` | a field decikit never reads; the tree editor drops it |
 
 ## Running exports
