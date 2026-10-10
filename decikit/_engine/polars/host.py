@@ -261,4 +261,5 @@ def _same_fields(got: pl.DataType, want: pl.DataType) -> bool:
                 and all(_same_fields(a.dtype, b.dtype) for a, b in zip(got.fields, want.fields)))
     if isinstance(want, (pl.List, pl.Array)):
         return isinstance(got, (pl.List, pl.Array)) and _same_fields(got.inner, want.inner)
-    return not isinstance(got, (pl.Struct, pl.List, pl.Array))
+    return (not isinstance(got, (pl.Struct, pl.List, pl.Array))
+            and getattr(got, "time_zone", None) == getattr(want, "time_zone", None))
