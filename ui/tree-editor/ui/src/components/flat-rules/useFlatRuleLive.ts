@@ -54,9 +54,7 @@ export function useFlatRuleLive(project: FlatRuleProjectDetail | null) {
         });
       },
       rejected: (reason) => toast({ title: "Edit Refused", description: reason, variant: "destructive", duration: 10000 }),
-      validation: (errors, version) => {
-        if (version === sync.version) store.getState().setValidationErrors(errors);
-      },
+      validation: (errors) => store.getState().setValidationErrors(errors),
       settled: markSavedIfIdle,
     });
 
