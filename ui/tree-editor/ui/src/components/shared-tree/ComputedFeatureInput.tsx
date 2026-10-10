@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FunctionSquare } from "lucide-react";
 import { FeatureSelector } from './FeatureSelector';
-import { ParameterOption } from './ParameterizedNumericInput';
 
 interface ComputedFeatureInputProps {
   /** Current value: either a string feature name or computed feature object */
@@ -12,46 +11,30 @@ interface ComputedFeatureInputProps {
   onChange: (value: string | { type: 'computed'; expression: string }) => void;
   /** Available feature names for autocomplete */
   availableFeatures: string[];
-  /** Available parameters for autocomplete */
-  availableParameters?: ParameterOption[];
   /** Placeholder text */
   placeholder?: string;
   /** Additional CSS classes */
   className?: string;
 }
 
-// Available Polars functions for autocomplete
-const POLARS_FUNCTIONS = [
-  'duration',
-  'datetime',
-  'date',
-  'time',
-  'lit',
-];
+// The functions decikit's expression grammar admits; it has no parameters or other calls.
+const FUNCTIONS = ['min', 'max', 'abs'];
 
 interface AutocompleteItem {
-  type: 'feature' | 'parameter' | 'function';
+  type: 'feature' | 'function';
   value: string;
   label: string;
   description?: string;
 }
 
 /**
- * Input for computed features with IDE-like autocomplete.
- *
- * Features:
- * - f(x) toggle button to switch between simple and computed mode
- * - Autocomplete for:
- *   - p.parameter_name (parameters)
- *   - feature names
- *   - Polars functions
- * - Syntax: "feature1 + feature2", "p.threshold * 2", "lit(5)"
+ * A feature name, or a computed feature: arithmetic over features with min/max/abs (e.g. "income - expenses").
+ * The f(x) button switches between the two; the expression field suggests features and functions.
  */
 export const ComputedFeatureInput: React.FC<ComputedFeatureInputProps> = ({
   value,
   onChange,
   availableFeatures,
-  availableParameters = [],
   placeholder = "Expression (e.g., feature1 + feature2)",
   className = ""
 }) => {
@@ -66,13 +49,12 @@ export const ComputedFeatureInput: React.FC<ComputedFeatureInputProps> = ({
 
   // Get the current word being typed at cursor position
   const getCurrentWord = (text: string, position: number): { word: string; start: number; end: number } => {
-    // Find word boundaries (alphanumeric + underscore + dot for parameters)
     let start = position;
-    while (start > 0 && /[a-zA-Z0-9_.]/.test(text[start - 1])) {
+    while (start > 0 && /[a-zA-Z0-9_]/.test(text[start - 1])) {
       start--;
     }
     let end = position;
-    while (end < text.length && /[a-zA-Z0-9_.]/.test(text[end])) {
+    while (end < text.length && /[a-zA-Z0-9_]/.test(text[end])) {
       end++;
     }
     return { word: text.slice(start, end), start, end };
@@ -86,57 +68,19 @@ export const ComputedFeatureInput: React.FC<ComputedFeatureInputProps> = ({
     const lowerWord = word.toLowerCase();
     const items: AutocompleteItem[] = [];
 
-    // Check if typing parameter (p. prefix)
-    if (word.startsWith('p.')) {
-      const paramSearch = word.slice(2).toLowerCase();
-      availableParameters.forEach(param => {
-        if (param.name.toLowerCase().includes(paramSearch)) {
-          items.push({
-            type: 'parameter',
-            value: `p.${param.name}`,
-            label: `p.${param.name}`,
-            description: `Parameter: ${param.type || 'any'}`
-          });
-        }
-      });
-    } else if (lowerWord === 'p') {
-      // Show all parameters when typing "p"
-      availableParameters.forEach(param => {
-        items.push({
-          type: 'parameter',
-          value: `p.${param.name}`,
-          label: `p.${param.name}`,
-          description: `Parameter: ${param.type || 'any'}`
-        });
-      });
-    } else {
-      // Match features
-      availableFeatures.forEach(feature => {
-        if (feature.toLowerCase().includes(lowerWord)) {
-          items.push({
-            type: 'feature',
-            value: feature,
-            label: feature,
-            description: 'Feature'
-          });
-        }
-      });
-
-      // Match functions
-      POLARS_FUNCTIONS.forEach(func => {
-        if (func.toLowerCase().includes(lowerWord)) {
-          items.push({
-            type: 'function',
-            value: `${func}()`,
-            label: func,
-            description: 'Polars function'
-          });
-        }
-      });
-    }
+    availableFeatures.forEach(feature => {
+      if (feature.toLowerCase().includes(lowerWord)) {
+        items.push({ type: 'feature', value: feature, label: feature, description: 'Feature' });
+      }
+    });
+    FUNCTIONS.forEach(func => {
+      if (func.includes(lowerWord)) {
+        items.push({ type: 'function', value: `${func}()`, label: func, description: 'Function' });
+      }
+    });
 
     return items.slice(0, 10); // Limit to 10 suggestions
-  }, [expression, cursorPosition, showAutocomplete, isComputed, availableFeatures, availableParameters]);
+  }, [expression, cursorPosition, showAutocomplete, isComputed, availableFeatures]);
 
   // Handle autocomplete selection
   const selectSuggestion = (item: AutocompleteItem) => {
@@ -161,8 +105,7 @@ export const ComputedFeatureInput: React.FC<ComputedFeatureInputProps> = ({
   // Keyboard navigation for autocomplete
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (!showAutocomplete || suggestions.length === 0) {
-      // Show autocomplete on certain keys
-      if (e.key === '.' || (e.key === ' ' && e.ctrlKey)) {
+      if (e.key === ' ' && e.ctrlKey) {
         setShowAutocomplete(true);
         setAutocompleteIndex(0);
         e.preventDefault();

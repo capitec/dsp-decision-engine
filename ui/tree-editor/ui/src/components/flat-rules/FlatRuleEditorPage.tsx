@@ -94,6 +94,7 @@ export const FlatRuleEditorPage: React.FC = () => {
   const [renameForm, setRenameForm] = useState({ name: '', description: '' });
   const [renameLoading, setRenameLoading] = useState(false);
   const initializeFromProject = useFlatRuleInitializeFromProject();
+  const saveProject = useFlatRuleSaveProject();
   const hasInputSchemaErrors = useFlatRuleHasInputSchemaErrors();
   const hasOutputErrors = useFlatRuleHasOutputErrors();
   const hasParameterErrors = useFlatRuleHasParameterErrors();
@@ -143,6 +144,8 @@ export const FlatRuleEditorPage: React.FC = () => {
 
   const handleExport = async () => {
     if (!project) return;
+    // The export is built from the stored document, so store what the editor shows first (as the node editor does).
+    if (!(await saveProject())) return;
 
     try {
       await flatRuleApi.downloadExport(project.id, project.name);

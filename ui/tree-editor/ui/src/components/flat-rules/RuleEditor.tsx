@@ -17,6 +17,7 @@ import {
   Edit2, Check, X, Trash2, Settings2, Search, AlertTriangle, Copy
 } from "lucide-react";
 import { TreeRenderer } from './TreeRenderer';
+import { copyWithNewIds } from './copyNode';
 import type {
   FlatRuleProjectDetail,
   PrioritizedTree,
@@ -30,6 +31,7 @@ import {
   useFlatRuleFocusedNode,
   useFlatRuleRuleErrors,
   useFlatRuleValidationErrors,
+  useFlatRuleSectionErrors,
   useFlatRuleSetTrees,
   useFlatRuleSetExpandedTrees,
   useFlatRuleSetEditingTreeName,
@@ -104,6 +106,7 @@ export const RuleEditor: React.FC<RuleEditorProps> = () => {
   const focusedNode = useFlatRuleFocusedNode();
   const ruleErrors = useFlatRuleRuleErrors();
   const validationErrors = useFlatRuleValidationErrors();
+  const parameterErrors = useFlatRuleSectionErrors().filter(e => e.section === 'parameters');
   const setExpandedTrees = useFlatRuleSetExpandedTrees();
   const setEditingTreeName = useFlatRuleSetEditingTreeName();
   const setFocusedNode = useFlatRuleSetFocusedNode();
@@ -178,40 +181,12 @@ export const RuleEditor: React.FC<RuleEditorProps> = () => {
       ? Math.max(...existingCopyNumbers) + 1
       : 1;
 
-    // Deep copy node with new IDs
-    const deepCopyNode = (node: RuleTableRow): RuleTableRow => {
-      const base = {
-        ...node,
-        id: crypto.randomUUID(),
-      };
-
-      // Handle cases nodes with branches
-      if ((node.type === 'cases') && node.branches) {
-        return {
-          ...base,
-          branches: node.branches.map(branch => deepCopyNode(branch)),
-          otherwise: node.otherwise ? deepCopyNode(node.otherwise) : undefined,
-        } as RuleTableRow;
-      }
-
-      // Handle unary/composite nodes with then/otherwise
-      if ((node.type === 'unary' || node.type === 'composite') && (node.then || node.otherwise)) {
-        return {
-          ...base,
-          then: node.then ? deepCopyNode(node.then) : undefined,
-          otherwise: node.otherwise ? deepCopyNode(node.otherwise) : undefined,
-        } as RuleTableRow;
-      }
-
-      return base as RuleTableRow;
-    };
-
     const clonedTree = {
       ...tree,
       id: crypto.randomUUID(),
       name: `${baseName} (Copy ${nextCopyNumber})`,
       priority: trees.length + 1,
-      rootNode: deepCopyNode(tree.rootNode)
+      rootNode: copyWithNewIds(tree.rootNode)
     };
 
     setTrees(prev => [...prev, clonedTree]);
@@ -265,7 +240,6 @@ export const RuleEditor: React.FC<RuleEditorProps> = () => {
           return {
             ...node,
             branches: node.branches?.map(branch => updateNodeRecursively(branch)),
-            otherwise: node.otherwise ? updateNodeRecursively(node.otherwise) : node.otherwise
           } as RuleTableRow;
         }
 
@@ -299,7 +273,7 @@ export const RuleEditor: React.FC<RuleEditorProps> = () => {
       
       const removeOtherwiseRecursively = (node: RuleTableRow): RuleTableRow => {
         // Check if this node's otherwise is the one to remove
-        if ((node.type === 'unary' || node.type === 'composite' || node.type === 'cases') &&
+        if ((node.type === 'unary' || node.type === 'composite') &&
             node.otherwise && node.otherwise.id === branchId.replace('otherwise-', '')) {
           return { ...node, otherwise: undefined } as RuleTableRow;
         }
@@ -309,7 +283,6 @@ export const RuleEditor: React.FC<RuleEditorProps> = () => {
           return {
             ...node,
             branches: node.branches.map(branch => removeOtherwiseRecursively(branch)),
-            otherwise: node.otherwise ? removeOtherwiseRecursively(node.otherwise) : node.otherwise
           } as RuleTableRow;
         }
 
@@ -352,7 +325,6 @@ export const RuleEditor: React.FC<RuleEditorProps> = () => {
         return {
           ...node,
           branches: node.branches.map(branch => deleteBranchRecursively(branch)),
-          otherwise: node.otherwise ? deleteBranchRecursively(node.otherwise) : node.otherwise
         } as RuleTableRow;
       }
 
@@ -384,36 +356,7 @@ export const RuleEditor: React.FC<RuleEditorProps> = () => {
   const pasteNode = useCallback((treeId: string, targetBranchId: string, nodeToUse?: RuleTableRow) => {
     const nodeToPaste = nodeToUse || copiedNode;
     if (nodeToPaste) {
-      // Create a deep copy with new IDs
-      const deepCopyWithNewIds = (node: RuleTableRow): RuleTableRow => {
-        const base = {
-          ...node,
-          id: crypto.randomUUID(),
-        };
-
-        // Handle cases nodes with branches
-        if ((node.type === 'cases') && node.branches) {
-          return {
-            ...base,
-            branches: node.branches.map(branch => deepCopyWithNewIds(branch)),
-            otherwise: node.otherwise ? deepCopyWithNewIds(node.otherwise) : undefined,
-          } as RuleTableRow;
-        }
-
-        // Handle unary/composite nodes with then/otherwise
-        if ((node.type === 'unary' || node.type === 'composite') && (node.then || node.otherwise)) {
-          return {
-            ...base,
-            then: node.then ? deepCopyWithNewIds(node.then) : undefined,
-            otherwise: node.otherwise ? deepCopyWithNewIds(node.otherwise) : undefined,
-          } as RuleTableRow;
-        }
-
-        return base as RuleTableRow;
-      };
-
-      const nodeWithNewIds = deepCopyWithNewIds(nodeToPaste);
-      updateNode(treeId, targetBranchId, nodeWithNewIds);
+      updateNode(treeId, targetBranchId, copyWithNewIds(nodeToPaste));
     }
   }, [updateNode, copiedNode]);
 
@@ -465,10 +408,6 @@ export const RuleEditor: React.FC<RuleEditorProps> = () => {
       if ((node.type === 'cases') && node.branches) {
         for (const branch of node.branches) {
           const found = findTargetNode(branch);
-          if (found) return found;
-        }
-        if (node.otherwise) {
-          const found = findTargetNode(node.otherwise);
           if (found) return found;
         }
       }
@@ -536,10 +475,6 @@ export const RuleEditor: React.FC<RuleEditorProps> = () => {
         const found = findNodeById(branch, targetId);
         if (found) return found;
       }
-      if (node.otherwise) {
-        const found = findNodeById(node.otherwise, targetId);
-        if (found) return found;
-      }
     }
 
     // Handle unary/composite nodes
@@ -590,6 +525,11 @@ export const RuleEditor: React.FC<RuleEditorProps> = () => {
           </Button>
         </div>
       </div>
+      {parameterErrors.length > 0 && (
+        <div className="text-sm text-red-600" data-testid="parameter-errors">
+          {parameterErrors.map(e => <div key={e.path}>{e.message}</div>)}
+        </div>
+      )}
 
       {/* Search Bar */}
       {trees.length > 0 && (

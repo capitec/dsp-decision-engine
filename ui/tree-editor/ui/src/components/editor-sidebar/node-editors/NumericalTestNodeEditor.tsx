@@ -70,7 +70,6 @@ export const NumericalTestNodeEditor: React.FC<NumericalTestNodeEditorProps> = (
               condition: { ...condition, feature: newFeature }
             })}
             availableFeatures={featureNames}
-            availableParameters={availableParameters}
           />
         </div>
 

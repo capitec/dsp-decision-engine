@@ -48,10 +48,26 @@ def validation_errors(data: t.Dict[str, t.Any]) -> t.List[t.Dict[str, t.Any]]:
     # A valid document can still fail to build (unsupported output types, out-of-range
     # result_idx, ...); building takes milliseconds and catches what running would.
     try:
-        TreeConfig(name="tree", tree=data).parameters()
+        params = TreeConfig(name="tree", tree=data).parameters()
     except (ValueError, TypeError) as e:
         return [{"loc": [], "msg": str(e), "type": "build_error"}]
-    return []
+    # The editor lets a parameter's default be any type, but a run converts it to the type
+    # of the slot that references it (a threshold is a number), so check that conversion here.
+    return [
+        {"loc": ["parameters", name], "msg": f"parameter '{name}': default {d.default!r} is not a valid "
+                                             f"{getattr(d.annotation, '__name__', d.annotation)}, which is how the tree uses it",
+         "type": "param_default"}
+        for decls in params.decls.values() for name, d in decls.items()
+        if not d.required and not _converts(d.annotation, d.default)
+    ]
+
+
+def _converts(annotation: t.Any, value: t.Any) -> bool:
+    try:
+        TypeAdapter(annotation).validate_python(value)
+    except ValidationError:
+        return False
+    return True
 
 
 def default_project_data(project_type: ProjectType) -> t.Dict[str, t.Any]:

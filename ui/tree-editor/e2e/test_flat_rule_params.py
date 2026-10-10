@@ -14,6 +14,7 @@ from flat_rules_ui import (
     rule_card,
     save,
     set_node_type,
+    set_parameter_default,
     use_parameter,
 )
 from seed import create_project
@@ -72,13 +73,27 @@ def test_threshold_from_a_new_parameter_saves_valid_exports_and_runs(signed_in: 
     use_parameter(rule_card(signed_in), "limit")
 
     assert save(signed_in)["validation_errors"] == []
-    expect(signed_in.get_by_text("Project Saved")).to_be_visible()
+    expect(signed_in.get_by_text("Project Saved", exact=True)).to_be_visible()
     document = export(signed_in, tmp_path)
 
     assert document["rules"][0]["rule"]["condition"]["threshold"] == {"param": "limit"}
     assert document["parameters"]["limit"]["default_value"] == 1000
     assert decisions(document, [500.0, 1500.0]) == ["approve", "decline"]
     assert decisions(document, [500.0, 1500.0], {"limit": 2000.0}) == ["approve", "approve"]
+
+
+@pytest.mark.smoke
+def test_export_right_after_setting_a_parameter_includes_it(signed_in: Page, tmp_path):
+    """Export without pressing Save first: the file must hold what the editor shows, as in the node editor."""
+    open_seeded(signed_in)
+    add_parameter(signed_in, "limit", "Float64", "1000")
+    unary_then_approve(signed_in)
+    use_parameter(rule_card(signed_in), "limit")
+
+    document = export(signed_in, tmp_path)
+    assert document["parameters"] == {"limit": {"type": "Float64", "default_value": 1000}}
+    assert document["rules"][0]["rule"]["condition"]["threshold"] == {"param": "limit"}
+    assert decisions(document, [500.0, 1500.0]) == ["approve", "decline"]
 
 
 @pytest.mark.parametrize("dtype, value, expected", [
@@ -186,6 +201,22 @@ def test_one_parameter_used_by_two_rules_in_all_mode_runs_both(signed_in: Page, 
     rows = run(export(signed_in, tmp_path), [500.0, 1500.0])
     assert rows == [{"Rule 1.decision": "approve", "Rule 2.decision": "decline"},
                     {"Rule 1.decision": "decline", "Rule 2.decision": "approve"}]
+
+
+def test_parameter_default_a_threshold_cannot_use_is_reported_and_blocks_the_export(signed_in: Page, tmp_path):
+    rule = {"type": "unary", "then": THEN_APPROVE,
+            "condition": {"type": "unary", "op": "<=", "feature": "amount", "threshold": {"param": "limit"}}}
+    open_seeded(signed_in, rule, parameters={"limit": {"type": "String", "default_value": ""}})
+
+    assert [e["loc"] for e in save(signed_in)["validation_errors"]] == [["parameters", "limit"]]
+    expect(signed_in.get_by_test_id("parameter-errors")).to_contain_text("parameter 'limit'")
+    signed_in.get_by_role("button", name="Export").click()
+    expect(signed_in.get_by_text("Export failed", exact=True)).to_be_visible()
+
+    set_parameter_default(signed_in, "limit", "1000")
+    assert save(signed_in)["validation_errors"] == []
+    expect(signed_in.get_by_test_id("parameter-errors")).to_be_hidden()
+    assert decisions(export(signed_in, tmp_path), [500.0, 1500.0]) == ["approve", "decline"]
 
 
 STRICT_RANGES = {"type": "cases", "op": "ranges", "strict": True, "feature": "amount", "otherwise": 2,

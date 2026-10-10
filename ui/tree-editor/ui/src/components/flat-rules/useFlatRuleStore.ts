@@ -61,8 +61,8 @@ interface FlatRuleState {
   deleteParameter: (name: string) => void;
   isParameterInUse: (parameterName: string) => boolean;
   
-  // Save functionality
-  saveProject: () => Promise<void>;
+  // Save functionality; resolves to whether the server stored the document
+  saveProject: () => Promise<boolean>;
   
   
   // Initialization
@@ -243,7 +243,6 @@ const store = create<FlatRuleState>()(
               return {
                 ...node,
                 branches: node.branches.map(branch => updateNodeRecursively(branch) || branch),
-                otherwise: node.otherwise ? (updateNodeRecursively(node.otherwise) || node.otherwise) : node.otherwise
               } as RuleTableRow;
             }
 
@@ -279,7 +278,6 @@ const store = create<FlatRuleState>()(
               return {
                 ...node,
                 branches: node.branches.map(branch => updateNodeRecursively(branch)),
-                otherwise: node.otherwise ? updateNodeRecursively(node.otherwise) : node.otherwise
               } as RuleTableRow;
             }
 
@@ -445,7 +443,7 @@ const store = create<FlatRuleState>()(
     // Save functionality
     saveProject: async () => {
       const state = get();
-      if (state.saving) return;
+      if (state.saving) return false;
 
       try {
         set({
@@ -484,7 +482,7 @@ const store = create<FlatRuleState>()(
               description: `${saved.validation_errors.length} issue(s) found. Affected rules are highlighted.`,
               duration: 10000,
             });
-
+        return true;
       } catch (err: any) {
         console.error('Failed to save project:', err);
         toast({
@@ -492,6 +490,7 @@ const store = create<FlatRuleState>()(
           description: apiErrorMessage(err, 'Failed to save project. Please try again.'),
           variant: "destructive",
         });
+        return false;
       } finally {
         set({ saving: false });
       }
