@@ -56,6 +56,9 @@ Workaround: round in a step (`int(x)`, `round(x)`), or declare the column `float
 **Frame-step `writes` dtypes are not verified or cast.** A declared dtype is kept when the step returns it, but a different dtype is accepted as-is (only missing columns and row-count changes raise).
 Impact: a wrong dtype surfaces later, at the reader; declare `writes={"col": pl.Float64}` and return exactly that.
 
+**An all-null output of a type polars cannot name comes back `Null`.** An all-null or empty output takes its declared dtype when the annotation names one: numbers, `str`, `bytes`, `date`, `datetime`, `time`, a `Literal` of strings, `list[T]` of those, `Struct[...]`, `Columnar[...]` and a `TypedDict` of numbers, text and bools. A bare `dict` or `list`, `list[dict]`, `dict[str, T]`, `Any`, `timedelta`, a `Literal` of numbers and a `TypedDict` with a field outside those take their dtype from the values (`declared_dtype` and `_typed_dtype` in `_engine/run/state.py`).
+Impact: such a column's dtype depends on the data; declare a typed shape where a consumer needs a fixed schema.
+
 **A `param_table` value is a numpy scalar in interpreted mode.** Arithmetic on it follows numpy, so `x / t.d[0]` with a zero gives `inf` and a warning where fused raises `ZeroDivisionError`.
 Workaround: convert with `float(t.d[0])` in the step, or guard the divisor.
 
