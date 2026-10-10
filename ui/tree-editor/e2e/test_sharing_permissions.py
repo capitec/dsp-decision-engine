@@ -1,6 +1,6 @@
 """Sharing projects and folders between two users: who sees what, who may save, who may delete.
 
-Every behaviour that fails today fails because the permission checks treat any signed-in user as a superadmin
+Most permission failures share one cause: the permission checks treat any signed-in user as a superadmin
 (`is_superadmin` is called without `await` in the folder-permission service), so those tests carry one shared reason.
 """
 
