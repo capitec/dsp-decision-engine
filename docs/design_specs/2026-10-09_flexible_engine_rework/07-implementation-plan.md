@@ -272,7 +272,11 @@ without impls on the example flows.
 2. Which exception type reaches the caller when a step raises inside a `map_batches` segment (polars may
    wrap it)? Decided by test in P4; see 09.
 3. Does a zero-row launch trigger the typing failure that splits a dict-returning kernel? Expected yes;
-   decided by the first test in `tests/compile/test_launch_time_split.py` (P2).
+   decided by the first test in `tests/compile/test_launch_time_split.py` (P2). Closed 2026-10-10: yes, for a
+   `TypedDict`, a `dict` and a `list[TypedDict]` return (`NumbaNotImplementedError: Cannot cast DictType...` in
+   native lowering). Built differently from "every `Kernel`": only kernels holding a step whose output no
+   kernel column holds are probed, because probing the others compiled signatures no launch used; see
+   `docs/design_decisions/decisions/engine.md`, "Fall back to Python only on compile failure".
 
 Settled on 2026-10-09 and recorded in [03-design-choices.md](03-design-choices.md): `stepped` stays
 (choice 2); `FallbackWarning`s stay on under the fused default and `session` opens interpreted (choice 11);
