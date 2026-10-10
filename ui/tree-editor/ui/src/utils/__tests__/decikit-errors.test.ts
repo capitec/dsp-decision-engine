@@ -127,6 +127,14 @@ describe('flat-rule errors from decikit', () => {
     expect(getFlatSectionErrors(schema).hasInputSchemaErrors).toBe(true);
   });
 
+  it('rules sharing a name in all mode is a document error, on no rule and no section', () => {
+    const parsed = parseFlatRuleValidationErrors(flat.rules_sharing_a_name_in_all_mode);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0].ruleIndex).toBeUndefined();
+    expect(parsed[0].section).toBeUndefined();
+    expect(formatRuleErrors(parsed)).toContain("rules ['Same'] share a name");
+  });
+
   it('groups errors by rule index and leaves section errors out of the groups', () => {
     const parsed = parseFlatRuleValidationErrors([...flat.empty_composite, ...flat.parameter_not_an_object]);
     expect([...groupErrorsByRule(parsed).keys()]).toEqual([1]);
@@ -209,6 +217,17 @@ describe('tree errors from decikit', () => {
     expect(err.affectedNodeId).toBeUndefined();
     expect(formatValidationErrors([err])).toContain('Node at index 0');
   });
+});
+
+// decikit tries an empty feature as a computed feature and as a name; the name branch's tag `constrained-str` is
+// not taken for a union branch, so each editor shows two errors, one of them about computed features.
+it.fails('an empty feature name is one error on the feature saying it is empty, in both editors', () => {
+  const flatParsed = parseFlatRuleValidationErrors(flat.empty_feature_name);
+  const treeParsed = parseValidationErrors(tree.empty_feature_name, [{ id: 'a' }]);
+  expect([flatParsed.map(e => [e.conditionPath, e.message]), treeParsed.map(e => [e.fieldPath, e.message])]).toEqual([
+    [[['rule', 'condition', 'feature'], 'String should have at least 1 character']],
+    [[['condition', 'feature'], 'String should have at least 1 character']],
+  ]);
 });
 
 describe('cleanLoc', () => {

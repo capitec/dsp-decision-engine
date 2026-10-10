@@ -495,5 +495,45 @@
     "error": "edge a->ghost refers to unknown node 'ghost'"
    }
   }
+ ],
+ "empty_feature_name": [
+  {
+   "type": "model_type",
+   "loc": [
+    "v3",
+    "nodes",
+    0,
+    "data",
+    "unary",
+    "condition",
+    ">",
+    "feature",
+    "function-after[_parse(), ComputedFeature]"
+   ],
+   "msg": "Input should be a valid dictionary or instance of ComputedFeature",
+   "input": "",
+   "ctx": {
+    "class_name": "ComputedFeature"
+   }
+  },
+  {
+   "type": "string_too_short",
+   "loc": [
+    "v3",
+    "nodes",
+    0,
+    "data",
+    "unary",
+    "condition",
+    ">",
+    "feature",
+    "constrained-str"
+   ],
+   "msg": "String should have at least 1 character",
+   "input": "",
+   "ctx": {
+    "min_length": 1
+   }
+  }
  ]
 }
