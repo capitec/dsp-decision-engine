@@ -129,7 +129,7 @@ export const FlatRuleEditorPage: React.FC = () => {
   }, [projectId, initializeFromProject]); // Depend on projectId and initializeFromProject
 
   const handleBack = () => {
-    navigate('/flat-rules');
+    navigate('/projects');
   };
 
   // Development helper: detect if page reloaded but data didn't
