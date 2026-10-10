@@ -3,15 +3,17 @@ from __future__ import annotations
 import threading
 import warnings
 from functools import partial
-from typing import Any, Iterator, NamedTuple
+from typing import Any, Iterable, Iterator, NamedTuple
 
 import numpy as np
 import polars as pl
 from numba.core.dispatcher import Dispatcher
 
 from decikit._engine.boundary.nulls import MissingInputError
-from decikit._engine.compile import Fallback, Kernel, Packed, Unit, compile_plan, numpy_dtype
+from decikit._engine.compile import (Fallback, Kernel, Packed, Unit, compile_packed, compile_plan, default_bundle,
+                                     numpy_dtype)
 from decikit._engine.compile.kernel import NOT_WHOLE
+from decikit._engine.compile.outputs import coded_values
 from decikit._engine.compile.rows import build_ragged, build_rows, rows_needs_no_fill
 from decikit._engine.compile.structs import build_struct, struct_schema
 from decikit._engine.ir.decls import Input, NullPolicy, base_annotation, is_typed, stored_fill
@@ -24,7 +26,7 @@ from decikit._engine.trace.envelope import Kind
 from decikit.exceptions import FallbackWarning, NotIntegralError
 from decikit.ops.nested import struct_item
 from decikit._engine.types import Representation, is_raw, representation_for, columnar_item, item_schema
-from decikit._engine.wiring.plan import Call, Plan, NodeVersion
+from decikit._engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, Sequence, NodeVersion
 
 
 # Everything a runner compiles for one plan, published whole so a call never sees half of it.
@@ -53,9 +55,11 @@ class SteppedRunner(InterpretedRunner):
 
     A step no kernel holds -- one reading or writing a semantic `str`, a `date`
     or a `list`, or with a body numba can't compile -- runs in Python, row by
-    row, with one `FallbackWarning` naming it. With `strict=True` it raises
-    instead, unless the step is `@allow_fallback`. A `Columnar[Item]` input still
-    runs compiled, one call per row.
+    row, and so does every step of a kernel numba refuses only when it is
+    launched (a step returning a `dict`). `fallbacks()` lists each, without a
+    warning; with `strict=True` it raises instead, unless the step is
+    `@allow_fallback`. A `Columnar[Item]` input still runs compiled, one call
+    per row.
 
     Example::
 
@@ -65,6 +69,8 @@ class SteppedRunner(InterpretedRunner):
     """
 
     fuse = False
+    # Whether a step outside a shared kernel warns with a `FallbackWarning`; `strict` refuses one either way.
+    loud = False
 
     def __init__(self, strict: bool = False) -> None:
         super().__init__()
@@ -105,10 +111,28 @@ class SteppedRunner(InterpretedRunner):
         strs = {c.id: names for c in plan.calls if _reads_span(c)
                 and (names := tuple(d.name for d in c.node.params if d.annotation is str))}
         units = compile_plan(plan, fuse=self.fuse, python=python)
+        packed = compile_packed(plan, lazy, python) if self.fuse else {}
+        reads = {id(unit): _external(unit) for unit in (*units.values(), *packed.values())}
+        kernels = {id(u): u for u in units.values() if isinstance(u, Kernel)}.values()
+        # A kernel inside a packed branch or loop runs only when the packed one is declined.
+        inside = {c.id for k in packed.values() for c in k.calls}
+        top = _top(plan.root)
+        for kernel in kernels:
+            # Numba refuses a kernel at launch when a step returns what no kernel column holds (a dict, a
+            # list). Any other kernel compiles at its first launch, for types that depend on the data.
+            if kernel.calls[0].id not in inside and not all(_held(o.annotation) for c in kernel.calls
+                                                               for o in c.node.outputs):
+                _probe(kernel, reads[id(kernel)], strs, kernel.calls[0].id in top)
+        fallbacks = self._report([*(u for u in units.values() if isinstance(u, Fallback)),
+                                  *(f for k in kernels for f in k._python)])
+        for kernel in kernels:
+            kernel.on_split = partial(self._split, plan)
+        return Compiled(plan, units, reads, strs, fallbacks, python, {}, packed)
+
+    def _report(self, units: Iterable[Fallback]) -> dict[str, str]:
+        # Every step outside a shared kernel, by path; strict refuses one that runs Python undeclared.
         fallbacks: dict[str, str] = {}
-        for unit in units.values():
-            if not isinstance(unit, Fallback):
-                continue
+        for unit in units:
             # A fallback backed by a dispatcher still runs compiled, just one call per row.
             compiled = isinstance(unit.fn, Dispatcher)
             for c in unit.calls:
@@ -117,15 +141,26 @@ class SteppedRunner(InterpretedRunner):
                 if unit.declared:
                     continue
                 if compiled:
-                    warnings.warn(f"{path} runs compiled, one call per row outside the shared "
-                                  f"kernel: {unit.reason}", FallbackWarning, stacklevel=5)
+                    if self.loud:
+                        warnings.warn(f"{path} runs compiled, one call per row outside the shared "
+                                      f"kernel: {unit.reason}", FallbackWarning, stacklevel=6)
                     continue
                 message = f"{path} runs in Python, row by row: {unit.reason}"
                 if self.strict:
                     raise ValueError(f"{message}; accept it with @allow_fallback, or run mode='interpreted'")
-                warnings.warn(message, FallbackWarning, stacklevel=5)
-        reads = {id(unit): _external(unit) for unit in units.values()}
-        return Compiled(plan, units, reads, strs, fallbacks, python, {}, {})
+                if self.loud:
+                    warnings.warn(message, FallbackWarning, stacklevel=6)
+        return fallbacks
+
+    def _split(self, plan: Plan, units: tuple[Fallback, ...]) -> None:
+        # A kernel splitting at a launch after the build: reported like a build-time fallback, once.
+        with self._lock:
+            now = self._compiled
+            if now.plan is plan and units[0].calls[0].node.origin.path in now.fallbacks:
+                return   # another thread's launch split it first
+            found = self._report(units)
+            if now.plan is plan:
+                self._compiled = now._replace(fallbacks=now.fallbacks | found)
 
     def fallbacks(self) -> dict[str, str]:
         return dict(self._compiled.fallbacks)
@@ -225,6 +260,47 @@ class SteppedRunner(InterpretedRunner):
             # into are never freed under a running kernel.
             entry = compiled.converted.setdefault(key, (bundle._replace(**pointers), utf8))
         return entry[0]
+
+
+def _held(annotation: Any) -> bool:
+    # A number, a `Literal` code, a `Struct` record or `Columnar` rows: what a kernel column stores.
+    base = base_annotation(annotation)
+    return (is_typed(base) or coded_values(annotation) is not None or struct_item(base) is not None
+            or columnar_item(base) is not None)
+
+
+def _top(r: Resolved) -> set[int]:
+    # The calls whose first launch reads whole columns; an arm or a loop body reads a row subset, a copy.
+    if isinstance(r, Call):
+        return {r.id}
+    if isinstance(r, Sequence):
+        return set().union(*map(_top, r.children))
+    return _top(r.condition) if isinstance(r, (Branch, Loop)) else set()
+
+
+def _probe(kernel: Kernel, reads, strs: dict[int, tuple[str, ...]], top: bool) -> None:
+    # A launch on zero rows compiles the kernel for the types its first real launch passes, so a
+    # kernel numba refuses only at launch splits now. Skipped where those types depend on the data:
+    # an untyped read, a span or `Columnar[...]` read, a param with no typed default.
+    values: dict[int, Any] = {}
+    for _, v, _, want, kind, build, _ in reads:
+        if kind is None and want is not None:
+            x = np.empty(0, want)
+            # An input column is read-only on the frame and the record path alike.
+            x.flags.writeable = not top or v.producer is not None
+        elif type(kind) is tuple and kind[0] == "struct":
+            x = build(np.empty(0, object), None, [])
+        else:
+            return
+        values.setdefault(v.id, x)
+    bundles = {}
+    for c in kernel.calls:
+        if c.node.params:
+            bundle = default_bundle(c.node)
+            if any(b is None for b in bundle):
+                return
+            bundles[c.id] = bundle._replace(**{k: (0, 0) for k in strs.get(c.id, ())})
+    kernel.run(values, {}, bundles, 0)
 
 
 def _external(unit: Unit) -> tuple[tuple[Input, NodeVersion, str, np.dtype | None, Any, Any, bool], ...]:
