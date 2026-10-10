@@ -13,9 +13,6 @@ from round_trip import expected_items
 from seed import export_document, get_project
 from tree_runs import assert_runs_alike, probe_frame
 
-STEP_DOCUMENT = ("a TreeConfig step document file (type: tree) imports as a broken tree project (validation errors: "
-                 "type should be 'v3-tree' or 'ui-tree', nodes missing) instead of its `tree`, or an error")
-
 
 def some(*tree_ids: str, smoke: str = "") -> list:
     """The trees as cases; `smoke` is the one in the smoke subset."""
@@ -50,23 +47,20 @@ def test_editor_export_downloads_what_the_api_exports(signed_in: Page, tmp_path,
     assert as_lines(ui.export(signed_in, flat, tmp_path)) == as_lines(export_document(signed_in, project_id))
 
 
-@pytest.mark.parametrize("tree", [pytest.param(t, id=t.id, marks=pytest.mark.xfail(strict=True, reason=STEP_DOCUMENT))
-                                  for t in TREES if t.file is not None])
-def test_step_document_file_imports_its_tree_or_is_refused_clearly(signed_in: Page, tree):
+@pytest.mark.parametrize("tree", [pytest.param(t, id=t.id) for t in TREES if t.file is not None])
+def test_step_document_file_imports_its_tree(signed_in: Page, tree):
     reply = ui.import_file(signed_in, tree.file, tree.id)
-    if not reply.ok:
-        dialog = signed_in.get_by_role("dialog", name="Import Project")
-        expect(dialog).to_contain_text("tree")
-        expect(dialog).not_to_contain_text("Import failed")
-        return
+    assert reply.ok, reply.text()
     project_id = reply.json()["project_id"]
-    assert get_project(signed_in, project_id)["validation_errors"] == []
+    project = get_project(signed_in, project_id)
+    assert project["validation_errors"] == [] and project["project_data"] == tree.document
     # The editor holds the tree; the step settings (path_output, feature_types, ...) stay in the file around it.
     assert_runs_alike(tree.wrap(export_document(signed_in, project_id)), tree.step, probe_frame(tree.step))
 
 
-@pytest.mark.xfail(strict=True, reason="a fraud `rule_set` document imports as a broken tree project, not an error")
 def test_fraud_rule_set_is_refused_with_a_clear_message(signed_in: Page):
     reply = ui.import_file(signed_in, REPO / "examples/transaction-fraud/configs/0.1.0/rule_set.json", "rules")
-    assert not reply.ok
-    expect(signed_in.get_by_role("dialog", name="Import Project")).to_contain_text("rule_set")
+    assert reply.status == 400
+    # The dialog also shows the file's name (rule_set.json), so look for the message itself.
+    expect(signed_in.get_by_role("dialog", name="Import Project")).to_contain_text(
+        "a 'rule_set' document is not a tree or flat-rule document")
