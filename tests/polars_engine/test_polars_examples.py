@@ -18,11 +18,11 @@ from pathlib import Path
 import polars as pl
 from polars.testing import assert_frame_equal
 
+from decikit import PolarsEngine
 from decikit.config import JsonFileStore
 from decikit.exceptions import EngineError
 from decikit.serving import RequestHandler
 from decikit.serving._parse import coerce_record
-from decikit._engine.polars.engine import PolarsEngine
 
 warnings.simplefilter("ignore")
 package, configs, sample, out = sys.argv[1:]
