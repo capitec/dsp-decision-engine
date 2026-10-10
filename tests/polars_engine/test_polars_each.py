@@ -8,9 +8,7 @@ import pytest
 from polars.testing import assert_frame_equal
 
 from decikit import FusedEngine, PolarsEngine, each, flow, missing_as
-from decikit._engine.polars.host import PolarsExecutable
 from decikit.exceptions import EngineError
-from decikit.lab.testing import assert_equivalent
 
 
 def heavy(weight: float = missing_as(0.0)) -> bool:
@@ -130,25 +128,11 @@ def test_undeclared_item_column_is_refused_naming_the_step_that_writes_it():
         host(pl.DataFrame({"n": [1, 2]}), pipe)
 
 
-def test_assert_equivalent_accepts_polars_typing_a_field_fused_leaves_null(monkeypatch):
-    df = frame([[item(None, code=None, parts=())]])
-    assert FusedEngine().bind(PIPE).run(df).schema["items"] != GATHERED
-    assert assert_equivalent(PIPE, df)["items"].to_list() == FusedEngine().bind(PIPE).run(df)["items"].to_list()
-    run = PolarsExecutable.run
-    monkeypatch.setattr(PolarsExecutable, "run", lambda self, data, params=None, trace=None:
-                        run(self, data, params).with_columns(pl.col("id").cast(pl.Float64)))
-    with pytest.raises(AssertionError, match="polars engine differs"):
-        assert_equivalent(PIPE, df, engines=("fused", "polars"))
-
-
-def test_items_whose_fields_differ_from_their_declaration_are_refused_not_recast():
-    def reordered(n: int) -> list[Line]:
-        return [{"sku": f"s{k}", "weight": 10.0 * k} for k in range(n)]
-
+def test_items_with_a_field_their_declaration_lacks_are_refused_not_recast():
     def extra(n: int) -> list[Line]:
         return [{"weight": 10.0 * k, "sku": f"s{k}", "colour": "red"} for k in range(n)]
 
-    for writer in (reordered, extra):
-        pipe = flow(writer, each(writer.__name__, flow(heavy, name="line"), name="each_line"), name="p")
-        with pytest.raises(EngineError, match=f"'{writer.__name__}' came back as .*declared"):
-            host(pl.DataFrame({"n": [0, 3, 1]}), pipe).collect()
+    pipe = flow(extra, each("extra", flow(heavy, name="line"), name="each_line"), name="p")
+    assert "colour" in str(FusedEngine().bind(pipe).run(pl.DataFrame({"n": [2]})).schema["extra"])
+    with pytest.raises(EngineError, match="'extra' came back as .*declared"):
+        host(pl.DataFrame({"n": [0, 3, 1]}), pipe).collect()

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import typing
 from dataclasses import dataclass
 from functools import partial
 from typing import Any, Callable, Mapping
@@ -8,13 +7,10 @@ from typing import Any, Callable, Mapping
 import polars as pl
 
 from decikit._engine.ir.context import to_ir
-from decikit._engine.ir.decls import base_annotation
 from decikit._engine.ir.nodes import CallNode, IRNode, SequenceNode, iter_nodes
-from decikit._engine.run.engine import Executable, _scatter_gathers
-from decikit._engine.run.state import declared_dtype
-from decikit._engine.types import item_schema
+from decikit._engine.run.engine import Executable
+from decikit._engine.run.gathered import annotated_dtype, gathered_dtype, named
 from decikit._engine.wiring import interface
-from decikit._engine.wiring.plan import NodeVersion, ScatterGather
 from decikit.exceptions import EngineError, WiringError
 
 _FRAME_NOTE = "in frame step "
@@ -199,81 +195,29 @@ def _output_schema(seg: _Segment, schema: pl.Schema, doc: Mapping | None) -> tup
     if seg.unneeded:
         out = out.drop(seg.unneeded)
     # A column built from Python values (`str`, `date`) has no dtype until a row arrives; its annotation says it.
+    # An each's list is checked on every batch too: one whose items do not fit their declaration keeps their fields.
     nulls = {}
     for name, dtype in out.schema.items():
-        if dtype == pl.Null:
+        if dtype == pl.Null or name in seg.executable._gathered:
             nulls[name] = _declared(seg, name, schema)
     return pl.Schema({n: nulls.get(n, t) for n, t in out.schema.items()}), nulls
 
 
 def _declared(seg: _Segment, name: str, schema: pl.Schema) -> Any:
     v = seg.executable.plan.outputs.get(name)
-    gathers = {sg.out.id: sg for sg in _scatter_gathers(seg.executable.plan.root)}
+    gathers = seg.executable._gathers
     if v is not None and v.id in gathers:
-        return _gathered(gathers[v.id], gathers, {}, schema)
+        return gathered_dtype(gathers[v.id], gathers, {}, schema)
     annotation = None if v is None else v.annotation
-    if (dtype := _annotated(annotation)) is not None:
+    if (dtype := annotated_dtype(annotation)) is not None:
         return dtype
     # A column no version names came out of a frame step of unknown outputs.
     writer = v.producer if v is not None else ", ".join(seg.paths)
     raise EngineError(
         f"the polars engine needs every column's dtype before any row arrives, and '{name}', written by {writer} "
-        f"as {_named(annotation)}, has none until it holds values. Annotate the step "
+        f"as {named(annotation)}, has none until it holds values. Annotate the step "
         f"that writes it with a type polars can name (a TypedDict, list[float], str); a frame step declares it, "
         f"as in `writes={{{name!r}: pl.Float64}}`. Or run the pipeline on the numba engine.")
-
-
-def _gathered(sg: ScatterGather, gathers: dict, known: dict, schema: pl.Schema) -> pl.DataType:
-    # As the gather builds it: every field of the item in its order, then each value the body writes.
-    path = sg.node.origin.path
-    column = _dtype(sg.column, gathers, known, schema)
-    if not (isinstance(column, pl.List) and isinstance(column.inner, pl.Struct)):
-        how = (f"reaches it as {column}" if sg.column.producer is None
-               else f"{sg.column.producer} writes as {_named(sg.column.annotation)}")
-        raise EngineError(
-            f"the polars engine needs every column's dtype before any row arrives, and {path} gathers "
-            f"'{sg.out.name}' from the items of '{sg.column.name}', which {how}, with no item type. Annotate "
-            f"the step that writes it as a list of a TypedDict naming the item's fields, or run the pipeline "
-            f"on the numba engine.")
-    fields = {f.name: f.dtype for f in column.inner.fields}
-    known = {**known, **{v.id: fields[name] for name, v in sg.fields if name in fields}}
-    for v in sg.new_fields:
-        if (dtype := _dtype(v, gathers, known, schema)) is None:
-            raise EngineError(
-                f"the polars engine needs every column's dtype before any row arrives, and {path} gathers "
-                f"'{v.name}', written by {v.producer} as {_named(v.annotation)}, into every item of "
-                f"'{sg.out.name}'. Annotate {v.producer} with a type polars can name (a TypedDict, "
-                f"list[float], str), or run the pipeline on the numba engine.")
-        fields[v.name] = dtype
-    return pl.List(pl.Struct(fields))
-
-
-def _dtype(v: NodeVersion, gathers: dict, known: dict, schema: pl.Schema) -> pl.DataType | None:
-    # `known` holds the dtype of each item field the enclosing eaches read.
-    if v.id in known:
-        return known[v.id]
-    if v.id in gathers:
-        return _gathered(gathers[v.id], gathers, known, schema)
-    if v.producer is None:
-        return schema.get(v.name)
-    return _annotated(v.annotation)
-
-
-def _annotated(annotation: Any) -> Any:
-    if isinstance(annotation, pl.DataType) or (isinstance(annotation, type) and issubclass(annotation, pl.DataType)):
-        return annotation
-    t = base_annotation(annotation)
-    if typing.is_typeddict(t):
-        fields = {name: _annotated(ft) for name, ft in item_schema(t)}
-        return None if None in fields.values() else pl.Struct(fields)
-    if typing.get_origin(t) is list and (inner := _annotated(typing.get_args(t)[0])) is not None:
-        return pl.List(inner)
-    return declared_dtype(annotation)
-
-
-def _named(annotation: Any) -> str:
-    # `list[dict].__name__` is "list".
-    return str(annotation) if typing.get_args(annotation) else getattr(annotation, "__name__", str(annotation))
 
 
 def _zero_rows(exe: Executable, schema: pl.Schema, params: Mapping | None) -> pl.DataFrame:
@@ -293,7 +237,7 @@ def _run_batch(exe: Executable, doc: Mapping | None, unneeded: tuple[str, ...], 
     out = exe.run(df, doc)
     if unneeded:
         out = out.drop(unneeded)
-    # An each's list holds whatever dtypes its items' values gave, `Null` for a field no item fills.
+    # A column `Null` on zero rows holds whatever dtype its values gave.
     fix = {c: t for c, t in nulls.items() if out.schema[c] != t}
     if not fix:
         return out
