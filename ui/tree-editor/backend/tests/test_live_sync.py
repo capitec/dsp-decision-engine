@@ -328,3 +328,30 @@ async def test_a_version_the_fan_out_failed_to_fetch_still_reaches_a_connected_c
             break
         await asyncio.sleep(0.1)
     assert client.ws.versions() == [2]
+
+
+@db
+@pytest.mark.asyncio
+async def test_after_the_validator_process_dies_the_next_version_is_validated_again(project):
+    import multiprocessing
+    from concurrent.futures import ProcessPoolExecutor
+    from concurrent.futures.process import BrokenProcessPool
+    from dsp_decikit.services.live_hub import Client, Hub
+    from dsp_decikit.services.live_sync import apply_message
+    project_id, _ = project
+    hub = Hub()
+    hub.validator = ProcessPoolExecutor(1, mp_context=multiprocessing.get_context("spawn"))
+    with pytest.raises(BrokenProcessPool):  # killed, as by the out-of-memory killer
+        await asyncio.get_running_loop().run_in_executor(hub.validator, os._exit, 1)
+    client = Client(Socket(), "c1")
+    await hub.join(project_id, client, 1)
+    await asyncio.gather(*[r.validating for r in hub.rooms.values() if r.validating], return_exceptions=True)
+
+    await apply_message(project_id, "c2", "m1", 1, [name("a", "Validated")])
+    hub.pump_soon(project_id)
+    for _ in range(300):
+        if any(m["type"] == "validation" and m["version"] == 2 for m in client.ws.sent):
+            break
+        await asyncio.sleep(0.1)
+    hub.validator.shutdown()
+    assert any(m["type"] == "validation" and m["version"] == 2 for m in client.ws.sent)
