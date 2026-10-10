@@ -1,6 +1,6 @@
 # Decision tracing
 
-A decision trace answers "why did record 1 get this answer" after the fact, from a production or batch run, without a debugger. Pass a `TraceSink` to `run` or `score` and every step that ran for every record leaves an event: which step (by durable id), in which branch arm and loop iteration, for which record. Hand the events to an adapter and they go wherever your audit trail lives.
+A decision trace answers "why did record 1 get this answer" after the fact, from a production or batch run, without a debugger. Pass a `TraceSink` to `run` and every step that ran for every record leaves an event: which step (by durable id), in which branch arm and loop iteration, for which record. Hand the events to an adapter and they go wherever your audit trail lives.
 
 Tracing is off by default. A run without a sink captures nothing and, in a compiled mode, runs a kernel with no trace code in it.
 
@@ -185,14 +185,14 @@ print([(e.kind.name, e.origin.path, e.iteration, e.record) for e in sink.events(
 
 Record 0 owed 250, paid three times and stopped when the condition failed at iteration 4; record 1 paid once. The interpreted run of the same flow emits the same `STEP` events, plus a `LOOP_ITERATION` event for each record at the start of each iteration.
 
-## One record: `score`
+## One record
 
-`score(record, trace=sink)` traces a single decision, the shape a serving handler sees. Every event has `record=0`.
+`run(record, trace=sink)` traces a single decision, the shape a serving handler sees. Every event has `record=0`.
 
 ```python
 sink = TraceSink()
 exe = pipeline.compile("fused")
-print(exe.score({"net_income": 4100.0, "expenses": 1500.0, "sector_code": 2}, trace=sink))
+print(exe.run({"net_income": 4100.0, "expenses": 1500.0, "sector_code": 2}, trace=sink))
 print([(e.origin.path, e.arm, e.record) for e in sink.events()])
 ```
 
@@ -283,7 +283,7 @@ print(open("trace.jsonl").read().splitlines()[0], sink.status())
 {"kind": "STEP", "step_id": "a1b2c3d4e5f6", "path": "limit/disposable_income", "arm": null, "iteration": null, "record": 0} {'delivered': 9, 'dropped': 0, 'failed': 0, 'errors': 0}
 ```
 
-- Keep `accept` fast. It runs synchronously inside `run` and `score`; enqueue and deliver on another thread or process if the destination is slow.
+- Keep `accept` fast. It runs synchronously inside `run`; enqueue and deliver on another thread or process if the destination is slow.
 - An adapter that raises does not stop the run. The event is counted as `failed` in `status()` and the run goes on. The sink keeps every event in `events()` either way.
 - `PassThroughAdapter` collects events in its `events` list, for tests.
 - The sink checks for lost evidence before the adapter sees anything, so an adapter that drops or redacts events cannot hide a loss that happened earlier.
@@ -329,7 +329,7 @@ With `TraceSink(strict=False)` the shortfall is added to `dropped` and the run c
 
 ## Limits
 
-- A sink is not thread-safe. Use one per `run` or `score` call.
+- A sink is not thread-safe. Use one per `run` call.
 - `TraceSink` keeps every delivered event in memory for `events()`. Bound it with `max_events` on large batches, or let the adapter be the only consumer and discard the sink after the call.
 - Traces identify logic, not data. The VS Code debugger and [debug sessions](debugging-and-testing.md) are where you look at values; the MCP server's `raw_trace` tool returns trace events only when the raw-data policy allows it ([CLI and MCP](cli-and-mcp.md)).
 - Branch condition calls and loop tests carry their own `STEP` events (`is_private`, `unpaid` above), so a record's trace shows what was tested as well as what decided.

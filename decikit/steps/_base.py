@@ -123,15 +123,16 @@ class Step(ABC):
         Example::
 
             exe = pipeline.compile("fused")
-            exe.score({"income": 1000.0, "debt": 200.0})
+            exe.run({"income": 1000.0, "debt": 200.0})
         """
         from decikit._engine import Engine
 
         return Engine().bind(self, mode)
 
     def run(self, data: Any, params: Any = None, trace: Any = None) -> Any:
-        """Run the step over a polars frame, interpreted; `trace` is an optional `TraceSink`.
+        """Run the step, interpreted, over a polars frame or one record (a dict); `trace` is an optional `TraceSink`.
 
+        A frame returns a frame and a dict returns a dict, as `Executable.run`.
         For repeated runs, `compile` once instead.
 
         Example::

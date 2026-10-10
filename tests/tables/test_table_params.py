@@ -45,10 +45,10 @@ def test_rows_come_from_the_params_document(run):
 def test_retuning_rows_and_their_count_never_recompiles(mode):
     exe = Engine().bind(table(), mode=mode)
     exe.run(FRAME, params=rows(THREE))
-    exe.score({"score": 5.0, "channel": "web"}, params=rows(THREE))
+    exe.run({"score": 5.0, "channel": "web"}, params=rows(THREE))
     with no_recompile():
         assert exe.run(FRAME, params=rows(FIVE))["pts"].to_list() == [9, 7, None, 5, 0]
-        assert exe.score({"score": 90.0, "channel": "branch"}, params=rows(FIVE))["pts"] == 5
+        assert exe.run({"score": 90.0, "channel": "branch"}, params=rows(FIVE))["pts"] == 5
         assert exe.run(FRAME, params=rows(THREE[:1]))["pts"].to_list() == [1, 1, 0, 0, 0]
         assert exe.run(FRAME, params=rows([]))["pts"].to_list() == [0, 0, 0, 0, 0]
 

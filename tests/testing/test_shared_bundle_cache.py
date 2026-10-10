@@ -102,7 +102,7 @@ def test_a_bundle_is_converted_once_per_document_and_node(monkeypatch):
     exe = Engine().bind(flow(low_cap, high_cap), mode="fused")
     doc = {"shared": {"rate": 0.25}}
     exe.run(FRAME, params=doc)
-    exe.score({"x": 1.0}, params={"shared": {"rate": 0.25}})
+    exe.run({"x": 1.0}, params={"shared": {"rate": 0.25}})
     exe.run(FRAME, params=doc)
     assert sorted(seen) == ["high_cap", "low_cap"]
     exe.run(FRAME, params={"shared": {"rate": 0.75}})
@@ -116,11 +116,11 @@ def test_a_reused_document_object_is_hashed_once(monkeypatch):
     exe = Engine().bind(flow(low_cap, high_cap), mode="fused")
     doc = {"shared": {"rate": 0.25}}
     for _ in range(3):
-        assert exe.score({"x": 2.0}, doc)["low_cap"] == 0.5
+        assert exe.run({"x": 2.0}, doc)["low_cap"] == 0.5
     exe.run(FRAME, doc)
     assert len(hashed) == 1
-    assert exe.score({"x": 2.0}, {"shared": {"rate": 0.5}})["low_cap"] == 1.0
-    assert exe.score({"x": 2.0}, doc)["low_cap"] == 0.5
+    assert exe.run({"x": 2.0}, {"shared": {"rate": 0.5}})["low_cap"] == 1.0
+    assert exe.run({"x": 2.0}, doc)["low_cap"] == 0.5
     assert len(hashed) == 3
 
 

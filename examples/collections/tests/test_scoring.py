@@ -84,7 +84,7 @@ def test_the_agency_flag_is_read_as_a_flag(pipeline):
 
 
 def band_of(roll_probability, shift=0.0, unadjusted=None):
-    out = Engine().bind(scoring.collections_bands_step).score({
+    out = Engine().bind(scoring.collections_bands_step).run({
         "roll_probability": roll_probability, "roll_probability_unadjusted": roll_probability if unadjusted is None else unadjusted,
         "band_edge_shift": shift})
     return out["collections_band_code"], out["collections_band_code_unadjusted"]

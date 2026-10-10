@@ -135,9 +135,9 @@ def test_a_str_field_beside_a_number_finds_the_item_in_every_mode():
 
 
 @pytest.mark.parametrize("mode", MODES)
-def test_score_reads_one_record_through_the_same_operations(mode):
+def test_a_record_run_reads_one_record_through_the_same_operations(mode):
     exe = Engine().bind(flow(find_best_item, name="p"), mode=mode)
-    assert [exe.score({"items": row})["find_best_item"] for row in ROWS] == FOUND
+    assert [exe.run({"items": row})["find_best_item"] for row in ROWS] == FOUND
 
 
 def test_each_row_reads_only_its_own_items_on_the_arrow_path():
@@ -283,9 +283,9 @@ _LABEL_FRAME = pl.DataFrame({"items": [[{"label": "a", "value": 1.0}, {"label": 
 _LABEL_RECORD = {"items": [{"label": "a", "value": 1.0}, {"label": "b", "value": 2.0}]}
 
 
-def test_allow_fallback_returning_list_of_str_gives_plain_strings_in_score():
+def test_allow_fallback_returning_list_of_str_gives_plain_strings_in_a_record_run():
     exe = Engine().bind(flow(_total_values, _collect_labels), mode="fused")
-    result = exe.score(_LABEL_RECORD, {})
+    result = exe.run(_LABEL_RECORD, {})
     assert result["_collect_labels"] == ["a", "b"]
     assert all(isinstance(x, str) for x in result["_collect_labels"])
 

@@ -1,4 +1,4 @@
-"""Tree walk throughput and score() latency of a TreeConfig in every mode.
+"""Tree walk throughput and run(record) latency of a TreeConfig in every mode.
 
 The tree is a campaign-style v3 document: 63 internal nodes over 16 float and
 2 int features (thresholds, AND composites, between), 64 leaves, and a
@@ -106,7 +106,7 @@ def compare(doc: dict) -> None:
     engines = {}
     for mode in ("fused", "stepped", "interpreted"):
         exe = Engine().bind(tree, mode=mode)
-        engines[f"decikit {mode}"] = (exe.run, exe.score)
+        engines[f"decikit {mode}"] = (exe.run, exe.run)
 
     # The outputs agree before anything is timed.
     expected = engines["decikit interpreted"][0](frame.head(20000)).select("label", "score", "band")
@@ -117,7 +117,7 @@ def compare(doc: dict) -> None:
                  for name, (_, score) in engines.items()}
     results = {name: (rows_per_s(run, reps=1 if "interpreted" in name else 7), *latencies[name])
                for name, (run, _) in engines.items()}
-    print(f"{'engine':<22}{'batch rows/s':>16}{'ns/row':>10}{'score p50 us':>14}{'score p99 us':>14}")
+    print(f"{'engine':<22}{'batch rows/s':>16}{'ns/row':>10}{'record p50 us':>14}{'record p99 us':>14}")
     for name, (batch, p50, p99) in results.items():
         print(f"{name:<22}{batch:>16,.0f}{1e9 / batch:>10.1f}{p50:>14.1f}{p99:>14.1f}")
 

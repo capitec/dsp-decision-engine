@@ -78,7 +78,7 @@ def test_every_match_type_agrees_with_python_over_the_string_corpus(run, match_t
     expected = _expected(match_type, patterns, VALUES)
     assert run(tree, pl.DataFrame({"s": VALUES}))["hit"].to_list() == expected
     exe = Engine().bind(tree, mode="fused")
-    assert [exe.score({"s": v})["hit"] for v in VALUES] == expected
+    assert [exe.run({"s": v})["hit"] for v in VALUES] == expected
 
 
 @pytest.mark.parametrize("kw", [{"case_sensitive": False}, {"trim_whitespace": True},
@@ -122,7 +122,7 @@ def test_an_empty_frame_an_all_null_column_and_an_absent_column_still_run(run):
 def test_a_null_string_never_matches_not_even_the_empty_pattern(run):
     tree = _matcher("contains", [""])
     assert run(tree, pl.DataFrame({"s": ["a", None, ""]}))["hit"].to_list() == [1, 0, 1]
-    assert Engine().bind(tree, mode="fused").score({"s": None})["hit"] == 0
+    assert Engine().bind(tree, mode="fused").run({"s": None})["hit"] == 0
 
 
 def test_a_mixed_tree_with_a_threshold_and_a_string_node_agrees_in_every_mode(run):
@@ -142,7 +142,7 @@ def test_a_mixed_tree_with_a_threshold_and_a_string_node_agrees_in_every_mode(ru
     })
     frame = pl.DataFrame({"x": [5.0, 20.0, 20.0, 20.0], "s": ["vip", "vip-plus", "silver", "golden"]})
     assert run(tree, frame)["pts"].to_list() == [0, 2, 1, 2]
-    assert Engine().bind(tree, mode="fused").score({"x": 20.0, "s": "goldfish"})["pts"] == 2
+    assert Engine().bind(tree, mode="fused").run({"x": 20.0, "s": "goldfish"})["pts"] == 2
 
 
 @pytest.mark.parametrize("match_type", ["exact", "starts_with", "ends_with", "contains"])
@@ -165,7 +165,7 @@ def test_a_pattern_param_is_retuned_by_its_key(run):
     assert run(tree, frame, {"ref": {"tier": "gold"}})["hit"].to_list() == [1, 1, 1, 0, 0]
     assert run(tree, frame, {"ref": {"tier": "日本語のテキスト"}})["hit"].to_list() == [1, 0, 0, 0, 0]
     exe = Engine().bind(tree, mode="fused")
-    assert exe.score({"s": "silverback"}, params={"ref": {"tier": "silver"}})["hit"] == 1
+    assert exe.run({"s": "silverback"}, params={"ref": {"tier": "silver"}})["hit"] == 1
 
 
 def test_a_key_pattern_takes_its_default_from_the_parameters_block(run):
@@ -257,7 +257,7 @@ def test_editing_adding_and_removing_patterns_never_recompiles():
     for mode in ("stepped", "fused"):
         exe = Engine().bind(_gated(["ab"]), mode=mode)
         exe.run(frame)
-        exe.score({"x": 20.0, "s": "ab"})
+        exe.run({"x": 20.0, "s": "ab"})
     edits = [(["cd"], [0, 0, 1, 0, 0]), (["twelve charsA"], [0, 0, 0, 1, 0]),
              (["ab", "cd", "本語"], [1, 1, 1, 0, 1]), (["q" * 5000], [0, 0, 0, 0, 0]),
              (["cd", "本語", "sA"], [0, 0, 1, 1, 1])]
@@ -266,13 +266,13 @@ def test_editing_adding_and_removing_patterns_never_recompiles():
             for mode in ("stepped", "fused"):
                 exe = Engine().bind(_gated(patterns), mode=mode)
                 assert exe.run(frame)["hit"].to_list() == hits
-                assert [exe.score(r)["hit"] for r in frame.iter_rows(named=True)] == hits
+                assert [exe.run(r)["hit"] for r in frame.iter_rows(named=True)] == hits
     exe = Engine().bind(_gated(["ab", {"param": "extra", "default": "zz"}]), mode="fused")
     exe.run(frame)
-    exe.score({"x": 20.0, "s": "cd"})
+    exe.run({"x": 20.0, "s": "cd"})
     with no_recompile():
         assert exe.run(frame, {"retune": {"extra": "語"}})["hit"].to_list() == [1, 1, 0, 0, 1]
-        assert exe.score({"x": 20.0, "s": "cd"}, {"retune": {"extra": "d"}})["hit"] == 1
+        assert exe.run({"x": 20.0, "s": "cd"}, {"retune": {"extra": "d"}})["hit"] == 1
 
 
 def test_a_pattern_count_change_and_a_threshold_change_share_one_kernel_signature():

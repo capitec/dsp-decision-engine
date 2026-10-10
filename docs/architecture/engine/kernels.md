@@ -1,7 +1,7 @@
 # Kernel semantics
 
-A step gives the same answer in `interpreted`, `stepped` and `fused` mode, and in `run` and
-`score`. Plain numba does not guarantee that: it rounds halves differently from CPython, computes
+A step gives the same answer in `interpreted`, `stepped` and `fused` mode, and in `run` on a
+frame or a record. Plain numba does not guarantee that: it rounds halves differently from CPython, computes
 `x ** n` by repeated squaring, has no fixed-point decimal and types a string as its own unicode
 object. Kernel semantics is the set of numba types and overloads that close those gaps, plus the
 rules for nulls that every runner applies the same way. It lives in
@@ -127,8 +127,8 @@ mode computes with a Python int and fails when it stores a result that does not 
 def wrapped(cents: int) -> int:
     return cents * 4_000_000_000
 
-flow(wrapped, name="w").compile("fused").score({"cents": 10_000_000_000})
-flow(wrapped, name="w").compile("interpreted").score({"cents": 10_000_000_000})
+flow(wrapped, name="w").compile("fused").run({"cents": 10_000_000_000})
+flow(wrapped, name="w").compile("interpreted").run({"cents": 10_000_000_000})
 ```
 
 ```text

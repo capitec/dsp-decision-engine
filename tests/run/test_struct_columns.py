@@ -122,7 +122,7 @@ def test_a_null_struct_names_the_column(mode):
     with pytest.raises(MissingInputError, match="input 'applicant' of step 'p/afford'"):
         exe.run(frame([{"income": 100.0, "age": 30}, None]))
     with pytest.raises(MissingInputError, match="input 'applicant'"):
-        exe.score({"applicant": None})
+        exe.run({"applicant": None})
 
 
 @pytest.mark.parametrize("mode", COMPILED)
@@ -131,14 +131,14 @@ def test_a_null_field_names_the_field(mode):
     with pytest.raises(MissingInputError, match=r"input 'applicant\.age'"):
         exe.run(frame([{"income": 100.0, "age": None}]))
     with pytest.raises(MissingInputError, match=r"input 'applicant\.age'"):
-        exe.score({"applicant": {"income": 100.0, "age": None}})
+        exe.run({"applicant": {"income": 100.0, "age": None}})
 
 
 @pytest.mark.parametrize("mode", MODES)
 def test_an_absent_struct_column_says_it_is_absent(mode):
     exe = Engine().bind(flow(afford, name="p"), mode=mode)
     with pytest.raises(MissingInputError, match="is not in the input frame or record"):
-        exe.score({})
+        exe.run({})
     with pytest.raises(MissingInputError, match="is not in the input frame or record"):
         exe.run(pl.DataFrame({"other": [1.0]}))
 
@@ -146,7 +146,7 @@ def test_an_absent_struct_column_says_it_is_absent(mode):
 def test_a_record_without_a_declared_field_names_the_field():
     exe = Engine().bind(flow(afford, name="p"), mode="fused")
     with pytest.raises(ValueError, match="has no field 'age' on row 0"):
-        exe.score({"applicant": {"income": 100.0}})
+        exe.run({"applicant": {"income": 100.0}})
 
 
 def test_a_column_without_a_declared_field_names_the_field():
@@ -276,7 +276,7 @@ def test_a_struct_reaches_the_kernel_through_the_frame_path_too():
         return df.with_columns(seen=pl.lit(1.0))
 
     exe = Engine().bind(flow(mark, afford, name="p"), mode="fused")
-    assert exe.score({"applicant": {"income": 100.0, "age": 30}})["afford"] == 230.0
+    assert exe.run({"applicant": {"income": 100.0, "age": 30}})["afford"] == 230.0
 
 
 def test_an_overridden_struct_column_is_read_from_the_new_values():

@@ -59,6 +59,6 @@ def decide(wording, params, documents):
     def run(rules, record, stack_enabled=True, **overrides):
         rule_set = RuleSet.load({"type": "rule_set", "name": "rules", "rules": rules})
         settings = {"fraud_interdiction": {"adjustment_stack_enabled": {"adjustment_stack_enabled": stack_enabled}}}
-        return build(rule_set, wording, **documents).compile("interpreted").score({**record, **overrides}, settings)
+        return build(rule_set, wording, **documents).compile("interpreted").run({**record, **overrides}, settings)
 
     return run

@@ -1,6 +1,6 @@
 # Engine
 
-Why the engine (IR, wiring, runners, kernels, compile cache, fallback, `score`, `each`) is shaped the way it is; read it before changing any of those or proposing an alternative.
+Why the engine (IR, wiring, runners, kernels, compile cache, fallback, `run`'s record path, `each`) is shaped the way it is; read it before changing any of those or proposing an alternative.
 
 ## Proposed: the flexible engine rework
 
@@ -8,7 +8,7 @@ Proposed 2026-10-09, being built on branch `engine/flexible-rework`; each bullet
 phase lands. The design, alternatives and plan: [flexible engine rework](../../design_specs/2026-10-09_flexible_engine_rework/README.md).
 
 - Proposed: an engine is a registry document (`Engine` is a `BaseRegistryModule` root; `InterpretedEngine`, `SteppedEngine`, `FusedEngine` keep the mode strings as aliases), and serving settings name an engine document instead of a mode string.
-- Proposed: `run` dispatches on its input (a dict takes the record path, a `DataFrame` the frame path, a `LazyFrame` the polars engine) and `score` is removed.
+- Proposed: `run` on a `LazyFrame` takes the polars engine (until then it is collected and run as a frame).
 - Proposed: `Step.run` and `compile` follow a context-scoped default engine set with `decikit.engine(...)`, fused when unset; `Step.session` opens interpreted unless given an engine.
 - Proposed: loudness is per engine: fused warns about every step that does not run compiled, kernels that split at their first launch included; stepped and interpreted never warn; `strict_compile=True` raises wherever it is set.
 - Proposed: the polars engine is lazy and starts as a host (the fused pipeline inside `map_batches`, split only at frame steps); polars-native step bodies are built only if a measurement against the host justifies them.
@@ -83,7 +83,7 @@ phase lands. The design, alternatives and plan: [flexible engine rework](../../d
 ## A declared dict, list, `Struct` or `Columnar` output is checked where the step runs
 
 - No kernel stores a dict, so a step returning a dict or `list[dict]` runs in Python (as a `Fallback`, or as a kernel that fails at its first launch and splits into per-call Python runs). It is validated with strict pydantic on every call, cached per annotation; strict, so an int is a float but a str or bool is not. A `Struct` or `Columnar` step returning tuples does run in a kernel: its tuple type, as numba infers it, is compared with the `Item` once at compile time (`compile/declared.py`); a mismatch is a fallback, which the Python check then refuses.
-- Why: scalar outputs were refused by the numpy store, but a dict or list went through unchecked and `run()` then turned `{'v': 1.5}` beside `{'v': 'high'}` into text. Comparing numba's inferred dict type with the TypedDict would be free but pointless: the dict never reaches a kernel. Validation costs about 1.4 us for 2 dicts of 1 field and 3 us for 6 of 5 fields (microbenchmark), 3.6 and 6.2 us on a whole `score()`. That was before the flags and masks around the check were prepared at bind and made on demand; see [per-step overhead](../experiments/per-step-overhead.md).
+- Why: scalar outputs were refused by the numpy store, but a dict or list went through unchecked and `run()` then turned `{'v': 1.5}` beside `{'v': 'high'}` into text. Comparing numba's inferred dict type with the TypedDict would be free but pointless: the dict never reaches a kernel. Validation costs about 1.4 us for 2 dicts of 1 field and 3 us for 6 of 5 fields (microbenchmark), 3.6 and 6.2 us on a whole `run(record)`. That was before the flags and masks around the check were prepared at bind and made on demand; see [per-step overhead](../experiments/per-step-overhead.md).
 - A plain `dict` or `list[dict]` declares no shape, so `run()` keeps the loose building there (int beside float widens, non-string keys become text) but refuses a number beside text. A declared shape gets a polars dtype: polars' strict inference truncates `1.5` to `1` in a later row of a nested list.
 - A `typing.TypedDict` is rebuilt from `typing_extensions` before pydantic sees it (`pydantic_ready`), for output checks and request validation: pydantic refuses `typing`'s before Python 3.12, which left outputs unchecked and failed JSON arrays there. A numpy number is checked, and served, as the Python number it is; only the retry after a failed validation converts, so a valid output pays nothing.
 - See: `tests/run/test_declared_outputs.py`
@@ -124,15 +124,15 @@ phase lands. The design, alternatives and plan: [flexible engine rework](../../d
 - Why: the rebuilt-union registry left stale unions on late registration, was superlinear (333 ms for 175 types) and gave 1332-character errors; lookup costs about 15 us more on a 63-node config, once. Without `SerializeAsAny` pydantic dumps a subclass as its base, silently.
 - See: [configurable steps](../../architecture/configurable-steps/index.md), `decikit/_registry.py`
 
-## `score` takes a dict and caches converted params bundles
+## `run` takes a dict or a frame, and caches converted params bundles
 
-- `score(record, params)` takes one dict; with no frame steps it builds no polars frame. Converted bundles are cached per params document and node, and a reused document is hashed once. Not: positional calls (transposition risk), a reused record buffer as default (brittle, thread-unsafe).
+- `run(record, params)` takes one dict; with no frame steps it builds no polars frame. `run` dispatches on its input: a `dict` first, then a `LazyFrame` (collected), a `DataFrame`, any other `Mapping`, else `TypeError`. The `dict` check adds about 0.06 us to a record; checking the frames and `Mapping` first would add about 0.5 us (the `Mapping` check alone 0.24), 1.4% of the flagship's 35 us fused record (best of 9 `timeit` rounds against the bare record body; a whole-call median moves more than that between rounds). Converted bundles are cached per params document and node, and a reused document is hashed once. Not: positional calls (transposition risk), a reused record buffer as default (brittle, thread-unsafe), a second name for the record path (the input already says which path; `score` was removed with no alias).
 - Why: 400 keyword arguments cost 1190 us, a dict 60 us; converting a validated model costs 170.6 us against 78.3 us to validate it, a cached bundle 0.23 us.
 - See: [experiment](../experiments/single-record-calling-convention.md), [engine](../../architecture/engine/index.md)
 
 ## One executable serves all threads; shared state is immutable or per thread
 
-- `run` and `score` on a shared `Executable` are safe from many threads, including the first call: caches fill through `once`, the compiled snapshot is published whole, `report` is thread-local, a bundle and its UTF-8 buffer are one `setdefault` entry.
+- `run` on a shared `Executable`, on a frame or a record, is safe from many threads, including the first call: caches fill through `once`, the compiled snapshot is published whole, `report` is thread-local, a bundle and its UTF-8 buffer are one `setdefault` entry.
 - Why: kernels are `nogil`, and an unsynchronised span buffer was a use-after-free. Sessions and trace sinks are single caller by contract.
 - See: [concurrency](../../architecture/engine/concurrency.md), `decikit/_engine/concurrency.py`
 

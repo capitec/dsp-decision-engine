@@ -295,7 +295,7 @@ def test_a_tree_reports_the_leaf_that_answered_in_every_mode():
     assert out["risk_leaf"].to_list() == ["low", "also_low", None, "low"]   # a null x takes the otherwise branch
     assert out["pts"].to_list() == [1, 1, 0, 1]
     assert out.schema["risk_leaf"] == pl.String
-    assert Engine().bind(_two_leaves_one_row(), mode="fused").score({"x": 7.0})["risk_leaf"] == "also_low"
+    assert Engine().bind(_two_leaves_one_row(), mode="fused").run({"x": 7.0})["risk_leaf"] == "also_low"
 
 
 def test_the_path_column_survives_an_explicit_emit_and_a_drop():
@@ -369,4 +369,4 @@ def test_a_string_feature_given_a_number_is_a_type_error_naming_it():
     })
     for mode in ("interpreted", "stepped", "fused"):
         with pytest.raises(TypeError, match="'s' is a string input"):
-            Engine().bind(cfg, mode=mode).score({"s": 1})
+            Engine().bind(cfg, mode=mode).run({"s": 1})

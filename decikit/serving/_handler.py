@@ -246,7 +246,7 @@ class RequestHandler:
         """
         live = self.module_fn()
         if isinstance(request, dict):
-            return live.executable.score(coerce_record(request, live.dates), live.params)
+            return live.executable.run(coerce_record(request, live.dates), live.params)
         return live.executable.run(coerce_frame(request, live.frame_inputs), live.params)
 
     def process_fn(self, data: bytes, accept: str, content_type: str) -> Response:
@@ -268,7 +268,7 @@ class RequestHandler:
             if sample:
                 with open(sample) as f:
                     record = coerce_record(json.load(f), _dates(executable))
-            executable.score(record, params)
+            executable.run(record, params)
             executable.run(pl.DataFrame([record]), params)
         except exc.ParamsError:
             raise

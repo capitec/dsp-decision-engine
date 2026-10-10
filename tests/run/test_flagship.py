@@ -1,4 +1,4 @@
-"""The flagship pipeline in every mode: answers, additive output, emit/drop, retuning and score."""
+"""The flagship pipeline in every mode: answers, additive output, emit/drop, retuning and a record run."""
 from __future__ import annotations
 
 import polars as pl
@@ -92,16 +92,16 @@ def test_a_param_outside_its_bounds_is_rejected_at_run_time_naming_node_param_an
         bind(pipeline).run(FRAME, params={"cap_by_income_band": {"cap": 999.0}})
 
 
-def test_score_takes_a_dict_and_returns_a_dict(bind):
-    out = bind(pipeline).score({
+def test_run_takes_a_dict_record_and_returns_a_dict(bind):
+    out = bind(pipeline).run({
         "net_income": 4100.0, "expenses": 1500.0, "instalment": 800.0,
         "term_cap": 60.0, "min_net_salary": 4100.0,
     })
     assert out["cap_by_income_band"] == 48.0
 
 
-def test_score_agrees_with_run_row_for_row(bind):
+def test_a_record_run_agrees_with_a_frame_run_row_for_row(bind):
     exe = bind(pipeline)
     batch = exe.run(FRAME)["cap_by_income_band"].to_list()
-    single = [exe.score(dict(zip(FRAME.columns, row)))["cap_by_income_band"] for row in FRAME.iter_rows()]
+    single = [exe.run(dict(zip(FRAME.columns, row)))["cap_by_income_band"] for row in FRAME.iter_rows()]
     assert batch == single

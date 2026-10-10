@@ -101,7 +101,7 @@ def test_an_overlay_for_another_target_is_rejected_when_the_document_loads():
 def test_an_overlay_on_the_disqualifying_threshold_is_applied_with_the_material_one():
     document = json.loads((CONFIGS / "event_threshold_overlays.json").read_text())
     document["adjustments"].append({**document["adjustments"][0], "adjustment_id": "ADJ-X", "target": "disqualifying_threshold"})
-    out = Engine().bind(events.event_unit(ConfigurableStep.load(document)), mode="interpreted").score({
+    out = Engine().bind(events.event_unit(ConfigurableStep.load(document)), mode="interpreted").run({
         "event_id": 1, "event_type_code": 1, "amount": 30_000.0, "event_date": date(2026, 8, 1),
         "status_is_active": True, "is_disputed": False, "is_satisfied": False,
         "decision_date": date(2026, 9, 24), "sector_code": 412, "criticality_class": vocab.CRITICAL})

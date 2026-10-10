@@ -24,7 +24,7 @@ Every argument is one of two kinds, and the difference decides where its value c
 
 ```mermaid
 flowchart LR
-    req["request data<br/>a frame row or a score() dict<br/>income, debt, applied_on"]:::data --> step["step function"]:::authoring
+    req["request data<br/>a frame row or a record dict<br/>income, debt, applied_on"]:::data --> step["step function"]:::authoring
     doc["params document<br/>configs/1.2.0/params.json<br/>{'afford': {'affordable': {'limit': 0.35}}}"]:::data --> step
     decl["param(0.4, ge=0, le=1)<br/>default and validation"]:::authoring -.-> doc
     store["config store<br/>immutable versions"]:::tooling --> doc
@@ -53,7 +53,7 @@ pipeline = flow(ratio, affordable, name="afford")
 
 with warnings.catch_warnings(record=True) as caught:
     warnings.simplefilter("always")
-    out = pipeline.compile().score({"income": 1000.0, "debt": 380.0, "limit": 0.3})
+    out = pipeline.compile().run({"income": 1000.0, "debt": 380.0, "limit": 0.3})
 print(out["affordable"])
 print(caught[0].message)
 ```
@@ -86,9 +86,9 @@ Named members give every step a path, such as `afford/affordable` or `offer/by_e
 
 ## Running a pipeline
 
-There are two ways to call a pipeline. `run(df)` takes a polars frame and returns a frame: the input columns plus every value nothing else reads. `score(record)` takes one dict and returns a dict. A service calls `score`; analysis, back-testing and experiments call `run`.
+`run` takes either shape. `run(df)` takes a polars frame and returns a frame: the input columns plus every value nothing else reads. `run(record)` takes one dict and returns a dict. A service passes a dict; analysis, back-testing and experiments pass a frame.
 
-`pipeline.run(df)` is a shortcut that runs in interpreted mode. For repeated calls, compile once with `pipeline.compile(mode)`, which returns an `Executable`, and call `run` or `score` on it as often as you like from as many threads as you like. There are three modes:
+`pipeline.run(df)` is a shortcut that runs in interpreted mode. For repeated calls, compile once with `pipeline.compile(mode)`, which returns an `Executable`, and call `run` on it as often as you like from as many threads as you like. There are three modes:
 
 <div class="diagram" markdown>
 ![Three run modes over a four-step pipeline: interpreted calls every step in Python, stepped compiles each step into its own kernel with a Python driver between, fused compiles consecutive steps into one kernel; a step reading a date runs in Python in both compiled modes and splits the fused kernel](assets/diagrams/concepts-run-modes.svg)
@@ -100,7 +100,7 @@ There are two ways to call a pipeline. `run(df)` takes a polars frame and return
 - `"stepped"` compiles every step into its own numba kernel and drives them from Python. Sessions still pause at every step.
 - `"fused"` compiles each run of consecutive compilable steps into one kernel, including whole branches and loops made of plain scalar steps. It is the fastest and the default for `decikit serve`.
 
-On the benchmark pipeline (1M rows through `run`, 20k `score` calls), interpreted mode ran 0.25M rows/s with a `score` median of 59.1 µs, stepped 12.9M rows/s and 37.1 µs, and fused 12.5M rows/s and 27.7 µs. [Compiled modes and fallback](guides/compile-and-fallback.md) covers what compiles, what falls back and how to measure your own pipeline.
+On the benchmark pipeline (1M rows through `run`, 20k single-record `run` calls), interpreted mode ran 0.25M rows/s with a single-record median of 59.1 µs, stepped 12.9M rows/s and 37.1 µs, and fused 12.5M rows/s and 27.7 µs. [Compiled modes and fallback](guides/compile-and-fallback.md) covers what compiles, what falls back and how to measure your own pipeline.
 
 ## From functions to answers
 
@@ -111,7 +111,7 @@ flowchart LR
     steps["Step tree<br/>flow, branch, functions"]:::authoring --> ir["IR<br/>to_ir(): CallNode,<br/>SequenceNode, BranchNode"]:::ir
     ir --> plan["Plan<br/>names resolved to versions,<br/>wiring checked"]:::ir
     plan --> runner["Runner<br/>interpreted, stepped<br/>or fused"]:::engine
-    runner --> exe["Executable<br/>run(df), score(dict)"]:::engine
+    runner --> exe["Executable<br/>run(df), run(dict)"]:::engine
     params["params document"]:::data --> exe
     data["frame or record"]:::data --> exe
     classDef authoring fill:#fff1e0,stroke:#f57c00,color:#7c2d00,stroke-width:1.5px;
@@ -150,7 +150,7 @@ A pipeline on its own is a Python object. These pieces turn it into something yo
 | path | A step's position in the tree, such as `credit/approved`. Keys params, errors, breakpoints and traces. |
 | run | Run a pipeline over a polars frame; returns a frame. |
 | score | Run a pipeline on one record given as a dict; returns a dict. |
-| [executable](guides/compile-and-fallback.md) | What `compile(mode)` or `Engine().bind(step, mode)` returns: a bound pipeline with `run`, `score`, `fallbacks` and `session`. |
+| [executable](guides/compile-and-fallback.md) | What `compile(mode)` or `Engine().bind(step, mode)` returns: a bound pipeline with `run`, `fallbacks` and `session`. |
 | [interpreted, stepped, fused](guides/compile-and-fallback.md) | The three run modes: plain Python, one kernel per step, one kernel per run of steps. |
 | [fallback](guides/compile-and-fallback.md) | A step a compiled mode runs in Python because numba cannot hold its types or compile its body. Reported once by a `FallbackWarning`. |
 | [ConfigurableStep](guides/trees-tables-scorecards.md) | A step type loaded from a JSON document with a `type` tag; trees, decision tables and scorecards are the built-in ones. Your own types: [Extending the decider toolkit](guides/extending.md). |

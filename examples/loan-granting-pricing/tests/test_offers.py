@@ -109,7 +109,7 @@ def approved(decide):
 
 
 def validate(validator, params, approved, **changes):
-    out = validator.score({**approved, **changes}, {"shared": params["shared"]})
+    out = validator.run({**approved, **changes}, {"shared": params["shared"]})
     return out["final_validation_passed"], out["final_validation_failures"]
 
 

@@ -367,7 +367,7 @@ A separate web application for editing decision trees: a FastAPI backend (`backe
 
 ## Guarantees and how they are tested
 
-- A run in the bridge matches compiled runs exactly. `tests/bridge/test_parity.py` debugs a flow through the bridge and compares it with `run()` and `score()` in interpreted, stepped and fused modes using `decikit.testing.equivalence.assert_equivalent` (NaN equals NaN, nothing else is approximate). See [Diff and equivalence](../guides/diff-and-equivalence.md).
+- A run in the bridge matches compiled runs exactly. `tests/bridge/test_parity.py` debugs a flow through the bridge and compares it with `run()` on the frame and on each record in interpreted, stepped and fused modes using `decikit.testing.equivalence.assert_equivalent` (NaN equals NaN, nothing else is approximate). See [Diff and equivalence](../guides/diff-and-equivalence.md).
 - The protocol round-trips over real stdio (`test_the_stdio_protocol_round_trips`), and the one-shot form answers datasets from the project's working directory (`test_the_json_lines_protocol_answers_datasets_from_the_project_cwd`).
 - A failing step is reported, not fatal: the reply carries `error` and the events hold the `Error` (`test_a_failing_step_is_reported_not_fatal`).
 - The bridge lives inside `decikit`, launched as `python -m decikit._tooling.bridge`, with no separate distribution (`tests/bridge/test_relocation.py`).

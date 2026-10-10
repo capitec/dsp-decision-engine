@@ -316,7 +316,7 @@ The application `{dti: 0.3, channel: "web", income: 7000, expenses: 4000}` walks
 4. Row 2: the postfix code computes `7000 - 4000 = 3000`, which is not `>= 5000`, so `pc = 0`, `code = 2`.
 5. Row 0 is a leaf: ordinal 0, path number 2.
 
-`pick` then reads `decision` at `ints[97 + 0] = 0`, the choice `'refer'`; `limit`'s validity at `ints[105 + 0] = 0`, so null; `leaf` at `ints[109 + 0] = 0`, `'refer'`; and `path` at `ints[113 + 2] = 2`, `'dti>channel>surplus>refer'`. `score()` on that record returns exactly that:
+`pick` then reads `decision` at `ints[97 + 0] = 0`, the choice `'refer'`; `limit`'s validity at `ints[105 + 0] = 0`, so null; `leaf` at `ints[109 + 0] = 0`, `'refer'`; and `path` at `ints[113 + 2] = 2`, `'dti>channel>surplus>refer'`. `run()` on that record returns exactly that:
 
 ```text
 {'dti': 0.3, 'channel': 'web', 'income': 7000.0, 'expenses': 4000.0, 'decision': 'refer', 'limit': None,
@@ -345,13 +345,13 @@ MissingInputError input 'score' of step 't' is required but column 'score' has 1
 
 A string match has its own per-condition `null_handling`: `no_match` (default, false), `match` (true) or `error`, which makes that string column a required input.
 
-How a null reaches the walker depends on the kind. A `float` feature is `missing_as(NaN)` and an `int` feature `missing_as(-2**63)` (the walker's `NULL_INT`), so a NaN in the data is also a null, and a computed feature over a null is NaN and therefore unknown too. A bool feature has no spare value and stays `bool | None`; a string is `bytes | None` and arrives as a span of length -1. The fills exist for speed: declaring the numeric features `T | None` cost one mask array per feature per kernel launch, and on the 18-feature benchmark tree `score()` p50 went from 63 to 102 µs. With fills it is back at 58 to 61 µs.
+How a null reaches the walker depends on the kind. A `float` feature is `missing_as(NaN)` and an `int` feature `missing_as(-2**63)` (the walker's `NULL_INT`), so a NaN in the data is also a null, and a computed feature over a null is NaN and therefore unknown too. A bool feature has no spare value and stays `bool | None`; a string is `bytes | None` and arrives as a span of length -1. The fills exist for speed: declaring the numeric features `T | None` cost one mask array per feature per kernel launch, and on the 18-feature benchmark tree `run(record)` p50 went from 63 to 102 µs. With fills it is back at 58 to 61 µs.
 
 ## Strings
 
 ### String features are byte spans
 
-A string feature is a `bytes | None` input. Compiled runners hand a string column to the kernel as `(address, byte length)` spans through the Arrow shim, length -1 for a null, and a `str` param of the node as a span of its UTF-8 bytes. The walker compares bytes against the pattern table; nothing is dictionary-encoded. For a single record (`score`) the runner encodes the record's own strings instead of building a frame. The [boundary page](../engine/boundary.md) describes the spans.
+A string feature is a `bytes | None` input. Compiled runners hand a string column to the kernel as `(address, byte length)` spans through the Arrow shim, length -1 for a null, and a `str` param of the node as a span of its UTF-8 bytes. The walker compares bytes against the pattern table; nothing is dictionary-encoded. For a single record (`run(record)`) the runner encodes the record's own strings instead of building a frame. The [boundary page](../engine/boundary.md) describes the spans.
 
 ### Regex, case folding and trimming run in Python
 
@@ -368,7 +368,7 @@ The answers are the same in every mode; only the speed differs. `Engine(strict_c
 
 A kernel cannot write strings. A tree's `String` output column is declared `Literal["refer", "approve", "decline", "manual"]` (its distinct values, in leaf order), the walker returns the index, `-1` for null, and the engine decodes the index after the kernel (`decikit/_engine/compile/outputs.py`). `path_output` and `trace_output` are `Literal` outputs too. A column that is null on every leaf still needs one choice, so it is declared `Literal[""]`.
 
-Decoding is per reader: `score()` indexes a cached object array (about 0.1 µs a row), and `run()` gathers from a cached polars `String` column. A tree with 8192 leaves, each with its own String value, in fused mode, saw `score` fall from 639 to 14 µs when the choices table stopped being rebuilt per call.
+Decoding is per reader: `run(record)` indexes a cached object array (about 0.1 µs a row), and `run(df)` gathers from a cached polars `String` column. A tree with 8192 leaves, each with its own String value, in fused mode, saw `run(record)` fall from 639 to 14 µs when the choices table stopped being rebuilt per call.
 
 List columns and struct outputs use the same mechanism through `lookup(values, dtype)`: the node returns an index into a table of values the engine holds. A struct column is flattened into one `column.field` column per field by `_output_types.resolve` before encoding; a list of struct records stays one list column.
 
@@ -378,7 +378,7 @@ List columns and struct outputs use the same mechanism through `lookup(values, d
 
 `trace_output` names a String column holding the ordered path, the ids of every node walked joined with `>`. A kernel cannot build a variable-length string, and once a node has two parents the leaf no longer names the path, so the encoder numbers paths Ball-Larus style. `_trace.counts` gives each node its number of paths to an end (a missing branch is one path, a leaf is one). In `_Encoder.weigh`, the jump into branch `i` gets a weight equal to the summed path counts of branches `0..i-1`, and the walker adds the weight of every jump it takes. The sum is the path's index among its root's paths. Two branches into one row share a weight, since they are the same node sequence. For the loan tree the six path numbers map to four distinct strings: `[0, 1, 2, 1, 2, 3]`.
 
-The cost is one add per row whether a tree is traced or not; it measured within noise (fused `score` p50 63.4 against 62.5 µs). A tree gets one string per distinct path, so a DAG whose shared nodes multiply paths past `MAX_PATHS` (100,000) is refused, and so is tracing a node that compiles to no rows, because its branches cannot be told apart.
+The cost is one add per row whether a tree is traced or not; it measured within noise (fused `run(record)` p50 63.4 against 62.5 µs). A tree gets one string per distinct path, so a DAG whose shared nodes multiply paths past `MAX_PATHS` (100,000) is refused, and so is tracing a node that compiles to no rows, because its branches cannot be told apart.
 
 ### `path_columns`
 
@@ -410,9 +410,9 @@ The interpreted runner passes its own `visit`, which records a `NodeVisited` eve
 
 ## Measured
 
-From `benchmarks/tree_walk.py` (a 127-node tree over 18 features with a String, a Float64 and an Int64 output; 1M rows through `run(df)`, 20k `score(dict)` calls; dev box under load average about 15):
+From `benchmarks/tree_walk.py` (a 127-node tree over 18 features with a String, a Float64 and an Int64 output; 1M rows through `run(df)`, 20k `run(dict)` calls; dev box under load average about 15):
 
-| Tree | Engine | ns/row | `score` p50 | `score` p99 |
+| Tree | Engine | ns/row | `run(record)` p50 | `run(record)` p99 |
 |---|---|---|---|---|
 | numeric | decider2 fused | 748 | 209 µs | 375 µs |
 | numeric | decikit fused | 592 | 58 µs | 78 µs |

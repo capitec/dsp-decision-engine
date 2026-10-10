@@ -36,7 +36,7 @@ def test_the_raw_sample_request_is_approved_with_its_dates_as_json_strings(handl
 
 def test_the_compiled_pipeline_agrees_with_the_interpreted_one_on_every_figure(handler, quote, params, sample):
     served = post(handler, (ROOT / "sample_request.json").read_bytes())
-    interpreted = quote.score(sample, params)
+    interpreted = quote.run(sample, params)
     for name in ("gross_monthly_income", "net_monthly_income", "existing_obligations", "max_affordable_instalment",
                  "score", "probability_of_default", "risk_grade", "nominal_annual_rate", "instalment",
                  "total_cost_of_credit", "outcome_code", "norm_table_version", "tax_table_cell_id"):

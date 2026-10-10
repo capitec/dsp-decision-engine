@@ -64,7 +64,7 @@ from decikit import flow
 from decikit._engine.compile import fingerprint
 
 exe = flow(steps.via_attr, name="p").compile("fused")
-print(json.dumps([fingerprint(steps.via_attr, strict=True), exe.score({"x": 1.0})["via_attr"], exe.fallbacks()]))
+print(json.dumps([fingerprint(steps.via_attr, strict=True), exe.run({"x": 1.0})["via_attr"], exe.fallbacks()]))
 """
 
 _STEPS = "import limits\n\n\ndef via_attr(x: float) -> float:\n    return x * limits.K + limits.PAIR[1]\n"

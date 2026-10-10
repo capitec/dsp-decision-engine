@@ -27,7 +27,7 @@ def entity(entity_id: int, role: int = 5, pct: float = 0.0, events=(), **fields)
 
 
 def parse_dates(record: dict) -> dict:
-    """A copy of a JSON request with its dates parsed, as `Executable.score` takes them (the handler does this when serving)."""
+    """A copy of a JSON request with its dates parsed, as `Executable.run` takes them (the handler does this when serving)."""
     record = copy.deepcopy(record)
     if isinstance(record.get("decision_date"), str):
         record["decision_date"] = date.fromisoformat(record["decision_date"])

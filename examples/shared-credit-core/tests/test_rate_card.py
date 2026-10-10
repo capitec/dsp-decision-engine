@@ -17,7 +17,7 @@ def price(doc):
     card = lookup(DecisionTableConfig.load(doc)).compile("interpreted")
 
     def run(amount, term, grade):
-        return card.score({"offered_amount": amount, "term_months": term, "risk_grade": grade})
+        return card.run({"offered_amount": amount, "term_months": term, "risk_grade": grade})
 
     return run
 

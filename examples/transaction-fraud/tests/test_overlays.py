@@ -11,7 +11,7 @@ def multiplier(documents):
     executable = Engine().bind(flow(documents["amount_overlays"], name="overlays"))
 
     def run(on, enabled=True):
-        out = executable.score({"decision_date": on, "adjustment_stack_enabled": enabled})
+        out = executable.run({"decision_date": on, "adjustment_stack_enabled": enabled})
         return (out["mule_scam_amount_multiplier"], out["mule_scam_amount_multiplier_unadjusted"],
                 out["adjustment_set_id"], out["applied_adjustment_ids"])
 

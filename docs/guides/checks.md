@@ -203,7 +203,7 @@ Codes are grouped by family in their third digit: `DCD0xx` determinism, `DCD1xx`
 | DCD203 | `shadowed_write` | warning | a value overwritten by a later step before anything reads it |
 | DCD204 | `unused_input` | info | a step argument the body never uses |
 | DCD205 | `unbounded_loop` | warning | a loop with a huge `max_iterations`, or a condition that reads none of the carried names |
-| DCD206 | `opaque_frame_step` | info | a frame step with unknown lineage; it blocks lineage checks and fusion, and `score()` cannot run it |
+| DCD206 | `opaque_frame_step` | info | a frame step with unknown lineage; it blocks lineage checks and fusion, and `run()` on a record cannot run it |
 | DCD207 | `table_overlap` | info | two decision-table rows that can both match one input (the earlier wins); reported by `unreachable_branch` |
 | DCD208 | `table_gap` | info | an input no decision-table row matches, so it takes `default`; reported by `unreachable_branch` |
 

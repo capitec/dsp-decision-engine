@@ -129,11 +129,11 @@ def test_bind_sets_a_params_default_without_touching_the_original():
 
 
 @pytest.mark.parametrize("mode", ("interpreted", "stepped", "fused"))
-def test_a_bound_value_changes_the_answer_of_run_and_score(mode):
+def test_a_bound_value_changes_the_answer_of_a_frame_and_a_record_run(mode):
     exe = engine.Engine().bind(flow(step(cap_by_income_band).bind(cap=12.0)), mode)
     frame = pl.DataFrame({"term_cap": [60.0, 60.0], "min_net_salary": [4000.0, 4000.0]})
     assert exe.run(frame)["cap_by_income_band"].to_list() == [12.0, 12.0]
-    assert exe.score({"term_cap": 60.0, "min_net_salary": 4000.0})["cap_by_income_band"] == 12.0
+    assert exe.run({"term_cap": 60.0, "min_net_salary": 4000.0})["cap_by_income_band"] == 12.0
 
 
 @pytest.mark.parametrize("mode", ("interpreted", "stepped", "fused"))

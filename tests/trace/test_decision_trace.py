@@ -141,10 +141,10 @@ def test_frame_steps_emit_a_frame_event_per_row():
     assert all(e.origin.path.endswith("join_bureau") for e in frames)
 
 
-def test_score_captures_one_records_evidence():
+def test_a_record_run_captures_one_records_evidence():
     exe = Engine().bind(AFFORDABILITY, mode="fused")
     sink = TraceSink()
-    exe.score({"net_income": 4100.0, "expenses": 3700.0, "instalment": 800.0}, trace=sink)
+    exe.run({"net_income": 4100.0, "expenses": 3700.0, "instalment": 800.0}, trace=sink)
     steps = [e for e in sink.events() if e.kind is Kind.STEP]
     assert [e.origin.path for e in steps] == [
         "affordability/disposable_income", "affordability/ratio", "affordability/affordable",

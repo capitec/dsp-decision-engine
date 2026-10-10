@@ -111,8 +111,8 @@ def test_suppressions_stay_out_of_compile_keys_and_never_recompile():
     row = {"x": 3.0}
     exe = Engine().bind(plain, "fused")
     exe.run(pl.DataFrame({"x": [1.0, 2.0]}))
-    exe.score(row)
+    exe.run(row)
     with no_recompile():
         other = Engine().bind(quiet, "fused")
         other.run(pl.DataFrame({"x": [1.0, 2.0]}))
-        assert other.score(row) == exe.score(row)
+        assert other.run(row) == exe.run(row)

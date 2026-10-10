@@ -167,8 +167,8 @@ eagerly for every node or lazily on first hit. [Params](engine/params.md) covers
 ```python
 exe = loan.compile("fused")
 record = {"net_income": 12000.0, "expenses": 4000.0, "instalment": 2500.0, "bureau_score": 700.0}
-print(exe.score(record))
-print(exe.score(record, params={"loan": {"base_limit": {"multiple": 1.5}}}))
+print(exe.run(record))
+print(exe.run(record, params={"loan": {"base_limit": {"multiple": 1.5}}}))
 print(loan.parameters().defaults())
 ```
 
@@ -183,7 +183,7 @@ print(loan.parameters().defaults())
 Kernels read typed numpy arrays. `decikit/_engine/boundary/` gets them out of a polars frame through one Arrow C stream
 export, read by a vendored nanoarrow shim compiled on first import, with a cast first for dtypes that need one. A
 required input that holds a null raises `MissingInputError` naming the input, the step path and the row count. The
-single-record path skips polars: `score()` writes the dict's values straight into one-row arrays. [The data
+single-record path skips polars: `run(record)` writes the dict's values straight into one-row arrays. [The data
 boundary](engine/boundary.md) covers both.
 
 ## How the packages stack
@@ -228,7 +228,7 @@ sequenceDiagram
     X->>X: NodeParams, caches
     X-->>U: exe
     Note over X,R: nothing compiled yet
-    U->>X: first run or score
+    U->>X: first run
     X->>R: iterate(plan, ...)
     R->>R: compile under a lock
     R-->>U: FallbackWarning(s)
@@ -282,7 +282,7 @@ sequenceDiagram
     participant X as Executable
     participant S as State
     participant R as runner
-    U->>X: score(record, params)
+    U->>X: run(record, params)
     alt plan has a frame step
         X->>X: one-row frame, run path
     else no frame step
@@ -295,9 +295,9 @@ sequenceDiagram
     end
 ```
 
-`score` takes a dict rather than keyword arguments. In decider2's measurements, binding 400 keyword arguments cost 1190 µs at p50 against 60 µs for a dict, about 6% of a 20 ms budget. Converted
+`run` takes a record as a dict rather than keyword arguments. In decider2's measurements, binding 400 keyword arguments cost 1190 µs at p50 against 60 µs for a dict, about 6% of a 20 ms budget. Converted
 params bundles are cached per document and node for the same reason: converting a validated model into a namedtuple
-costs more than validating it (170.6 µs against 78.3 µs at 50 modules). The flagship pipeline's `score()` is
+costs more than validating it (170.6 µs against 78.3 µs at 50 modules). The flagship pipeline's `run(record)` is
 27.7 µs p50 in fused mode.
 
 ## Design principles and the decisions behind them
@@ -373,9 +373,9 @@ flowchart LR
 | Describe | `decikit/lab/_describe.py` | `to_ir` for nodes and `resolve` for the data edges between them |
 | Checks | `decikit/lab/checks/` | `CheckContext` exposes the IR, the resolved plan, the `step_map` and, for runtime checks, an interpreted run |
 | Diff | `decikit/lab/diff/` | an IR content hash per node (the function's fingerprint, consts, inputs, outputs, params); trees and tables as z3 terms |
-| Testing | `decikit/lab/testing/` | `Engine.bind` in every mode, then `run`, `score` and a session must agree |
+| Testing | `decikit/lab/testing/` | `Engine.bind` in every mode, then `run` on the frame, `run` per record and a session must agree |
 | Experiments | `decikit/lab/experiments/` | an `Executable` in fused or stepped mode per scenario, fed in batches |
-| Serving | `decikit/serving/` | `Engine().bind(...)` per config version, `score(record, params)` per request |
+| Serving | `decikit/serving/` | `Engine().bind(...)` per config version, `run(record, params)` per request |
 | Editor bridge | `decikit/_tooling/bridge/` | `to_ir` and `step_map` for the flow panel, a `Session` for stepping, `session.replace` for hot edits |
 | MCP | `decikit/_tooling/mcp/` | `Engine().bind(step)` for runs, traces and sessions an agent asks for |
 
