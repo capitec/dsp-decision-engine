@@ -8,6 +8,7 @@ import {
 import type { ProjectDetailResponse } from '@/api/types.gen';
 import { ValidationResult } from '../validation/ValidationResultsDialog';
 import { extractFeatures, renameFeature } from './FeatureActions';
+import { detectSubtrees, generateDefaultNodeName } from './util';
 import { ParameterMap, TreeEdge, V2Subtree, PolarsSchema } from '@/types/tree-types';
 import { normalizeTreeOutput } from '@/utils/normalize-dtypes';
 import { ValidationError, parseValidationErrors, formatValidationErrors, getInvalidNodeIds, getSectionErrors } from '@/utils/validation-error-parser';
@@ -596,6 +597,17 @@ const editorStore = create<EditorStoreState>()(
     initializeFromProject: (response) => {
       const projectData = response.project_data as any; // Type as any since it's a union type
       const normalizedNodes = (projectData.nodes || []).map(normalizeNode);
+      const edges = (projectData.edges || []).map(normalizeEdge);
+      // A saved subtree is {id: its root node's id, name}, and decikit runs the first one listed, so the
+      // editor's subtrees start from them, in their order, rather than being rebuilt in node order.
+      const nodeById = new Map<string, Node>(normalizedNodes.map((n: Node) => [n.id, n]));
+      const savedSubtrees: Subtree[] = (projectData.subtrees || [])
+        .filter((st: any) => nodeById.has(st.rootNodeId ?? st.id))
+        .map((st: any, order: number) => {
+          const rootNodeId = st.rootNodeId ?? st.id;
+          return { ...st, id: st.id ?? rootNodeId, rootNodeId, order: st.order ?? order,
+                   name: st.name || generateDefaultNodeName(nodeById.get(rootNodeId)!) };
+        });
 
       // Get input_schema from project data
       let inputSchema: PolarsSchema = projectData.input_schema || [];
@@ -631,9 +643,9 @@ const editorStore = create<EditorStoreState>()(
         projectDescription: response.description,
         input_schema: inputSchema,
         nodes: normalizedNodes,
-        edges: (projectData.edges || []).map(normalizeEdge),
+        edges,
         ...((projectData.nodes || []).some((n: any) => !n.position) && { autoRearrange: true }),
-        subtrees: projectData.subtrees || [],
+        subtrees: detectSubtrees(normalizedNodes, edges, savedSubtrees),
 
         // v2 format - backend handles backward compatibility
         output: normalizedOutput,

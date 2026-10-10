@@ -230,7 +230,6 @@ def test_the_subtree_listed_first_is_the_tree_that_runs(signed_in: Page):
     assert run(export_document(signed_in, project), amount=[500.0, 2000.0]) == ["decline", "decline"]
 
 
-@pytest.mark.xfail(strict=True, reason="saved subtrees are rebuilt in node order on open, so the next save changes which subtree runs")
 def test_saving_after_an_unrelated_edit_keeps_the_subtree_that_runs(signed_in: Page):
     base = loan_document()
     doc = {**base, "nodes": [*base["nodes"], leaf("stray", -1, 900, 0)],
@@ -287,7 +286,6 @@ def test_add_subtree_button_adds_a_node(signed_in: Page):
     expect(signed_in.locator(NODES)).to_have_count(1)
 
 
-@pytest.mark.xfail(strict=True, reason="a renamed subtree is saved but comes back with its default name after a reload")
 def test_renamed_subtree_keeps_its_name_after_a_reload(signed_in: Page):
     open_tree(signed_in, loan_document())
     entry = signed_in.get_by_title("amount ≤ 1000")
