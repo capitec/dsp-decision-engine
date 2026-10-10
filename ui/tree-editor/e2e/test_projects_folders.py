@@ -288,7 +288,6 @@ def test_search_with_no_match_says_so(signed_in: Page):
     expect(signed_in.get_by_text("No projects match your search")).to_be_visible()
 
 
-@pytest.mark.xfail(strict=True, reason="an older list response that arrives last replaces the newer one: the search result is lost")
 def test_a_slow_older_list_response_does_not_replace_the_newer_search_result(signed_in: Page):
     seed_many(signed_in, 14)
     create_project(signed_in, "Needle", flat_document())
