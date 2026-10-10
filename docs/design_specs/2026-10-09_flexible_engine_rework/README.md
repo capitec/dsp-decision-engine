@@ -1,8 +1,10 @@
 # Flexible engine rework
 
-Status: being implemented on branch `engine/flexible-rework` (not merged), base commit `44232809`
-(`feature/python-api-redesign` after the decikit rename and the integration merge), started 2026-10-10. Read it
-before starting any of the work it describes, and update it as decisions change.
+Status: implemented on branch `engine/flexible-rework` (not merged) for P0 to P5; P6 dropped on P5's no-go; P7 not
+built. Base commit `44232809` (`feature/python-api-redesign` after the decikit rename and the integration merge),
+started 2026-10-10. The rationale now lives in `docs/design_decisions/decisions/engine.md` and `serving.md`, the
+measurements in `docs/design_decisions/experiments/polars-host-vs-native.md` and `flexible-engine-comparison.md`;
+this folder is history.
 
 ## What it proposes
 
@@ -39,6 +41,34 @@ collapses `score` into `run`, and leaves room for optional polars-native step bo
 | 2026-10-09 | `Step.session()` opens interpreted unless given an engine; it does not follow the default |
 | 2026-10-09 | `stepped` stays as an engine |
 | 2026-10-09 | Loudness is per engine: fused warns about every step that does not run compiled, kernels that split at first launch included (today nothing reports those); stepped and interpreted never warn; `strict_compile=True` still raises wherever it is set; `@allow_fallback` is discouraged in the guide |
+| 2026-10-10 | `Executable.run` checks `dict` first, then `LazyFrame`, `DataFrame`, `Mapping` (spec order cost 0.46-0.51 µs per record call against 0.06 µs) (manager, pending owner confirmation) |
+| 2026-10-10 | `RequestHandler.score` keeps its name; only `Executable.score` goes (manager, pending owner confirmation) |
+| 2026-10-10 | A scalar step writing a container, `bytes` or a time falls back at build, so its kernel splits around it; replaces the zero-row probe (manager, pending owner confirmation) |
+| 2026-10-10 | An all-null typed output takes its declared dtype on every numba engine (manager, pending owner confirmation) |
+| 2026-10-10 | `RequestHandler(engine=...)` also takes a tag; a strict refusal is `EngineError`; `stage()` builds kernels before warm-up (manager, pending owner confirmation) |
+| 2026-10-10 | `Step.run` caches no executable; the repeated small-frame cost is recorded (manager, pending owner confirmation) |
+| 2026-10-10 | The polars host refuses an output with no polars dtype crossing a segment or reaching the output (5 of 12 examples), rather than typing it from data (manager, pending owner confirmation) |
+| 2026-10-10 | Host segments emit only what later segments read, split at a read-then-rewrite, declare every pipeline name as input (manager, pending owner confirmation) |
+| 2026-10-10 | `PolarsEngine.params_validation` must equal its segments'; `run(DataFrame)` keeps plain `collect()`; a `PolarsEngine` default keeps its settings for `run(LazyFrame)` (manager, pending owner confirmation) |
+| 2026-10-10 | `assert_equivalent` compares each record with a one-row frame when the pipeline has a frame step (manager, pending owner confirmation) |
+| 2026-10-10 | P6 (polars bodies, native segments, `impl`) is not built: E2 no-go (manager, pending owner confirmation) |
+| 2026-10-10 | Unannotated/`Any` outputs and untyped container rendering left as they are and documented as known limitations (manager, pending owner confirmation) |
+
+## Deviations from the plan
+
+- P1: the `dict` check comes first (measured above); `RequestHandler.score` stays.
+- P2: no zero-row probe (built, verified, then replaced by the static build-time rule; 4 example steps that ran in
+  Python inside split kernels now run compiled); `NumbaEngine` has no `mode`, subclasses return `_runner()`;
+  `registered()` does not load entry points; `decikit serve` validates the engine document before starting workers.
+- P4: segment emission, splitting and declared inputs as in the table; fact 3 of 09 does not hold for untyped
+  Python-built outputs or an `each`'s gathered list, so those are refused; no exception unwrap is needed (open
+  question 2: polars passes the step's exception through, in memory, streaming and sinks); every `map_batches` node
+  turns pushdown off explicitly (older polars pushed filters below frame steps).
+- P5/P6: no-go; `impl`, native segments and E3 to E5 are dropped.
+- P7: not built; the entry-point engine test is the seam.
+- Pre-existing numba-engine divergences found on the way were fixed on the branch: struct values shared by kernels
+  and Python steps, all-null typed outputs, numpy-number outputs, temporal and `bytes` outputs, traces of split
+  kernels, interpreted `Columnar` outputs, `missing_as` struct fill.
 
 ## Files
 
