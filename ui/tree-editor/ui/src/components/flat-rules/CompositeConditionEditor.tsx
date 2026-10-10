@@ -62,10 +62,10 @@ export const CompositeConditionEditor: React.FC<CompositeConditionEditorProps> =
         const errorMessage = getErrorAtPath(conditionErrors, currentPath);
 
         return (
-        <div key={idx} className={`p-2 rounded ${bgColor} space-y-2 ${hasError ? 'ring-2 ring-red-500 bg-red-50' : ''}`}>
+        <div key={idx} data-testid="condition-row" className={`p-2 rounded ${bgColor} space-y-2 ${hasError ? 'ring-2 ring-red-500 bg-red-50' : ''}`}>
           {/* Error indicator */}
           {hasError && (
-            <div className="flex items-center gap-1.5 text-red-600 text-xs bg-red-100 px-2 py-1 rounded">
+            <div data-testid="condition-error" className="flex items-center gap-1.5 text-red-600 text-xs bg-red-100 px-2 py-1 rounded">
               <AlertCircle className="w-3 h-3" />
               <span>{errorMessage || 'Validation error'}</span>
             </div>
@@ -104,7 +104,7 @@ export const CompositeConditionEditor: React.FC<CompositeConditionEditorProps> =
                   onUpdate(newConditions);
                 }}
               >
-                <SelectTrigger className="w-32 h-6 text-xs">
+                <SelectTrigger className="w-32 h-6 text-xs" data-testid="condition-op">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -316,7 +316,7 @@ export const CompositeConditionEditor: React.FC<CompositeConditionEditorProps> =
                         onUpdate(newConditions);
                       }}
                     >
-                      <SelectTrigger className="w-32 h-8">
+                      <SelectTrigger className="w-32 h-8" data-testid="match-type">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>

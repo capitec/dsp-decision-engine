@@ -189,7 +189,7 @@ export const ParameterizedNumericInput: React.FC<ParameterizedNumericInputProps>
         </div>
       )}
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2" data-testid="numeric-input">
         {isParameter ? (
           // Parameter reference mode
           <>

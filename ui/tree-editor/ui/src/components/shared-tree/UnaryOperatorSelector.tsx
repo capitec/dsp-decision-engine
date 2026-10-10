@@ -18,7 +18,7 @@ export const UnaryOperatorSelector: React.FC<UnaryOperatorSelectorProps> = ({
 }) => {
   return (
     <Select value={value} onValueChange={onChange}>
-      <SelectTrigger className={className}>
+      <SelectTrigger className={className} data-testid="unary-op">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
