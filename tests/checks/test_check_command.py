@@ -1,13 +1,13 @@
-"""decider check: output formats, exit status, --select and --list."""
+"""decikit check: output formats, exit status, --select and --list."""
 import json
 
 import pytest
 from click.testing import CliRunner
 
-from decider._tooling.cli import cli
+from decikit._tooling.cli import cli
 
 PIPELINE = '''
-from decider import flow, step
+from decikit import flow, step
 
 
 @step(output="cents", id="0123abcdef45")
@@ -55,7 +55,7 @@ def test_json_and_sarif_formats(project):
     doc = json.loads(_check("shop.pipeline:build", "--format", "json").output)
     assert doc["flow"]["name"] == "term" and doc["findings"][0]["code"] == "DCD101"
     sarif = json.loads(_check("shop.pipeline:build", "--format", "sarif").output)
-    assert sarif["runs"][0]["results"][0]["partialFingerprints"]["decider/v1"] == "fedcba543210/0123abcdef45/DCD101"
+    assert sarif["runs"][0]["results"][0]["partialFingerprints"]["decikit/v1"] == "fedcba543210/0123abcdef45/DCD101"
 
 
 def test_select_keeps_findings_by_code_prefix(project):

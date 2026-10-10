@@ -2,9 +2,9 @@
 import polars as pl
 import pytest
 
-from decider import allow_fallback, flow
-from decider.exceptions import DeciderError, NotIntegralError
-from decider.steps.trees import TreeConfig
+from decikit import allow_fallback, flow
+from decikit.exceptions import DecikitError, NotIntegralError
+from decikit.steps.trees import TreeConfig
 
 NOT_WHOLE = [7.5, float("nan"), float("inf"), -float("inf")]
 HALVES_TO_A_FRACTION = [15.0, float("nan"), float("inf"), -float("inf")]
@@ -39,8 +39,8 @@ def declared_python(y: float) -> int:
     return y
 
 
-def test_a_not_integral_error_is_a_decider_value_error():
-    assert issubclass(NotIntegralError, (DeciderError, ValueError))
+def test_a_not_integral_error_is_a_decikit_value_error():
+    assert issubclass(NotIntegralError, (DecikitError, ValueError))
 
 
 @pytest.mark.parametrize("value", NOT_WHOLE)
@@ -91,7 +91,7 @@ def test_a_nan_from_a_float_step_into_an_int_output_is_refused_in_every_mode(bin
         exe.score({"y": float("nan")})
 
 
-@pytest.mark.filterwarnings("ignore::decider.exceptions.FallbackWarning")
+@pytest.mark.filterwarnings("ignore::decikit.exceptions.FallbackWarning")
 def test_a_python_run_step_returning_a_float_that_is_not_whole_for_an_int_output_is_refused(bind):
     exe = bind(flow(band_points, name="p"))
     assert exe.score({"band": "b"})["band_points"] == 2

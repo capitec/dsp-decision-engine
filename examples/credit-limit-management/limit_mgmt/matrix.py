@@ -6,7 +6,7 @@ without a deployment; `pipeline.build(matrix)` receives it loaded.
 """
 from __future__ import annotations
 
-from decider import DecisionTableConfig, allow_fallback, step
+from decikit import DecisionTableConfig, allow_fallback, step
 
 from credit_core.evidence import cell_id
 from limit_mgmt.vocab import PRODUCT_ACCESS_FACILITY, PRODUCT_EVERYDAY_CARD

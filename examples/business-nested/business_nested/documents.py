@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from decider import ConfigurableStep
+from decikit import ConfigurableStep
 
 CONFIGS = Path(__file__).resolve().parents[1] / "configs" / "0.2.0"
 

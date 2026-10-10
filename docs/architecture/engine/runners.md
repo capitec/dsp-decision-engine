@@ -6,7 +6,7 @@ runs (a numba kernel per call), and `FusedRunner` also replaces how a sequence, 
 for several calls). Every runner is a generator of checkpoints, so `run`, `score` and a debug session all go
 through the same code.
 
-The code lives in `decider/_engine/run/`:
+The code lives in `decikit/_engine/run/`:
 
 | File | Holds |
 |---|---|
@@ -349,7 +349,7 @@ How kernels are built and packed is on the [compile](compile.md) and [kernels](k
 
 ## Representations
 
-A string input reaches a step in one of three representations (`Representation` in `decider/_engine/types.py`):
+A string input reaches a step in one of three representations (`Representation` in `decikit/_engine/types.py`):
 
 | Annotation | Representation | What the step gets |
 |---|---|---|

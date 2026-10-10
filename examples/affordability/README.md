@@ -63,14 +63,14 @@ The arithmetic, in the order a regulator reads it:
 
 ## Features it shows
 
-| decider feature | Where |
+| Decider toolkit feature | Where |
 |---|---|
 | Reusing another project's steps on other columns: `.relabel` and `.named` run `credit_core`'s income and tax once per applicant | [household.py](assessment/household.py) |
 | Multi-output steps (`outputs=`) that fold several columns into household figures | [household.py](assessment/household.py), [debts.py](assessment/debts.py) |
 | `dag` of `dag`s with `.emit`: the same step objects wired as one pipeline and as two halves | [pipeline.py](assessment/pipeline.py) |
 | `flow` for a value written twice (reason codes fired, then ranked; the capacity rounded after the overlay) | [verdict.py](assessment/verdict.py), [capacity.py](assessment/capacity.py) |
 | `DecisionTableConfig` with `eq` keys (grade by product) and an open-ended band ladder (dependants) | [capacity.py](assessment/capacity.py) |
-| An `AdjustmentStack` and a `ReasonCodes` set from `credit_core`, loaded from config documents and compared by `decider.lab.diff`; the stack is tighten-only and switched off with a param through the same code | [capacity.py](assessment/capacity.py), [verdict.py](assessment/verdict.py), [tests/test_release_checks.py](tests/test_release_checks.py) |
+| An `AdjustmentStack` and a `ReasonCodes` set from `credit_core`, loaded from config documents and compared by `decikit.lab.diff`; the stack is tighten-only and switched off with a param through the same code | [capacity.py](assessment/capacity.py), [verdict.py](assessment/verdict.py), [tests/test_release_checks.py](tests/test_release_checks.py) |
 | `param` for policy (staleness windows, minimum tier per mode, marginal band), a generated params document | [modes.py](assessment/modes.py), [verdict.py](assessment/verdict.py), [`configs/0.1.0/params.json`](configs/0.1.0/params.json) |
 | `missing_as` for an absent second applicant, `NaN` for "not supplied" which is not a zero | [household.py](assessment/household.py), [verdict.py](assessment/verdict.py) |
 | `TypedDict` account lists: JSON date strings arrive as `date`s | [debts.py](assessment/debts.py) |
@@ -84,21 +84,21 @@ From the repository root, put every example on the path once (this one imports `
 ```bash
 export PYTHONPATH=$(printf '%s:' "$PWD"/examples/*/)
 cd examples/affordability
-export DECIDER_API__CODE_PATH="$PWD" DECIDER_API__PIPELINE="assessment.pipeline:build" DECIDER_CONFIG__BASEPATH="$PWD/configs"
+export DECIKIT_API__CODE_PATH="$PWD" DECIKIT_API__PIPELINE="assessment.pipeline:build" DECIKIT_CONFIG__BASEPATH="$PWD/configs"
 ```
 
 Build (validates `configs/0.1.0` and compiles and warms every kernel with `sample_request.json`; the first build
 in a fresh checkout takes a minute while numba compiles):
 
 ```bash
-uv run decider build
+uv run decikit build
 # built config version 0.1.0 (pipeline assessment.pipeline:build, mode fused)
 ```
 
 Serve, and assess the sample application. Its dates are plain JSON strings:
 
 ```bash
-uv run decider serve --workers 1 &
+uv run decikit serve --workers 1 &
 curl -s -d @sample_request.json -H 'content-type: application/json' localhost:8080/invocations |
   jq '{gross_monthly_income, net_monthly_income, living_expenses, existing_obligations, discretionary_income,
        max_affordable_instalment_unadjusted, max_affordable_instalment, adjustments_applied,
@@ -157,7 +157,7 @@ To regenerate `configs/0.1.0` (the capacity overlays, the reason codes and the p
 ## The documents
 
 `build(capacity_adjustments, reason_codes)` receives one document per argument, each a file in `configs/<version>/`. A change to either is a
-new config version, and `decider.lab.diff.structure` reports it: the overlays and the codes are fields of a step, not objects a step closes over.
+new config version, and `decikit.lab.diff.structure` reports it: the overlays and the codes are fields of a step, not objects a step closes over.
 Called without arguments (as the examples that embed the assessment do), `build()` loads the shipped documents through
 [documents.py](assessment/documents.py).
 

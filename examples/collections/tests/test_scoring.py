@@ -1,7 +1,7 @@
 import copy
 
 import pytest
-from decider import ConfigurableStep, DecisionTableConfig, Engine
+from decikit import ConfigurableStep, DecisionTableConfig, Engine
 
 from collections_treatment import scoring
 from collections_treatment.overlays import in_dag

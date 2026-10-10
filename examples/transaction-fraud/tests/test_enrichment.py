@@ -1,5 +1,5 @@
 import pytest
-from decider import Engine, flow
+from decikit import Engine, flow
 
 from fraud_interdiction import enrichment, vocab
 from fraud_interdiction.vocab import Mode, VelocityBand

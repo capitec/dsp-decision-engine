@@ -1,5 +1,5 @@
 """Credit card: revolving limit, rate by grade. Application scorecard: points per characteristic, summed into a score."""
-from decider import flow, param, step
+from decikit import flow, param, step
 
 
 def cc_pts_bureau_score(bureau_score: float, cut_1: float = param(0.13), cut_2: float = param(0.83), cut_3: float = param(0.95),

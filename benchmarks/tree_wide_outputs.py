@@ -8,8 +8,8 @@ import random
 import sys
 import time
 
-from decider import TreeConfig, flow
-from decider._engine import Engine
+from decikit import TreeConfig, flow
+from decikit._engine import Engine
 
 
 def tree(n: int, part_outputs: int | None = 64) -> TreeConfig:

@@ -2,11 +2,11 @@
 
 Checks read a pipeline and report what is risky about it before it ships: a division by an input that may be zero, a `round()` that gives different answers in Python and in a compiled kernel, a step that reads the clock, a param without bounds, a step without a durable id. Each finding has a stable code (`DCD104`), names the step it is about, points at the file and line where it can, and says in one line what to do instead.
 
-`decider` only reports. Whether a warning blocks a release is your policy, set in `checks.yaml` or on the command line, and enforced by the exit status of `decider check`.
+`decikit` only reports. Whether a warning blocks a release is your policy, set in `checks.yaml` or on the command line, and enforced by the exit status of `decikit check`.
 
 ```python
-from decider import flow, param
-from decider.lab import checks
+from decikit import flow, param
+from decikit.lab import checks
 
 def ratio(income: float, debt: float) -> float:
     return debt / income
@@ -18,7 +18,7 @@ report = checks.run(flow(ratio, approved, name="credit"))
 print(report.to_text())
 ```
 
-`checks.run(pipeline)` runs the standard set (every check that needs neither data nor execution) and returns a `Report`. The same report comes out of `decider check` on the command line, the MCP `check_report` tool and the VS Code extension.
+`checks.run(pipeline)` runs the standard set (every check that needs neither data nor execution) and returns a `Report`. The same report comes out of `decikit check` on the command line, the MCP `check_report` tool and the VS Code extension.
 
 ```mermaid
 flowchart TD
@@ -51,8 +51,8 @@ The loan pipeline below has the problems checks are built to find. `fee` rounds 
 
 ```python
 # loanchk/pipeline.py
-from decider import flow, param, step
-from decider.ops.decimal import Currency
+from decikit import flow, param, step
+from decikit.ops.decimal import Currency
 
 
 def ratio(income: float, debt: float) -> float:
@@ -73,7 +73,7 @@ def build():
 ```
 
 ```python
-from decider.lab import checks
+from decikit.lab import checks
 from loanchk.pipeline import build
 
 report = checks.run(build())
@@ -85,7 +85,7 @@ print(report.ok, report.counts)
 loanchk/pipeline.py:17: warning DCD102 float_money: loan/fee: returns float round(amount * rate, 2) into a Decimal output
     fix: return a Decimal: multiply a Decimal by the float, or build one with Currency(major, minor)
 loanchk/pipeline.py:17: error DCD103 bare_round: loan/fee: round(amount * rate, 2) rounds differently in Python and compiled modes on .xx5
-    fix: use decider.ops.decimal.round(x, n, Rounding.HALF_UP)
+    fix: use decikit.ops.decimal.round(x, n, Rounding.HALF_UP)
 loanchk/pipeline.py:8: warning DCD104 division_by_variable: loan/ratio: debt / income divides by income, which may be zero
     fix: guard it (`if b != 0`), use max(b, eps), or bound the param with gt=0
 loanchk/pipeline.py:12: info DCD108 nan_propagation: loan/approved: ratio is compared without a NaN guard; a NaN takes the false side silently
@@ -95,25 +95,25 @@ info DCD301 param_unconstrained: param 'limit' of loan/approved has no bounds
 info DCD301 param_unconstrained: param 'rate' of loan/fee has no bounds
     fix: add `ge=`/`le=` so a bad params document is refused
 warning DCD401 durable_ids: flow 'loan' has no committed durable id
-    fix: run `decider ids`
+    fix: run `decikit ids`
 warning DCD401 durable_ids: loan/ratio has no committed durable id
-    fix: run `decider ids`
+    fix: run `decikit ids`
 warning DCD401 durable_ids: loan/approved has no committed durable id
-    fix: run `decider ids`
+    fix: run `decikit ids`
 warning DCD401 durable_ids: loan/fee has no committed durable id
-    fix: run `decider ids`
+    fix: run `decikit ids`
 loan: 3 info, 6 warning, 1 error
 False {<Severity.INFO: 'info'>: 3, <Severity.WARNING: 'warning'>: 6, <Severity.ERROR: 'error'>: 1}
 ```
 
 File paths in the report are absolute; they are shortened here. `bare_round` is a warning on a float output and an error on a `Decimal` one, which is why it is the one error above.
 
-The fixed version guards the division, bounds both params and rounds with `decider.ops.decimal.round`:
+The fixed version guards the division, bounds both params and rounds with `decikit.ops.decimal.round`:
 
 ```python
-from decider import flow, param, step
-from decider.ops import decimal
-from decider.ops.decimal import Currency, Rounding
+from decikit import flow, param, step
+from decikit.ops import decimal
+from decikit.ops.decimal import Currency, Rounding
 
 
 def ratio(income: float, debt: float) -> float:
@@ -169,7 +169,7 @@ A `Finding` carries:
 
 Codes are grouped by family in their third digit: `DCD0xx` determinism, `DCD1xx` numeric, `DCD2xx` structure, `DCD3xx` params, `DCD4xx` ids, `DCD5xx` runtime. `checks.standard` is every check in the first five families except `table_overlap` and `table_gap`, which `unreachable_branch` reports itself. The runtime family is opt-in: name its checks in a list or in `checks.yaml`.
 
-`decider check --list` prints the catalogue, and `checks.catalogue()` returns it as dicts with each check's config schema.
+`decikit check --list` prints the catalogue, and `checks.catalogue()` returns it as dicts with each check's config schema.
 
 ### Determinism
 
@@ -207,7 +207,7 @@ Codes are grouped by family in their third digit: `DCD0xx` determinism, `DCD1xx`
 | DCD207 | `table_overlap` | info | two decision-table rows that can both match one input (the earlier wins); reported by `unreachable_branch` |
 | DCD208 | `table_gap` | info | an input no decision-table row matches, so it takes `default`; reported by `unreachable_branch` |
 
-`unreachable_branch` solves trees and decision tables with z3 (`pip install 'decider[prove]'`). Without z3 that part of the check is listed in `report.skipped` and the rest still runs.
+`unreachable_branch` solves trees and decision tables with z3 (`pip install 'decikit[prove]'`). Without z3 that part of the check is listed in `report.skipped` and the rest still runs.
 
 ### Params
 
@@ -241,8 +241,8 @@ A few more examples, from a deliberately careless offer flow:
 
 ```python
 from datetime import date
-from decider import flow, loop, param, step
-from decider.lab import checks
+from decikit import flow, loop, param, step
+from decikit.lab import checks
 
 def decided_on(score: float) -> float:
     return float(date.today().toordinal())
@@ -300,7 +300,7 @@ A check with `needs_data` runs only when `data=` is given; otherwise it is liste
 
 ```python
 import polars as pl
-from decider.lab import checks
+from decikit.lab import checks
 from loanchk.pipeline import build
 
 frame = pl.DataFrame({"income": [1000.0, None], "amount": [5000.0, 200.0]})
@@ -333,12 +333,12 @@ error DCD304 invalid_params_doc: loan/fee: param 'rate': Input should be less th
 
 ### Checks that execute the flow
 
-`crash_probe` and `mode_divergence` build their own inputs with `decider.lab.testing.corpus` and run the flow, in every mode for `mode_divergence`, so they compile kernels and take seconds rather than milliseconds. `nan_output` and `constant_output` run it once, interpreted, over your data.
+`crash_probe` and `mode_divergence` build their own inputs with `decikit.lab.testing.corpus` and run the flow, in every mode for `mode_divergence`, so they compile kernels and take seconds rather than milliseconds. `nan_output` and `constant_output` run it once, interpreted, over your data.
 
 ```python
 import polars as pl
-from decider import flow, param
-from decider.lab import checks
+from decikit import flow, param
+from decikit.lab import checks
 
 def ratio(income: float, debt: float) -> float:
     return debt / income
@@ -374,9 +374,9 @@ credit: 0 info, 1 warning, 0 error
 A finding you have looked at and accepted is suppressed where it occurs. `suppress_checks` takes aliases or codes, on `@step` and on every composite (`flow`, `dag`, `branch`, `loop`, `each`, `optimise`), as `suppress_checks:` in a [flow file](flow-files.md), and as a field on any `ConfigurableStep` document. A suppression on a composite covers every step inside it.
 
 ```python
-from decider import flow, step
-from decider.lab import checks
-from decider.ops.decimal import Currency
+from decikit import flow, step
+from decikit.lab import checks
+from decikit.ops.decimal import Currency
 
 @step(output="cents")
 def cents(units: int) -> int:
@@ -428,7 +428,7 @@ To turn a check off for the whole project, use `disable` in `checks.yaml` instea
 
 ## The project policy: `checks.yaml`
 
-`checks.yaml` (or `checks.json`, or `checks.yml`) beside `configs/` is the project's check policy. `checks.run(pipeline)` with no list and `decider check` both read it.
+`checks.yaml` (or `checks.json`, or `checks.yml`) beside `configs/` is the project's check policy. `checks.run(pipeline)` with no list and `decikit check` both read it.
 
 ```yaml
 extends: standard
@@ -444,9 +444,9 @@ fail_on: error
 | `extends` | `standard` | start from `checks.standard`; set `null` to start from nothing |
 | `checks` | `[]` | entries to add; an entry of a type already in `standard` replaces it, so `{type: durable_ids, severity: error}` promotes that check |
 | `disable` | `[]` | aliases or codes to drop, from the list and from the findings |
-| `fail_on` | `error` | the default gate for `report.fail_on()` and the exit status of `decider check` |
+| `fail_on` | `error` | the default gate for `report.fail_on()` and the exit status of `decikit check` |
 
-Entries name a check by alias, or by `"module:Class"` for a check that is not registered under an alias. Two entries of one type with different options both run. The file is validated strictly: an unknown key or a bad severity is a `DeciderError` that names the file.
+Entries name a check by alias, or by `"module:Class"` for a check that is not registered under an alias. Two entries of one type with different options both run. The file is validated strictly: an unknown key or a bad severity is a `DecikitError` that names the file.
 
 With that file in place, the fixed loan pipeline reports only the promoted id findings and the suppressed `float_money`:
 
@@ -454,13 +454,13 @@ With that file in place, the fixed loan pipeline reports only the promoted id fi
 loanchk/pipeline.py:16: warning DCD102 float_money: loan/fee: returns float decimal.round(amount * rate, 2, mode=Rounding.HALF_UP) into a Decimal output (suppressed by float_money on loan/fee)
     fix: return a Decimal: multiply a Decimal by the float, or build one with Currency(major, minor)
 error DCD401 durable_ids: flow 'loan' has no committed durable id
-    fix: run `decider ids`
+    fix: run `decikit ids`
 error DCD401 durable_ids: loan/ratio has no committed durable id
-    fix: run `decider ids`
+    fix: run `decikit ids`
 error DCD401 durable_ids: loan/approved has no committed durable id
-    fix: run `decider ids`
+    fix: run `decikit ids`
 error DCD401 durable_ids: loan/fee has no committed durable id
-    fix: run `decider ids`
+    fix: run `decikit ids`
 loan: 0 info, 0 warning, 4 error, 1 suppressed
 ```
 
@@ -470,14 +470,14 @@ How the file and an explicit list combine:
 - `checks.run(pipeline, [...])`: your list decides what runs; the file's `disable` and `fail_on` still apply, its `checks` entries and severities do not.
 - `checks.run(pipeline, config="ci/checks.yaml")`: another file in place of the project's.
 
-The file is found through the `checks_path` setting, `${PROJECT_ROOT}/checks.yaml` by default, where the project root is the nearest ancestor of the working directory holding `configs/`. `DECIDER_CHECKS_PATH` points elsewhere.
+The file is found through the `checks_path` setting, `${PROJECT_ROOT}/checks.yaml` by default, where the project root is the nearest ancestor of the working directory holding `configs/`. `DECIKIT_CHECKS_PATH` points elsewhere.
 
-`durable_ids` tells you to run [`decider ids`](cli-and-mcp.md), which writes ids into `@step(...)` decorators, `step(...)` calls and named composites. A plain undecorated function and a `ConfigurableStep` document get no id from it: decorate the function with `@step`, and add an `"id"` key to the document by hand, or the finding stays.
+`durable_ids` tells you to run [`decikit ids`](cli-and-mcp.md), which writes ids into `@step(...)` decorators, `step(...)` calls and named composites. A plain undecorated function and a `ConfigurableStep` document get no id from it: decorate the function with `@step`, and add an `"id"` key to the document by hand, or the finding stays.
 
-## `decider check`
+## `decikit check`
 
 ```bash
-decider check loanchk.pipeline:build
+decikit check loanchk.pipeline:build
 ```
 
 `ENTRY` is `module:attribute`, a pipeline or a zero-argument function that builds one, importable from the working directory. The command prints the report and exits 1 when the gate fails, 0 otherwise.
@@ -494,7 +494,7 @@ decider check loanchk.pipeline:build
 `--select` filters before the gate, so `--select DCD1 --fail-on warning` exits 0 when the only numeric finding is suppressed even though there are id errors:
 
 ```text
-$ decider check loanchk.pipeline:build --select DCD1 --fail-on warning
+$ decikit check loanchk.pipeline:build --select DCD1 --fail-on warning
 loanchk/pipeline.py:16: warning DCD102 float_money: loan/fee: returns float decimal.round(amount * rate, 2, mode=Rounding.HALF_UP) into a Decimal output (suppressed by float_money on loan/fee)
     fix: return a Decimal: multiply a Decimal by the float, or build one with Currency(major, minor)
 loan: 0 info, 0 warning, 0 error, 1 suppressed
@@ -502,14 +502,14 @@ loan: 0 info, 0 warning, 0 error, 1 suppressed
 
 ### SARIF for code scanning
 
-`--format sarif` writes SARIF 2.1.0. Each finding becomes a result with its code as `ruleId`, its severity as the level (`info` is `note`), its file and line as the location, and a `partialFingerprints["decider/v1"]` of `flow_id/step_id/code` (path and name when there are no ids). Suppressed findings carry an `inSource` suppression.
+`--format sarif` writes SARIF 2.1.0. Each finding becomes a result with its code as `ruleId`, its severity as the level (`info` is `note`), its file and line as the location, and a `partialFingerprints["decikit/v1"]` of `flow_id/step_id/code` (path and name when there are no ids). Suppressed findings carry an `inSource` suppression.
 
 ```json
 {
   "ruleId": "DCD102",
   "level": "warning",
   "message": {"text": "loan/fee: returns float decimal.round(amount * rate, 2, mode=Rounding.HALF_UP) into a Decimal output"},
-  "partialFingerprints": {"decider/v1": "loan/loan/fee/DCD102"},
+  "partialFingerprints": {"decikit/v1": "loan/loan/fee/DCD102"},
   "locations": [{"physicalLocation": {"artifactLocation": {"uri": ".../loanchk/pipeline.py"}, "region": {"startLine": 16}}}],
   "suppressions": [{"kind": "inSource", "justification": "float_money on loan/fee"}]
 }
@@ -518,7 +518,7 @@ loan: 0 info, 0 warning, 0 error, 1 suppressed
 A CI job that uploads it to GitHub:
 
 ```yaml
-- run: decider check credit.pipeline:build --format sarif > checks.sarif
+- run: decikit check credit.pipeline:build --format sarif > checks.sarif
 - uses: github/codeql-action/upload-sarif@v3
   if: always()
   with:
@@ -543,8 +543,8 @@ A check is a `Check` subclass with a `type` alias, a `code` and a `run(ctx)` gen
 # acme_checks.py
 import typing as t
 
-from decider.lab import checks
-from decider.lab.checks import Check
+from decikit.lab import checks
+from decikit.lab.checks import Check
 
 
 class NoFloatMoney(Check):
@@ -570,8 +570,8 @@ def single_step(ctx):
 ```
 
 ```python
-from decider import flow, param
-from decider.lab import checks
+from decikit import flow, param
+from decikit.lab import checks
 from acme_checks import NoFloatMoney, single_step
 
 def admin_fee(amount: float, rate: float = param(0.01, ge=0, le=1)) -> float:
@@ -600,13 +600,13 @@ The `CheckContext` a check receives:
 | `ctx.plan` | the resolved wiring plan |
 | `ctx.description` | `describe(pipeline)` |
 | `ctx.steps` | the step object behind each path |
-| `ctx.calls()` | call nodes of your own code (decider's generated kernels are skipped) |
+| `ctx.calls()` | call nodes of your own code (the decider toolkit's generated kernels are skipped) |
 | `ctx.source(node)` | the parsed source of a call's function, or `None` |
 | `ctx.frame`, `ctx.params` | what was passed as `data=` and `params=` |
 | `ctx.outputs` | the output frame of running the flow over `data`, and the node producing each column; `None` if it crashed |
 | `ctx.finding(node, message, fix=None, *, line=None, code=None, check=None, severity=None, **detail)` | a `Finding` with step, file and suppression filled in |
 
-For a check to load from `checks.yaml` by alias without an import path, ship it in a package under the `decider.checks` entry-point group. [Extending decider](extending.md) covers registries and entry points.
+For a check to load from `checks.yaml` by alias without an import path, ship it in a package under the `decikit.checks` entry-point group. [Extending the decider toolkit](extending.md) covers registries and entry points.
 
 ### Checks on a step's own document
 

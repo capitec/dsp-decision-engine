@@ -5,14 +5,14 @@ import gc
 import polars as pl
 import pytest
 
-from decider import branch, dag, flow, loop, param, step
-from decider import _engine as engine
-from decider._engine.ir.context import _BUILT, IRContext
-from decider._engine.ir.decls import Input, Output, ParamDecl
-from decider._engine.ir.nodes import CallNode, SequenceNode, iter_nodes
-from decider._serde import FrameDoc
-from decider.steps import ConfigurableStep, ParamRef, Step, Value
-from decider.steps._values import TableRef, TableValue
+from decikit import branch, dag, flow, loop, param, step
+from decikit import _engine as engine
+from decikit._engine.ir.context import _BUILT, IRContext
+from decikit._engine.ir.decls import Input, Output, ParamDecl
+from decikit._engine.ir.nodes import CallNode, SequenceNode, iter_nodes
+from decikit._serde import FrameDoc
+from decikit.steps import ConfigurableStep, ParamRef, Step, Value
+from decikit.steps._values import TableRef, TableValue
 
 
 def ratio(disposable_income: float, instalment: float) -> float:

@@ -4,7 +4,7 @@ The cycle lists are ragged (a young account has fewer than six) and newest first
 """
 from __future__ import annotations
 
-from decider import allow_fallback, flow, missing_as
+from decikit import allow_fallback, flow, missing_as
 
 
 @allow_fallback

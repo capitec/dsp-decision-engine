@@ -3,7 +3,7 @@ import copy
 from dataclasses import asdict
 
 import pytest
-from decider import Engine, flow
+from decikit import Engine, flow
 
 from loan_granting.offers import BEST_EXPECTED_VALUE, LARGEST_AMOUNT, LOWEST_TOTAL_COST, build_offer_set, expected_value, steps
 from loan_granting.pricing import PricingResult

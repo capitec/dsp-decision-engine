@@ -2,12 +2,12 @@
 import polars as pl
 import pytest
 
-from decider import branch, flow, param, step
-from decider._engine import Engine
-from decider._engine.debug import (NodeFinished, NodeVisited, Overridden, ParamsValidated, Paused, RunFinished,
+from decikit import branch, flow, param, step
+from decikit._engine import Engine
+from decikit._engine.debug import (NodeFinished, NodeVisited, Overridden, ParamsValidated, Paused, RunFinished,
                                   SetValue)
-from decider._engine.run.runners import InterpretedRunner
-from decider.steps.trees import TreeConfig
+from decikit._engine.run.runners import InterpretedRunner
+from decikit.steps.trees import TreeConfig
 
 
 def disposable_income(net_income: float, expenses: float) -> float:

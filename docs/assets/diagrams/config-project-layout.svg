@@ -39,9 +39,9 @@
     <text x="420" y="364" fill="#14532d">named datasets for the debugger and experiments (not versioned)</text>
     <text x="420" y="418" fill="#7c2d00">structure: steps, wiring, def build(band)</text>
     <text x="420" y="446" fill="#7c2d00">structure as YAML, still code: reviewed and deployed with it</text>
-    <text x="420" y="474" fill="#7c2d00">one request; decider build warms the kernels with it</text>
+    <text x="420" y="474" fill="#7c2d00">one request; decikit build warms the kernels with it</text>
     <text x="420" y="502" fill="#7c2d00">score requests through the handler</text>
     <text x="420" y="550" fill="#4c1d95">Handler(RequestHandler): request hooks</text>
-    <text x="420" y="576" fill="#4c1d95">DECIDER_API__PIPELINE, DECIDER_CONFIG__BASEPATH, ...</text>
+    <text x="420" y="576" fill="#4c1d95">DECIKIT_API__PIPELINE, DECIKIT_CONFIG__BASEPATH, ...</text>
   </g>
 </svg>

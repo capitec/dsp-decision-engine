@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from decider import DecisionTableConfig
+from decikit import DecisionTableConfig
 
 from credit_core.dates import EffectiveVersions, Version
 from credit_core.evidence import cell_id

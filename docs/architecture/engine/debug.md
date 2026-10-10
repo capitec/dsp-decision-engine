@@ -8,14 +8,14 @@ The user side (opening a session from a notebook, what to type at each pause) is
 
 | File | What it holds |
 |---|---|
-| `decider/_engine/debug/session.py` | `Session`: breakpoints, stepping, `set`, `rewind`, `value`, `structure`, `output`, the event log |
-| `decider/_engine/debug/edit.py` | `Edits`, the half of `Session` that changes the pipeline mid-run: `replace`, `delete`, `reload`, `watch`; plus `swap` |
-| `decider/_engine/debug/hot.py` | `keys` (the content of every checkpoint, for reload), `same`, `ModuleWatcher` |
-| `decider/_engine/debug/commands.py` | one frozen dataclass per command (`BreakAt`, `StepOver`, `SetValue`, ...) and the `Command` union |
-| `decider/_engine/debug/events.py` | one frozen dataclass per event (`Paused`, `NodeFinished`, ...), `RunSummary`, `summarize` |
-| `decider/_engine/debug/wire.py` | the pydantic `TypeAdapter`s `COMMAND`, `EVENT`, `EVENT_LOG` |
-| `decider/debug.py` | the public facade: `Session` and the event classes |
-| `decider/_tooling/bridge/controls.py` | `Controls`: forced arms, forced loop counts, value and iteration breakpoints, built on top of a session |
+| `decikit/_engine/debug/session.py` | `Session`: breakpoints, stepping, `set`, `rewind`, `value`, `structure`, `output`, the event log |
+| `decikit/_engine/debug/edit.py` | `Edits`, the half of `Session` that changes the pipeline mid-run: `replace`, `delete`, `reload`, `watch`; plus `swap` |
+| `decikit/_engine/debug/hot.py` | `keys` (the content of every checkpoint, for reload), `same`, `ModuleWatcher` |
+| `decikit/_engine/debug/commands.py` | one frozen dataclass per command (`BreakAt`, `StepOver`, `SetValue`, ...) and the `Command` union |
+| `decikit/_engine/debug/events.py` | one frozen dataclass per event (`Paused`, `NodeFinished`, ...), `RunSummary`, `summarize` |
+| `decikit/_engine/debug/wire.py` | the pydantic `TypeAdapter`s `COMMAND`, `EVENT`, `EVENT_LOG` |
+| `decikit/debug.py` | the public facade: `Session` and the event classes |
+| `decikit/_tooling/bridge/controls.py` | `Controls`: forced arms, forced loop counts, value and iteration breakpoints, built on top of a session |
 
 A session is opened with `Step.session(df, params, mode=...)` or `Executable.session(df, params)`. Both end in `Session(executable, frame, params)`.
 
@@ -27,7 +27,7 @@ A session is opened with `Step.session(df, params, mode=...)` or `Executable.ses
 
 ## A runner is a generator
 
-Every runner implements one method, `iterate(plan, state, params, trace=None, table=None)`, and it returns a generator of `Checkpoint`s (`decider/_engine/run/runners/base.py`). `Executable.run` drains it without looking. A session calls `next()` on it one checkpoint at a time, and the generator frame holds everything in between: the current scope, the rows of the arm being run, the loop's active rows. Nothing about pausing is written into the runners, so the [runners](runners.md) page describes the only control flow there is.
+Every runner implements one method, `iterate(plan, state, params, trace=None, table=None)`, and it returns a generator of `Checkpoint`s (`decikit/_engine/run/runners/base.py`). `Executable.run` drains it without looking. A session calls `next()` on it one checkpoint at a time, and the generator frame holds everything in between: the current scope, the rows of the arm being run, the loop's active rows. Nothing about pausing is written into the runners, so the [runners](runners.md) page describes the only control flow there is.
 
 A `Checkpoint` has four fields a session uses:
 
@@ -91,7 +91,7 @@ The pipeline below has a scalar sequence, a branch and a loop: a three-row loan 
 ```python
 import polars as pl
 
-from decider import branch, flow, loop, param, step
+from decikit import branch, flow, loop, param, step
 
 
 @step(output="disposable_income")
@@ -205,10 +205,10 @@ The override changed row 0 from 3100 to 5200 and row 1 from 500 to 900. Row 1's 
 Breakpoint paths are full paths from the root. A breakpoint on `"ratio"` here matches nothing: it is registered, never fires, and the run goes to the end. `structure()` lists every path with its kind and source, and is the way to find them (here with the pipeline saved as `loan.py`):
 
 ```text
-{'path': 'loan', 'kind': 'sequence', 'source': 'decider.steps:SequentialStep'}
+{'path': 'loan', 'kind': 'sequence', 'source': 'decikit.steps:SequentialStep'}
 {'path': 'loan/disposable_income', 'kind': 'scalar', 'source': 'loan:disposable_income'}
 {'path': 'loan/ratio', 'kind': 'scalar', 'source': 'loan:ratio'}
-{'path': 'loan/by_affordability', 'kind': 'branch', 'source': 'decider.steps:BranchStep'}
+{'path': 'loan/by_affordability', 'kind': 'branch', 'source': 'decikit.steps:BranchStep'}
 {'path': 'loan/by_affordability/affordable', 'kind': 'scalar', 'source': 'loan:affordable'}
 ...
 ```
@@ -229,9 +229,9 @@ Locator breakpoints exist because a row node (a tree, a table) is one call: the 
 
 ```python
 import polars as pl
-from decider import flow
-from decider._engine.debug import NodeVisited
-from decider.steps.trees import TreeConfig
+from decikit import flow
+from decikit._engine.debug import NodeVisited
+from decikit.steps.trees import TreeConfig
 
 tree = TreeConfig(name="risk_tree", trace_output="risk_path", tree={
     "nodes": [{"id": "n0", "data": {"type": "unary", "condition":
@@ -253,8 +253,8 @@ for e in s.events:
 
 ```text
 after pricing/risk_tree
-NodeVisited(origin=Origin(path='pricing/risk_tree', source='decider.steps.trees:TreeConfig', locator='n0', id=None, suppress_checks=()), rows=3, kind='node_visited')
-NodeVisited(origin=Origin(path='pricing/risk_tree', source='decider.steps.trees:TreeConfig', locator='n1', id=None, suppress_checks=()), rows=2, kind='node_visited')
+NodeVisited(origin=Origin(path='pricing/risk_tree', source='decikit.steps.trees:TreeConfig', locator='n0', id=None, suppress_checks=()), rows=3, kind='node_visited')
+NodeVisited(origin=Origin(path='pricing/risk_tree', source='decikit.steps.trees:TreeConfig', locator='n1', id=None, suppress_checks=()), rows=2, kind='node_visited')
 ```
 
 Trees report node ids and decision tables report the index of each row tried. Scorecards have no Python reference walker and report nothing. Stepped and fused modes run row nodes compiled, so they never call `visit`: the same session in stepped mode collected no `NodeVisited` events at all.
@@ -331,7 +331,7 @@ before loan/broken_ratio rewind
 
 ## Forcing a branch arm or a loop count
 
-Forced arms, forced loop counts, value breakpoints and iteration breakpoints live outside the engine. `Controls` in `decider/_tooling/bridge/controls.py` builds them out of `set` and a predicate breakpoint:
+Forced arms, forced loop counts, value breakpoints and iteration breakpoints live outside the engine. `Controls` in `decikit/_tooling/bridge/controls.py` builds them out of `set` and a predicate breakpoint:
 
 - A force is an override of the condition's output. At the `after` checkpoint of a branch's condition step, `Controls` calls `session.set` on the condition's output: `True`/`False` for a bool condition (arm 0 is `True`), the int k otherwise. A loop forced to n iterations gets `True` before iterations 1 to n and `False` after. The runner reads the condition only after that checkpoint, so it routes as told, and the override shows in lineage like any other.
 - `Controls.check` is registered as the first breakpoint. It applies forces and returns false unless a watch fires. Being first matters because `_go` stops at the first breakpoint that answers true.
@@ -341,9 +341,9 @@ Forced arms, forced loop counts, value breakpoints and iteration breakpoints liv
 Run on the loan pipeline with arm 0 forced on `loan/by_affordability`, `loan/repay` forced to one iteration and a watch on `balance < 1000`. `Controls` takes the described IR the bridge builds:
 
 ```python
-from decider.ir import to_ir, step_map
-from decider._tooling.bridge.describing import node_json
-from decider._tooling.bridge.controls import Controls
+from decikit.ir import to_ir, step_map
+from decikit._tooling.bridge.describing import node_json
+from decikit._tooling.bridge.controls import Controls
 
 ir = node_json(to_ir(pipeline), step_map(pipeline), {})
 s = pipeline.session(df)
@@ -400,7 +400,7 @@ Everything is built on copies first, so a failure (a `WiringError`, a missing pa
 
 ## Hot reload
 
-`reload(pipeline)` takes an edited copy of the whole pipeline and re-runs from the first checkpoint whose content changed. `keys(plan, steps)` in `decider/_engine/debug/hot.py` lists every checkpoint as `(when, path, content)`, in `_order`'s order:
+`reload(pipeline)` takes an edited copy of the whole pipeline and re-runs from the first checkpoint whose content changed. `keys(plan, steps)` in `decikit/_engine/debug/hot.py` lists every checkpoint as `(when, path, content)`, in `_order`'s order:
 
 - A function call's content is the fingerprint of its function (and of its `reference`), its inputs, outputs, params with their defaults, consts, `nogil` and the `(name, producer)` pairs it reads. Defaults are listed separately because `ParamDecl` equality leaves `default` out.
 - A configurable step (a tree, a table, a scorecard) is keyed by its class name, `model_dump_json()`, its reads and writes, and the fingerprints of its class's methods. Its IR would not do: a tree's IR holds array addresses that change on every load.
@@ -450,7 +450,7 @@ The keys are snapshotted when the session opens and after every edit. In a noteb
 Two ways feed `reload`:
 
 - `watch(source)` registers an IPython `post_run_cell` hook. With a callable (`lambda: flow(income, ratio)`), the lambda looks the names up again after every cell, so a cell that only redefines `ratio` is picked up. A failed reload emits `ReloadFailed(error)`, re-raises, and keeps the pipeline the session had.
-- `ModuleWatcher("pkg.pipeline:pipeline")` watches the files of every imported module under the target's directory (outside `site-packages` and `decider`). On a change it drops all of them from `sys.modules` and imports the target afresh, so `from features import ratio` in another module never keeps the old function. It deletes their `.pyc` files first because a `.pyc` stamps whole seconds, and a same-size edit inside one second would load stale code. A failed import puts the old modules back.
+- `ModuleWatcher("pkg.pipeline:pipeline")` watches the files of every imported module under the target's directory (outside `site-packages` and `decikit`). On a change it drops all of them from `sys.modules` and imports the target afresh, so `from features import ratio` in another module never keeps the old function. It deletes their `.pyc` files first because a `.pyc` stamps whole seconds, and a same-size edit inside one second would load stale code. A failed import puts the old modules back.
 
 Re-resolving functions by `__qualname__` in `__main__` was considered and rejected: `ratio_v1 = ratio` followed by a new `def ratio` would swap the step the user kept on purpose, lambdas and closures have no global to find, and patching `__code__` in place mutates objects the IR cache assumes never change.
 
@@ -468,7 +468,7 @@ Serving never hot reloads. A code change is a new deploy, because the decision a
 
 ## Events
 
-Events are frozen, slotted dataclasses in `decider/_engine/debug/events.py`. Each has a `kind` literal, which is also its JSON tag.
+Events are frozen, slotted dataclasses in `decikit/_engine/debug/events.py`. Each has a `kind` literal, which is also its JSON tag.
 
 | Event | `kind` | Emitted when |
 |---|---|---|
@@ -491,7 +491,7 @@ The log only grows. Clients read the tail since their last read; the editor brid
 
 ## The wire format
 
-JSON exists only at the edge. `decider/_engine/debug/wire.py` holds three pydantic `TypeAdapter`s over discriminated unions: `COMMAND` for one command, `EVENT` for one event and `EVENT_LOG` for a list. A command's `kind` is the name of the `Session` method it calls, so `Session.apply` dispatches with `getattr(self, command.kind)` and passes the remaining fields positionally.
+JSON exists only at the edge. `decikit/_engine/debug/wire.py` holds three pydantic `TypeAdapter`s over discriminated unions: `COMMAND` for one command, `EVENT` for one event and `EVENT_LOG` for a list. A command's `kind` is the name of the `Session` method it calls, so `Session.apply` dispatches with `getattr(self, command.kind)` and passes the remaining fields positionally.
 
 | Command | `kind` | Fields |
 |---|---|---|
@@ -528,7 +528,7 @@ sequenceDiagram
 Driving a session entirely from JSON:
 
 ```python
-from decider._engine.debug import COMMAND, EVENT, EVENT_LOG
+from decikit._engine.debug import COMMAND, EVENT, EVENT_LOG
 
 s = pipeline.session(df)
 for line in ['{"kind": "break_at", "target": "loan/by_affordability"}',
@@ -542,11 +542,11 @@ assert EVENT_LOG.validate_json(EVENT_LOG.dump_json(s.events)) == s.events
 ```
 
 ```text
-{"origin":{"path":"loan/by_affordability","source":"decider.steps:BranchStep","locator":null,"id":null,"suppress_checks":[]},"when":"after","reason":"step","kernel":[],"arm":null,"iteration":null,"kind":"paused"}
+{"origin":{"path":"loan/by_affordability","source":"decikit.steps:BranchStep","locator":null,"id":null,"suppress_checks":[]},"when":"after","reason":"step","kernel":[],"arm":null,"iteration":null,"kind":"paused"}
 {"name":"ratio","producer":"override@loan/by_affordability","value":{"dtype":"Float64","rows":3,"nulls":0,"preview":[1.0,2.0,0.5]},"previous":{"dtype":"Float64","rows":3,"nulls":0,"preview":[2.066666666666667,0.5555555555555556,2.2]},"kind":"overridden"}
 ```
 
-The editor bridge (`decider/_tooling/bridge/bridge.py`) does not use `COMMAND`. It speaks its own JSON-lines protocol over stdio, calls `Session` methods directly, and serialises the new events with `EVENT.dump_python(e, mode="json")` into each reply. A reader thread handles `pause` at once, even while the main thread is inside `resume`; every other request is queued and run in order, so the session's state is never read while it is being written. See [Editor bridge](../editor-bridge.md).
+The editor bridge (`decikit/_tooling/bridge/bridge.py`) does not use `COMMAND`. It speaks its own JSON-lines protocol over stdio, calls `Session` methods directly, and serialises the new events with `EVENT.dump_python(e, mode="json")` into each reply. A reader thread handles `pause` at once, even while the main thread is inside `resume`; every other request is queued and run in order, so the session's state is never read while it is being written. See [Editor bridge](../editor-bridge.md).
 
 ## Thread safety
 
@@ -564,6 +564,6 @@ The tests are in `tests/debug/`: `test_session.py` (interpreted stepping, breakp
 
 ## Why it is shaped this way
 
-- The VS Code extension debugs step code with an ordinary debugpy session and has no decider debug adapter. An earlier prototype drove a decider DAP adapter and needed a second debugpy attach to get into a step's Python, so there were two debuggers with two breakpoint models, and users reached for the Python one. Per-node stepping, rewind, value breakpoints and edits stay in `Session` for notebooks and the bridge.
+- The VS Code extension debugs step code with an ordinary debugpy session and has no decider toolkit debug adapter. An earlier prototype drove a decider toolkit DAP adapter and needed a second debugpy attach to get into a step's Python, so there were two debuggers with two breakpoint models, and users reached for the Python one. Per-node stepping, rewind, value breakpoints and edits stay in `Session` for notebooks and the bridge.
 - Edits rebuild and replay instead of patching a running plan. Version ids are positional, so a patched plan would have to renumber everything after the edit; a fresh resolve plus a carry-over by `(name, producer)` reuses the code paths a normal run takes.
 - One rebuild handles every kind of change. Per-path edits cannot insert a step or replace an anonymous root flow, and N changed paths would cost N re-resolves and N replays. The first-difference rebuild restarts at the same point a sequence of per-path edits would.

@@ -28,10 +28,10 @@
     <text x="260" y="76" text-anchor="middle" fill="#4c1d95">RequestHandler, HTTP apps</text>
     <rect x="370" y="24" width="200" height="76" rx="9" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="5 3"/>
     <text x="470" y="54" text-anchor="middle" font-weight="700" fill="#4c1d95">_tooling/cli</text>
-    <text x="470" y="76" text-anchor="middle" fill="#4c1d95">the decider command</text>
+    <text x="470" y="76" text-anchor="middle" fill="#4c1d95">the decikit command</text>
     <rect x="580" y="24" width="200" height="76" rx="9" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="5 3"/>
     <text x="680" y="54" text-anchor="middle" font-weight="700" fill="#4c1d95">_tooling/mcp</text>
-    <text x="680" y="76" text-anchor="middle" fill="#4c1d95">decider mcp server</text>
+    <text x="680" y="76" text-anchor="middle" fill="#4c1d95">decikit mcp server</text>
     <rect x="790" y="24" width="190" height="76" rx="9" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="5 3"/>
     <text x="885" y="54" text-anchor="middle" font-weight="700" fill="#4c1d95">_tooling/bridge</text>
     <text x="885" y="76" text-anchor="middle" fill="#4c1d95">editor debug bridge</text>
@@ -63,7 +63,7 @@
   <!-- L1 core -->
   <g font-size="14" text-anchor="middle">
     <rect x="160" y="370" width="156" height="90" rx="9" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
-    <text x="238" y="400" font-weight="700" fill="#7c2d00">decider</text>
+    <text x="238" y="400" font-weight="700" fill="#7c2d00">decikit</text>
     <text x="238" y="421" fill="#7c2d00">__init__.py</text>
     <text x="238" y="442" fill="#7c2d00">authoring names</text>
     <rect x="326" y="370" width="156" height="90" rx="9" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
@@ -87,7 +87,7 @@
   <!-- L0 foundation -->
   <g font-size="14" text-anchor="middle" fill="#1f2937">
     <rect x="160" y="500" width="126" height="76" rx="9" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
-    <text x="223" y="530" font-weight="700">exceptions</text><text x="223" y="552">DeciderError</text>
+    <text x="223" y="530" font-weight="700">exceptions</text><text x="223" y="552">DecikitError</text>
     <rect x="298" y="500" width="126" height="76" rx="9" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
     <text x="361" y="530" font-weight="700">ops</text><text x="361" y="552">Text, Currency</text>
     <rect x="436" y="500" width="126" height="76" rx="9" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="5 3"/>

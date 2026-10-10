@@ -15,7 +15,7 @@ import math
 from dataclasses import dataclass
 from typing import Callable
 
-from decider import ParamTable, allow_fallback, missing_as, param, param_table, step
+from decikit import ParamTable, allow_fallback, missing_as, param, param_table, step
 
 from credit_core.rate_card import FLEX_LOAN_MAX_AMOUNT, FLEX_LOAN_MAX_TERM
 

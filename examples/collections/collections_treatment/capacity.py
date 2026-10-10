@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import polars as pl
 
-from decider import DecisionTableConfig, allow_fallback, frame_step, missing_as, param
+from decikit import DecisionTableConfig, allow_fallback, frame_step, missing_as, param
 
 from collections_treatment import vocab as v
 

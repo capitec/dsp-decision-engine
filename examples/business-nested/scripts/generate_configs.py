@@ -9,7 +9,7 @@ from pathlib import Path
 from credit_core.adverse_events import JUDGMENT
 from credit_core.vocab import PRODUCT_BUSINESS_TERM_FACILITY, SEGMENT_SME_PEOPLE
 
-from decider import ConfigurableStep
+from decikit import ConfigurableStep
 
 from business_nested import outcome
 from business_nested.pipeline import build

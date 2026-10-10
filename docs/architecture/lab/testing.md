@@ -1,18 +1,18 @@
 # Testing helpers
 
-`decider.lab.testing` is three helpers for a project's own test suite. `assert_equivalent` proves that the three
+`decikit.lab.testing` is three helpers for a project's own test suite. `assert_equivalent` proves that the three
 execution modes, single-record scoring and the debugger all give the same answer. `corpus` builds the boundary
 inputs worth proving it on. `no_recompile` proves that a block of code compiled nothing. The runtime checks
 `crash_probe` and `mode_divergence` are built from the first two (see [Checks](checks.md)).
 
 | File | What it holds |
 |---|---|
-| `decider/lab/testing/__init__.py` | `MODES`, `assert_equivalent`, `corpus`, `no_recompile` |
-| `decider/lab/testing/_equivalence.py` | `MODES = ("interpreted", "stepped", "fused")` and `assert_equivalent` |
-| `decider/lab/testing/_corpus.py` | `corpus` and its value tables (`TIES`, `LARGE_RAW`, `INT_NEAR_2_53`) |
-| `decider/lab/testing/_recompile.py` | `no_recompile`, a context manager over numba's compile events |
+| `decikit/lab/testing/__init__.py` | `MODES`, `assert_equivalent`, `corpus`, `no_recompile` |
+| `decikit/lab/testing/_equivalence.py` | `MODES = ("interpreted", "stepped", "fused")` and `assert_equivalent` |
+| `decikit/lab/testing/_corpus.py` | `corpus` and its value tables (`TIES`, `LARGE_RAW`, `INT_NEAR_2_53`) |
+| `decikit/lab/testing/_recompile.py` | `no_recompile`, a context manager over numba's compile events |
 
-The package imports nothing else from the lab. It needs the engine (`Engine`), the debugger (`decider.debug.Session`),
+The package imports nothing else from the lab. It needs the engine (`Engine`), the debugger (`decikit.debug.Session`),
 the wiring `resolve`, and numba's event API. The user-level walkthrough is in the
 [debugging and testing guide](../../guides/debugging-and-testing.md) and the
 [diff and equivalence guide](../../guides/diff-and-equivalence.md).
@@ -108,8 +108,8 @@ To show a failure, this test overloads a helper so compiled code computes `x + 2
 ```python
 import polars as pl
 from numba.extending import overload
-from decider import flow
-from decider.lab.testing import assert_equivalent
+from decikit import flow
+from decikit.lab.testing import assert_equivalent
 
 def bump(x):
     return x + 1.0
@@ -229,7 +229,7 @@ A step with no inputs gets a one-row `boundary` that holds only `case`.
 For the loan flow (`income` and `debt`, both required floats):
 
 ```python
-from decider.lab.testing import corpus
+from decikit.lab.testing import corpus
 
 frames = corpus(pipeline)
 for name, f in frames.items():

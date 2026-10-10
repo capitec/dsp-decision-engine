@@ -1,7 +1,7 @@
 """Risk grade 1 (best) to 12 (worst) from the probability of default, per product and segment."""
 from __future__ import annotations
 
-from decider import DecisionTableConfig
+from decikit import DecisionTableConfig
 
 from credit_core.evidence import cell_id
 

@@ -12,7 +12,7 @@ from typing import Any, Literal, Mapping
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from decider import ConfigurableStep, ParamRef, Value, allow_fallback
+from decikit import ConfigurableStep, ParamRef, Value, allow_fallback
 
 Op = Literal["add", "multiply", "set"]
 

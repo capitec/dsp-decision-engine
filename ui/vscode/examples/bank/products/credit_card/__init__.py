@@ -1,5 +1,5 @@
 """Credit card: revolving limit, rate by grade."""
-from decider import flow
+from decikit import flow
 
 from bank.products.credit_card.affordability import cc_affordability
 from bank.products.credit_card.limits import cc_limits

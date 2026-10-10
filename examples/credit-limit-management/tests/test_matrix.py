@@ -3,8 +3,8 @@ from datetime import date
 
 import polars as pl
 import pytest
-from decider import ConfigurableStep
-from decider.lab import diff
+from decikit import ConfigurableStep
+from decikit.lab import diff
 
 from limit_mgmt import overlays
 from limit_mgmt.documents import shipped

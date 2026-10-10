@@ -1,11 +1,11 @@
 """EP-1, a new-to-bank business application: the nested-entity assessment, then what a facility adds to it.
 
-`decider build` and `decider serve` use `build`. The assessment is `business_nested`'s, embedded whole; this module adds
+`decikit build` and `decikit serve` use `build`. The assessment is `business_nested`'s, embedded whole; this module adds
 the instalment the covenant is tested against, the master scale the grade is on, and the DSCR covenant bound at approval.
 """
 from __future__ import annotations
 
-from decider import allow_fallback, flow, param
+from decikit import allow_fallback, flow, param
 
 from business_nested.pipeline import DECISION_OUTPUTS, build as build_assessment
 

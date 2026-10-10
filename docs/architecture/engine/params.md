@@ -11,14 +11,14 @@ The code is split between two packages:
 
 | File | Holds |
 |---|---|
-| `decider/_engine/params/declare.py` | `param()`, `missing_as()`, the `ParamSpec` and `MissingAs` markers |
-| `decider/_engine/params/harvest.py` | `harvest(fn)`: a signature into `Input`s, `ParamDecl`s and `Output`s; `call_with_defaults` |
-| `decider/_engine/params/tables.py` | `param_table()`, `table_type(schema)` |
-| `decider/_engine/params/models.py` | `NodeParams`: one node's pydantic model, bundle class and defaults; `record_shared_type` |
-| `decider/_engine/params/bundles.py` | `bundle_class(fields)`: one namedtuple class per field tuple, picklable by reference |
-| `decider/_engine/params/validate.py` | `validate_node`, `Validation`, `Status`, `ParamsCache`, `document_key`, `check_namespaces`, `merge` |
-| `decider/_engine/params/schema.py` | `parameters(ir)` and `ParamsSchema`: what `Step.parameters()` returns |
-| `decider/_engine/run/params.py` | `RunParams` (one run's view of a document) and `RunReport` |
+| `decikit/_engine/params/declare.py` | `param()`, `missing_as()`, the `ParamSpec` and `MissingAs` markers |
+| `decikit/_engine/params/harvest.py` | `harvest(fn)`: a signature into `Input`s, `ParamDecl`s and `Output`s; `call_with_defaults` |
+| `decikit/_engine/params/tables.py` | `param_table()`, `table_type(schema)` |
+| `decikit/_engine/params/models.py` | `NodeParams`: one node's pydantic model, bundle class and defaults; `record_shared_type` |
+| `decikit/_engine/params/bundles.py` | `bundle_class(fields)`: one namedtuple class per field tuple, picklable by reference |
+| `decikit/_engine/params/validate.py` | `validate_node`, `Validation`, `Status`, `ParamsCache`, `document_key`, `check_namespaces`, `merge` |
+| `decikit/_engine/params/schema.py` | `parameters(ir)` and `ParamsSchema`: what `Step.parameters()` returns |
+| `decikit/_engine/run/params.py` | `RunParams` (one run's view of a document) and `RunReport` |
 
 ## From declaration to bundle
 
@@ -151,7 +151,7 @@ call 4  credit/affordable
 
 Both limit nodes share one bundle class: `bundle_class` returns the same object for the same tuple of field names.
 The class's qualified name encodes the fields (`Bundle_8_multiple` is one field, eight characters, `multiple`), and
-it is registered on the `decider._engine.params.bundles` module under that name. A module `__getattr__` decodes any
+it is registered on the `decikit._engine.params.bundles` module under that name. A module `__getattr__` decodes any
 such name and rebuilds the class on demand. This exists for numba's disk cache, which pickles the argument types
 of each compiled specialisation. It fixes this failure: a namedtuple made inside a function
 pickles by value, comes back as a different class in the next process, and every cache lookup missed; for a

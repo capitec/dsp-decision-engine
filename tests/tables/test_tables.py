@@ -2,11 +2,11 @@
 import polars as pl
 import pytest
 
-from decider import flow
-from decider._engine import Engine
-from decider.steps.tables import DecisionTableConfig
-from decider.steps.tables.schema import BoundMode
-from decider.steps.trees.schema import RangeEndLogic
+from decikit import flow
+from decikit._engine import Engine
+from decikit.steps.tables import DecisionTableConfig
+from decikit.steps.tables.schema import BoundMode
+from decikit.steps.trees.schema import RangeEndLogic
 
 BANDS = [{"lo": None, "hi": 30.0, "pts": 1}, {"lo": 30.0, "hi": 70.0, "pts": 2}, {"lo": 70.0, "hi": None, "pts": 3}]
 
@@ -259,7 +259,7 @@ def test_a_gap_or_open_edge_inside_one_group_is_rejected(rows, message):
 
 
 def test_packing_string_outputs_does_not_compare_every_choice_per_row():
-    from decider.steps.tables._encode import Shape, dtypes, pack
+    from decikit.steps.tables._encode import Shape, dtypes, pack
 
     comparisons = 0
 

@@ -4,7 +4,7 @@ Whether an increase is actually funded is decided later, over the whole book, in
 """
 from __future__ import annotations
 
-from decider import allow_fallback, flow, step
+from decikit import allow_fallback, flow, step
 
 from limit_mgmt import reasons
 from limit_mgmt.vocab import ChangeType, IncreasePath, NoticeClass

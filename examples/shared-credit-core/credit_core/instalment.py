@@ -1,7 +1,7 @@
 """Level-payment amortisation and its inverse: the same formula run in both directions."""
 from __future__ import annotations
 
-from decider import missing_as, step
+from decikit import missing_as, step
 
 
 def instalment_before_fees(offered_amount: float, term_months: float, nominal_annual_rate: float) -> float:

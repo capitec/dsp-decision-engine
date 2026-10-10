@@ -4,7 +4,7 @@ from datetime import date
 from pathlib import Path
 
 import pytest
-from decider import ConfigurableStep, DecisionTableConfig, TreeConfig
+from decikit import ConfigurableStep, DecisionTableConfig, TreeConfig
 
 from campaign_trees.pipeline import build
 

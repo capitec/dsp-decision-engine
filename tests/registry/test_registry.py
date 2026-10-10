@@ -8,8 +8,8 @@ from abc import ABC, abstractmethod
 import pytest
 from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
 
-from decider.steps import ConfigurableStep
-from decider._registry import BaseRegistryModule, import_path, ref
+from decikit.steps import ConfigurableStep
+from decikit._registry import BaseRegistryModule, import_path, ref
 
 
 class Step(ABC):
@@ -76,7 +76,7 @@ def test_alias_loads_by_either_spelling_and_dumps_as_alias():
 
 def test_import_path_imports_the_module(tmp_path, monkeypatch):
     (tmp_path / "registry_plugin_mod.py").write_text(
-        "from decider.steps import ConfigurableStep\n"
+        "from decikit.steps import ConfigurableStep\n"
         "class Plugin(ConfigurableStep):\n"
         "    x: int = 1\n"
         "    def to_ir(self, ctx): ...\n"
@@ -257,8 +257,8 @@ def test_root_composes_with_a_slotted_abc():
 
 
 def test_built_in_tags_resolve_before_their_modules_are_imported():
-    code = ("import sys; from decider import ConfigurableStep; "
-            "assert 'decider.steps.tables' not in sys.modules and 'decider.steps.trees' not in sys.modules; "
+    code = ("import sys; from decikit import ConfigurableStep; "
+            "assert 'decikit.steps.tables' not in sys.modules and 'decikit.steps.trees' not in sys.modules; "
             "print(*(ConfigurableStep.resolve(t).__name__ for t in ('tree', 'decision_table', 'scorecard')))")
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True).stdout
     assert out.split() == ["TreeConfig", "DecisionTableConfig", "ScorecardConfig"]
@@ -274,7 +274,7 @@ def _install_plugin(tmp_path, monkeypatch, group, tag, target, source):
     dist = tmp_path / "ep_plugin-1.0.dist-info"
     dist.mkdir()
     (dist / "METADATA").write_text("Metadata-Version: 2.1\nName: ep-plugin\nVersion: 1.0\n")
-    (dist / "entry_points.txt").write_text(f"[decider.{group}]\n{tag} = {target}\n")
+    (dist / "entry_points.txt").write_text(f"[decikit.{group}]\n{tag} = {target}\n")
     monkeypatch.syspath_prepend(str(tmp_path))
     monkeypatch.delitem(sys.modules, "ep_plugin", raising=False)
 
@@ -282,7 +282,7 @@ def _install_plugin(tmp_path, monkeypatch, group, tag, target, source):
 def test_a_step_type_loads_from_an_entry_point_without_importing_it(tmp_path, monkeypatch):
     _install_plugin(tmp_path, monkeypatch, "steps", "ep_scaled", "ep_plugin:EpScaled", '''
 from typing import Literal
-from decider import ConfigurableStep
+from decikit import ConfigurableStep
 
 class EpScaled(ConfigurableStep):
     type: Literal["ep_scaled"] = "ep_scaled"
@@ -297,11 +297,11 @@ class EpScaled(ConfigurableStep):
 
 
 def test_a_metric_type_loads_from_an_entry_point(tmp_path, monkeypatch):
-    from decider.lab.experiments.metrics import Metric
+    from decikit.lab.experiments.metrics import Metric
 
     _install_plugin(tmp_path, monkeypatch, "metrics", "ep_metric", "ep_plugin", '''
 from typing import Literal
-from decider.lab.experiments.metrics import Metric
+from decikit.lab.experiments.metrics import Metric
 
 class EpMetric(Metric):
     type: Literal["ep_metric"] = "ep_metric"
@@ -316,7 +316,7 @@ def test_an_entry_point_naming_an_unregistered_class_is_rejected(tmp_path, monke
 
 
 def test_an_unknown_tag_still_raises_registry_error():
-    from decider.exceptions import RegistryError
+    from decikit.exceptions import RegistryError
 
     with pytest.raises(RegistryError, match="not a registered ConfigurableStep type"):
         ConfigurableStep.resolve("no_such_type")

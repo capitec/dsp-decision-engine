@@ -17,7 +17,7 @@ Stories run the real editor (headless, `--ozone-platform=headless`) and caption 
 - Judges differ by about 0.3 to 0.4 on the same screenshots, so a score that crosses a threshold needs a second judge.
 - Fixes it drove: a find box and fold-by-default for 1,000 steps; formula trees filled with the record's values; "go back" and "will re-run" history; money and percent formatting everywhere; branch controls shown only on the condition step. Layout bugs found only in images: flex children that would not shrink, data edges that made the layout sprawl.
 - Bugs found by the large flow: stale bytecode after a same-second, same-size edit (now a fresh `sys.pycache_prefix` per load) and a custom DAP request with undefined `args`.
-- Launch traps: use the Electron binary, not the `codium` wrapper; on macOS not the `code` CLI, with a short absolute `--user-data-dir`; point `decider.python` at the worktree (`["uv", "run", "python"]`); webview content is two iframes deep; a copied, not symlinked, `ms-python.debugpy`.
+- Launch traps: use the Electron binary, not the `codium` wrapper; on macOS not the `code` CLI, with a short absolute `--user-data-dir`; point `decikit.python` at the worktree (`["uv", "run", "python"]`); webview content is two iframes deep; a copied, not symlinked, `ms-python.debugpy`.
 
 ## Decision
 Keep stories that read as a person would, judged by a fresh agent per round, stopping after three rounds without a new best, and confirm a high score with a second judge. Only the unit and in-editor smoke tests remain in the repo. See [debugger and editors](../decisions/debugger-and-editors.md).

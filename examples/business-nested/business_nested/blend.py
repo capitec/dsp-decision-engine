@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import math
 
-from decider import allow_fallback, flow, param, step
+from decikit import allow_fallback, flow, param, step
 
 from credit_core.vocab import SEGMENT_SME_PEOPLE
 

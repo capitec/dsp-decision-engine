@@ -16,14 +16,14 @@ import polars as pl
 import pytest
 from numba.core.errors import NumbaError
 
-from decider import ConfigurableStep, Engine, branch, each, flow, missing_as, param, step
-from decider.ops import Text
-from decider.config import JsonFileStore
-from decider._engine.compile.njit import jit
-from decider._engine.compile.rows import rows_class
-from decider._engine.params import ParamsCache
-from decider._engine.trace import TraceSink
-from decider.serving._handler import Live, RequestHandler
+from decikit import ConfigurableStep, Engine, branch, each, flow, missing_as, param, step
+from decikit.ops import Text
+from decikit.config import JsonFileStore
+from decikit._engine.compile.njit import jit
+from decikit._engine.compile.rows import rows_class
+from decikit._engine.params import ParamsCache
+from decikit._engine.trace import TraceSink
+from decikit.serving._handler import Live, RequestHandler
 
 MODES = ("interpreted", "stepped", "fused")
 THREADS = 16
@@ -449,7 +449,7 @@ def test_concurrent_first_validations_of_one_document_share_one_result():
 
 def test_registry_resolves_a_lazy_module_and_lists_while_classes_register(tmp_path, monkeypatch):
     (tmp_path / "conc_root.py").write_text(
-        "from decider._registry import BaseRegistryModule\n\n"
+        "from decikit._registry import BaseRegistryModule\n\n"
         "class Root(BaseRegistryModule, root=True):\n    pass\n")
     (tmp_path / "conc_leaf.py").write_text(
         "import typing as t\nfrom conc_root import Root\n\n"

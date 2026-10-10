@@ -1,7 +1,7 @@
 """Behaviour on the bureau: arrears, enquiries, judgements."""
 import math  # noqa: F401
 
-from decider import dag, param, step  # noqa: F401
+from decikit import dag, param, step  # noqa: F401
 
 
 def bureau_score_band(bureau_score: float, low: float = param(27.0), mid: float = param(67.0), high: float = param(75.0)) -> float:

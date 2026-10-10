@@ -7,16 +7,16 @@ import numpy as np
 import polars as pl
 import pytest
 
-pytest.importorskip("decider._engine.boundary._arrow._shim", exc_type=ImportError, reason="the Arrow shim can't be built here")
+pytest.importorskip("decikit._engine.boundary._arrow._shim", exc_type=ImportError, reason="the Arrow shim can't be built here")
 
-from decider._engine.boundary._arrow.plan import ArrowKindError  # noqa: E402
-from decider._engine.boundary.dtypes import NeedsKernelSplit  # noqa: E402
-from decider._engine.boundary.extract import _schema_plan, extract_frame  # noqa: E402
-from decider._engine.concurrency import _local  # noqa: E402
-from decider._engine.boundary.nulls import MissingInputError  # noqa: E402
-from decider._engine.ir.decls import Input, NullPolicy  # noqa: E402
-from decider.ops.decimal import Currency  # noqa: E402
-from decider.ops.decimal import Decimal as Dec  # noqa: E402
+from decikit._engine.boundary._arrow.plan import ArrowKindError  # noqa: E402
+from decikit._engine.boundary.dtypes import NeedsKernelSplit  # noqa: E402
+from decikit._engine.boundary.extract import _schema_plan, extract_frame  # noqa: E402
+from decikit._engine.concurrency import _local  # noqa: E402
+from decikit._engine.boundary.nulls import MissingInputError  # noqa: E402
+from decikit._engine.ir.decls import Input, NullPolicy  # noqa: E402
+from decikit.ops.decimal import Currency  # noqa: E402
+from decikit.ops.decimal import Decimal as Dec  # noqa: E402
 
 
 def _spans(values: np.ndarray) -> list:

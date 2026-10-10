@@ -1,10 +1,10 @@
 # The spec's worked example pipeline, run end to end in every mode.
 import polars as pl
 
-from decider import branch, dag, flow, frame_step, missing_as, param, step
-from decider._engine import Engine
-from decider.steps.trees import TreeConfig
-from decider.lab.testing import assert_equivalent
+from decikit import branch, dag, flow, frame_step, missing_as, param, step
+from decikit._engine import Engine
+from decikit.steps.trees import TreeConfig
+from decikit.lab.testing import assert_equivalent
 
 RISK_TREE = """
 {"type": "tree", "name": "risk_tree", "tree": {

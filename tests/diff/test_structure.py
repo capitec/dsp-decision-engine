@@ -1,8 +1,8 @@
 """structure: steps added, removed, renamed and changed; params; wiring."""
-from decider import flow, param, step
-from decider.lab import diff
-from decider.steps.tables import DecisionTableConfig
-from decider.steps.trees import TreeConfig
+from decikit import flow, param, step
+from decikit.lab import diff
+from decikit.steps.tables import DecisionTableConfig
+from decikit.steps.trees import TreeConfig
 
 
 def net(a: float, b: float) -> float:

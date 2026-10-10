@@ -2,7 +2,7 @@
 
 Serving answers every request from one shared `Executable`, and an embedder may call that executable from as many threads as it likes. So everything on the `run` and `score` path has to be safe when many threads call it at once, including the very first call, which compiles. Everything else (debug sessions, trace sinks, experiments, the bridge) is single-caller by contract.
 
-Two helpers in `decider/_engine/concurrency.py` implement most of the contract: `once`, for caches built once and read without a lock, and a per-thread pool for reusable scratch. Serving's own request handling is in [Serving](../serving.md).
+Two helpers in `decikit/_engine/concurrency.py` implement most of the contract: `once`, for caches built once and read without a lock, and a per-thread pool for reusable scratch. Serving's own request handling is in [Serving](../serving.md).
 
 ## The contract
 
@@ -19,7 +19,7 @@ Two helpers in `decider/_engine/concurrency.py` implement most of the contract: 
 | `Session` | one debugger drives one session; it may be opened from a shared executable without disturbing it |
 | `TraceSink` | one sink per call; its counters are plain ints |
 | experiments, checks, diff, data loaders, the bridge, MCP | tools with one caller; experiments already isolate revisions in subprocesses |
-| user step functions | decider cannot make them safe; the `impure` and `mutates_input` checks flag the common ways they fail |
+| user step functions | the decider toolkit cannot make them safe; the `impure` and `mutates_input` checks flag the common ways they fail |
 
 The docstrings say it in one line each: `Executable` is "Safe to call from many threads at once", `Session` and `TraceSink` are "Not thread-safe: use one per thread" and "use one per call".
 
@@ -36,7 +36,7 @@ The rules the code follows:
 3. Caches are write-once, and an entry carries its own keep-alives. Inserts use `setdefault` and never overwrite. An entry that holds raw pointers also holds the buffers they point into.
 4. Reusable scratch is pooled per thread and popped while in use.
 5. Module-global build caches use a double-checked lock: a lock-free `dict.get` on the hit path, a lock, a second check, the build and one insert on the miss path.
-6. No rule depends on the GIL making dict operations atomic. Decider runs on CPython with the GIL today; rule 3's `setdefault` relies only on per-object dict atomicity, which free-threaded CPython keeps.
+6. No rule depends on the GIL making dict operations atomic. The decider toolkit runs on CPython with the GIL today; rule 3's `setdefault` relies only on per-object dict atomicity, which free-threaded CPython keeps.
 
 Locks appear only on miss paths, so a warm `score()` takes none.
 
@@ -91,7 +91,7 @@ Sixteen threads released at once on a cold cache, with a 10 ms build and the int
 ```python
 import sys, threading, time
 from concurrent.futures import ThreadPoolExecutor
-from decider._engine.concurrency import Cache, once, checkout, checkin
+from decikit._engine.concurrency import Cache, once, checkout, checkin
 
 sys.setswitchinterval(1e-6)
 cache, builds = Cache(), []
@@ -113,13 +113,13 @@ The caches that go through `once`:
 
 | Cache | Where | Keyed by | Holds |
 |---|---|---|---|
-| `_DISPATCHERS` | `decider/_engine/compile/njit.py` | the function's content fingerprint | the shared numba dispatcher for that code |
-| `_REASONS` | `decider/_engine/compile/njit.py` | fingerprint and signature | why numba refused a function, or `None` |
-| `_KERNELS` | `decider/_engine/compile/kernel.py` | the program's content, outputs, variables, trace refs | a built fused kernel |
-| `_DTYPES` | `decider/_engine/compile/structs.py` | a struct schema | its numpy record dtype |
-| `_LAYOUTS` | `decider/_engine/compile/rows.py` | a nested-row schema | its row layout class |
-| `Executable._checked` | `decider/_engine/run/engine.py` | params document key | that namespaces were checked (and, when eager, every bundle built) |
-| `Executable._warned` | `decider/_engine/run/engine.py` | a param name found in the input | that its warning was issued, so it fires once |
+| `_DISPATCHERS` | `decikit/_engine/compile/njit.py` | the function's content fingerprint | the shared numba dispatcher for that code |
+| `_REASONS` | `decikit/_engine/compile/njit.py` | fingerprint and signature | why numba refused a function, or `None` |
+| `_KERNELS` | `decikit/_engine/compile/kernel.py` | the program's content, outputs, variables, trace refs | a built fused kernel |
+| `_DTYPES` | `decikit/_engine/compile/structs.py` | a struct schema | its numpy record dtype |
+| `_LAYOUTS` | `decikit/_engine/compile/rows.py` | a nested-row schema | its row layout class |
+| `Executable._checked` | `decikit/_engine/run/engine.py` | params document key | that namespaces were checked (and, when eager, every bundle built) |
+| `Executable._warned` | `decikit/_engine/run/engine.py` | a param name found in the input | that its warning was issued, so it fires once |
 
 `rows.py` and `structs.py` call it as `_LAYOUTS.get(schema) or once(...)`, which saves a function call on the hot path. `jit()` attaches numba's disk cache to a dispatcher inside the `build`, before the dispatcher is published; when a later copy of the same code has a real file and the shared dispatcher still has none, it attaches the cache under `_DISPATCHERS.lock`. Compile caching itself is covered in [Compile cache](cache.md).
 
@@ -161,7 +161,7 @@ reused after checkin: True
 another thread gets its own: True made: 3
 ```
 
-The one user today is input extraction. `decider/_engine/boundary/extract.py` checks out a `FrameView` per `FramePlan` from the `"views"` pool, binds it to the incoming frame, reads the columns, then calls `view.release()` and checks it back in. A `FrameView` hands raw buffer addresses to kernels and `release()` invalidates them, so two threads sharing one view would free each other's spans mid-kernel. See [The boundary](boundary.md) for the view itself.
+The one user today is input extraction. `decikit/_engine/boundary/extract.py` checks out a `FrameView` per `FramePlan` from the `"views"` pool, binds it to the incoming frame, reads the columns, then calls `view.release()` and checks it back in. A `FrameView` hands raw buffer addresses to kernels and `release()` invalidates them, so two threads sharing one view would free each other's spans mid-kernel. See [The boundary](boundary.md) for the view itself.
 
 A per-(plan, thread) reusable `State` for `score()` on the same pattern is planned; it has not landed.
 
@@ -189,7 +189,7 @@ The call then carries `compiled` in its `_Context`, so every node of the call se
 - `_bundle` converts a node's `str` params to `(address, length)` spans of their UTF-8 bytes. The entry is the pair `(bundle, utf8)`, inserted with `converted.setdefault(key, ...)`. A thread that loses the race uses the winner's entry, and the buffers the spans point into live as long as that entry.
 - `_drop`, which removes a packed kernel numba refused at run time, takes the lock and publishes `now._replace(packed=...)`, a new snapshot without that path, instead of mutating the dict in place.
 
-A convention test enforces rule 1 mechanically. `test_runners_and_executable_keep_no_per_call_state` in `tests/test_conventions.py` walks the AST of every class in `decider/_engine/run/engine.py` and `decider/_engine/run/runners/` and fails on any assignment to `self.<attr>`, any subscript assignment through `self`, and any mutating method call (`update`, `pop`, `append`, `setdefault`, ...) on something reached from `self`, outside `__init__`, `_compile`, `_build` and `with self._lock:` blocks. The one allowlisted exception is `Executable._params`, which writes a `threading.local`.
+A convention test enforces rule 1 mechanically. `test_runners_and_executable_keep_no_per_call_state` in `tests/test_conventions.py` walks the AST of every class in `decikit/_engine/run/engine.py` and `decikit/_engine/run/runners/` and fails on any assignment to `self.<attr>`, any subscript assignment through `self`, and any mutating method call (`update`, `pop`, `append`, `setdefault`, ...) on something reached from `self`, outside `__init__`, `_compile`, `_build` and `with self._lock:` blocks. The one allowlisted exception is `Executable._params`, which writes a `threading.local`.
 
 ## Per-thread report
 
@@ -199,7 +199,7 @@ A convention test enforces rule 1 mechanically. `test_runners_and_executable_kee
 
 ## Why kernels release the GIL
 
-Every compiled kernel is built with `njit(nogil=True)` in `decider/_engine/compile/kernel.py`, unconditionally. Stepped mode wraps each call in a one-call kernel built the same way, so it releases the GIL too. A compiled kernel touches no Python objects, so releasing the GIL is safe for any of them.
+Every compiled kernel is built with `njit(nogil=True)` in `decikit/_engine/compile/kernel.py`, unconditionally. Stepped mode wraps each call in a one-call kernel built the same way, so it releases the GIL too. A compiled kernel touches no Python objects, so releasing the GIL is safe for any of them.
 
 The measurement that decided it: 1 to 16 threads calling the same compiled kernel, against a 20 ms budget.
 
@@ -212,7 +212,7 @@ The measurement that decided it: 1 to 16 threads calling the same compiled kerne
 
 Throughput was bound by the GIL at about 1,020 to 1,190 calls per second either way. The tail was the problem: with `nogil=False` each call holds the GIL for its whole run and the calls queue behind each other, a convoy that put the 16-thread p99 at 12.7 times the budget. With `nogil=True` the p99 stayed flat.
 
-The alternatives were these. decider2 made `nogil` opt-in per step, and a fused group got it only if every step had it. An earlier finding had `nogil=True` losing to `nogil=False` (26% against 55% of throughput retained) when serving competed with a background compile thread. That finding is set aside because compilation had moved to a subprocess, which retained 97.9%. In decider, `RequestHandler.stage` binds and warms the new version in the serving process, under the handler's lock, so a stage under load is the case that earlier finding measured. GC tuning was ruled out as a tail fix: disabling or freezing the collector left p50 to p99 unchanged.
+The alternatives were these. decider2 made `nogil` opt-in per step, and a fused group got it only if every step had it. An earlier finding had `nogil=True` losing to `nogil=False` (26% against 55% of throughput retained) when serving competed with a background compile thread. That finding is set aside because compilation had moved to a subprocess, which retained 97.9%. In the decider toolkit, `RequestHandler.stage` binds and warms the new version in the serving process, under the handler's lock, so a stage under load is the case that earlier finding measured. GC tuning was ruled out as a tail fix: disabling or freezing the collector left p50 to p99 unchanged.
 
 Releasing the GIL is also why the lifetime rules matter. Once a kernel runs without the GIL, another thread can run Python at the same moment, including Python that frees a buffer the kernel is reading. As a rule: anything that hands a raw address to a kernel must stay reachable from a live Python object for the whole call. With a thread pool, a shared buffer is a use-after-free, and that ends in a segfault.
 
@@ -222,7 +222,7 @@ Two details sit outside the guarantee. A `Fallback` that calls a numba dispatche
 
 `RequestHandler.process_fn` calls `score()` or `run()` directly on the event loop (it is a plain method, not a coroutine). With Starlette, one worker process therefore runs requests one at a time, and its `nogil` kernels never overlap. Concurrency today comes from embedders calling one executable from their own threads, and from running several processes. The contract holds either way. Moving scoring to a thread pool (`anyio.to_thread.run_sync`) would trade a thread hop per request for not blocking the loop; that is left to a benchmark.
 
-`stage`, `activate` and `rollback` take the handler's `_lock` and swap the active `Live` with one assignment. `Live.dates` defaults to an empty `MappingProxyType`, so the shared default cannot be mutated. The registry takes its root's `RLock` on the miss path of `resolve` and `lazy`, and `bundle_class` in `decider/_engine/params/bundles.py` builds each namedtuple class under a module lock.
+`stage`, `activate` and `rollback` take the handler's `_lock` and swap the active `Live` with one assignment. `Live.dates` defaults to an empty `MappingProxyType`, so the shared default cannot be mutated. The registry takes its root's `RLock` on the miss path of `resolve` and `lazy`, and `bundle_class` in `decikit/_engine/params/bundles.py` builds each namedtuple class under a module lock.
 
 ## The races that were found and fixed
 

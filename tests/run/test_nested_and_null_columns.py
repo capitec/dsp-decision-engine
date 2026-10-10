@@ -4,7 +4,7 @@ import warnings
 import polars as pl
 import pytest
 
-from decider import Engine, flow, frame_step, missing_as, param
+from decikit import Engine, flow, frame_step, missing_as, param
 
 
 def _both(pipeline, record):
@@ -177,7 +177,7 @@ def test_list_of_float_output_keeps_floats_whatever_the_first_row():
 def test_a_nested_null_field_is_not_retyped_as_string():
     from typing import TypedDict
 
-    from decider.ops import Columnar
+    from decikit.ops import Columnar
 
     class Item(TypedDict):
         price: float

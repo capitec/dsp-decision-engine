@@ -1,5 +1,5 @@
 """Credit card: revolving limit, rate by grade. Limits: product caps and the offer."""
-from decider import flow, param, step
+from decikit import flow, param, step
 
 
 def cc_product_cap(grade: int, cap: float = param(150000.0)) -> float:

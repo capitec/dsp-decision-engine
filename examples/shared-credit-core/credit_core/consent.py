@@ -1,7 +1,7 @@
 """Consent: one verdict for the message, then whether the delivery channel may carry it."""
 from __future__ import annotations
 
-from decider import missing_as, step
+from decikit import missing_as, step
 
 from credit_core.vocab import ConsentChannel, ConsentVerdict
 

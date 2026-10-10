@@ -1,7 +1,7 @@
 """How much of the enrichment this decision could rely on: velocity freshness, the source bitset and the mode."""
 from __future__ import annotations
 
-from decider import missing_as, param
+from decikit import missing_as, param
 
 from fraud_interdiction import vocab as v
 

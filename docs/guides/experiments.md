@@ -4,9 +4,9 @@ An experiment answers "what happens to the population if we change this": a tigh
 
 ```python
 from credit import pipeline, frame
-from decider.lab.experiments import Experiment
-from decider.lab.experiments.metrics import Divergence, ValueCounts
-from decider.lab.experiments.plots import Changes
+from decikit.lab.experiments import Experiment
+from decikit.lab.experiments.metrics import Divergence, ValueCounts
+from decikit.lab.experiments.plots import Changes
 
 result = (Experiment("limits", pipeline, frame)
           .scenario("standard_0.28", params={"credit": {"policy": {"standard": {"limit": 0.28}}}})
@@ -17,14 +17,14 @@ result.summaries["divergence"]["standard_0.28"].changed     # 1 of 6 records cha
 result.show()                                                # in a notebook
 ```
 
-Plots need altair: `pip install 'decider[experiments]'`.
+Plots need altair: `pip install 'decikit[experiments]'`.
 
 The examples on this page use this flow. Thin-file customers (under 12 months on book) get a stricter ratio limit; everyone approved gets an offer of twice their income.
 
 ```python
 # credit.py
 import polars as pl
-from decider import branch, flow, param, step
+from decikit import branch, flow, param, step
 
 
 def ratio(income: float, debt: float) -> float:
@@ -85,9 +85,9 @@ A scenario is one controlled change, run next to the baseline. The baseline is a
 
 ```python
 from credit import pipeline, frame
-from decider.lab.experiments import Experiment
-from decider.lab.experiments.metrics import (BranchFlows, Describe, Divergence, Histogram, ValueCounts)
-from decider.lab.experiments.plots import Bars, Changes, Distribution, Ranges, Sankey
+from decikit.lab.experiments import Experiment
+from decikit.lab.experiments.metrics import (BranchFlows, Describe, Divergence, Histogram, ValueCounts)
+from decikit.lab.experiments.plots import Bars, Changes, Distribution, Ranges, Sankey
 
 result = (Experiment("limits", pipeline, frame, batch_size=4)
           .scenario("standard_0.28", params={"credit": {"policy": {"standard": {"limit": 0.28}}}})
@@ -131,7 +131,7 @@ value_counts one_record {'True': 5, 'False': 1}
 
 `revision="v1"` runs the scenario on the code at that git revision. The runner resolves it to a SHA, checks it out into a temporary git worktree and runs the scenario there in a fresh Python process over the whole input, then reads the output back batch by batch in step with the other scenarios. A separate process is the only way to load another version of a module that the experiment has already imported; without it the "old" scenario would silently run the live code. Several scenarios on one revision share one checkout. A revision that resolves to the experiment's own `revision` (default `HEAD`) runs in-process.
 
-The subprocess imports the flow by `flow.entry`, the `module:attr` the definition names. The builder infers it when the pipeline is a module-level variable; for a pipeline built by a function, give it with `Experiment.from_def` or in `experiment.json`. The worker uses the decider installed in your environment. To refuse revisions that need another engine, set `flow.decider` to a version specifier (`">=1.0,<2.0"`); a mismatch raises before anything runs.
+The subprocess imports the flow by `flow.entry`, the `module:attr` the definition names. The builder infers it when the pipeline is a module-level variable; for a pipeline built by a function, give it with `Experiment.from_def` or in `experiment.json`. The worker uses the decider toolkit installed in your environment. To refuse revisions that need another engine, set `flow.decikit` to a version specifier (`">=1.0,<2.0"`); a mismatch raises before anything runs.
 
 The [tutorial](../walkthroughs/compare-two-policy-versions.md) runs a revision scenario against a real git history.
 
@@ -167,7 +167,7 @@ Subclass `Metric` with a `type` alias, a `Summary` subclass for its result, and 
 
 ```python
 import typing as t
-from decider.lab.experiments.metrics import Metric, Summary
+from decikit.lab.experiments.metrics import Metric, Summary
 
 class Total(Summary):
     column: str
@@ -199,7 +199,7 @@ print({k: v.total for k, v in result.summaries["book"].items()})
 {'baseline': 11000.0, 'multiple_3': 16500.0}
 ```
 
-A metric is a registry model, so it loads from `experiment.json` by its `type` once its module is imported, or by `"package.module:Class"`. Ship it in a package under the `decider.metrics` entry-point group to make the alias work everywhere ([Extending decider](extending.md)).
+A metric is a registry model, so it loads from `experiment.json` by its `type` once its module is imported, or by `"package.module:Class"`. Ship it in a package under the `decikit.metrics` entry-point group to make the alias work everywhere ([Extending the decider toolkit](extending.md)).
 
 ## Plots
 
@@ -236,11 +236,11 @@ All take `metric` (the metric's name), `name` (defaults to the metric's name) an
 {'divergence': 'vega-lite', 'value_counts': 'vega-lite', 'describe': 'vega-lite', 'histogram': 'vega-lite', 'branch_flows': 'vega'}
 ```
 
-A plot of your own subclasses `Plot` (`from decider.lab.experiments.plots import Plot, require_altair`), sets `requires` to the summary type and returns an altair chart or a Vega spec dict from `render(summaries)`.
+A plot of your own subclasses `Plot` (`from decikit.lab.experiments.plots import Plot, require_altair`), sets `requires` to the summary type and returns an altair chart or a Vega spec dict from `render(summaries)`.
 
 ## Reports
 
-`result.show()` draws a report in a notebook and `result.save_html(path)` writes it as one HTML page whose charts load Vega from a CDN. Without a layout, the report is an overview and a section per metric (its table and every plot that draws it). `.report(...)` lays out your own from blocks in `decider.lab.experiments.report`:
+`result.show()` draws a report in a notebook and `result.save_html(path)` writes it as one HTML page whose charts load Vega from a CDN. Without a layout, the report is an overview and a section per metric (its table and every plot that draws it). `.report(...)` lays out your own from blocks in `decikit.lab.experiments.report`:
 
 | Block | Shows |
 |---|---|
@@ -253,7 +253,7 @@ A plot of your own subclasses `Plot` (`from decider.lab.experiments.plots import
 | `Section(title=..., blocks=[...])` | a titled group |
 
 ```python
-from decider.lab.experiments.report import Chart, Overview, Section, Table, Text
+from decikit.lab.experiments.report import Chart, Overview, Section, Table, Text
 
 experiment.report(
     Overview(),
@@ -280,7 +280,7 @@ A `Callback` sees every scenario; metrics are callbacks copied per scenario. Ove
 `Batch` carries `scenario`, `index`, `offset` (the first record's index in the whole input), `output` and the `baseline` output for the same records. `NodeBatch` carries `path`, `id`, `values` (a column per name the node wrote), `rows` (batch positions it ran on), `arm`, `iteration` and the baseline's `NodeBatch` for the same node. `Run` carries `name`, `step`, `scenarios`, `total` and `batch_size`; set `run.stop = "cancelled"` or `"timed_out"` to end the run after the current batch.
 
 ```python
-from decider.lab.experiments.callbacks import Callback
+from decikit.lab.experiments.callbacks import Callback
 
 class Log(Callback):
     def on_run_start(self, run):
@@ -320,7 +320,7 @@ Built in: `Progress()` prints records done and elapsed time after each batch, an
 | `nondeterministic` | the baseline gave a different answer when rerun on the same batch |
 | `preflight` | the checks `Report` from before the run |
 | `cost` | `CostEstimate(rows, calls, frame_calls)`; `row_operations` is rows times non-frame calls |
-| `manifest` | a `RunManifest`: id, flow reference, revision (authored and resolved SHA), Python and decider versions, input fingerprint, output locations |
+| `manifest` | a `RunManifest`: id, flow reference, revision (authored and resolved SHA), Python and the decider toolkit versions, input fingerprint, output locations |
 | `definition` | the `ExperimentDef` that ran |
 
 | `RunStatus` | Means |
@@ -338,7 +338,7 @@ None of these reads as `COMPLETED`, so a partial or noisy run never passes for a
 ```python
 import random
 import polars as pl
-from decider import flow
+from decikit import flow
 
 def jitter(score: float) -> float:
     return score + random.random()
@@ -361,8 +361,8 @@ The manifest's input fingerprint is filled in when the input is an in-memory fra
 The definition is data: `ExperimentDef`, saved as `experiment.json`. `Experiment.save(path)` writes it (inferring `flow.entry` when it can) and `Experiment.load(path)` reads it back, importing the flow from `flow.entry` and scanning `input.path` (relative to the JSON file) or `input.dataset` (from the project holding it) unless you pass `step=` and `frame=`.
 
 ```python
-from decider.lab.experiments import ExperimentDef
-from decider.lab.experiments.metrics import Divergence
+from decikit.lab.experiments import ExperimentDef
+from decikit.lab.experiments.metrics import Divergence
 
 definition = ExperimentDef(
     name="policy_v2",
@@ -380,7 +380,7 @@ definition = ExperimentDef(
   "version": "2",
   "name": "policy_v2",
   "description": "",
-  "flow": {"entry": "lending.pipeline:build", "decider": ""},
+  "flow": {"entry": "lending.pipeline:build", "decikit": ""},
   "revision": "HEAD",
   "input": {"path": "", "dataset": "applications"},
   "scenarios": [
@@ -399,19 +399,19 @@ definition = ExperimentDef(
 
 | `ExperimentDef` field | Default | Meaning |
 |---|---|---|
-| `version` | `"2"` | the format; a newer one than decider supports is refused |
+| `version` | `"2"` | the format; a newer one than the decider toolkit supports is refused |
 | `name`, `description` | | labels |
-| `flow.entry`, `flow.decider` | | `module:attr` of the pipeline; a version specifier for decider |
+| `flow.entry`, `flow.decikit` | | `module:attr` of the pipeline; a version specifier for the decider toolkit |
 | `revision` | `"HEAD"` | the baseline's revision, recorded in the manifest |
 | `input.path` or `input.dataset` | | a `.parquet`, `.csv`, `.json` or `.jsonl` file, or a [dataset](data-and-datasets.md) name; not both |
 | `scenarios`, `metrics`, `plots`, `report` | empty | as above |
 | `batch_size` | 100000 | records per batch |
 | `determinism` | `true` | rerun baseline batches and flag a difference |
 
-Run a saved definition from Python with `decider.lab.experiments.run(path, out_dir=...)`, or from the command line:
+Run a saved definition from Python with `decikit.lab.experiments.run(path, out_dir=...)`, or from the command line:
 
 ```bash
-decider experiment run experiments/policy_v2/experiment.json --out results/policy_v2
+decikit experiment run experiments/policy_v2/experiment.json --out results/policy_v2
 ```
 
 ```text
@@ -422,7 +422,7 @@ policy_v2: completed
 results in results/policy_v2/result.json
 ```
 
-The command exits 0 only when the status is `completed`. `--out` gets `result.json` (the whole `ExperimentResult`) and a folder of Parquet outputs per scenario; read one back with `pl.scan_parquet("results/policy_v2/baseline/*.parquet")` and `ExperimentResult.model_validate_json(...)` for the result. A summary read back from JSON loads as the base `Summary` with its fields intact (`s.changed` still works), because the JSON does not name the subclass. `decider` does not own where results go; you choose `out_dir`.
+The command exits 0 only when the status is `completed`. `--out` gets `result.json` (the whole `ExperimentResult`) and a folder of Parquet outputs per scenario; read one back with `pl.scan_parquet("results/policy_v2/baseline/*.parquet")` and `ExperimentResult.model_validate_json(...)` for the result. A summary read back from JSON loads as the base `Summary` with its fields intact (`s.changed` still works), because the JSON does not name the subclass. `decikit` does not own where results go; you choose `out_dir`.
 
 ## Background runs and jobs
 
@@ -438,13 +438,13 @@ print(handle.status, handle.progress, r.status)
 JobStatus.SUCCEEDED 1.0 RunStatus.COMPLETED
 ```
 
-`handle.status` is a `JobStatus` (`QUEUED`, `RUNNING`, then `SUCCEEDED`, `FAILED`, `CANCELLED` or `TIMED_OUT`), `handle.progress` the fraction of records done (`None` before the total is known), `handle.cancel()` stops after the batch in progress and `handle.result(timeout=None)` waits for the `ExperimentResult`. A cancelled run returns a result with status `CANCELLED` and the summaries of the batches that ran. `decider.lab.experiments.start(path)` does the same for a saved definition.
+`handle.status` is a `JobStatus` (`QUEUED`, `RUNNING`, then `SUCCEEDED`, `FAILED`, `CANCELLED` or `TIMED_OUT`), `handle.progress` the fraction of records done (`None` before the total is known), `handle.cancel()` stops after the batch in progress and `handle.result(timeout=None)` waits for the `ExperimentResult`. A cancelled run returns a result with status `CANCELLED` and the summaries of the batches that ran. `decikit.lab.experiments.start(path)` does the same for a saved definition.
 
-The handle wraps a `JobHandle`, decider's general controller for finite work, whose immutable snapshot `Job` (`job_id`, `kind`, `status`, `done`, `total`, `logs`, `error`, `partial`, `result`) is the form VS Code and the MCP server read; `result.job` holds the final snapshot.
+The handle wraps a `JobHandle`, the decider toolkit's general controller for finite work, whose immutable snapshot `Job` (`job_id`, `kind`, `status`, `done`, `total`, `logs`, `error`, `partial`, `result`) is the form VS Code and the MCP server read; `result.job` holds the final snapshot.
 
 ## Validation
 
-`decider.lab.experiments.validate(definition, step)` returns every problem with a definition instead of raising on the first, and `run()` raises a `ValueError` joining them all before anything executes:
+`decikit.lab.experiments.validate(definition, step)` returns every problem with a definition instead of raising on the first, and `run()` raises a `ValueError` joining them all before anything executes:
 
 ```python
 bad = (Experiment("bad", pipeline, frame)
@@ -469,6 +469,6 @@ It also catches duplicate scenario, metric and plot names, a `nodes` glob or `no
 
 ## Next
 
-- [Tutorial: compare two policy versions](../walkthroughs/compare-two-policy-versions.md) runs a revision scenario and checks the result against `decider.lab.diff`.
+- [Tutorial: compare two policy versions](../walkthroughs/compare-two-policy-versions.md) runs a revision scenario and checks the result against `decikit.lab.diff`.
 - [Comparing versions](diff-and-equivalence.md) for record-level and proof-level comparison.
 - [Experiments internals](../architecture/lab/experiments.md) for the runner, the worker process and the registries.

@@ -29,7 +29,7 @@ exe.run({"income": 1000.0, "debt": 200.0})         # the former score(); same co
 ## Choosing an engine
 
 ```python
-from decider import FusedEngine, PolarsEngine, engine
+from decikit import FusedEngine, PolarsEngine, engine
 
 pipeline.run(df, engine="interpreted")
 pipeline.run(df.lazy(), engine=PolarsEngine(segments=FusedEngine(strict_compile=True)))
@@ -41,7 +41,7 @@ pipeline.session(df)                               # a session opens interpreted
 pipeline.session(df, engine="fused")               # pause at kernel boundaries, as production runs
 ```
 
-Settings for serving (`DECIDER_API__ENGINE__*`, or `decider serve --engine fused`):
+Settings for serving (`DECIKIT_API__ENGINE__*`, or `decikit serve --engine fused`):
 
 ```toml
 [api.engine]
@@ -69,7 +69,7 @@ exe.fallbacks()                                    # the numba fallbacks inside 
 ## Equivalence
 
 ```python
-from decider.lab.testing import assert_equivalent
+from decikit.lab.testing import assert_equivalent
 
 assert_equivalent(pipeline, df)                               # built-in numba engines and polars
 assert_equivalent(pipeline, df, engines=("fused", "polars"))
@@ -83,7 +83,7 @@ the polars engine's native segments use.
 ```python
 from datetime import date
 import polars as pl
-from decider import flow, impl, step
+from decikit import flow, impl, step
 
 @step
 def tenure_months(start: date, as_of: date) -> int:
@@ -114,7 +114,7 @@ A polars body on a step inside a `loop` is never used; the loop runs in the numb
 ## Spark (last)
 
 ```python
-from decider_spark import SparkEngine                         # or by tag once installed: engine="spark"
+from decikit_spark import SparkEngine                         # or by tag once installed: engine="spark"
 
 scored = pipeline.run(spark_df)                               # a Spark DataFrame
 scored.write.parquet("s3://.../scored")
@@ -125,7 +125,7 @@ A `frame_step` in the pipeline raises: cross-row work is done in the job between
 ## Writing an engine
 
 ```python
-from decider import Engine
+from decikit import Engine
 
 class MyEngine(Engine):
     type: Literal["mine"] = "mine"
@@ -136,10 +136,10 @@ class MyEngine(Engine):
 ```
 
 ```toml
-[project.entry-points."decider.engines"]
+[project.entry-points."decikit.engines"]
 mine = "my_package.engine:MyEngine"
 ```
 
-`pipeline.compile("mine")` and `DECIDER_API__ENGINE__TYPE=mine` then find it. An engine that reuses the numba
+`pipeline.compile("mine")` and `DECIKIT_API__ENGINE__TYPE=mine` then find it. An engine that reuses the numba
 driver subclasses `NumbaEngine` and supplies a runner; one that translates the plan reuses
-`decider._engine.segments` and supplies an emitter and a boundary.
+`decikit._engine.segments` and supplies an emitter and a boundary.

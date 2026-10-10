@@ -16,7 +16,7 @@ export interface ParsedValidationError {
   // Identify what part of the tree is affected
   affectedNodeId?: string;
   affectedNodeIndex?: number;
-  // Path inside the affected node, without decider's union tags (empty = the node itself)
+  // Path inside the affected node, without decikit's union tags (empty = the node itself)
   fieldPath?: (string | number)[];
   affectedFeature?: string;
   affectedOutput?: boolean;
@@ -36,7 +36,7 @@ const CONDITION_FOR: Record<string, string> = {
 };
 
 /**
- * Strip decider's union tags from the part of a loc below a node or rule.
+ * Strip decikit's union tags from the part of a loc below a node or rule.
  * Cuts at the first union-branch tag, so every branch tried for one field maps to the same path.
  * Returns null for errors from a cases-condition branch that does not match the node's own op.
  */

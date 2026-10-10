@@ -7,7 +7,7 @@ that are too heavy, scores the rest, and keeps the best.
 Three methods, one answer:
 
 - hand-written `@njit` search — the ceiling, and the reference for correctness;
-- a `decider.loop` written out by hand — the verbose thing users did before;
+- a `decikit.loop` written out by hand — the verbose thing users did before;
 - `optimise(...)` — the library construct, which lowers to that same loop.
 
     uv run python benchmarks/fan_out_reduce.py [items] [orders]
@@ -22,8 +22,8 @@ import numba
 import numpy as np
 import polars as pl
 
-from decider import Engine, ParamTable, flow, loop, optimise, param, param_table, step
-from decider.ops import Columnar
+from decikit import Engine, ParamTable, flow, loop, optimise, param, param_table, step
+from decikit.ops import Columnar
 
 ITEMS = int(sys.argv[1]) if len(sys.argv) > 1 else 6
 ORDERS = int(sys.argv[2]) if len(sys.argv) > 2 else 200
@@ -117,7 +117,7 @@ def _hand_batch(price, weight, ladder_floor, ladder_rate, max_weight, out_index,
         out_index[r], out_score[r] = i, s
 
 
-# --- method 1: `decider.loop` by hand (what a user writes today) ----------------
+# --- method 1: `decikit.loop` by hand (what a user writes today) ----------------
 
 def more(index: int, count: int) -> bool:
     return index <= count

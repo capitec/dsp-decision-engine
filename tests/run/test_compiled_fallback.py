@@ -8,15 +8,15 @@ import numpy as np
 import polars as pl
 import pytest
 
-from decider.exceptions import FallbackWarning, WiringError
+from decikit.exceptions import FallbackWarning, WiringError
 
-from decider import allow_fallback, branch, flow, missing_as, step
-from decider.ops import Text
-from decider._engine import Engine
-from decider._engine.boundary._arrow.intrinsics import load_u8
-from decider._engine.compile import Fallback, Kernel
-from decider._engine.run.representations import spans
-from decider.lab.testing import assert_equivalent
+from decikit import allow_fallback, branch, flow, missing_as, step
+from decikit.ops import Text
+from decikit._engine import Engine
+from decikit._engine.boundary._arrow.intrinsics import load_u8
+from decikit._engine.compile import Fallback, Kernel
+from decikit._engine.run.representations import spans
+from decikit.lab.testing import assert_equivalent
 
 COMPILED = ("stepped", "fused")
 
@@ -314,8 +314,8 @@ def test_fallback_warnings_are_silenced_by_their_category(mode):
 
 @pytest.mark.parametrize("bad", ["flow", "scorecard", "frame_step"])
 def test_allow_fallback_refuses_a_step_it_could_not_reach(bad):
-    from decider import frame_step
-    from decider.steps.scorecard._config import DefaultBin, ScorecardConfig, ScoredVariable, ValuesBin
+    from decikit import frame_step
+    from decikit.steps.scorecard._config import DefaultBin, ScorecardConfig, ScoredVariable, ValuesBin
 
     targets = {
         "flow": lambda: flow(half, name="p"),

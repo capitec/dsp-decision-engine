@@ -4,11 +4,11 @@ import pytest
 from numba.core import types
 from numba.core.errors import TypingError
 
-from decider import Engine, flow, missing_as, param
-from decider.ops import Text
-from decider._engine.compile.semantics.strings import _span_eq
-from decider._engine.compile.span import SPAN
-from decider.lab.testing import assert_equivalent
+from decikit import Engine, flow, missing_as, param
+from decikit.ops import Text
+from decikit._engine.compile.semantics.strings import _span_eq
+from decikit._engine.compile.span import SPAN
+from decikit.lab.testing import assert_equivalent
 
 COMPILED = ("stepped", "fused")
 # ASCII, empty, 2-byte, 3-byte, 4-byte and a null.

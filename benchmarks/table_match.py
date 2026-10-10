@@ -14,8 +14,8 @@ import time
 import numpy as np
 import polars as pl
 
-from decider._engine import Engine
-from decider.steps.tables import DecisionTableConfig
+from decikit._engine import Engine
+from decikit.steps.tables import DecisionTableConfig
 
 N = 1_000_000
 rng = np.random.default_rng(0)
@@ -59,7 +59,7 @@ def compare(expression: dict, **extra) -> None:
     table = DecisionTableConfig.load({"type": "decision_table", "name": "bands", **doc})
     for mode in ("fused", "stepped", "interpreted"):
         exe = Engine().bind(table, mode=mode)
-        engines[f"decider {mode}"] = (exe.run, exe.score)
+        engines[f"decikit {mode}"] = (exe.run, exe.score)
     # The same rows read from the params document, which every call passes.
     columns = {**DTYPES, "band": {"type": "Enum", "categories": sorted({r["band"] for r in ROWS} | {"none"})}}
     by_param = DecisionTableConfig.load({"type": "decision_table", "name": "bands", "columns": columns,
@@ -67,11 +67,11 @@ def compare(expression: dict, **extra) -> None:
                                          **{k: v for k, v in doc.items() if k != "parameters"}})
     exe = Engine().bind(by_param, mode="fused")
     params = {"bands": {"rows": ROWS}}
-    engines["decider fused, rows param"] = (lambda df, exe=exe: exe.run(df, params),
+    engines["decikit fused, rows param"] = (lambda df, exe=exe: exe.run(df, params),
                                             lambda r, exe=exe: exe.score(r, params))
 
     # The outputs agree before anything is timed.
-    expected = engines["decider interpreted"][0](frame.head(20000)).select(OUTPUTS).cast({"pts": pl.Int64})
+    expected = engines["decikit interpreted"][0](frame.head(20000)).select(OUTPUTS).cast({"pts": pl.Int64})
     for name, (run, _) in engines.items():
         assert run(frame.head(20000)).select(OUTPUTS).cast({"pts": pl.Int64}).equals(expected), name
 

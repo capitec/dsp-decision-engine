@@ -24,4 +24,4 @@ Per-call dispatch of a 1-row driver (median of 2,000 calls after warmup, so typi
 - A timing budget cannot guard the collision (it costs 1.03x, so no threshold separates pass from fail); the guard has to compare the fingerprint of every bundle class.
 
 ## Decision
-One bundle class per field tuple (`bundle_class` caches it and names it from the fields), so two live classes never share a name and field names; the guard is that construction, not a timing assertion. Merging bundles per call is a measured option (3.50 vs 18.9 µs at 20 steps) that has not been needed: a `score()` is 28-35 µs with the params lookup at 1.5 µs. See [engine](../decisions/engine.md), `decider/_engine/params/bundles.py`.
+One bundle class per field tuple (`bundle_class` caches it and names it from the fields), so two live classes never share a name and field names; the guard is that construction, not a timing assertion. Merging bundles per call is a measured option (3.50 vs 18.9 µs at 20 steps) that has not been needed: a `score()` is 28-35 µs with the params lookup at 1.5 µs. See [engine](../decisions/engine.md), `decikit/_engine/params/bundles.py`.

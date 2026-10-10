@@ -6,7 +6,7 @@ import json
 import sys
 from pathlib import Path
 
-from decider import ConfigurableStep
+from decikit import ConfigurableStep
 
 from assessment.capacity import ADJUSTMENT_SET_ID
 from assessment.pipeline import build

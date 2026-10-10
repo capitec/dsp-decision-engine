@@ -1,7 +1,7 @@
 """Global suppressions: every rule that removes a client is recorded, not only the first."""
 from __future__ import annotations
 
-from decider import allow_fallback, missing_as, step
+from decikit import allow_fallback, missing_as, step
 
 # Compliance owns which suppressions are absolute. An absolute one keeps the client out of the tree altogether; any
 # other still runs the tree, so the analytics team can report who would have been targeted.

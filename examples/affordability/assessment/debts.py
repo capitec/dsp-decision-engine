@@ -1,7 +1,7 @@
 """The household's existing debts, treated account by account by `credit_core.obligations`."""
 from __future__ import annotations
 
-from decider import allow_fallback, missing_as, step
+from decikit import allow_fallback, missing_as, step
 
 from credit_core import obligations
 from credit_core.obligations import Account

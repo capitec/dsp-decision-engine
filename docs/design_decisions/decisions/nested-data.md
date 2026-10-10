@@ -8,7 +8,7 @@ Read this before changing how lists of records, structs or strings inside record
 - A fallback step gets the same value as a compiled one (`Text`, namedtuple of arrays, record), so `assert_equivalent` can compare modes.
 - Why: the best storage depends on row count (int codes won 4.7x in batch, lost 2x on one record), and a code-typed step that fell back compared a `str` to an int and silently answered wrong.
 - Not: `Raw[T]`, `Rows[Item]`, `raw_str()` (process-order codes), a `@step(arrays=True)` flag, `Enum` codes for speed.
-- See: `decider/ops/nested.py`, `decider/ops/text.py`, [kernels](../../architecture/engine/kernels.md)
+- See: `decikit/ops/nested.py`, `decikit/ops/text.py`, [kernels](../../architecture/engine/kernels.md)
 
 ## A `TypedDict` is the schema; a bare `dict` is the opt-out
 

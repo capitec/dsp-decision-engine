@@ -1,18 +1,18 @@
 # Comparing versions
 
-Before a new version of a policy ships, someone asks three questions: what changed in the code, which decisions change because of it, and is a refactor really only a refactor. `decider.lab.diff` answers each one without you writing comparison code.
+Before a new version of a policy ships, someone asks three questions: what changed in the code, which decisions change because of it, and is a refactor really only a refactor. `decikit.lab.diff` answers each one without you writing comparison code.
 
 | Question | Call | Runs the flow? |
 |---|---|---|
 | What changed: steps, params, wiring? | `diff.structure(old, new)` | no |
 | Which rows and columns change over this data, and by how much? | `diff.outputs(old, new, frame, key=...)` | yes, both versions, interpreted |
-| The same between two git revisions | `diff.revisions(base, head, entry=...)` or `decider diff` | yes, each in its own process |
+| The same between two git revisions | `diff.revisions(base, head, entry=...)` or `decikit diff` | yes, each in its own process |
 | Do the two compute the same thing for every input? | `diff.prove(old, new)` | no |
 
-Two neighbouring tools answer different questions. `decider.lab.testing.assert_equivalent` checks that the execution modes of one version agree ([Debugging and testing](debugging-and-testing.md)). [Experiments](experiments.md) run many scenarios over a population batch by batch and measure them with metrics; they reuse `diff`'s comparison of values.
+Two neighbouring tools answer different questions. `decikit.lab.testing.assert_equivalent` checks that the execution modes of one version agree ([Debugging and testing](debugging-and-testing.md)). [Experiments](experiments.md) run many scenarios over a population batch by batch and measure them with metrics; they reuse `diff`'s comparison of values.
 
 <div class="diagram" markdown>
-![Two pipeline objects go to diff.structure, diff.outputs or diff.prove, returning a StructureDiff, an OutputDiff or a Proof; two git revisions go to diff.revisions or decider diff, which return the same StructureDiff and OutputDiff models](../assets/diagrams/guide-diff-tools.svg)
+![Two pipeline objects go to diff.structure, diff.outputs or diff.prove, returning a StructureDiff, an OutputDiff or a Proof; two git revisions go to diff.revisions or decikit diff, which return the same StructureDiff and OutputDiff models](../assets/diagrams/guide-diff-tools.svg)
 
 *Which call takes what, and what it returns.*
 </div>
@@ -21,8 +21,8 @@ The examples use two versions of a small credit flow. The new one adds a 50 fee 
 
 ```python
 import polars as pl
-from decider import flow, param, step
-from decider.lab import diff
+from decikit import flow, param, step
+from decikit.lab import diff
 
 @step(id="0a0a0a0a0a01")
 def ratio(income: float, debt: float) -> float:
@@ -104,10 +104,10 @@ True [('credit/ratio', 'credit/debt_to_income')] () ()
 True ['credit/debt_to_income'] ['credit/ratio'] ()
 ```
 
-Without ids, the renamed step shows as one removed and one added. `identical` is `True` in both cases, because names and paths are labels and are not hashed: the two versions compute the same thing. Run [`decider ids`](cli-and-mcp.md) once and commit the result so diffs, traces and experiments can follow a step through renames, extractions and reordering ([Decision tracing](tracing.md) explains durable ids).
+Without ids, the renamed step shows as one removed and one added. `identical` is `True` in both cases, because names and paths are labels and are not hashed: the two versions compute the same thing. Run [`decikit ids`](cli-and-mcp.md) once and commit the result so diffs, traces and experiments can follow a step through renames, extractions and reordering ([Decision tracing](tracing.md) explains durable ids).
 
 !!! warning "Trees and decision tables always show as changed"
-    The hash of a tree or decision-table step includes values that differ on every build, so such a step is reported in `changed_steps` (with `code`, and for tables `consts`) and `identical` is `False` even when nothing in its document changed, even for the same object compared with itself. `decider diff` without `--data` therefore reports `structure: differs` and exits 1 for any pipeline with a tree or table. Use `--data` (which judges by outputs) or `diff.prove`, whose z3 tier compares the documents themselves.
+    The hash of a tree or decision-table step includes values that differ on every build, so such a step is reported in `changed_steps` (with `code`, and for tables `consts`) and `identical` is `False` even when nothing in its document changed, even for the same object compared with itself. `decikit diff` without `--data` therefore reports `structure: differs` and exits 1 for any pipeline with a tree or table. Use `--data` (which judges by outputs) or `diff.prove`, whose z3 tier compares the documents themselves.
 
 ## Which records change: `outputs`
 
@@ -160,7 +160,7 @@ Comparison rules: floats compare with `is_close` (`rtol=1e-6`, `atol=1e-9`, both
 
 Intermediates are dropped from a flow's output unless emitted, which is why the example compares `old.emit("ratio")` with `new.emit("ratio")`. Emit what you want compared.
 
-## Between git revisions: `revisions` and `decider diff`
+## Between git revisions: `revisions` and `decikit diff`
 
 Usually the old version is a commit, not an object in your notebook. `diff.revisions(base, head, entry="module:attr")` checks out each revision into a temporary git worktree and loads its pipeline in a fresh Python process, so the two never share imported modules. `structure()` compares them; `outputs(frame, key=...)` runs both over the frame.
 
@@ -169,7 +169,7 @@ Usually the old version is a commit, not an object in your notebook. `diff.revis
 sequenceDiagram
     participant You as diff.revisions(...)
     participant Git as git
-    participant W as worker process<br/>decider.lab.diff._worker
+    participant W as worker process<br/>decikit.lab.diff._worker
     You->>Git: rev-parse v1, HEAD
     loop each revision
         You->>Git: worktree add --detach tmp sha
@@ -182,8 +182,8 @@ sequenceDiagram
 ```
 
 ```python
-from decider.lab import diff
-from decider.lab.data import dataset
+from decikit.lab import diff
+from decikit.lab.data import dataset
 
 frame = dataset("applications").load().frame
 r = diff.revisions("v1", "HEAD", entry="lending.pipeline:build")
@@ -195,12 +195,12 @@ print(o.rows_changed, o.columns["approved"].changed)
 567 69
 ```
 
-A fresh process is what makes this correct. A pipeline module that is already imported cannot be imported again under the same name from another directory, so loading both revisions into one process would silently run the live code twice; that bug has happened, and the measured cost of the fix is about 0.5 s for the checkout plus 0.8 s for the new process per revision. The worker uses the decider installed in your environment, not the one the old revision pinned.
+A fresh process is what makes this correct. A pipeline module that is already imported cannot be imported again under the same name from another directory, so loading both revisions into one process would silently run the live code twice; that bug has happened, and the measured cost of the fix is about 0.5 s for the checkout plus 0.8 s for the new process per revision. The worker uses the decider toolkit installed in your environment, not the one the old revision pinned.
 
 The same from the command line:
 
 ```bash
-decider diff v1 v2 lending.pipeline:build --data applications --key application_id
+decikit diff v1 v2 lending.pipeline:build --data applications --key application_id
 ```
 
 ```text
@@ -220,7 +220,7 @@ Errors come back as one line: `Error: revision 'v9' did not resolve`, or `Error:
 
 ## Is it only a refactor: `prove`
 
-`diff.prove(old, new)` returns a `Proof`. Its `identical` is `True` only when decider can prove both versions compute the same outputs for every input; otherwise it is `None`, never `False`, because nothing here proves two versions different in general. It never claims equivalence from sampled rows.
+`diff.prove(old, new)` returns a `Proof`. Its `identical` is `True` only when the decider toolkit can prove both versions compute the same outputs for every input; otherwise it is `None`, never `False`, because nothing here proves two versions different in general. It never claims equivalence from sampled rows.
 
 <div class="diagram" markdown>
 ![The prove decision ladder: equal IR hashes give tier ir_hash; otherwise, if z3 is installed and only trees and tables changed, each changed step is solved and gives tier smt with identical True or a counterexample; anything else gives tier none with the structure diff as evidence](../assets/diagrams/guide-diff-prove-tiers.svg)
@@ -253,7 +253,7 @@ Any change to a step's code, however equivalent it is in meaning, changes its fi
 
 ### Tier 2: z3 over trees and decision tables
 
-With the `prove` extra installed (`pip install 'decider[prove]'`, which brings `z3-solver`), `prove` encodes each changed tree or decision-table step as z3 terms and asks for an input row on which the old and new step write different outputs. The tutorial [Compare two policy versions](../walkthroughs/compare-two-policy-versions.md) splits one band of a decision table into two rows, then makes a slip:
+With the `prove` extra installed (`pip install 'decikit[prove]'`, which brings `z3-solver`), `prove` encodes each changed tree or decision-table step as z3 terms and asks for an input row on which the old and new step write different outputs. The tutorial [Compare two policy versions](../walkthroughs/compare-two-policy-versions.md) splits one band of a decision table into two rows, then makes a slip:
 
 ```text
 # band B split at 650, the same bands as before
@@ -264,7 +264,7 @@ smt None lending/risk_band {'bureau_score': 696.0000000000002}
 lending/risk_band: z3 found an input on which the step differs; it judges the step alone, so the flow around it may never produce that input
 ```
 
-The counterexample is an input row for the step on its own (a `None` in it is a null). It is a real difference in that step, and decider re-runs both steps on it to confirm before reporting it. Whether the surrounding flow can ever produce that row is a separate question: an earlier step may never let a score of 696 through.
+The counterexample is an input row for the step on its own (a `None` in it is a null). It is a real difference in that step, and the decider toolkit re-runs both steps on it to confirm before reporting it. Whether the surrounding flow can ever produce that row is a separate question: an earlier step may never let a score of 696 through.
 
 What z3 models, from `SmtEvidence.modelled`:
 
@@ -278,7 +278,7 @@ Anything outside that makes the step unencodable and the proof falls back to tie
 
 The other conditions for tier 2 come from the structure diff: no param declaration changed, and no step was added, removed, renamed or moved, and no data edge changed. When one of those fails, `reason` says which, for example `"the pipelines differ in more than the contents of steps, which z3 can't compare"`.
 
-Without the extra, `prove` stops at tier 1 and says `install decider[prove] to compare trees and decision tables with z3`. Because of the warning above, that includes an unchanged pipeline that contains a tree or table.
+Without the extra, `prove` stops at tier 1 and says `install decikit[prove] to compare trees and decision tables with z3`. Because of the warning above, that includes an unchanged pipeline that contains a tree or table.
 
 ### What `prove` does not do
 

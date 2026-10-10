@@ -4,9 +4,9 @@ import json
 import polars as pl
 import pytest
 
-from decider import flow
-from decider.config import JsonFileStore
-from decider.serving import RequestHandler
+from decikit import flow
+from decikit.config import JsonFileStore
+from decikit.serving import RequestHandler
 
 from test_inputs import RECORD, build, due_day
 

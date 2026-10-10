@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from decider import ParamTable, allow_fallback, param, param_table, step
+from decikit import ParamTable, allow_fallback, param, param_table, step
 
 from consolidation import overlays, vocab
 

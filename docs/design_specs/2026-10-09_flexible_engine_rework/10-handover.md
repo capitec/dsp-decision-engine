@@ -16,7 +16,7 @@ rules, how to run things, what "done" means per phase, what a reviewer checks, a
    question for the owner, not a decision to take alone.
 
 Then, in the repo: `CLAUDE.md`, `docs/design_decisions/decisions/engine.md` and `api-layout.md`, and
-`uv run decider guide`.
+`uv run decikit guide`.
 
 ## Rules of this repo that bite here
 
@@ -33,11 +33,11 @@ Then, in the repo: `CLAUDE.md`, `docs/design_decisions/decisions/engine.md` and 
   entry fails the test, so remove entries you make unnecessary).
 - Layers import downward only (`docs/architecture/package-layout.md`). `_settings.py` is L0 and must not
   import `_engine`; that is why engine settings are resolved in `serving/`. Spark code never lives under
-  `decider/`.
+  `decikit/`.
 - The simplest code that passes the tests; no speculative abstractions; stdlib first. If a simplification
   would change behaviour a test pins, keep the behaviour and leave a `# ponytail: <what could be simpler>`
   comment.
-- Every Python example in `decider/GUIDE.md` runs in `tests/test_guide.py`. Change the guide and the tests
+- Every Python example in `decikit/GUIDE.md` runs in `tests/test_guide.py`. Change the guide and the tests
   together.
 - If the docs and the code disagree, or the intended behaviour is ambiguous, stop and report. Do not guess.
 - A moved or renamed public name changes its callers in the same commit. No compatibility shims.
@@ -53,7 +53,7 @@ Then, in the repo: `CLAUDE.md`, `docs/design_decisions/decisions/engine.md` and 
 | the guide's examples | `uv run pytest tests/test_guide.py -q` |
 | everything | `uv run pytest -q` (slow the first time per worktree) |
 | the regression guard | `uv run python benchmarks/modes.py` and `benchmarks/serving_latency.py`, before and after |
-| import-weight check | `uv run pytest tests/test_imports.py -q` (`import decider` must not import numba) |
+| import-weight check | `uv run pytest tests/test_imports.py -q` (`import decikit` must not import numba) |
 | docs site | `uv run --group docs zensical build` (this folder is excluded from the site) |
 
 On the shared development box, `/tmp` is RAM-backed and the box is often loaded: run heavy tests and
@@ -78,7 +78,7 @@ A phase is done when all of these hold:
 
 ### P1, `run` absorbs `score`
 
-- `grep -rn "\.score(" decider docs tests benchmarks examples` is empty.
+- `grep -rn "\.score(" decikit docs tests benchmarks examples` is empty.
 - `Executable.run` checks `LazyFrame` before `DataFrame` before `Mapping`, and the record path is the old
   `score` body unchanged (diff it).
 - The `TypeError` for a wrong input names the accepted types.
@@ -91,11 +91,11 @@ A phase is done when all of these hold:
   locks and snapshots stay on runners and executables.
 - `NumbaEngine` is abstract (an abstract `_runner`), so it never registers as a type; the three subclasses
   register under their aliases and import paths.
-- `import decider` still imports no numba (`tests/test_imports.py`); the engine classes load through the
+- `import decikit` still imports no numba (`tests/test_imports.py`); the engine classes load through the
   module `__getattr__`.
 - `_settings.py` does not import `_engine`; resolution happens in `serving/_handler.py`.
 - The `_tooling.bridge.protocol -> _engine.run.engine` allowlist entry is gone and the test is green.
-- `DECIDER_API__ENGINE__TYPE=fused DECIDER_API__ENGINE__STRICT_COMPILE=true decider serve` refuses a
+- `DECIKIT_API__ENGINE__TYPE=fused DECIKIT_API__ENGINE__STRICT_COMPILE=true decikit serve` refuses a
   pipeline with an undeclared fallback (the PR shows the error).
 
 ### P3, the default engine

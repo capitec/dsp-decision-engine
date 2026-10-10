@@ -1,11 +1,11 @@
 """A Flex Loan application: gates, fraud, bureau, score, caps, affordability, the offers and the outcome.
 
-`decider build` and `decider serve` use `build`, which receives the rate card, the four overlay stacks and the
+`decikit build` and `decikit serve` use `build`, which receives the rate card, the four overlay stacks and the
 reason codes as the documents in `configs/<version>/`.
 """
 from __future__ import annotations
 
-from decider import dag, flow, param, step
+from decikit import dag, flow, param, step
 
 from assessment import modes
 from assessment.pipeline import build as build_assessment

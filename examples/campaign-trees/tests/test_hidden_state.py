@@ -3,9 +3,9 @@ import json
 import warnings
 from pathlib import Path
 
-from decider import ConfigurableStep, Engine
-from decider.exceptions import HiddenStateWarning
-from decider.lab import diff
+from decikit import ConfigurableStep, Engine
+from decikit.exceptions import HiddenStateWarning
+from decikit.lab import diff
 
 from campaign_trees.pipeline import build
 

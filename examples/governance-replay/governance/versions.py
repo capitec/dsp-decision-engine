@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from credit_core.rate_card import diff_cards
-from decider.lab import diff
+from decikit.lab import diff
 
 from governance.flows import Flow
 from governance.replayer import Replayer
@@ -12,7 +12,7 @@ from governance.replayer import Replayer
 
 @dataclass(frozen=True)
 class VersionDiff:
-    """`structure` is decider's step-level diff and `proof` its verdict on whether the steps are provably the same
+    """`structure` is decikit's step-level diff and `proof` its verdict on whether the steps are provably the same
     (`True`, `False`, or `None` when it cannot tell); `params` lists changed leaves; `documents` summarises each
     changed config document."""
 

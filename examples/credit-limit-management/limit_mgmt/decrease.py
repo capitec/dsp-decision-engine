@@ -5,7 +5,7 @@ client's others. The other thirteen triggers and the notice machinery are left o
 """
 from __future__ import annotations
 
-from decider import allow_fallback, flow, missing_as, step
+from decikit import allow_fallback, flow, missing_as, step
 
 from limit_mgmt.vocab import NoticeClass
 

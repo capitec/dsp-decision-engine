@@ -9,7 +9,7 @@ from __future__ import annotations
 import math
 from dataclasses import asdict
 
-from decider import DecisionTableConfig, ParamTable, allow_fallback, missing_as, param, param_table, step
+from decikit import DecisionTableConfig, ParamTable, allow_fallback, missing_as, param, param_table, step
 
 from credit_core.credit_life import CREDIT_LIFE_VERSION
 from credit_core.vocab import SEGMENT_NEW_TO_BANK

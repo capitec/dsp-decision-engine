@@ -8,9 +8,9 @@ The user-side guide is [trees, tables and scorecards](../../guides/trees-tables-
 
 | File | Role |
 |---|---|
-| `decider/steps/scorecard/__init__.py` | Exports `ScorecardConfig` |
-| `decider/steps/scorecard/_config.py` | The document model (`ScorecardConfig`, the three variable kinds, the three bin kinds), bin validation, and the lowering in each variable's `nodes()` |
-| `decider/steps/scorecard/_kernels.py` | `score_bins`, `score_bins_tuned`, `adjust`, `constant` and `total`: plain numeric Python that numba also compiles |
+| `decikit/steps/scorecard/__init__.py` | Exports `ScorecardConfig` |
+| `decikit/steps/scorecard/_config.py` | The document model (`ScorecardConfig`, the three variable kinds, the three bin kinds), bin validation, and the lowering in each variable's `nodes()` |
+| `decikit/steps/scorecard/_kernels.py` | `score_bins`, `score_bins_tuned`, `adjust`, `constant` and `total`: plain numeric Python that numba also compiles |
 
 ## The document model
 

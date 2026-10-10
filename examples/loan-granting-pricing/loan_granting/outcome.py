@@ -1,7 +1,7 @@
 """The outcome, the referral queue and the reasons: the first stage that decides wins."""
 from __future__ import annotations
 
-from decider import allow_fallback, flow, missing_as, step
+from decikit import allow_fallback, flow, missing_as, step
 
 from credit_core.affordability import INDETERMINATE
 from credit_core.vocab import (

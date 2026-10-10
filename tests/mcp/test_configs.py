@@ -7,15 +7,15 @@ from pathlib import Path
 
 import pytest
 
-from decider._tooling.mcp import Policy, _configs as configs, _params as params, build_server
-from decider._tooling.mcp._patch import PatchError, apply_patch
+from decikit._tooling.mcp import Policy, _configs as configs, _params as params, build_server
+from decikit._tooling.mcp._patch import PatchError, apply_patch
 
 ROOT = Path(__file__).resolve().parents[2]
 EXAMPLE_07 = ROOT / "examples/credit-limit-management"
 BUREAU_TREE = ROOT / "ui/vscode/examples/bank/trees/bureau_grade.json"
 
 PIPELINE = '''\
-from decider import flow, param
+from decikit import flow, param
 
 
 def ratio(income: float, debt: float) -> float:

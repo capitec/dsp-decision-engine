@@ -2,7 +2,7 @@
 import warnings
 
 import pytest
-from decider import Engine, HiddenStateWarning, flow
+from decikit import Engine, HiddenStateWarning, flow
 
 from loan_granting import eligibility, waterfall
 from loan_granting.pipeline import build

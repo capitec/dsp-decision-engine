@@ -1,7 +1,7 @@
 """The business grade: the financial and people components blended on log-odds, an overlay, then the product's ladder."""
 from __future__ import annotations
 
-from decider import allow_fallback, flow, param, step
+from decikit import allow_fallback, flow, param, step
 
 from credit_core.adjustments import AdjustmentStack
 from credit_core.vocab import PRODUCT_BUSINESS_REVOLVING_FACILITY, PRODUCT_BUSINESS_TERM_FACILITY

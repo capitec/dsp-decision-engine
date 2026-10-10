@@ -1,27 +1,27 @@
-# decider for VS Code
+# Decider toolkit for VS Code
 
-See, edit and debug decider flows: Python pipelines and YAML flow files.
+See, edit and debug decider toolkit flows: Python pipelines and YAML flow files.
 
 ## Install
 
 ```sh
 cd ui/vscode          # Node 22 (see .nvmrc)
-pnpm install && pnpm package     # writes decider-vscode-0.1.0.vsix
-code --install-extension decider-vscode-0.1.0.vsix
+pnpm install && pnpm package     # writes decikit-vscode-0.1.0.vsix
+code --install-extension decikit-vscode-0.1.0.vsix
 ```
 
 Or press F5 in this folder to run it in an Extension Development Host on `examples/`.
 
-The extension needs `decider` importable by the project's Python. It runs the
-`decider.python` setting (e.g. `["uv", "run", "python"]`), else the ms-python
+The extension needs `decikit` importable by the project's Python. It runs the
+`decikit.python` setting (e.g. `["uv", "run", "python"]`), else the ms-python
 interpreter, else `python3`. `examples/.vscode/settings.json` sets `uv run python`.
 
 ## What it does
 
-**decider** in the activity bar has three views.
+**the decider toolkit** in the activity bar has three views.
 
 - **Flows**: every `flow.yaml` (a top-level `flow:` and `steps:`), and every
-  Python file that imports decider and defines `def build()`,
+  Python file that imports the decider toolkit and defines `def build()`,
   `pipeline = flow(...)` or a `*_pipeline()` factory. Click one to show it; ▷
   debugs it. CodeLenses above each pipeline do the same.
 - **Structure**: the shown flow as a tree, with an icon per node type. Click a
@@ -38,7 +38,7 @@ Inserting asks for what the node needs: a step from the flow's `components`
 `expr`), `modifies`/`carries`, `max`. A new Subflow can write
 `flows/<name>.yaml`. Edits keep comments and layout and can be undone.
 
-The **graph** (@decider/ui) opens beside the source: reads and writes, groups that
+The **graph** (@decikit/ui) opens beside the source: reads and writes, groups that
 fold, and an inspector per node.
 
 ## Debugging
@@ -58,8 +58,8 @@ pick. Set ordinary breakpoints in your step functions.
 Your own launch configuration works too:
 
 ```json
-{ "type": "debugpy", "request": "launch", "name": "decider: credit",
-  "module": "decider._tooling.bridge.run", "args": ["${workspaceFolder}/credit_flow/flow.yaml"] }
+{ "type": "debugpy", "request": "launch", "name": "decikit: credit",
+  "module": "decikit._tooling.bridge.run", "args": ["${workspaceFolder}/credit_flow/flow.yaml"] }
 ```
 
 Any Python debug session that pauses inside the shown flow's steps is mirrored,

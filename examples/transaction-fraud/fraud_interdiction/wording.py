@@ -1,7 +1,7 @@
 """Client-facing wording: generic per action, because saying which rule fired tells the fraudster too."""
 from __future__ import annotations
 
-from decider import allow_fallback
+from decikit import allow_fallback
 
 SUPPRESSED = "wording.suppressed_no_consent.v1"
 

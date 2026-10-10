@@ -3,8 +3,8 @@ import json
 
 import pytest
 
-from decider import flow
-from decider.exceptions import NotIntegralError
+from decikit import flow
+from decikit.exceptions import NotIntegralError
 
 from test_handler_score import _handler
 

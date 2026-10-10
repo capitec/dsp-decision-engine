@@ -1,9 +1,9 @@
 import * as vscode from "vscode";
-import { walk, type CallNodeJson, type IRNodeJson } from "@decider/ui";
+import { walk, type CallNodeJson, type IRNodeJson } from "@decikit/ui";
 import { userCode } from "./debugging";
 import { walkItems, type Item } from "./outline";
 
-export const TOOLBOX_MIME = "application/vnd.code.tree.decider.toolbox";
+export const TOOLBOX_MIME = "application/vnd.code.tree.decikit.toolbox";
 
 export interface NodeType {
   kind: "step" | "branch" | "loop" | "flow" | "subflow";
@@ -101,7 +101,7 @@ export class StructureProvider implements vscode.TreeDataProvider<Item>, vscode.
       item.into && "into",
       item.kind === "branch" && item.yamlPath && "branch",
     ].filter(Boolean).join(" ");
-    t.command = { command: "decider.select", title: "Show", arguments: [item] };
+    t.command = { command: "decikit.select", title: "Show", arguments: [item] };
     return t;
   }
 

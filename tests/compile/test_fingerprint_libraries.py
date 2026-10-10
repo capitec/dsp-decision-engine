@@ -9,11 +9,11 @@ import sys
 
 import pytest
 
-from decider import flow, step
-from decider._engine.compile import fingerprint, hidden_state
-from decider.ops import decimal
+from decikit import flow, step
+from decikit._engine.compile import fingerprint, hidden_state
+from decikit.ops import decimal
 
-fp = importlib.import_module("decider._engine.compile.fingerprint")
+fp = importlib.import_module("decikit._engine.compile.fingerprint")
 
 _STEPS = '''
 import dataclasses, json, statistics
@@ -24,7 +24,7 @@ def calls_libraries(x: float) -> float:
     return statistics.mean([x, 1.0]) + len(json.dumps({"a": x})) + float(dataclasses.is_dataclass(x)) + float(pl.lit(1) is None)
 '''
 
-_CHILD = "import json, steps\nfrom decider._engine.compile import fingerprint\n" \
+_CHILD = "import json, steps\nfrom decikit._engine.compile import fingerprint\n" \
          "print(json.dumps(fingerprint(steps.calls_libraries, strict=True)))\n"
 
 
@@ -57,7 +57,7 @@ def test_a_library_function_a_step_calls_is_keyed_by_name_and_package_version(mo
     assert fingerprint(calling(statistics.mean)) != first
 
 
-def test_deciders_own_functions_are_still_walked():
+def test_the_toolkits_own_functions_are_still_walked():
     assert not fp._is_library(decimal.round.__code__.co_filename)
     assert not fp._is_library(__file__)
 

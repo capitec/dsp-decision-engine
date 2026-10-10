@@ -77,7 +77,7 @@ to measure.
   `maxRecordsPerBatch`; the cost of one cross-pipeline frame operation done in the job instead of a
   `frame_step`.
 - Method: a local Spark with 4 executors; the flagship and the fallback-heavy pipeline; 10M rows.
-- Decides: the recommended job shape in the Spark guide; whether `decider build` needs a `--spark-cache`
+- Decides: the recommended job shape in the Spark guide; whether `decikit build` needs a `--spark-cache`
   output.
 - Script: `benchmarks/spark_engine.py`, skipped when pyspark is absent.
 

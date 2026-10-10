@@ -7,15 +7,15 @@ import polars as pl
 import pytest
 from numba.core import types
 
-from decider import Engine, allow_fallback, branch, flow, loop, missing_as, param, step
-from decider._engine.compile import default_bundle
-from decider._engine.compile.decimal_type import DecimalType
-from decider._engine.compile.njit import _input_type
-from decider.exceptions import IRError, ParamsError, WiringError
-from decider.ir import to_ir
-from decider.ops import decimal
-from decider.ops.decimal import Currency, Decimal, Rounding
-from decider.lab.testing import assert_equivalent, corpus
+from decikit import Engine, allow_fallback, branch, flow, loop, missing_as, param, step
+from decikit._engine.compile import default_bundle
+from decikit._engine.compile.decimal_type import DecimalType
+from decikit._engine.compile.njit import _input_type
+from decikit.exceptions import IRError, ParamsError, WiringError
+from decikit.ir import to_ir
+from decikit.ops import decimal
+from decikit.ops.decimal import Currency, Decimal, Rounding
+from decikit.lab.testing import assert_equivalent, corpus
 
 MODES = ("interpreted", "stepped", "fused")
 D = stdlib.Decimal
@@ -125,7 +125,7 @@ def test_no_decimal_object_reaches_a_dispatcher_on_the_warm_path():
 
 
 def _calls(node):
-    from decider.ir import CallNode, iter_nodes
+    from decikit.ir import CallNode, iter_nodes
 
     return (n for n in iter_nodes(node) if isinstance(n, CallNode))
 
@@ -215,14 +215,14 @@ def test_a_decimal_annotation_needs_a_precision_and_scale_and_at_most_nineteen_d
 
 def test_a_too_wide_annotation_raises_at_flow_build_when_annotations_are_strings():
     ns: dict = {}
-    exec("from __future__ import annotations\nfrom decider.ops.decimal import Decimal\n"
+    exec("from __future__ import annotations\nfrom decikit.ops.decimal import Decimal\n"
          "def wide(x: Decimal[38, 2]) -> int:\n    return 1\n", ns)
     with pytest.raises(IRError, match="at most 19"):
         flow(ns["wide"])
 
 
 def test_currency_is_decimal_19_4_and_decimal_spells_its_own_precision():
-    from decider._engine.types import decimal_info
+    from decikit._engine.types import decimal_info
 
     assert decimal_info(Currency)[1:3] == (4, None) and decimal_info(Currency["R"])[1:3] == (4, "R")
     assert decimal_info(Decimal[18, 2]).scale == 2 and decimal_info(Decimal[18, 2] | None).scale == 2

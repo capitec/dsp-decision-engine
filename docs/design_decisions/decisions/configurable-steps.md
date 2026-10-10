@@ -10,7 +10,7 @@ Read this before changing how tree or table documents become kernels, or what a 
 - Not: polars `when/then` chains for scoring (one record costs 419 µs to 7.8 ms, because building the physical plan rather than the optimizer is the cost, so plan caching cannot close it) or a table of njit callables (28-41x per row).
 - The walker's helpers are `inline="always"`: a real call per row between the kernel and the walker doubled the tree's cost (247-262 against 125-133 ns/row); see [tree walker costs](../experiments/tree-walker-costs.md).
 - Not built, from ZEN: a per-column bitset index for tables of 8+ rows and a `collect` hit policy (every matching row, not the first).
-- See: [runtime arrays vs generated code](../experiments/runtime-arrays-vs-generated-code.md), [alternatives to a numba tree walker](../experiments/alternatives-to-a-numba-tree-walker.md), `decider/steps/trees/_walker.py`, `decider/steps/tables/_matcher.py`
+- See: [runtime arrays vs generated code](../experiments/runtime-arrays-vs-generated-code.md), [alternatives to a numba tree walker](../experiments/alternatives-to-a-numba-tree-walker.md), `decikit/steps/trees/_walker.py`, `decikit/steps/tables/_matcher.py`
 
 ## Consts reach the kernel as addresses, not arrays
 
@@ -31,7 +31,7 @@ Read this before changing how tree or table documents become kernels, or what a 
 - Why 64: a single record, start-up and a big frame pull the width in different directions, and 64 is the best compromise over ten rule shapes (table below; [part size](../experiments/tree-split-part-size.md)). A tree of up to 64 rules is never split. From 250 rules up a single record is within 2-3% of an unsplit tree, as with 128; only a tree of 65 to 128 rules pays (up to 8%), and its author can set `part_outputs: 128`. Parts of 128 stage twice as slowly per process and make a big frame 1.4-1.5x slower than parts of 32 (64: 1.1x). A user who runs large frames sets 32; one who needs the last few percent and has a cold start to spare sets more or none.
 - Each part reads every feature with the kind the whole tree gives it. A node breakpoint `<name>#<id>` matches the parts under `<name>`.
 - Cost: `<name>` alone no longer names one node, so a trace, a diff and `checks` report per part (`<name>/part_1`); `_split.DEFAULT_PART_OUTPUTS` is the default width. Every process compiles its fused parts again: `examples/transaction-fraud` stages in 61 s at parts of 128, 31 s at 64 and 21 s at 32, for no measurable change in its `score()`.
-- See: [wide output compile](../experiments/wide-output-compile.md), `decider/steps/trees/_split.py`
+- See: [wide output compile](../experiments/wide-output-compile.md), `decikit/steps/trees/_split.py`
 
 Measured by the part-size sweep, median over ten rule shapes (`score()` against an unsplit tree; cold bind; `run()` over 200k rows against parts of 32):
 
@@ -46,7 +46,7 @@ Measured by the part-size sweep, median over ten rule shapes (`score()` against 
 - v3, `flat_rule` and `prioritized_flat_rule` all become `Tree` (a DAG; unreachable nodes dropped); `TreeConfig` stores the document so the editor keeps node positions.
 - Flat nodes get path ids (`"0.1"`), not `uuid4`, so breakpoints and cache keys are stable; thresholds are `Value[int | float]` so int64 ids above 2**53 stay exact.
 - No version marker means v3 (a real v1 always carries one); v0-v2 raise; Python function references (`output_fn` and kin) are rejected by name.
-- See: `decider/steps/trees/schema/`, `docs/architecture/configurable-steps/trees.md`
+- See: `decikit/steps/trees/schema/`, `docs/architecture/configurable-steps/trees.md`
 
 ## Nulls follow decider_old unless `null_handling="error"`
 
@@ -66,13 +66,13 @@ Measured by the part-size sweep, median over ten rule shapes (`score()` against 
 
 - Each jump carries a weight and the walker sums the weights it takes; the output is a `Literal` of every path's `>`-joined node ids.
 - Why: a kernel cannot write a variable-length string, and with shared nodes the leaf does not name the path. Cost: one add per row, within noise; over 100,000 paths is refused.
-- See: `decider/steps/trees/_trace.py`
+- See: `decikit/steps/trees/_trace.py`
 
 ## The reference walkers are independent implementations
 
 - `reference` walks the model in plain Python and shares only feature kinds with the encoder; it is the interpreted mode and the session locator (`<name>#<id>`, `<name>#<row>`).
 - Why: tests run every fixture in all three modes, so an encoder bug cannot hide behind a copy of itself.
-- See: `decider/steps/trees/_reference.py`, `decider/steps/tables/_reference.py`
+- See: `decikit/steps/trees/_reference.py`, `decikit/steps/tables/_reference.py`
 
 ## Table rows are inline or from params, with one matcher
 
@@ -90,10 +90,10 @@ Measured by the part-size sweep, median over ten rule shapes (`score()` against 
 
 ## Flow files are a front end to `flow` / `branch` / `loop`
 
-- `decider.steps.flowfile.load_flow` builds the same `Step` objects written by hand, so the engine and tooling change nothing; `flow: name` loads `flows/name.*` by reference and conditions are a column, a component or the closed `{expr: ...}` grammar.
+- `decikit.steps.flowfile.load_flow` builds the same `Step` objects written by hand, so the engine and tooling change nothing; `flow: name` loads `flows/name.*` by reference and conditions are a column, a component or the closed `{expr: ...}` grammar.
 - A `step:` name matching both a component and a config document is an error, never a precedence rule; a `branch` with no `else` is one-arm.
 - `a OP b` with no constant side compiles as `(a) - (b) OP 0` in float, so exact equality of large ints can be off.
-- See: `decider/steps/flowfile/_load.py`, `docs/architecture/configurable-steps/expr-and-flowfile.md`
+- See: `decikit/steps/flowfile/_load.py`, `docs/architecture/configurable-steps/expr-and-flowfile.md`
 
 ## Pipeline structure lives with the code, not in a config version
 
@@ -108,4 +108,4 @@ Measured by the part-size sweep, median over ten rule shapes (`score()` against 
 - Why a `staticmethod`: with no `self` numba compiles `impl` as a plain function, and the diff fingerprints its body.
 - Why checks at class creation: a missing `impl`, an argument without a field, or a field that is neither a column nor a `Value` would otherwise surface as a wiring error far from the class. Rows, objects and lists are `param_table` or a hand-written `to_ir`, not a field type this base accepts.
 - No `type` tag is derived from the class name: without a `Literal` tag the class already loads by import path, and a derived alias could collide across packages.
-- See: `decider/steps/_custom.py`, `tests/steps/test_custom_function.py`
+- See: `decikit/steps/_custom.py`, `tests/steps/test_custom_function.py`

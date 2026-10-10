@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import pytest
 
-from decider.lab.experiments import Experiment, ExperimentDef, validate
-from decider.lab.experiments.metrics import Divergence, ValueCounts
-from decider.lab.experiments.plots import Changes
-from decider.lab.experiments.report import Chart, MetricSection, Overview, Report, Row, Section, Table, Text
+from decikit.lab.experiments import Experiment, ExperimentDef, validate
+from decikit.lab.experiments.metrics import Divergence, ValueCounts
+from decikit.lab.experiments.plots import Changes
+from decikit.lab.experiments.report import Chart, MetricSection, Overview, Report, Row, Section, Table, Text
 
 LIMIT_03 = {"demo": {"approved": {"limit": 0.3}}}
 
@@ -79,7 +79,7 @@ def test_save_html_writes_the_page_and_show_draws_it_in_a_notebook(pipeline, fra
     shown = []
     monkeypatch.setattr(IPython.display, "display", lambda *objs: shown.extend(objs))
     result.show()
-    assert len(shown) == 1 and shown[0].data.startswith('<div class="decider-report">')
+    assert len(shown) == 1 and shown[0].data.startswith('<div class="decikit-report">')
 
 
 def test_a_report_without_a_title_still_names_the_page(pipeline, frame):

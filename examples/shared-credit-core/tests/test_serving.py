@@ -1,11 +1,11 @@
-"""The pipeline as served: raw request bytes through the handler `decider serve` uses, in its default compiled mode."""
+"""The pipeline as served: raw request bytes through the handler `decikit serve` uses, in its default compiled mode."""
 import json
 from pathlib import Path
 
 import pytest
-from decider import Engine
-from decider.config import JsonFileStore
-from decider.serving import RequestHandler
+from decikit import Engine
+from decikit.config import JsonFileStore
+from decikit.serving import RequestHandler
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIGS = ROOT / "configs" / "0.1.0"

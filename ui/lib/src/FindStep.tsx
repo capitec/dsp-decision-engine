@@ -38,7 +38,7 @@ export function FindStep({ nodes, onPick, selected }: { nodes: CallNodeJson[]; o
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       // Only while this view shows and has the focus: the page may be a whole IDE with its own Ctrl+F.
-      const root = input.current?.closest(".decider");
+      const root = input.current?.closest(".decikit");
       const at = e.target as Node;
       if (!root?.getClientRects().length || !(root.contains(at) || at.contains(root))) return;
       if ((e.ctrlKey || e.metaKey) && e.key === "f") {

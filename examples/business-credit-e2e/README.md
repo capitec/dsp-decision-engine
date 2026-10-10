@@ -91,7 +91,7 @@ The scale is not a cause of probability movement. It decides whether two grades 
 
 ## Features it shows
 
-| decider feature | Where |
+| Decider toolkit feature | Where |
 |---|---|
 | Another example's `build()` embedded whole as the first step of a `flow`, its params nested under the outer flow's name | [pipeline.py](business_credit_e2e/pipeline.py), [`configs/0.1.0/params.json`](configs/0.1.0/params.json) |
 | `param` for the policy a facility adds (the minimum payment), next to the params of the embedded assessment | [pipeline.py](business_credit_e2e/pipeline.py) |
@@ -111,21 +111,21 @@ From the repository root, put every example on the path once (this one imports `
 ```bash
 export PYTHONPATH=$(printf '%s:' "$PWD"/examples/*/)
 cd examples/business-credit-e2e
-export DECIDER_API__CODE_PATH="$PWD" DECIDER_API__PIPELINE="business_credit_e2e.pipeline:build" DECIDER_CONFIG__BASEPATH="$PWD/configs"
+export DECIKIT_API__CODE_PATH="$PWD" DECIKIT_API__PIPELINE="business_credit_e2e.pipeline:build" DECIKIT_CONFIG__BASEPATH="$PWD/configs"
 ```
 
 Build (validates `configs/0.1.0`, compiles and warms every kernel with `sample_request.json`; the first build in a
 fresh checkout takes a minute while numba compiles):
 
 ```bash
-uv run decider build
+uv run decikit build
 # built config version 0.1.0 (pipeline business_credit_e2e.pipeline:build, mode fused)
 ```
 
 Serve, and decide the sample application. Its dates are plain JSON strings, inside the lists too:
 
 ```bash
-uv run decider serve --workers 1 &
+uv run decikit serve --workers 1 &
 curl -s -d @sample_request.json -H 'content-type: application/json' localhost:8080/invocations |
   jq '{outcome_code, risk_grade, offered_amount, nominal_annual_rate, instalment, master_scale_version,
        covenant_instance_id, covenant_definition_version, covenant_threshold, dscr_existing_debt_service,
@@ -185,7 +185,7 @@ only thing that moved:
 
 ```python
 import json
-from decider import Engine
+from decikit import Engine
 from business_credit_e2e import history, review, vocab
 from business_credit_e2e.pipeline import build
 from business_credit_e2e.records import parse_dates

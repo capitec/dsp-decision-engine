@@ -15,7 +15,7 @@ from credit_core.rate_card import generate_flex_loan_card
 from campaign_trees import overlays
 from campaign_trees.pipeline import build
 
-from decider import ConfigurableStep, DecisionTableConfig, TreeConfig
+from decikit import ConfigurableStep, DecisionTableConfig, TreeConfig
 
 # Tier A is the funding-constrained tier in October.
 CAP_REDUCTIONS = {

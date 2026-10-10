@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Any, Literal
 
-from decider import ConfigurableStep, allow_fallback, param
+from decikit import ConfigurableStep, allow_fallback, param
 
 from credit_core.adjustments import AdjustmentStack, evaluate
 

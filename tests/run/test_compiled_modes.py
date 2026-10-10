@@ -2,14 +2,14 @@
 import polars as pl
 import pytest
 
-from decider import branch, flow, missing_as, param, step
-from decider.ops import Text
-from decider._engine import Engine
-from decider._engine.compile import Kernel
-from decider._engine.ir.decls import Input, Output
-from decider._engine.ir.nodes import CallNode
-from decider._engine.ir.origin import Origin
-from decider.lab.testing import assert_equivalent, no_recompile
+from decikit import branch, flow, missing_as, param, step
+from decikit.ops import Text
+from decikit._engine import Engine
+from decikit._engine.compile import Kernel
+from decikit._engine.ir.decls import Input, Output
+from decikit._engine.ir.nodes import CallNode
+from decikit._engine.ir.origin import Origin
+from decikit.lab.testing import assert_equivalent, no_recompile
 
 MODES = ("interpreted", "stepped", "fused")
 

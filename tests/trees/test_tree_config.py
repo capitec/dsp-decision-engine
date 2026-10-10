@@ -8,16 +8,16 @@ import sys
 import polars as pl
 import pytest
 
-from decider import flow
-from decider.steps.trees.schema import load_document
-from decider import _engine as engine
-from decider._engine import Engine
-from decider._engine.compile import kernel
-from decider._engine.debug import NodeVisited
-from decider.steps import ConfigurableStep
-from decider.steps.trees import TreeConfig, _walker as walker
-from decider.steps.trees.schema import LeafNode
-from decider.lab.testing import assert_equivalent
+from decikit import flow
+from decikit.steps.trees.schema import load_document
+from decikit import _engine as engine
+from decikit._engine import Engine
+from decikit._engine.compile import kernel
+from decikit._engine.debug import NodeVisited
+from decikit.steps import ConfigurableStep
+from decikit.steps.trees import TreeConfig, _walker as walker
+from decikit.steps.trees.schema import LeafNode
+from decikit.lab.testing import assert_equivalent
 
 RISK = {
     "nodes": [
@@ -65,7 +65,7 @@ def test_a_tree_with_infinite_numbers_round_trips_through_json():
 
 def test_the_tree_is_one_row_node_whose_params_are_its_param_refs():
     node = engine.to_ir(_risk())
-    assert (node.kind, node.origin.path, node.origin.source) == ("row", "risk_tree", "decider.steps.trees:TreeConfig")
+    assert (node.kind, node.origin.path, node.origin.source) == ("row", "risk_tree", "decikit.steps.trees:TreeConfig")
     assert node.reference is not None and node.fn is walker.walk
     assert [i.name for i in node.inputs] == ["ratio"]
     assert [o.name for o in node.outputs] == ["band", "pts"]
@@ -326,8 +326,8 @@ def test_a_path_output_named_like_an_output_column_is_refused():
 _CHILD = """
 import contextlib, io, json
 import polars as pl
-from decider._engine import Engine
-from decider.steps.trees import TreeConfig
+from decikit._engine import Engine
+from decikit.steps.trees import TreeConfig
 
 tree = TreeConfig(name="t", tree=json.loads(%r))
 log = io.StringIO()

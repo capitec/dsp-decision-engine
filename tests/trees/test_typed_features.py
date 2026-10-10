@@ -2,11 +2,11 @@
 import polars as pl
 import pytest
 
-from decider import _engine as engine
-from decider._engine import Engine
-from decider._engine.compile import kernel
-from decider._engine.ir.decls import base_annotation
-from decider.steps.trees import TreeConfig, _walker as walker
+from decikit import _engine as engine
+from decikit._engine import Engine
+from decikit._engine.compile import kernel
+from decikit._engine.ir.decls import base_annotation
+from decikit.steps.trees import TreeConfig, _walker as walker
 
 BIG = 9007199254740992  # 2**53: the first integer float64 can't tell from its successor
 MODES = ("interpreted", "stepped", "fused")

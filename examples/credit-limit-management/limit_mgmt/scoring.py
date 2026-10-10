@@ -5,7 +5,7 @@ the adjusted ones.
 """
 from __future__ import annotations
 
-from decider import DecisionTableConfig, ScorecardConfig, flow
+from decikit import DecisionTableConfig, ScorecardConfig, flow
 
 from credit_core import calibration
 from credit_core.evidence import cell_id

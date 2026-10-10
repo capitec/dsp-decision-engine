@@ -79,7 +79,7 @@ The stages, in the order the decision takes them:
 
 ## Features it shows
 
-| decider feature | Where |
+| Decider toolkit feature | Where |
 |---|---|
 | Reusing another example's halves: `assessment.evidence_unit()` once in the flow, `capacity_unit()` compiled and scored per candidate debt set, equal to the whole assessment | [pipeline.py](consolidation/pipeline.py), [capacity.py](consolidation/capacity.py), [tests/test_assessment.py](tests/test_assessment.py) |
 | `each`: per-account rules as ordinary steps, with a `DecisionTableConfig` lookup inside the child | [inventory.py](consolidation/inventory.py) |
@@ -103,14 +103,14 @@ From the repository root, put every example on the path once (this one imports `
 ```bash
 export PYTHONPATH=$(printf '%s:' "$PWD"/examples/*/)
 cd examples/consolidation
-export DECIDER_API__CODE_PATH="$PWD" DECIDER_API__PIPELINE="consolidation.pipeline:build" DECIDER_CONFIG__BASEPATH="$PWD/configs"
+export DECIKIT_API__CODE_PATH="$PWD" DECIKIT_API__PIPELINE="consolidation.pipeline:build" DECIKIT_CONFIG__BASEPATH="$PWD/configs"
 ```
 
 Build (validates `configs/0.1.0`, compiles and warms every kernel with `sample_request.json`; the first build in a fresh
 checkout takes a minute while numba compiles):
 
 ```bash
-uv run decider build
+uv run decikit build
 # built config version 0.1.0 (pipeline consolidation.pipeline:build, mode fused)
 ```
 
@@ -118,7 +118,7 @@ Serve, and assess the sample client. Her dates are plain JSON strings. The 178 s
 tenth of a second:
 
 ```bash
-uv run decider serve --workers 1 &
+uv run decikit serve --workers 1 &
 curl -s -d @sample_request.json -H 'content-type: application/json' localhost:8080/invocations |
   jq '{outcome_code, offer_valid_until,
        chosen: (.chosen_offer | {settlement_set, product_code, term_months, offered_amount, nominal_annual_rate, instalment,
@@ -298,13 +298,13 @@ Inputs it reads that the caller owns: `decision_id`, `decision_date`, `channel_c
 - **Left out.** Products 30 and 40 (they need collateral data), the restructure variant and batch identification, the
   consolidation-specific scorecard (the grade comes in with the request), joint applicants, a time budget, rate add-on
   overlays, and the persistence and replay of the record. `hardship_declared` and an assessment mode are not read.
-- **One workaround for what decider lacks**, marked `# workaround`: the product policies are keyed by text because a `dict`
+- **One workaround for what the decider toolkit lacks**, marked `# workaround`: the product policies are keyed by text because a `dict`
   with integer keys becomes a column that a JSON or CSV batch response cannot write, and `product_policies` is one of
   the pipeline's outputs.
 - **The Flex Loan card is regenerated** in `build` from `credit_core`, not read from a config document, to avoid a third
   13 MB copy of it; the plain offer is the only thing that uses it. It is made once per process, and its rows are the
   default of the table param `plain_granting/plain_rate_card`, which `params.json` leaves out.
-- **What a release check sees.** No step closes over an object, so `decider.lab.diff` compares everything the
+- **What a release check sees.** No step closes over an object, so `decikit.lab.diff` compares everything the
   decision reads: editing a reason code's severity, an overlay's effect, scope or window, a rate card or the capacity
   overlay shows as the step that reads it, and a reworded rationale or description does not
   ([`tests/test_documents.py`](tests/test_documents.py), [`tests/test_hidden_state.py`](tests/test_hidden_state.py)).

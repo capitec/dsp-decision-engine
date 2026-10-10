@@ -1,18 +1,18 @@
 # CLI and MCP
 
-`decider` has two command surfaces over the same library. The `decider` command is for people and CI: start a project, build it, serve it, check it, compare revisions, run experiments, add durable ids. `decider mcp` is for agents: a Model Context Protocol server whose tools describe flows, trace lineage, summarise runs and, after the user confirms, run things. Neither holds logic of its own; each command calls one library function, so everything here can also be done from Python.
+`decikit` has two command surfaces over the same library. The `decikit` command is for people and CI: start a project, build it, serve it, check it, compare revisions, run experiments, add durable ids. `decikit mcp` is for agents: a Model Context Protocol server whose tools describe flows, trace lineage, summarise runs and, after the user confirms, run things. Neither holds logic of its own; each command calls one library function, so everything here can also be done from Python.
 
 ```mermaid
 flowchart TD
-    T["decider template NAME"] --> B["decider build"]
-    B --> S["decider serve"]
-    T --> I["decider ids"]
-    I --> C["decider check"]
-    C --> D["decider diff BASE HEAD"]
-    D --> E["decider experiment run"]
+    T["decikit template NAME"] --> B["decikit build"]
+    B --> S["decikit serve"]
+    T --> I["decikit ids"]
+    I --> C["decikit check"]
+    C --> D["decikit diff BASE HEAD"]
+    D --> E["decikit experiment run"]
     E --> S
-    G["decider guide"] -.-> T
-    M["decider mcp"] -.-> C
+    G["decikit guide"] -.-> T
+    M["decikit mcp"] -.-> C
     classDef authoring fill:#fff1e0,stroke:#f57c00,color:#7c2d00,stroke-width:1.5px;
     classDef tooling fill:#ede9fe,stroke:#7c3aed,color:#4c1d95,stroke-width:1.5px;
     classDef engine fill:#ccfbf1,stroke:#0d9488,color:#134e4a,stroke-width:1.5px;
@@ -25,20 +25,20 @@ flowchart TD
 
 ## Settings
 
-Commands take few flags. Settings come from `DECIDER_*` environment variables, or from a `.env` file in the current directory, which fills in whatever the real environment does not set. Nested settings use a double underscore: `DECIDER_API__PIPELINE=credit_risk.pipeline:build`, `DECIDER_CONFIG__BASEPATH=configs`, `DECIDER_SERVE__PORT=8080`. `decider --help` lists every command; there are no others.
+Commands take few flags. Settings come from `DECIKIT_*` environment variables, or from a `.env` file in the current directory, which fills in whatever the real environment does not set. Nested settings use a double underscore: `DECIKIT_API__PIPELINE=credit_risk.pipeline:build`, `DECIKIT_CONFIG__BASEPATH=configs`, `DECIKIT_SERVE__PORT=8080`. `decikit --help` lists every command; there are no others.
 
 ```text
-$ decider --help
-Usage: decider [OPTIONS] COMMAND [ARGS]...
+$ decikit --help
+Usage: decikit [OPTIONS] COMMAND [ARGS]...
 
-  decider: build and serve decision pipelines.
+  decikit: build and serve decision pipelines.
 
-  New here? Run `decider guide` for the getting-started guide, then `decider
+  New here? Run `decikit guide` for the getting-started guide, then `decikit
   template NAME` for a starter project.
 
-  Settings come from DECIDER_* environment variables, or a .env file in the
-  current directory, e.g. DECIDER_API__PIPELINE=mypkg.pipeline:build,
-  DECIDER_CONFIG__BASEPATH=configs.
+  Settings come from DECIKIT_* environment variables, or a .env file in the
+  current directory, e.g. DECIKIT_API__PIPELINE=mypkg.pipeline:build,
+  DECIKIT_CONFIG__BASEPATH=configs.
 
 Options:
   --help  Show this message and exit.
@@ -55,25 +55,25 @@ Commands:
   template    Write a starter project called NAME into DIRECTORY...
 ```
 
-`python -m decider` runs the same commands.
+`python -m decikit` runs the same commands.
 
-## `decider guide`
+## `decikit guide`
 
-Prints the getting-started guide that ships inside the installed package (`decider/GUIDE.md`): the mental model, a construct-per-need table, examples for every feature and the common mistakes. It matches the installed version, so it is the first thing to read, and the first thing to hand an agent.
+Prints the getting-started guide that ships inside the installed package (`decikit/GUIDE.md`): the mental model, a construct-per-need table, examples for every feature and the common mistakes. It matches the installed version, so it is the first thing to read, and the first thing to hand an agent.
 
 ```text
-$ decider guide | head -3
-# decider: getting started
+$ decikit guide | head -3
+# decikit: getting started
 
 Don't read the repo's `docs/` folder: it describes an older version. This guide
 ```
 
-## `decider template NAME [DIRECTORY]`
+## `decikit template NAME [DIRECTORY]`
 
 Writes a starter project into `DIRECTORY` (default `./NAME`). The project directory is itself the package, so `import NAME` resolves to it. `NAME` is turned into a package name (non-word characters become `_`); a name that still is not a Python identifier, or a target directory that exists and is not empty, is refused.
 
 ```text
-$ decider template credit_risk
+$ decikit template credit_risk
 created credit_risk/README.md
 created credit_risk/__init__.py
 created credit_risk/configs/0.0.0/params.json
@@ -85,41 +85,41 @@ created credit_risk/sample_request.json
 created credit_risk/tests/test_pipeline.py
 
 $ cat credit_risk/.env
-DECIDER_API__PIPELINE=credit_risk.pipeline:build
-DECIDER_API__HANDLER=credit_risk.inference:Handler
-DECIDER_CONFIG__BASEPATH=configs
+DECIKIT_API__PIPELINE=credit_risk.pipeline:build
+DECIKIT_API__HANDLER=credit_risk.inference:Handler
+DECIKIT_CONFIG__BASEPATH=configs
 ```
 
 `pipeline.py` holds the steps and a `build()` function; `inference.py` the request `Handler`; `configs/0.0.0/params.json` the first params version; `sample_request.json` one request the tests and `build` use. [Projects and serving](projects-and-serving.md) walks through each file.
 
-## `decider build [VERSION]`
+## `decikit build [VERSION]`
 
 Stages a config version exactly as `serve` would, then stops. It imports the pipeline, loads the version's documents, validates its params document, and runs `sample_request.json` through every kernel, which fills numba's disk cache so that `serve` starts without compiling. It also records the CPU the cache was built for. `VERSION` defaults to the latest.
 
 ```text
-$ cd credit_risk && decider build
+$ cd credit_risk && decikit build
 built config version 0.0.0 (pipeline credit_risk.pipeline:build, mode fused)
 ```
 
 A version that fails is reported with its error: `Error: config version 9.9.9 failed to build: <ErrorType>: <message>`. Run `build` in CI and in the image build, on the same CPU type you serve on.
 
-## `decider serve`
+## `decikit serve`
 
-Serves the latest config version over HTTP: `POST /invocations` scores a request, `GET /ping` answers once the version is staged and active. Each worker imports the pipeline and handler from `DECIDER_API__CODE_PATH` (default: the current directory).
+Serves the latest config version over HTTP: `POST /invocations` scores a request, `GET /ping` answers once the version is staged and active. Each worker imports the pipeline and handler from `DECIKIT_API__CODE_PATH` (default: the current directory).
 
 | Option | Default |
 |---|---|
-| `--host` | `DECIDER_SERVE__HOST` or `0.0.0.0` |
-| `--port` | `DECIDER_SERVE__PORT` or `8080` |
-| `--workers` | `DECIDER_SERVE__WORKERS` or 2 × CPUs + 1 |
-| `--mode interpreted\|stepped\|fused` | `DECIDER_API__MODE` or `fused` |
-| `--server starlette\|sanic` | `DECIDER_SERVE__SERVER` or `starlette` |
+| `--host` | `DECIKIT_SERVE__HOST` or `0.0.0.0` |
+| `--port` | `DECIKIT_SERVE__PORT` or `8080` |
+| `--workers` | `DECIKIT_SERVE__WORKERS` or 2 × CPUs + 1 |
+| `--mode interpreted\|stepped\|fused` | `DECIKIT_API__MODE` or `fused` |
+| `--server starlette\|sanic` | `DECIKIT_SERVE__SERVER` or `starlette` |
 
 ```text
-$ decider serve --workers 1 --port 18931 &
+$ decikit serve --workers 1 --port 18931 &
 INFO:     Started server process [4015272]
-decider: pipeline credit_risk.pipeline:build from .../credit_risk/pipeline.py
-decider: handler credit_risk.inference:Handler from .../credit_risk/inference.py
+decikit: pipeline credit_risk.pipeline:build from .../credit_risk/pipeline.py
+decikit: handler credit_risk.inference:Handler from .../credit_risk/inference.py
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://0.0.0.0:18931 (Press CTRL+C to quit)
 
@@ -129,9 +129,9 @@ $ curl -s -d @sample_request.json -H 'content-type: application/json' localhost:
 {"income":1000.0,"debt":250.0,"applied_on":"2026-01-15","approved":true}
 ```
 
-Starlette needs `pip install 'decider[serve-starlette]'` (uvicorn) and sanic `decider[serve-sanic]`; without them `serve` says which extra to install. If `decider build` recorded a different CPU, `serve` warns that numba's cache will miss and every worker will compile at startup. The serving stack is covered in [Projects and serving](projects-and-serving.md) and [Serving](../architecture/serving.md).
+Starlette needs `pip install 'decikit[serve-starlette]'` (uvicorn) and sanic `decikit[serve-sanic]`; without them `serve` says which extra to install. If `decikit build` recorded a different CPU, `serve` warns that numba's cache will miss and every worker will compile at startup. The serving stack is covered in [Projects and serving](projects-and-serving.md) and [Serving](../architecture/serving.md).
 
-## `decider ids [PATH]`
+## `decikit ids [PATH]`
 
 Adds a durable `id="0123abcdef45"` to every `@step(...)` decorator, `step(...)` and `frame_step(...)` call, and named `flow`, `dag`, `branch`, `loop`, `each` and `optimise` under `PATH` (default `.`) that lacks one. It changes no other byte: it finds declarations with Python's `ast` and splices the keyword in, so comments and formatting survive.
 
@@ -141,11 +141,11 @@ Adds a durable `id="0123abcdef45"` to every `@step(...)` decorator, `step(...)` 
 | `--fix` | when two declarations share an id, give the later copies fresh ids instead of aborting |
 
 ```text
-$ decider ids lending --check
+$ decikit ids lending --check
 would add 1 id(s) in 1 file(s)
   lending/pipeline.py:33  lending  ->  id=78c90554161d
 
-$ decider ids lending
+$ decikit ids lending
 added 5 id(s) in 1 file(s)
   lending/pipeline.py:5  disposable_income  ->  id=61960951899c
   lending/pipeline.py:10  instalment_ratio  ->  id=f18ff80f85b3
@@ -172,13 +172,13 @@ It is a deliberate source edit, so it guards itself:
 
 It only edits those Python calls. A plain function passed to `flow` without `@step` gets no id; add the decorator. A tree, table or scorecard document needs an `"id"` key next to its `"name"`, added by hand. There is no Python API for the generator. [Decision tracing](tracing.md) explains what ids are for.
 
-## `decider check [ENTRY]`
+## `decikit check [ENTRY]`
 
 Runs the checks over the pipeline `ENTRY` (`module:attr`, a pipeline or a zero-argument function that builds one) with the project's `checks.yaml` policy, prints a report and exits 1 when the gate fails.
 
 ```text
-$ decider check --help
-Usage: decider check [OPTIONS] [ENTRY]
+$ decikit check --help
+Usage: decikit check [OPTIONS] [ENTRY]
 
   Run the checks over the pipeline ENTRY (module:factory); exit 1 when the
   gate fails.
@@ -199,11 +199,11 @@ Options:
 ```
 
 ```text
-$ decider check loanchk.pipeline:build
+$ decikit check loanchk.pipeline:build
 loanchk/pipeline.py:16: warning DCD102 float_money: loan/fee: returns float decimal.round(amount * rate, 2, mode=Rounding.HALF_UP) into a Decimal output (suppressed by float_money on loan/fee)
     fix: return a Decimal: multiply a Decimal by the float, or build one with Currency(major, minor)
 error DCD401 durable_ids: flow 'loan' has no committed durable id
-    fix: run `decider ids`
+    fix: run `decikit ids`
 ...
 loan: 0 info, 0 warning, 4 error, 1 suppressed
 $ echo $?
@@ -212,7 +212,7 @@ $ echo $?
 
 `--list` prints the catalogue (`DCD001  wall_clock  determinism  warning`, one per line, with `[needs_data]` and `[executes]` flags), and `--format sarif` writes SARIF for code scanning. A wrong entry currently surfaces as a Python traceback (`AttributeError: module 'loanchk.pipeline' has no attribute 'nope'`) rather than a one-line error. Everything about checks, including `checks.yaml`, is in [Checks](checks.md).
 
-## `decider diff BASE HEAD ENTRY`
+## `decikit diff BASE HEAD ENTRY`
 
 Compares the pipeline `ENTRY` at two git revisions, each loaded in its own process from a temporary worktree. Without `--data` it compares structure; with `--data` it also runs both revisions over the data and reports which rows and columns change.
 
@@ -223,7 +223,7 @@ Compares the pipeline `ENTRY` at two git revisions, each loaded in its own proce
 | `--format text\|json` | `text` (default) or `{"structure": ..., "outputs": ...}` |
 
 ```text
-$ decider diff v1 v2 lending.pipeline:build --data applications --key application_id
+$ decikit diff v1 v2 lending.pipeline:build --data applications --key application_id
 structure: differs
   changed lending/risk_band: code, consts
   changed lending/approved: params
@@ -238,12 +238,12 @@ $ echo $?
 
 The exit status is 1 when something differs. With `--data` that means a changed row or column; without it, a structure that is not identical, which a pipeline containing a tree or table currently always reports. [Comparing versions](diff-and-equivalence.md) has the details.
 
-## `decider experiment run PATH`
+## `decikit experiment run PATH`
 
 Runs the experiment defined in `PATH` (an `experiment.json`) and prints each scenario's status. `--out DIR` writes each scenario's output as Parquet and the whole result as `DIR/result.json`. The exit status is 0 only when the run completed; `partial`, `non_reproducible`, `failed`, `cancelled` and `timed_out` exit 1.
 
 ```text
-$ decider experiment run experiments/policy_v2/experiment.json --out results/cli
+$ decikit experiment run experiments/policy_v2/experiment.json --out results/cli
 policy_v2: completed
   baseline: completed
   v1: completed
@@ -253,9 +253,9 @@ results in results/cli/result.json
 
 `input.path` in the file is relative to the file; `input.dataset` names a dataset of the project holding it. See [Experiments](experiments.md).
 
-## `decider mcp`
+## `decikit mcp`
 
-`decider mcp` serves a [FastMCP](https://gofastmcp.com) server over stdio for an agent's MCP host. It needs `pip install 'decider[mcp]'`. The host starts and owns the process; the VS Code extension, when running, is a peer the server can talk to, not its parent.
+`decikit mcp` serves a [FastMCP](https://gofastmcp.com) server over stdio for an agent's MCP host. It needs `pip install 'decikit[mcp]'`. The host starts and owns the process; the VS Code extension, when running, is a peer the server can talk to, not its parent.
 
 ### Connecting an agent
 
@@ -264,20 +264,20 @@ Declare it as a stdio server in the host's MCP configuration, run from the proje
 ```json
 {
   "mcpServers": {
-    "decider": {
+    "decikit": {
       "command": "uv",
-      "args": ["run", "decider", "mcp"]
+      "args": ["run", "decikit", "mcp"]
     }
   }
 }
 ```
 
-Add `"--raw"` to `args` to allow the per-record tools, or set `DECIDER_MCP_RAW=1` in the server's environment. Tell the agent to run `decider guide` (or read it with the shell) before it writes pipeline code; the guide is written for that reader.
+Add `"--raw"` to `args` to allow the per-record tools, or set `DECIKIT_MCP_RAW=1` in the server's environment. Tell the agent to run `decikit guide` (or read it with the shell) before it writes pipeline code; the guide is written for that reader.
 
 ### Tools
 
 <div class="diagram" markdown>
-![The decider MCP server's tools in six classes: structural reads and summarised reads always on, raw data tools off unless --raw, run tools marked destructive so the host asks the user, validated config-editing tools, and editor and debug tools forwarded to the VS Code window over an authenticated socket](../assets/diagrams/guide-mcp-tools.svg)
+![The decikit MCP server's tools in six classes: structural reads and summarised reads always on, raw data tools off unless --raw, run tools marked destructive so the host asks the user, validated config-editing tools, and editor and debug tools forwarded to the VS Code window over an authenticated socket](../assets/diagrams/guide-mcp-tools.svg)
 
 *What an agent can call, and what stands between it and your data or source.*
 </div>
@@ -301,7 +301,7 @@ Flows are named by import path, `module:attr`, the same `ENTRY` the CLI takes. E
 | `run_flow` | `entry`, `data` | runs the flow; the same summary as `run_summary` plus `ran: true` (gated) |
 | `run_experiment` | `definition`, `data` | runs an experiment over the file `data`; the result as JSON (gated) |
 | `start_debug` | `entry`, `data` | opens a debug session paused before anything runs and returns its structure (gated) |
-| `generate_ids` | `path="."`, `check=True` | `decider ids` on `path`; with `check=False` it writes source (gated) |
+| `generate_ids` | `path="."`, `check=True` | `decikit ids` on `path`; with `check=False` it writes source (gated) |
 | `highlight` | `nodes`, `flow=None`, `workspace="."` | selects and reveals a node in the VS Code flow view (editor) |
 | `reveal_source` | `path`, `line`, `workspace="."` | opens a file at a line in VS Code (editor) |
 | `editor_selection` | `workspace="."` | what the user is looking at: file, selection, shown flow, selected nodes, debugger pause (editor) |
@@ -333,7 +333,7 @@ The config-editing tools change tree, decision table, scorecard and params docum
 | `params_view` | `path`, `entry=None` | a params document; with `entry`, its problems and the schema it must meet |
 | `params_set` | `path`, `changes`, `entry=None` | sets params by slash path; refused if it adds a problem for `entry` |
 
-`data` arguments are file paths (`.parquet`, `.csv`, `.json`, `.jsonl`), read with [`decider.lab.data.read`](data-and-datasets.md). A tool that raises comes back to the agent as a tool error with the message, for example `Error calling tool 'describe_flow': No module named 'lending.nope'`.
+`data` arguments are file paths (`.parquet`, `.csv`, `.json`, `.jsonl`), read with [`decikit.lab.data.read`](data-and-datasets.md). A tool that raises comes back to the agent as a tool error with the message, for example `Error calling tool 'describe_flow': No module named 'lending.nope'`.
 
 What an agent sees, from the tutorial project:
 
@@ -347,7 +347,7 @@ rows 2000, approved [{'value': False, 'count': 1433}, {'value': True, 'count': 5
 params {'validated': ['lending/approved', 'lending/credit_limit'], 'invalid': [], 'warnings': []}
 
 raw_record(..., record=0)          # without --raw
-{'redacted': 'raw data disabled: start `decider mcp` with --raw (or DECIDER_MCP_RAW=1) to return it'}
+{'redacted': 'raw data disabled: start `decikit mcp` with --raw (or DECIKIT_MCP_RAW=1) to return it'}
 
 raw_record(..., record=0)          # with --raw
 {"entry": "lending.pipeline:build", "record": 0, "values": {"lending/disposable_income": {"disposable_income": 7757.009999999999},
@@ -365,13 +365,13 @@ The server sorts what it can return into three classes, and the `Policy` decides
 | summarised | on | run tallies, check reports, experiment results |
 | raw | off | per-record values and trace events: `raw_record`, `raw_trace`, `debug_evaluate` |
 
-With raw data off, a raw tool returns the redaction notice above, never a made-up value. `decider mcp --raw` (or `DECIDER_MCP_RAW=1` in the server's environment) turns it on for the session; there is no settings key. Summaries can still reveal something about the data (a value count over a small file is close to the data itself), so point the server at data the agent may see.
+With raw data off, a raw tool returns the redaction notice above, never a made-up value. `decikit mcp --raw` (or `DECIKIT_MCP_RAW=1` in the server's environment) turns it on for the session; there is no settings key. Summaries can still reveal something about the data (a value count over a small file is close to the data itself), so point the server at data the agent may see.
 
 Tools that run code or write source (`run_flow`, `run_experiment`, `start_debug`, `generate_ids`, `debug_flow`, `debug_control`, `debug_evaluate`) carry the MCP `destructiveHint` annotation. The host asks the user to confirm before calling them; the server does not ask again. `generate_ids` defaults to `check=True`, which only reports.
 
 ### Editor tools
 
-`decider mcp` also registers the editor and debug tools (`editor_selection`, `highlight`, `reveal_source`, `show_flow`, `set_breakpoints`, `debug_flow`, `debug_control`, `debug_evaluate`). They are not answered by the server: each is forwarded to the VS Code window whose workspace matches, over a per-window Unix socket (a named pipe on Windows) in `~/.decider/editor/`, a directory only you can read. The window's secret token sits beside the socket, so other local processes cannot drive your editor. The decider VS Code extension opens the socket for each folder it has open. With no matching window open, the tool returns `{"ok": false, "error": "no editor window for workspace '...'"}` rather than failing. The bridge is described in [Editor bridge](../architecture/editor-bridge.md).
+`decikit mcp` also registers the editor and debug tools (`editor_selection`, `highlight`, `reveal_source`, `show_flow`, `set_breakpoints`, `debug_flow`, `debug_control`, `debug_evaluate`). They are not answered by the server: each is forwarded to the VS Code window whose workspace matches, over a per-window Unix socket (a named pipe on Windows) in `~/.decikit/editor/`, a directory only you can read. The window's secret token sits beside the socket, so other local processes cannot drive your editor. The decider toolkit VS Code extension opens the socket for each folder it has open. With no matching window open, the tool returns `{"ok": false, "error": "no editor window for workspace '...'"}` rather than failing. The bridge is described in [Editor bridge](../architecture/editor-bridge.md).
 
 ### Limits worth knowing
 

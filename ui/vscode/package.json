@@ -1,7 +1,7 @@
 {
-  "name": "decider-vscode",
-  "displayName": "decider",
-  "description": "See, edit and debug decider flows: Python pipelines and YAML flow files",
+  "name": "decikit-vscode",
+  "displayName": "decider toolkit",
+  "description": "See, edit and debug decider toolkit flows: Python pipelines and YAML flow files",
   "version": "0.1.0",
   "publisher": "capitec",
   "private": true,
@@ -30,295 +30,295 @@
   "contributes": {
     "commands": [
       {
-        "command": "decider.refreshFlows",
-        "title": "decider: Refresh flows",
+        "command": "decikit.refreshFlows",
+        "title": "decider toolkit: Refresh flows",
         "icon": "$(refresh)"
       },
       {
-        "command": "decider.showFlow",
-        "title": "decider: Visualise flow",
+        "command": "decikit.showFlow",
+        "title": "decider toolkit: Visualise flow",
         "icon": "$(type-hierarchy)"
       },
       {
-        "command": "decider.debugFlow",
-        "title": "decider: Debug flow",
+        "command": "decikit.debugFlow",
+        "title": "decider toolkit: Debug flow",
         "icon": "$(debug-alt)"
       },
       {
-        "command": "decider.refreshStructure",
-        "title": "decider: Reload flow",
+        "command": "decikit.refreshStructure",
+        "title": "decider toolkit: Reload flow",
         "icon": "$(refresh)"
       },
       {
-        "command": "decider.openCode",
+        "command": "decikit.openCode",
         "title": "Go to step code",
         "icon": "$(go-to-file)"
       },
       {
-        "command": "decider.toggleBreakpoint",
+        "command": "decikit.toggleBreakpoint",
         "title": "Toggle breakpoint",
         "icon": "$(debug-breakpoint-unsupported)"
       },
       {
-        "command": "decider.insertBefore",
+        "command": "decikit.insertBefore",
         "title": "Insert before…",
         "icon": "$(insert)"
       },
       {
-        "command": "decider.insertAfter",
+        "command": "decikit.insertAfter",
         "title": "Insert after…",
         "icon": "$(add)"
       },
       {
-        "command": "decider.insertInside",
+        "command": "decikit.insertInside",
         "title": "Add inside…",
         "icon": "$(add)"
       },
       {
-        "command": "decider.deleteNode",
+        "command": "decikit.deleteNode",
         "title": "Delete",
         "icon": "$(trash)"
       },
       {
-        "command": "decider.insertFromToolbox",
+        "command": "decikit.insertFromToolbox",
         "title": "Insert into the flow",
         "icon": "$(add)"
       },
       {
-        "command": "decider.refreshDatasets",
-        "title": "decider: Refresh datasets",
+        "command": "decikit.refreshDatasets",
+        "title": "decider toolkit: Refresh datasets",
         "icon": "$(refresh)"
       },
       {
-        "command": "decider.previewDataset",
+        "command": "decikit.previewDataset",
         "title": "Preview rows"
       },
       {
-        "command": "decider.debugWithDataset",
+        "command": "decikit.debugWithDataset",
         "title": "Debug a flow on this dataset",
         "icon": "$(debug-alt)"
       },
       {
-        "command": "decider.copyDatasetName",
+        "command": "decikit.copyDatasetName",
         "title": "Copy name"
       },
       {
-        "command": "decider.revealDataset",
+        "command": "decikit.revealDataset",
         "title": "Reveal in Explorer"
       }
     ],
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "decider",
-          "title": "decider",
+          "id": "decikit",
+          "title": "decider toolkit",
           "icon": "$(type-hierarchy)"
         }
       ]
     },
     "views": {
-      "decider": [
+      "decikit": [
         {
-          "id": "decider.flows",
+          "id": "decikit.flows",
           "name": "Flows"
         },
         {
-          "id": "decider.datasets",
+          "id": "decikit.datasets",
           "name": "Datasets"
         },
         {
-          "id": "decider.structure",
+          "id": "decikit.structure",
           "name": "Structure"
         },
         {
-          "id": "decider.toolbox",
+          "id": "decikit.toolbox",
           "name": "Toolbox",
-          "when": "decider.yamlFlow"
+          "when": "decikit.yamlFlow"
         }
       ]
     },
     "viewsWelcome": [
       {
-        "view": "decider.flows",
-        "contents": "No decider flows found.\n\nA flow is a `flow.yaml` (a top-level `flow:` and `steps:`), or a Python file that imports decider and defines `def build()` or `pipeline = flow(...)`.\n\n[Refresh](command:decider.refreshFlows)"
+        "view": "decikit.flows",
+        "contents": "No decider toolkit flows found.\n\nA flow is a `flow.yaml` (a top-level `flow:` and `steps:`), or a Python file that imports decikit and defines `def build()` or `pipeline = flow(...)`.\n\n[Refresh](command:decikit.refreshFlows)"
       },
       {
-        "view": "decider.structure",
+        "view": "decikit.structure",
         "contents": "Pick a flow under Flows, or click Visualise flow above a pipeline."
       },
       {
-        "view": "decider.datasets",
-        "contents": "No datasets found.\n\nDatasets live in a `datasets/` folder beside `configs/`: `x.parquet`, `x.csv` or `x.jsonl` files, `x/` folders of part files, and `datasets/config.json` entries for client providers such as Redshift.\n\n[Refresh](command:decider.refreshDatasets)"
+        "view": "decikit.datasets",
+        "contents": "No datasets found.\n\nDatasets live in a `datasets/` folder beside `configs/`: `x.parquet`, `x.csv` or `x.jsonl` files, `x/` folders of part files, and `datasets/config.json` entries for client providers such as Redshift.\n\n[Refresh](command:decikit.refreshDatasets)"
       }
     ],
     "menus": {
       "view/title": [
         {
-          "command": "decider.refreshFlows",
-          "when": "view == decider.flows",
+          "command": "decikit.refreshFlows",
+          "when": "view == decikit.flows",
           "group": "navigation"
         },
         {
-          "command": "decider.debugFlow",
-          "when": "view == decider.structure && decider.flowShown",
+          "command": "decikit.debugFlow",
+          "when": "view == decikit.structure && decikit.flowShown",
           "group": "navigation@1"
         },
         {
-          "command": "decider.showFlow",
-          "when": "view == decider.structure && decider.flowShown",
+          "command": "decikit.showFlow",
+          "when": "view == decikit.structure && decikit.flowShown",
           "group": "navigation@2"
         },
         {
-          "command": "decider.refreshStructure",
-          "when": "view == decider.structure && decider.flowShown",
+          "command": "decikit.refreshStructure",
+          "when": "view == decikit.structure && decikit.flowShown",
           "group": "navigation@3"
         },
         {
-          "command": "decider.refreshDatasets",
-          "when": "view == decider.datasets",
+          "command": "decikit.refreshDatasets",
+          "when": "view == decikit.datasets",
           "group": "navigation"
         }
       ],
       "view/item/context": [
         {
-          "command": "decider.debugFlow",
-          "when": "view == decider.flows && viewItem == flow",
+          "command": "decikit.debugFlow",
+          "when": "view == decikit.flows && viewItem == flow",
           "group": "inline"
         },
         {
-          "command": "decider.toggleBreakpoint",
-          "when": "view == decider.structure && viewItem =~ /\\bcode\\b/",
+          "command": "decikit.toggleBreakpoint",
+          "when": "view == decikit.structure && viewItem =~ /\\bcode\\b/",
           "group": "inline@1"
         },
         {
-          "command": "decider.openCode",
-          "when": "view == decider.structure && viewItem =~ /\\bcode\\b/",
+          "command": "decikit.openCode",
+          "when": "view == decikit.structure && viewItem =~ /\\bcode\\b/",
           "group": "inline@2"
         },
         {
-          "command": "decider.insertInside",
-          "when": "view == decider.structure && viewItem =~ /\\binto\\b/",
+          "command": "decikit.insertInside",
+          "when": "view == decikit.structure && viewItem =~ /\\binto\\b/",
           "group": "inline@3"
         },
         {
-          "command": "decider.openCode",
-          "when": "view == decider.structure && viewItem =~ /\\bcode\\b/",
+          "command": "decikit.openCode",
+          "when": "view == decikit.structure && viewItem =~ /\\bcode\\b/",
           "group": "1_open@1"
         },
         {
-          "command": "decider.toggleBreakpoint",
-          "when": "view == decider.structure && viewItem =~ /\\bcode\\b/",
+          "command": "decikit.toggleBreakpoint",
+          "when": "view == decikit.structure && viewItem =~ /\\bcode\\b/",
           "group": "1_open@2"
         },
         {
-          "command": "decider.insertBefore",
-          "when": "view == decider.structure && viewItem =~ /\\bedit\\b/",
+          "command": "decikit.insertBefore",
+          "when": "view == decikit.structure && viewItem =~ /\\bedit\\b/",
           "group": "2_edit@1"
         },
         {
-          "command": "decider.insertAfter",
-          "when": "view == decider.structure && viewItem =~ /\\bedit\\b/",
+          "command": "decikit.insertAfter",
+          "when": "view == decikit.structure && viewItem =~ /\\bedit\\b/",
           "group": "2_edit@2"
         },
         {
-          "command": "decider.insertInside",
-          "when": "view == decider.structure && viewItem =~ /\\binto\\b/",
+          "command": "decikit.insertInside",
+          "when": "view == decikit.structure && viewItem =~ /\\binto\\b/",
           "group": "2_edit@3"
         },
         {
-          "command": "decider.deleteNode",
-          "when": "view == decider.structure && viewItem =~ /\\bedit\\b/",
+          "command": "decikit.deleteNode",
+          "when": "view == decikit.structure && viewItem =~ /\\bedit\\b/",
           "group": "3_delete@1"
         },
         {
-          "command": "decider.insertFromToolbox",
-          "when": "view == decider.toolbox",
+          "command": "decikit.insertFromToolbox",
+          "when": "view == decikit.toolbox",
           "group": "inline"
         },
         {
-          "command": "decider.debugWithDataset",
-          "when": "view == decider.datasets && viewItem =~ /^dataset\\b/",
+          "command": "decikit.debugWithDataset",
+          "when": "view == decikit.datasets && viewItem =~ /^dataset\\b/",
           "group": "inline"
         },
         {
-          "command": "decider.previewDataset",
-          "when": "view == decider.datasets && viewItem =~ /^dataset\\b/",
+          "command": "decikit.previewDataset",
+          "when": "view == decikit.datasets && viewItem =~ /^dataset\\b/",
           "group": "1_open@1"
         },
         {
-          "command": "decider.revealDataset",
-          "when": "view == decider.datasets && viewItem =~ /dataset-local/",
+          "command": "decikit.revealDataset",
+          "when": "view == decikit.datasets && viewItem =~ /dataset-local/",
           "group": "1_open@2"
         },
         {
-          "command": "decider.copyDatasetName",
-          "when": "view == decider.datasets && viewItem =~ /^dataset/",
+          "command": "decikit.copyDatasetName",
+          "when": "view == decikit.datasets && viewItem =~ /^dataset/",
           "group": "2_copy"
         }
       ],
       "commandPalette": [
         {
-          "command": "decider.openCode",
+          "command": "decikit.openCode",
           "when": "false"
         },
         {
-          "command": "decider.toggleBreakpoint",
+          "command": "decikit.toggleBreakpoint",
           "when": "false"
         },
         {
-          "command": "decider.insertBefore",
+          "command": "decikit.insertBefore",
           "when": "false"
         },
         {
-          "command": "decider.insertAfter",
+          "command": "decikit.insertAfter",
           "when": "false"
         },
         {
-          "command": "decider.insertInside",
+          "command": "decikit.insertInside",
           "when": "false"
         },
         {
-          "command": "decider.deleteNode",
+          "command": "decikit.deleteNode",
           "when": "false"
         },
         {
-          "command": "decider.insertFromToolbox",
+          "command": "decikit.insertFromToolbox",
           "when": "false"
         },
         {
-          "command": "decider.previewDataset",
+          "command": "decikit.previewDataset",
           "when": "false"
         },
         {
-          "command": "decider.debugWithDataset",
+          "command": "decikit.debugWithDataset",
           "when": "false"
         },
         {
-          "command": "decider.copyDatasetName",
+          "command": "decikit.copyDatasetName",
           "when": "false"
         },
         {
-          "command": "decider.revealDataset",
+          "command": "decikit.revealDataset",
           "when": "false"
         }
       ]
     },
     "configuration": {
-      "title": "decider",
+      "title": "decider toolkit",
       "properties": {
-        "decider.python": {
+        "decikit.python": {
           "type": "array",
           "items": {
             "type": "string"
           },
           "default": [],
-          "description": "Command that runs Python for decider, e.g. [\"uv\", \"run\", \"python\"]. Empty: the ms-python interpreter, then python3. Debugging also uses it."
+          "description": "Command that runs Python for the decider toolkit, e.g. [\"uv\", \"run\", \"python\"]. Empty: the ms-python interpreter, then python3. Debugging also uses it."
         }
       }
     }
   },
   "scripts": {
-    "build": "pnpm --filter @decider/ui build && vite build && vite build --config vite.webview.config.ts",
+    "build": "pnpm --filter @decikit/ui build && vite build && vite build --config vite.webview.config.ts",
     "watch": "vite build --watch",
     "test": "vitest run",
     "package": "pnpm build && cp ../../LICENSE . && vsce package --no-dependencies",
@@ -328,7 +328,7 @@
     "yaml": "^2.9.1"
   },
   "devDependencies": {
-    "@decider/ui": "workspace:*",
+    "@decikit/ui": "workspace:*",
     "@types/node": "^22.0.0",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",

@@ -7,7 +7,7 @@ unadjusted value beside the adjusted one, and `adjustment_stack_enabled` switche
 """
 from __future__ import annotations
 
-from decider import allow_fallback, dag, missing_as, step
+from decikit import allow_fallback, dag, missing_as, step
 
 from credit_core import calibration, risk_grade
 from credit_core.scorecard import VARIABLES, adverse_action_codes, build_scorecard

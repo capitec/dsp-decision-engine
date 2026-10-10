@@ -1,12 +1,12 @@
 """The per-account decision for the monthly programme: exclusions, behaviour score, matrix, caps, affordability, decrease.
 
-`build(matrix)` is what `decider serve` runs for one account and what `simulation.run_cycle` runs over the whole book.
+`build(matrix)` is what `decikit serve` runs for one account and what `simulation.run_cycle` runs over the whole book.
 The budget that decides which proposed increases are actually funded is `allocation.allocate`, not a step: it needs
 every account at once.
 """
 from __future__ import annotations
 
-from decider import dag, flow
+from decikit import dag, flow
 
 from limit_mgmt import affordability, caps, decrease, exclusions, matrix as mx, outcome, population, scoring
 from limit_mgmt.documents import shipped
@@ -42,7 +42,7 @@ OUTPUTS = (
 
 def build(matrix, behaviour_score_adjustments=None, behaviour_pd_adjustments=None, matrix_dial_adjustments=None,
           buffer_adjustments=None, reason_codes=None):
-    """Each argument is the config document of that name, loaded by `decider`: `matrix` is `configs/<version>/matrix.json`,
+    """Each argument is the config document of that name, loaded by `decikit`: `matrix` is `configs/<version>/matrix.json`,
     `matrix.build_matrix_table()` makes one in code. The overlays and `reason_codes` default to the documents shipped
     in `configs/0.1.0/`.
     """

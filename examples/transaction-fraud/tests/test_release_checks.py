@@ -4,8 +4,8 @@ import warnings
 from pathlib import Path
 
 import pytest
-from decider import ConfigurableStep, DecisionTableConfig, Engine, HiddenStateWarning
-from decider.lab import diff
+from decikit import ConfigurableStep, DecisionTableConfig, Engine, HiddenStateWarning
+from decikit.lab import diff
 
 from fraud_interdiction.pipeline import build
 

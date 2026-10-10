@@ -2,7 +2,7 @@
 from datetime import date
 
 import pytest
-from decider import Engine
+from decikit import Engine
 
 from business_nested import events, vocab
 

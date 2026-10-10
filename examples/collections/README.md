@@ -80,7 +80,7 @@ In the order the pipeline applies them:
 
 ## Features it shows
 
-| decider feature | Where |
+| Decider toolkit feature | Where |
 |---|---|
 | A config document handed to `build` by name: the 5 376-row matrix, changed with no release | [pipeline.py](collections_treatment/pipeline.py), [matrix.py](collections_treatment/matrix.py), [`configs/0.1.0/treatment_matrix.json`](configs/0.1.0/treatment_matrix.json) |
 | `DecisionTableConfig` with inline rows, banded ranges and `eq` keys | [state.py](collections_treatment/state.py), [scoring.py](collections_treatment/scoring.py) |
@@ -103,21 +103,21 @@ From the repository root, put every example on the path once (this one imports `
 ```bash
 export PYTHONPATH=$(printf '%s:' "$PWD"/examples/*/)
 cd examples/collections
-export DECIDER_API__CODE_PATH="$PWD" DECIDER_API__PIPELINE="collections_treatment.pipeline:build" DECIDER_CONFIG__BASEPATH="$PWD/configs"
+export DECIKIT_API__CODE_PATH="$PWD" DECIKIT_API__PIPELINE="collections_treatment.pipeline:build" DECIKIT_CONFIG__BASEPATH="$PWD/configs"
 ```
 
 Build (validates `configs/0.1.0`, compiles and warms every kernel with `sample_request.json`; the first build in a
 fresh checkout takes a minute while numba compiles):
 
 ```bash
-uv run decider build
+uv run decikit build
 # built config version 0.1.0 (pipeline collections_treatment.pipeline:build, mode fused)
 ```
 
 Serve, and decide the sample account. Its dates are plain JSON strings:
 
 ```bash
-uv run decider serve --workers 1 &
+uv run decikit serve --workers 1 &
 curl -s -d @sample_request.json -H 'content-type: application/json' localhost:8080/invocations |
   jq '{arrears_bucket_code, collections_score, collections_band_code, matrix_cell_id, matrix_treatment_code,
        treatment_code, suspension_codes, pool_code, allocated, allocation_rank, non_selection_reason_code}'
@@ -178,7 +178,7 @@ To regenerate `configs/0.1.0` (the synthetic matrix, the overlay stacks and the 
 
 ## Capacity is a population fact
 
-`decider serve` decides one account, which is a population of one: it ranks first of one in its pool. The ranking
+`decikit serve` decides one account, which is a population of one: it ranks first of one in its pool. The ranking
 and rationing step is written for the whole day. Run the pipeline over a frame of accounts and it ranks them
 together (see `test_a_revised_pool_supply_in_the_params_document_changes_who_is_allocated`):
 

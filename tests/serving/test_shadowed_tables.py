@@ -3,10 +3,10 @@ import warnings
 
 import pytest
 
-from decider import ParamTable, ShadowedTableWarning, flow, param_table
-from decider._settings import get_settings
-from decider.config import JsonFileStore
-from decider.serving import RequestHandler
+from decikit import ParamTable, ShadowedTableWarning, flow, param_table
+from decikit._settings import get_settings
+from decikit.config import JsonFileStore
+from decikit.serving import RequestHandler
 
 ROWS = [{"floor": 0, "rate": 0.2}, {"floor": 600, "rate": 0.1}]
 COLUMNS = {"floor": int, "rate": float}
@@ -42,7 +42,7 @@ def stage(tmp_path, step, params):
 
 @pytest.fixture(autouse=True)
 def fresh_settings(monkeypatch):
-    monkeypatch.delenv("DECIDER_BUILD__WARN_SHADOWED_TABLES", raising=False)
+    monkeypatch.delenv("DECIKIT_BUILD__WARN_SHADOWED_TABLES", raising=False)
     get_settings.cache_clear()
     yield
     get_settings.cache_clear()
@@ -89,7 +89,7 @@ def test_the_warning_can_be_ignored_by_category(tmp_path):
 
 @pytest.mark.parametrize("value", ["false", "0"])
 def test_the_warning_can_be_switched_off_by_a_setting(tmp_path, monkeypatch, value):
-    monkeypatch.setenv("DECIDER_BUILD__WARN_SHADOWED_TABLES", value)
+    monkeypatch.setenv("DECIKIT_BUILD__WARN_SHADOWED_TABLES", value)
     get_settings.cache_clear()
     assert stage(tmp_path, seeded, {"p": {"seeded": {"rates": ROWS[:1]}}})[1] == []
 
@@ -101,7 +101,7 @@ def test_the_warning_can_be_switched_off_for_one_table(tmp_path):
 @pytest.mark.parametrize("params", [["not", "a", "mapping"], {"shared": None}])
 def test_a_malformed_params_document_is_reported_by_validation_not_by_the_warning(tmp_path, monkeypatch, params):
     def failure(warn: str):
-        monkeypatch.setenv("DECIDER_BUILD__WARN_SHADOWED_TABLES", warn)
+        monkeypatch.setenv("DECIKIT_BUILD__WARN_SHADOWED_TABLES", warn)
         get_settings.cache_clear()
         try:
             stage(tmp_path / warn, seeded_shared, params)

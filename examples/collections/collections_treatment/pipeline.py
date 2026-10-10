@@ -1,4 +1,4 @@
-"""Collections treatment for one day's delinquent accounts: `build` is what `decider serve` runs.
+"""Collections treatment for one day's delinquent accounts: `build` is what `decikit serve` runs.
 
 Stages, in dependency order: account state, suspensions, score and bands, the matrix and its overlays, the
 suspension check on the overlaid recommendation, the escalation path, the arrangement test and capacity.
@@ -6,7 +6,7 @@ suspension check on the overlaid recommendation, the escalation path, the arrang
 """
 from __future__ import annotations
 
-from decider import DecisionTableConfig, dag
+from decikit import DecisionTableConfig, dag
 
 from credit_core.adjustments import AdjustmentStack
 

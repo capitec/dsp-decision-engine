@@ -76,7 +76,7 @@ export class DatasetsProvider implements vscode.TreeDataProvider<Node>, vscode.D
     item.contextValue = contextValue;
     item.iconPath = new vscode.ThemeIcon(n.error ? "error" : "database");
     item.tooltip = n.error ?? n.path ?? n.name;
-    if (!n.error) item.command = { command: "decider.previewDataset", title: "Preview", arguments: [n] };
+    if (!n.error) item.command = { command: "decikit.previewDataset", title: "Preview", arguments: [n] };
     return item;
   }
 
@@ -107,7 +107,7 @@ export async function previewDataset(d: Project): Promise<void> {
   const key = `${d.cwd}\0${d.name}`;
   const open = previews.get(key);
   if (open) return open.reveal();
-  const panel = vscode.window.createWebviewPanel("decider.datasetPreview", `${d.name} (preview)`, vscode.ViewColumn.Active, { enableScripts: true });
+  const panel = vscode.window.createWebviewPanel("decikit.datasetPreview", `${d.name} (preview)`, vscode.ViewColumn.Active, { enableScripts: true });
   previews.set(key, panel);
   panel.onDidDispose(() => previews.delete(key));
   try {

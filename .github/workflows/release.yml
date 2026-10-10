@@ -32,7 +32,7 @@ jobs:
         id: get
         run: |
           uv sync --group dev
-          VERSION=$(uv run python -c "from importlib.metadata import version; print(version('decider'))")
+          VERSION=$(uv run python -c "from importlib.metadata import version; print(version('decikit'))")
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
   # ── 2a. Build wheel → PyPI ─────────────────────────────────────────────────
@@ -41,7 +41,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: release
-      url: https://pypi.org/p/decider
+      url: https://pypi.org/p/decikit
     permissions:
       id-token: write     # OIDC trusted publishing — no token secret needed
     steps:

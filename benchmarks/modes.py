@@ -8,8 +8,8 @@ import time
 import numpy as np
 import polars as pl
 
-from decider import flow, param
-from decider._engine import Engine
+from decikit import flow, param
+from decikit._engine import Engine
 
 N = 1_000_000
 ROW = {"net_income": 4100.0, "expenses": 1500.0, "instalment": 800.0, "term_cap": 60.0, "min_net_salary": 4100.0}
@@ -63,7 +63,7 @@ def latency(score, calls=20000):
 engines = {}
 for mode in ("fused", "stepped", "interpreted"):
     exe = Engine().bind(flagship, mode=mode)
-    engines[f"decider {mode}"] = (exe.run, exe.score)
+    engines[f"decikit {mode}"] = (exe.run, exe.score)
 latencies = {name: latency(score, calls=2000 if "interpreted" in name else 20000)
              for name, (_, score) in engines.items()}
 results = {name: (rows_per_s(run, reps=1 if "interpreted" in name else 7), *latencies[name])

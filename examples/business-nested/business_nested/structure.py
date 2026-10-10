@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import date
 from typing import TypedDict
 
-from decider import allow_fallback, param, step
+from decikit import allow_fallback, param, step
 
 from business_nested import vocab
 

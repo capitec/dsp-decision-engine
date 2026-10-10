@@ -1,8 +1,8 @@
 """Today's violations of each convention rule; every entry is a to-do for a later phase."""
 
-NO_ALL: dict[str, str] = {}  # {module path relative to decider/: reason}
+NO_ALL: dict[str, str] = {}  # {module path relative to decikit/: reason}
 
-BIG_ALL: dict[str, str] = {  # {package path relative to decider/: reason}
+BIG_ALL: dict[str, str] = {  # {package path relative to decikit/: reason}
     ".": "the authoring vocabulary is one namespace by design",
     "steps/trees/schema": "permanent: the document grammar is public by design",
 }
@@ -69,7 +69,7 @@ SHARED_STATE: dict[str, str] = {  # {"path::Class.method": reason}
     "_engine/run/engine.py::Executable._params": "writes a threading.local, so the report is per thread",
 }
 
-KERNEL_DECORATOR: dict[str, str] = {  # {path relative to decider/: reason}
+KERNEL_DECORATOR: dict[str, str] = {  # {path relative to decikit/: reason}
     "_engine/boundary/_arrow/intrinsics.py": "permanent: the Arrow intrinsics stay with the boundary",
     "_engine/compile/kernel.py": "the generated kernel body is an intrinsic; to be confirmed as an internal kernel",
     "steps/scorecard/_kernels.py": "permanent: internal kernels may use register_jitable",

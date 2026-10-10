@@ -1,7 +1,7 @@
 """Product routing: whether this product may carry the request. One product here, so one gate."""
 from __future__ import annotations
 
-from decider import allow_fallback, param, step
+from decikit import allow_fallback, param, step
 
 R_AMOUNT_OUT_OF_RANGE = 1201
 R_TERM_OUT_OF_RANGE = 1202

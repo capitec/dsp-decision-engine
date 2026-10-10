@@ -10,7 +10,7 @@ from credit_core import eligibility
 from credit_core.pipeline import R_AFFORDABILITY_FAIL, build
 from credit_core.rate_card import generate_flex_loan_card
 
-from decider import ConfigurableStep, DecisionTableConfig
+from decikit import ConfigurableStep, DecisionTableConfig
 
 # Two tighten-only score overlays. An applicant in segment 3 who came through channel 4 gets both, in stack order.
 SCORE_ADJUSTMENTS = {

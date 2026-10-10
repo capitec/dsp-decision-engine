@@ -7,11 +7,11 @@ import pytest
 from numba import njit
 from numba.core.errors import TypingError
 
-import decider._engine.compile.njit  # noqa: F401  (registers the decimal type and overloads)
-from decider._engine.compile.decimal_type import DecimalType
-from decider._engine.compile.semantics.decimals import _divlu, _mul64, raw, wrapper
-from decider.ops import decimal
-from decider.ops.decimal import Currency, Decimal, Rounding
+import decikit._engine.compile.njit  # noqa: F401  (registers the decimal type and overloads)
+from decikit._engine.compile.decimal_type import DecimalType
+from decikit._engine.compile.semantics.decimals import _divlu, _mul64, raw, wrapper
+from decikit.ops import decimal
+from decikit.ops.decimal import Currency, Decimal, Rounding
 
 INT64_MAX = 2 ** 63 - 1
 
@@ -322,7 +322,7 @@ def test_the_cache_salt_reads_the_decimal_files():
     import hashlib
     from pathlib import Path
 
-    from decider._engine.compile import semantics
+    from decikit._engine.compile import semantics
 
     for name in ("decimal_type.py", "semantics/decimals.py"):
         assert any(p.endswith(name) for p in map(str, semantics._FILES)), name
@@ -332,10 +332,10 @@ def test_the_cache_salt_reads_the_decimal_files():
 
 _CACHE_CHILD = """
 import json
-import decider._engine.compile.njit
+import decikit._engine.compile.njit
 from numba import njit
-from decider._engine.compile.semantics.decimals import raw, wrapper
-from decider.ops.decimal import Decimal
+from decikit._engine.compile.semantics.decimals import raw, wrapper
+from decikit.ops.decimal import Decimal
 w = wrapper(4)
 
 @njit(cache=True, nogil=True)

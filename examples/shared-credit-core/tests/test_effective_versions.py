@@ -1,8 +1,8 @@
 from datetime import date
 
 import pytest
-from decider import ConfigurableStep, flow
-from decider.lab import diff
+from decikit import ConfigurableStep, flow
+from decikit.lab import diff
 
 from credit_core.dates import EffectiveVersions, Version
 

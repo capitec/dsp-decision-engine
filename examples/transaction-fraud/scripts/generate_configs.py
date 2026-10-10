@@ -11,7 +11,7 @@ import random
 import sys
 from pathlib import Path
 
-from decider import ConfigurableStep, DecisionTableConfig
+from decikit import ConfigurableStep, DecisionTableConfig
 
 from fraud_interdiction import vocab
 from fraud_interdiction.pipeline import build

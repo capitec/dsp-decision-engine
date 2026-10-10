@@ -7,10 +7,10 @@ import pytest
 
 pytest.importorskip("z3")
 
-from decider import flow  # noqa: E402
-from decider.lab import diff
-from decider.steps.tables import DecisionTableConfig  # noqa: E402
-from decider.steps.trees import TreeConfig  # noqa: E402
+from decikit import flow  # noqa: E402
+from decikit.lab import diff
+from decikit.steps.tables import DecisionTableConfig  # noqa: E402
+from decikit.steps.trees import TreeConfig  # noqa: E402
 
 OUT = {"data": [{"o": 0}, {"o": 1}], "default": {"o": -1}, "dtypes": [["o", "Int64"]]}
 
@@ -186,7 +186,7 @@ def test_a_tree_with_a_param_falls_back_with_a_reason():
 def test_without_z3_the_proof_stops_at_the_hash_and_says_how_to_install_it(monkeypatch):
     monkeypatch.setitem(sys.modules, "z3", None)
     proof = diff.prove(tree((cond("x", ">", 5), 1, 0)), tree((cond("x", ">", 6), 1, 0)))
-    assert (proof.tier, proof.identical) == ("none", None) and "decider[prove]" in proof.reason
+    assert (proof.tier, proof.identical) == ("none", None) and "decikit[prove]" in proof.reason
 
 
 def _random_spec(rng, depth=2):

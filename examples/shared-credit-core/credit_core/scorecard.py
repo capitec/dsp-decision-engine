@@ -1,7 +1,7 @@
 """The retail unsecured scorecard: points per characteristic, with the reason code each low score raises."""
 from __future__ import annotations
 
-from decider import ScorecardConfig
+from decikit import ScorecardConfig
 
 SCORECARD_ID = 1
 SCORECARD_VERSION = "sc-2026.09"

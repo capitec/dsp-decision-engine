@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from decider import missing_as, param, step
+from decikit import missing_as, param, step
 
 # event_type_code
 JUDGMENT = 1

@@ -4,8 +4,8 @@ import typing as t
 import polars as pl
 import pytest
 
-from decider.lab.data import DatasetError, DatasetProvider, FileProvider, FolderProvider, dataset, datasets
-from decider.lab.data._providers import dataset_documents, datasets_folder, project_root
+from decikit.lab.data import DatasetError, DatasetProvider, FileProvider, FolderProvider, dataset, datasets
+from decikit.lab.data._providers import dataset_documents, datasets_folder, project_root
 
 FRAME = pl.DataFrame({"client_id": [1, 2]})
 
@@ -117,7 +117,7 @@ def test_relative_path_is_relative_to_the_cwd(tmp_path, monkeypatch):
 def test_datasets_path_comes_from_the_environment(tmp_path, monkeypatch):
     (tmp_path / "d").mkdir()
     FRAME.write_csv(tmp_path / "d" / "loans.csv")
-    monkeypatch.setenv("Decider_DATASETS_PATH", str(tmp_path / "d"))
+    monkeypatch.setenv("Decikit_DATASETS_PATH", str(tmp_path / "d"))
     assert list(datasets()) == ["loans"]
 
 

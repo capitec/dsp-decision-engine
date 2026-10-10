@@ -10,10 +10,10 @@ import numpy as np
 import polars as pl
 import pytest
 
-from decider import step
-from decider._engine.compile import fingerprint, hidden_state
+from decikit import step
+from decikit._engine.compile import fingerprint, hidden_state
 
-fp = importlib.import_module("decider._engine.compile.fingerprint")
+fp = importlib.import_module("decikit._engine.compile.fingerprint")
 
 
 class Register:
@@ -101,7 +101,7 @@ def test_an_object_after_a_function_in_the_same_container_keeps_the_containers_n
     assert [h[:3] for h in hidden_state(step_)] == [("pair", "object", "Register")]
 
 
-def test_what_a_decider_helper_reads_is_not_reported_against_the_step_calling_it():
+def test_what_a_decikit_helper_reads_is_not_reported_against_the_step_calling_it():
     namespace = {"REGISTRY": Register()}
     exec(compile("def helper(x):\n    return REGISTRY.limit + x\n", fp.__file__, "exec"), namespace)
     helper = namespace["helper"]

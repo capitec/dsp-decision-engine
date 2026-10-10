@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import math
 
-from decider import DecisionTableConfig, step
+from decikit import DecisionTableConfig, step
 
 from credit_core.evidence import cell_id
 from retail_credit.documents import recorded

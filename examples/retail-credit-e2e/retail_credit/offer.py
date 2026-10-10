@@ -1,7 +1,7 @@
 """Offer assembly: whether there is an offer at all, and the figures of the one the solve found."""
 from __future__ import annotations
 
-from decider import allow_fallback, step
+from decikit import allow_fallback, step
 
 from credit_core.affordability import MARGINAL, PASS
 from credit_core.vocab import FraudVerdictCode

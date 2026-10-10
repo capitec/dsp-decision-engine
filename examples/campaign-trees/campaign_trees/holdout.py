@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import hashlib
 
-from decider import allow_fallback, missing_as, param
+from decikit import allow_fallback, missing_as, param
 
 
 def _unit_interval(*parts: object) -> float:

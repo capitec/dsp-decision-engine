@@ -1,7 +1,7 @@
 """Hard eligibility gates. Every gate is evaluated, so the reason list is complete."""
 from __future__ import annotations
 
-from decider import allow_fallback, missing_as, param, step
+from decikit import allow_fallback, missing_as, param, step
 
 # decline reason codes
 R_UNDERAGE = 1001

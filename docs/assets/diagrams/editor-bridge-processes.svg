@@ -22,7 +22,7 @@
   <text x="56" y="290" font-size="13" fill="#4c1d95">depends on ms-python.debugpy</text>
 
   <rect x="40" y="420" width="350" height="180" rx="9" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
-  <text x="56" y="444" font-size="14" font-weight="600" fill="#4c1d95">webview: @decider/ui</text>
+  <text x="56" y="444" font-size="14" font-weight="600" fill="#4c1d95">webview: @decikit/ui</text>
   <text x="56" y="470" font-size="13" fill="#4c1d95">webview/main.tsx renders &lt;App send listen can&gt;</text>
   <text x="56" y="494" font-size="13" fill="#4c1d95">can = {"reveal"}: stepping is debugpy's</text>
   <text x="56" y="518" font-size="13" fill="#4c1d95">ui/lib/src: Graph, Inspector, layout.ts</text>
@@ -35,7 +35,7 @@
 
   <!-- process 1: one-shot bridge -->
   <rect x="520" y="20" width="460" height="170" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
-  <text x="536" y="46" font-size="14" font-weight="600" fill="#134e4a">one question: python -m decider._tooling.bridge --fd 3</text>
+  <text x="536" y="46" font-size="14" font-weight="600" fill="#134e4a">one question: python -m decikit._tooling.bridge --fd 3</text>
   <text x="536" y="72" font-size="13" fill="#134e4a">stdin: one request line, then EOF</text>
   <text x="536" y="96" font-size="13" fill="#134e4a">fd 3: one reply line (stdout ignored, stderr kept)</text>
   <text x="536" y="120" font-size="13" fill="#134e4a">describe · components · datasets</text>
@@ -44,7 +44,7 @@
 
   <!-- process 2: debugpy -->
   <rect x="520" y="220" width="460" height="170" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
-  <text x="536" y="246" font-size="14" font-weight="600" fill="#134e4a">Debug flow: debugpy launch of decider._tooling.bridge.run</text>
+  <text x="536" y="246" font-size="14" font-weight="600" fill="#134e4a">Debug flow: debugpy launch of decikit._tooling.bridge.run</text>
   <text x="536" y="272" font-size="13" fill="#134e4a">FILE [--pipeline] [--data | --dataset] [--row]</text>
   <text x="536" y="296" font-size="13" fill="#134e4a">runs the pipeline once, interpreted, in plain Python</text>
   <text x="536" y="320" font-size="13" fill="#134e4a">your breakpoints stop in your step functions</text>
@@ -56,7 +56,7 @@
   <text x="536" y="446" font-size="14" font-weight="600" fill="#134e4a">a long-lived bridge: Bridge.serve()</text>
   <text x="536" y="472" font-size="13" fill="#134e4a">reader thread: answers pause and cancel at once</text>
   <text x="536" y="496" font-size="13" fill="#134e4a">main thread: start, step, resume, set, state, ...</text>
-  <text x="536" y="520" font-size="13" fill="#134e4a">over decider.debug.Session (interpreted)</text>
+  <text x="536" y="520" font-size="13" fill="#134e4a">over decikit.debug.Session (interpreted)</text>
   <text x="536" y="544" font-size="13" fill="#134e4a">--debugpy PORT: also listen for an attach</text>
   <text x="536" y="574" font-size="13" fill="#1f2937">driven by tests and by any host that keeps one</text>
   <text x="536" y="596" font-size="13" fill="#1f2937">open; the VS Code panel no longer steps through it</text>

@@ -2,7 +2,7 @@
 
 Once a month a bank decides, for each of its clients, which of its live credit campaigns the client should be
 offered, at what tier, for how much and through which channel. This example is that decision for one campaign,
-the **Flex Loan pre-approved top-up** (campaign 23), and it is the example that shows decider's **decision trees**:
+the **Flex Loan pre-approved top-up** (campaign 23), and it is the example that shows the decider toolkit's **decision trees**:
 the targeting policy is a tree that campaign analysts own, kept as a config document a business user can edit.
 
 ## The business problem
@@ -60,7 +60,7 @@ a client's qualifying campaigns become a contact, given the channels' capacity a
 
 ## Features it shows
 
-| decider feature | Where |
+| Decider toolkit feature | Where |
 |---|---|
 | A tree as a config document: `TreeConfig` in v3 form, `build(campaign_23, ...)` receives it by name | [`configs/0.1.0/campaign_23.json`](configs/0.1.0/campaign_23.json), [pipeline.py](campaign_trees/pipeline.py) |
 | `trace_output`: the whole path as node ids, and `path_output`: the leaf | the first lines of [`campaign_23.json`](configs/0.1.0/campaign_23.json), [tests/test_tree.py](tests/test_tree.py) |
@@ -87,21 +87,21 @@ From the repository root, put every example on the path once (this one imports `
 ```bash
 export PYTHONPATH=$(printf '%s:' "$PWD"/examples/*/)
 cd examples/campaign-trees
-export DECIDER_API__CODE_PATH="$PWD" DECIDER_API__PIPELINE="campaign_trees.pipeline:build" DECIDER_CONFIG__BASEPATH="$PWD/configs"
+export DECIKIT_API__CODE_PATH="$PWD" DECIKIT_API__PIPELINE="campaign_trees.pipeline:build" DECIKIT_CONFIG__BASEPATH="$PWD/configs"
 ```
 
 Build (validates `configs/0.1.0`, compiles and warms every kernel with `sample_request.json`; the first build in a
 fresh checkout takes a minute while numba compiles):
 
 ```bash
-uv run decider build
+uv run decikit build
 # built config version 0.1.0 (pipeline campaign_trees.pipeline:build, mode fused)
 ```
 
 Serve, and decide the sample client. Its date is a plain JSON string:
 
 ```bash
-uv run decider serve --workers 1 &
+uv run decikit serve --workers 1 &
 curl -s -d @sample_request.json -H 'content-type: application/json' localhost:8080/invocations |
   jq -c '{assignment_outcome_code, advertised_amount, tree_path, offer_tier_code, reason_label, pre_assessed_amount, overlay_stack_id}'
 ```
@@ -187,14 +187,14 @@ row 6 of `output.data`). Node 6 looks like this:
 ```
 
 Config versions are immutable and a build picks the latest, so every change below starts with
-`cp -r configs/0.1.0 configs/0.2.0`, and ends with `uv run decider build`.
+`cp -r configs/0.1.0 configs/0.2.0`, and ends with `uv run decikit build`.
 
 **Change a published threshold** (the analysts re-fitted the tree). Edit the number, here `default` 2200 to 2500, or a
 plain `0.33`. The node keeps its id, so its volume history continues; ask which nodes a new version touched:
 
 ```python
 import json
-from decider import TreeConfig
+from decikit import TreeConfig
 from campaign_trees.trees import changed_nodes, problems
 
 old, new = (TreeConfig.load(json.load(open(f"configs/{v}/campaign_23.json"))) for v in ("0.1.0", "0.2.0"))

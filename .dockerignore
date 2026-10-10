@@ -2,7 +2,7 @@
 *
 
 # Package source (the builder stage builds the wheel from these)
-!/decider
+!/decikit
 !/pyproject.toml
 !/README.md
 

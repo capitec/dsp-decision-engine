@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import math
 
-from decider import missing_as, param, step
+from decikit import missing_as, param, step
 
 # affordability_verdict_code
 PASS = 1

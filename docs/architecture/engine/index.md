@@ -3,11 +3,11 @@
 The engine turns a pipeline into something that runs. It takes a step, a plain function or an IR node, lowers it
 to the [IR](ir.md), binds every name the IR reads to a version of a value ([wiring](wiring.md)), prepares the
 [params](params.md), and drives one of three [runners](runners.md) over a polars frame or a single dict record.
-Everything lives under `decider/_engine/`. Users reach it through `Engine` and `Executable` (both exported from
-`decider`), or through `Step.run`, `Step.compile` and `Step.session`, which build an `Engine()` and call `bind`.
+Everything lives under `decikit/_engine/`. Users reach it through `Engine` and `Executable` (both exported from
+`decikit`), or through `Step.run`, `Step.compile` and `Step.session`, which build an `Engine()` and call `bind`.
 
 ```python
-from decider import Engine
+from decikit import Engine
 
 exe = Engine(params_validation="lazy").bind(pipeline, mode="fused")
 exe.run(df, params=doc)          # a polars DataFrame
@@ -39,13 +39,13 @@ builds, and what happens on each call.
 | `concurrency.py` | | `Cache` and `once()`, the build-once caches shared by threads | [Concurrency](concurrency.md) |
 | `types.py` | | annotation helpers every layer shares (below) | this page |
 
-`decider/_engine/__init__.py` exports `to_ir`, `IRContext` and `step_map` directly and `Engine` through a module
-`__getattr__`. `Engine` pulls in numba, and `import decider` must not, so the import waits until something asks
-for it. `decider/__init__.py` does the same for `Engine` and `Executable`.
+`decikit/_engine/__init__.py` exports `to_ir`, `IRContext` and `step_map` directly and `Engine` through a module
+`__getattr__`. `Engine` pulls in numba, and `import decikit` must not, so the import waits until something asks
+for it. `decikit/__init__.py` does the same for `Engine` and `Executable`.
 
 The engine sits in layer 1 of the package's layer map, next to `steps`, `ir`, `trace`, `debug` and `config`.
 `tests/test_conventions.py` checks that imports only go down that map and that no package outside the core
-(`decider`, `steps`, `ir`, `trace`, `debug`) imports from `decider._engine`. The [package layout](../package-layout.md)
+(`decikit`, `steps`, `ir`, `trace`, `debug`) imports from `decikit._engine`. The [package layout](../package-layout.md)
 page has the full map.
 
 ## Engine and bind
@@ -58,7 +58,7 @@ page has the full map.
 | `strict_compile` | `False` | In `"stepped"` and `"fused"` modes, a step that would fall back to Python raises at the first run instead of warning, unless the step is marked `@allow_fallback`. In every mode, a `HiddenStateWarning` finding raises `EngineError` at `bind`. |
 
 `Engine.bind(step_or_ir, mode="interpreted")` looks the mode up in `RUNNERS`, a plain dict in
-`decider/_engine/run/engine.py`:
+`decikit/_engine/run/engine.py`:
 
 ```python
 RUNNERS = {
@@ -130,7 +130,7 @@ type, and a shared param sets the affordability ratio:
 
 ```python
 import polars as pl
-from decider import branch, flow, missing_as, param, step
+from decikit import branch, flow, missing_as, param, step
 
 def disposable_income(net_income: float,
                       expenses: float = missing_as(0.0)) -> float:
@@ -267,9 +267,9 @@ and hashing an empty params document took 3.7 µs, so the empty document's key i
 
 | Engine | Batch rows/s | `score` p50 | `score` p99 |
 |---|---|---|---|
-| decider fused | 12.5M | 27.7 µs | 34.7 µs |
-| decider stepped | 12.9M | 37.1 µs | 47.6 µs |
-| decider interpreted | 0.25M | 59.1 µs | 84.5 µs |
+| decikit fused | 12.5M | 27.7 µs | 34.7 µs |
+| decikit stepped | 12.9M | 37.1 µs | 47.6 µs |
+| decikit interpreted | 0.25M | 59.1 µs | 84.5 µs |
 
 Running the credit pipeline above in fused mode on a loaded development machine while writing this page gave a
 `score` p50 of 80.7 µs against 192.4 µs for `run` on the same record as a one-row frame. `score` takes a dict
@@ -277,7 +277,7 @@ because matching keyword names against a 400-argument signature cost 1190 µs pe
 
 ## session and fallbacks
 
-`session(df, params=None)` returns a `decider.debug.Session` over the frame, paused before anything runs. It calls
+`session(df, params=None)` returns a `decikit.debug.Session` over the frame, paused before anything runs. It calls
 the same `prepare` and the same `runner.iterate`, and advances the generator only as far as the user asks. The
 [debug](debug.md) page covers it.
 
@@ -326,7 +326,7 @@ in step credit/affordable, row 0
 
 ## Shared annotation helpers
 
-`decider/_engine/types.py` answers questions about annotations that every layer asks, so the answers agree:
+`decikit/_engine/types.py` answers questions about annotations that every layer asks, so the answers agree:
 
 - `plain_annotation` strips `Annotated[...]`; `hoist_metadata` rewrites `Optional[Annotated[T, M]]` as
   `Annotated[T | None, M]` so the metadata sits in one place.
@@ -336,7 +336,7 @@ in step credit/affordable, row 0
   call stores a string value; the [runners](runners.md) page shows where they are used.
 - `decimal_info`, `is_decimal`, `decimal_scale`, `decimal_boxer`, `to_raw` and `to_raw_input` cover `Decimal[p, s]`
   and `Currency`, which the engine stores as an int64 mantissa. `decimal_info` imports nothing: it looks for
-  `decider.ops.decimal` in `sys.modules`, because importing it would load numba.
+  `decikit.ops.decimal` in `sys.modules`, because importing it would load numba.
 - `cast_values` turns one value, or one per row, into a typed array and mask, refusing a lossy cast
   (`casting="same_kind"`).
 
@@ -347,7 +347,7 @@ helper answers without it.
 ## Extending and debugging the engine
 
 A new execution mode is one entry in `RUNNERS` and a class with an `iterate(plan, state, params, trace=None,
-table=None)` generator method (the `Runner` protocol in `decider/_engine/run/runners/base.py`). A compiled mode
+table=None)` generator method (the `Runner` protocol in `decikit/_engine/run/runners/base.py`). A compiled mode
 also implements `CompiledRunner`: `_compile(plan, lazy)` and `fallbacks()`. Subclassing `InterpretedRunner` and
 overriding `_call` is how `SteppedRunner` does it.
 

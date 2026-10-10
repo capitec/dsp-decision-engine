@@ -1,7 +1,7 @@
 """Final validation: whether the Bank is willing to be bound by the offer, checked on the figures it will be bound to."""
 from __future__ import annotations
 
-from decider import allow_fallback, param, step
+from decikit import allow_fallback, param, step
 
 A_AMOUNT_ON_GRID = 1701
 A_AMOUNT_WITHIN_CAP = 1702

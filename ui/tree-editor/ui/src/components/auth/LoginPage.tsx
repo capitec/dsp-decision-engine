@@ -253,13 +253,13 @@ export const LoginPage: React.FC = () => {
         <div className="text-center mb-6">
           {!isPopupMode && (
             <img 
-              src="/decider-icon.png" 
-              alt="DSP Decider Logo" 
+              src="/decikit-icon.png" 
+              alt="DSP Decider toolkit Logo" 
               className="w-24 h-24 mx-auto mb-4 object-contain"
             />
           )}
           <h1 className={`${isPopupMode ? 'text-xl' : 'text-2xl'} font-bold text-gray-900 mb-2`}>
-            {isPopupMode ? 'Session Refresh' : 'DSP Decider'}
+            {isPopupMode ? 'Session Refresh' : 'DSP Decider toolkit'}
           </h1>
           <p className="text-gray-600">
             {isPopupMode 

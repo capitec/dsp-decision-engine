@@ -3,8 +3,8 @@ from __future__ import annotations
 
 from typing import TypedDict
 
-from decider import flow, param, step
-from decider.ops import Struct
+from decikit import flow, param, step
+from decikit.ops import Struct
 
 from credit_core import credit_life, fees, instalment, rounding
 from retail_credit import flex_card

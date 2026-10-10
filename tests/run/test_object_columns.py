@@ -1,6 +1,6 @@
 import polars as pl
 
-from decider import flow, step
+from decikit import flow, step
 
 
 def test_a_nullable_string_input_reaches_the_step_as_none():

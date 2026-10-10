@@ -1,6 +1,6 @@
 import * as path from "node:path";
 import { isMap, isSeq, LineCounter, parseDocument, type Document, type Node } from "yaml";
-import { lastSegment, type IRNodeJson } from "@decider/ui";
+import { lastSegment, type IRNodeJson } from "@decikit/ui";
 
 export type Kind = "step" | "flow" | "branch" | "loop" | "condition" | "arm";
 
@@ -29,7 +29,7 @@ export type Read = (file: string) => string | undefined;
 const KINDS = ["step", "flow", "branch", "loop"] as const;
 const FLOW_EXTS = ["yaml", "yml", "json"];
 
-/** Whether `text` is a decider flow file: a top-level `flow:` name and `steps:` list. */
+/** Whether `text` is a decikit flow file: a top-level `flow:` name and `steps:` list. */
 export function isFlowFile(text: string): boolean {
   return /^flow:\s*\S/m.test(text) && /^steps:/m.test(text);
 }

@@ -5,7 +5,7 @@ The affordability steps run a second time on `existing_obligations_hypothetical`
 """
 from __future__ import annotations
 
-from decider import missing_as, step
+from decikit import missing_as, step
 
 from credit_core.affordability import MARGINAL, PASS
 from credit_core.vocab import FraudVerdictCode

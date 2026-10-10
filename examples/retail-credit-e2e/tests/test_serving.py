@@ -1,11 +1,11 @@
-"""The decision as served: raw request bytes through the handler `decider serve` uses, in its compiled default mode."""
+"""The decision as served: raw request bytes through the handler `decikit serve` uses, in its compiled default mode."""
 import json
 from pathlib import Path
 
 import pytest
-from decider import Engine
-from decider.config import JsonFileStore
-from decider.serving import RequestHandler
+from decikit import Engine
+from decikit.config import JsonFileStore
+from decikit.serving import RequestHandler
 
 from retail_credit.pipeline import build
 

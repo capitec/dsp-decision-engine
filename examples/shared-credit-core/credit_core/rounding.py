@@ -1,8 +1,8 @@
 """Money rounding in one place, so a pricing step and a contract step cannot disagree by a cent."""
 from __future__ import annotations
 
-from decider import step
-from decider.ops import decimal
+from decikit import step
+from decikit.ops import decimal
 
 
 def round_advance(amount: float) -> float:

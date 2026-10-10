@@ -5,8 +5,8 @@ from datetime import date
 from pathlib import Path
 
 import pytest
-from decider import ConfigurableStep, Engine, HiddenStateWarning
-from decider.lab import diff
+from decikit import ConfigurableStep, Engine, HiddenStateWarning
+from decikit.lab import diff
 
 from business_nested import events, vocab
 from business_nested.pipeline import build

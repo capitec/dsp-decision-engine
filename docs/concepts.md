@@ -1,6 +1,6 @@
 # Core concepts
 
-A decider pipeline is a set of plain Python functions wired together by the names of their arguments. Each function reads values by name and writes one value under its own name. Some arguments are request data, which changes with every record, and some are params, which hold policy and come from a versioned document. The same pipeline runs over a polars frame or one record at a time, in plain Python or compiled with numba, and gives the same answers either way.
+A decider toolkit pipeline is a set of plain Python functions wired together by the names of their arguments. Each function reads values by name and writes one value under its own name. Some arguments are request data, which changes with every record, and some are params, which hold policy and come from a versioned document. The same pipeline runs over a polars frame or one record at a time, in plain Python or compiled with numba, and gives the same answers either way.
 
 This page builds that model one piece at a time and ends with a glossary. Each term links to the guide that covers it in full.
 
@@ -41,7 +41,7 @@ The engine enforces the split. A value for a param that turns up in the record i
 ```python
 import warnings
 
-from decider import flow, param
+from decikit import flow, param
 
 def ratio(income: float, debt: float) -> float:
     return debt / income
@@ -98,7 +98,7 @@ There are two ways to call a pipeline. `run(df)` takes a polars frame and return
 
 - `"interpreted"` calls each function in Python for each row. It needs no compile, pauses at every step in a debug session, and is the reference the other modes are tested against.
 - `"stepped"` compiles every step into its own numba kernel and drives them from Python. Sessions still pause at every step.
-- `"fused"` compiles each run of consecutive compilable steps into one kernel, including whole branches and loops made of plain scalar steps. It is the fastest and the default for `decider serve`.
+- `"fused"` compiles each run of consecutive compilable steps into one kernel, including whole branches and loops made of plain scalar steps. It is the fastest and the default for `decikit serve`.
 
 On the benchmark pipeline (1M rows through `run`, 20k `score` calls), interpreted mode ran 0.25M rows/s with a `score` median of 59.1 µs, stepped 12.9M rows/s and 37.1 µs, and fused 12.5M rows/s and 27.7 µs. [Compiled modes and fallback](guides/compile-and-fallback.md) covers what compiles, what falls back and how to measure your own pipeline.
 
@@ -126,7 +126,7 @@ Wiring errors (a typo in an input name, a dag cycle, a branch-local value read o
 
 A pipeline on its own is a Python object. These pieces turn it into something you deploy, inspect and compare:
 
-- A project is a package directory with `pipeline.py` (a `build()` function returning the pipeline), `inference.py` (the request handler), `configs/<version>/` and a `.env`. `decider template NAME` writes one, and `decider build` and `decider serve` run it. See [Projects and serving](guides/projects-and-serving.md).
+- A project is a package directory with `pipeline.py` (a `build()` function returning the pipeline), `inference.py` (the request handler), `configs/<version>/` and a `.env`. `decikit template NAME` writes one, and `decikit build` and `decikit serve` run it. See [Projects and serving](guides/projects-and-serving.md).
 - A config version is one immutable directory under `configs/`, such as `configs/0.0.0/`, holding the params document and any tree, table or scorecard documents. A new version is a new directory; replaying an old decision reads the version it was made with. See the [config store](architecture/config-store.md).
 - A trace is the compact evidence of why a record got its answer: which steps ran, which branch arm and loop iteration each row took. It is captured only when you pass a `TraceSink`. See [Tracing](guides/tracing.md).
 - A check is a static rule run over a pipeline (and optionally a params document or data), such as a missing durable id or a product that can overflow int64. Each finding has a stable code like `DCD401`. See [Checks](guides/checks.md).
@@ -153,7 +153,7 @@ A pipeline on its own is a Python object. These pieces turn it into something yo
 | [executable](guides/compile-and-fallback.md) | What `compile(mode)` or `Engine().bind(step, mode)` returns: a bound pipeline with `run`, `score`, `fallbacks` and `session`. |
 | [interpreted, stepped, fused](guides/compile-and-fallback.md) | The three run modes: plain Python, one kernel per step, one kernel per run of steps. |
 | [fallback](guides/compile-and-fallback.md) | A step a compiled mode runs in Python because numba cannot hold its types or compile its body. Reported once by a `FallbackWarning`. |
-| [ConfigurableStep](guides/trees-tables-scorecards.md) | A step type loaded from a JSON document with a `type` tag; trees, decision tables and scorecards are the built-in ones. Your own types: [Extending decider](guides/extending.md). |
+| [ConfigurableStep](guides/trees-tables-scorecards.md) | A step type loaded from a JSON document with a `type` tag; trees, decision tables and scorecards are the built-in ones. Your own types: [Extending the decider toolkit](guides/extending.md). |
 | [IR](architecture/steps-and-ir.md) | The intermediate representation every step lowers to with `to_ir`. |
 | [project](guides/projects-and-serving.md) | A package directory with `pipeline.py`, `inference.py`, `configs/` and `.env`. |
 | [config version](architecture/config-store.md) | One immutable `configs/<version>/` directory of documents. |

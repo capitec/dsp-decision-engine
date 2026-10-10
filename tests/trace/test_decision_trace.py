@@ -5,12 +5,12 @@ import numpy as np
 import polars as pl
 import pytest
 
-from decider import branch, dag, flow, frame_step, loop, param, step
-from decider._engine import Engine
-from decider._engine.ir.origin import Origin
-from decider._engine.trace import (Kind, PassThroughAdapter, StepTable, TraceEvent, TraceLossError, TraceSink,
+from decikit import branch, dag, flow, frame_step, loop, param, step
+from decikit._engine import Engine
+from decikit._engine.ir.origin import Origin
+from decikit._engine.trace import (Kind, PassThroughAdapter, StepTable, TraceEvent, TraceLossError, TraceSink,
                                   decode, pack, unpack)
-from decider._engine.trace.envelope import SCHEMA_VERSION
+from decikit._engine.trace.envelope import SCHEMA_VERSION
 
 MODES = ("interpreted", "stepped", "fused")
 

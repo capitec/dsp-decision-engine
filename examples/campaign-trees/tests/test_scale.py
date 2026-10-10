@@ -2,7 +2,7 @@
 import random
 
 import polars as pl
-from decider import TreeConfig, flow
+from decikit import TreeConfig, flow
 
 from campaign_trees.trees import problems
 

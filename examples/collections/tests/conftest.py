@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from decider import ConfigurableStep, DecisionTableConfig
+from decikit import ConfigurableStep, DecisionTableConfig
 
 from collections_treatment.pipeline import build
 
@@ -37,7 +37,7 @@ STACKS = ("score_shift", "scaling_change", "odds_multiplier", "band_boundary_shi
 
 @pytest.fixture(scope="session")
 def stacks():
-    """The shipped overlay stacks, loaded as `decider build` loads them."""
+    """The shipped overlay stacks, loaded as `decikit build` loads them."""
     return {name: ConfigurableStep.load(str(ROOT / "configs" / "0.1.0" / f"{name}.json")) for name in STACKS}
 
 

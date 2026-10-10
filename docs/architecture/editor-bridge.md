@@ -1,6 +1,6 @@
 # Editor bridge
 
-An editor that shows a decider flow needs facts only Python can produce: which pipelines a file defines, the IR with a source location for every node, the params each step declares, and, while debugging, what each record looks like at each checkpoint. The editor runs in Node (VS Code) or a browser (the tree editor), so something has to stand between it and the library. That is the editor bridge, `decider/_tooling/bridge/`: a JSON-lines protocol over a child process's pipes, plus the adapters that turn a `decider.debug.Session` into the views an editor draws.
+An editor that shows a decider toolkit flow needs facts only Python can produce: which pipelines a file defines, the IR with a source location for every node, the params each step declares, and, while debugging, what each record looks like at each checkpoint. The editor runs in Node (VS Code) or a browser (the tree editor), so something has to stand between it and the library. That is the editor bridge, `decikit/_tooling/bridge/`: a JSON-lines protocol over a child process's pipes, plus the adapters that turn a `decikit.debug.Session` into the views an editor draws.
 
 The bridge does not implement a second debugger. Running one checkpoint at a time, rewinding, overriding values and swapping steps are `Session` features, documented in [Debug sessions](engine/debug.md). The bridge adds what an editor needs on top: source locations, per-record history, lineage per record, forced branches, value breakpoints, scenario forks and comparisons, all as JSON.
 
@@ -11,7 +11,7 @@ This page covers the bridge, the processes around it and the UIs that sit on it:
 | File | What it holds |
 |---|---|
 | `bridge.py` | `Bridge`: the command dispatcher (`handle`), the stdio loop (`serve`) and `main` (`--fd`, `--debugpy`). |
-| `__main__.py` | `python -m decider._tooling.bridge` calls `main()`. |
+| `__main__.py` | `python -m decikit._tooling.bridge` calls `main()`. |
 | `protocol.py` | The reply models (`Hello`, `DescribeResult`, `Status`, `StateResult`, `Lineage`, `Draft`, ...), `PROTOCOL_VERSION`, `capabilities()`, and the generator for `ui/lib/src/model/protocol.ts`. |
 | `schema.py` | JSON Schema and TypeScript generation from pydantic models, for the protocol and the static-flow contract. |
 | `loading.py` | `load_module` (import a file fresh), flow-file helpers, `latest_config`, `components`. |
@@ -27,7 +27,7 @@ This page covers the bridge, the processes around it and the UIs that sit on it:
 | `datasets.py` | `datasets`, `dataset_schema`, `dataset_head` for the dataset picker. |
 | `experiment.py` | `experiment` (run with streamed progress, cancellable), `experiment_schema`, `experiment_validate`. |
 | `draft.py` | `draft_changes`: a paused session's changes as an experiment draft. |
-| `run.py` | `python -m decider._tooling.bridge.run`: run a pipeline once under a Python debugger; `node_path()`. |
+| `run.py` | `python -m decikit._tooling.bridge.run`: run a pipeline once under a Python debugger; `node_path()`. |
 
 ## The processes
 
@@ -39,11 +39,11 @@ This page covers the bridge, the processes around it and the UIs that sit on it:
 
 Three ways of running Python sit behind an editor:
 
-1. One question, one process. `ask(cwd, cmd, args)` in `ui/vscode/src/python.ts` spawns `python -m decider._tooling.bridge --fd 3` in the file's directory, writes one request line, closes stdin and reads one reply line from file descriptor 3. stdout is ignored, so a `print()` in a step cannot corrupt the protocol; stderr is kept for the error message if the process dies. A fresh process per question means an edit saved a second ago always counts, with no reload logic in the bridge.
-2. Debug flow. `debugFlow` in `debugging.ts` starts an ordinary `debugpy` launch of `python -m decider._tooling.bridge.run FILE [--pipeline P] [--data PATH | --dataset NAME] [--row N]`, which runs the pipeline once in interpreted mode. Breakpoints are ordinary Python breakpoints in step functions. The extension mirrors the debugger onto the flow (see [Native debugging](#native-debugging-with-debugpy)).
+1. One question, one process. `ask(cwd, cmd, args)` in `ui/vscode/src/python.ts` spawns `python -m decikit._tooling.bridge --fd 3` in the file's directory, writes one request line, closes stdin and reads one reply line from file descriptor 3. stdout is ignored, so a `print()` in a step cannot corrupt the protocol; stderr is kept for the error message if the process dies. A fresh process per question means an edit saved a second ago always counts, with no reload logic in the bridge.
+2. Debug flow. `debugFlow` in `debugging.ts` starts an ordinary `debugpy` launch of `python -m decikit._tooling.bridge.run FILE [--pipeline P] [--data PATH | --dataset NAME] [--row N]`, which runs the pipeline once in interpreted mode. Breakpoints are ordinary Python breakpoints in step functions. The extension mirrors the debugger onto the flow (see [Native debugging](#native-debugging-with-debugpy)).
 3. A long-lived bridge. `Bridge.serve()` keeps a session open across requests: `start`, then `step`, `resume`, `set`, `state`, `lineage`, `rewind`, forks and comparisons. The tests drive it, and it is what a panel with its own Continue and Step buttons would use. The VS Code panel stopped stepping through it when debugging moved to debugpy, so in the shipped extension these commands have no caller.
 
-The interpreter is the `decider.python` setting (for example `["uv", "run", "python"]`), else the ms-python extension's active environment, else `python3`. For debugpy launches `configuredExecutable` resolves that command to a real `sys.executable`, since debugpy needs a file.
+The interpreter is the `decikit.python` setting (for example `["uv", "run", "python"]`), else the ms-python extension's active environment, else `python3`. For debugpy launches `configuredExecutable` resolves that command to a real `sys.executable`, since debugpy needs a file.
 
 ## The protocol
 
@@ -75,7 +75,7 @@ One JSON object per line in each direction:
                   "source_mapping": true}}
 ```
 
-The reply shapes are pydantic models in `protocol.py`, and the TypeScript the UI compiles against is generated from them. `uv run python -m decider._tooling.bridge.protocol` rewrites the block between `// <generated: ...>` and `// </generated>` in `ui/lib/src/model/protocol.ts` with one `export interface` per model, field docs included. A field typed `Unset[...]` is left out of the wire when the producer did not set it (`wire()` dumps with `exclude_unset=True`) and becomes an optional field in TypeScript, so the JSON a host receives is exactly what the bridge put in, never a `null` it did not mean.
+The reply shapes are pydantic models in `protocol.py`, and the TypeScript the UI compiles against is generated from them. `uv run python -m decikit._tooling.bridge.protocol` rewrites the block between `// <generated: ...>` and `// </generated>` in `ui/lib/src/model/protocol.ts` with one `export interface` per model, field docs included. A field typed `Unset[...]` is left out of the wire when the producer did not set it (`wire()` dumps with `exclude_unset=True`) and becomes an optional field in TypeScript, so the JSON a host receives is exactly what the bridge put in, never a `null` it did not mean.
 
 ### Commands
 
@@ -111,7 +111,7 @@ Commands after `lineage` in `handle` need a session and raise `RuntimeError: no 
 
 ### A real conversation
 
-This is a script driving `python -m decider._tooling.bridge --fd 3` over its pipes, on `ui/vscode/examples/loan.py`, exactly as the extension spawns it (long replies cut at 600 characters):
+This is a script driving `python -m decikit._tooling.bridge --fd 3` over its pipes, on `ui/vscode/examples/loan.py`, exactly as the extension spawns it (long replies cut at 600 characters):
 
 ```text
 >> {"id": 3, "cmd": "start", "file": ".../loan.py", "breakpoints": ["term/cap_by_income"]}
@@ -122,7 +122,7 @@ This is a script driving `python -m decider._tooling.bridge --fd 3` over its pip
    "dataset": {"dataset": "", "fingerprint": "2fa7e5ef...", "columns": [["client_id", "Int64"], ...], "row_count": 2}}}
 >> {"id": 4, "cmd": "resume"}
 << {"id": 4, "ok": true, "result": {"finished": false, "current": {"path": "term/cap_by_income", "when": "before"},
-   "events": [{"kind": "node_started", "origin": {"path": "", "source": "decider.steps:SequentialStep", ...}}, ...
+   "events": [{"kind": "node_started", "origin": {"path": "", "source": "decikit.steps:SequentialStep", ...}}, ...
 >> {"id": 6, "cmd": "lineage", "name": "term_cap", "row": 0}
 << {"id": 6, "ok": true, "result": {"name": "term_cap", "producer": "term/term_cap", "value": 60.0,
    "inputs": [{"name": "requested_term", "producer": null, "value": 72.0, "inputs": []}]}}
@@ -207,8 +207,8 @@ flowchart LR
 `describe(file, pipeline)` is the command every host calls first. It does five things:
 
 1. Imports the file fresh with `load_module`. A file inside a package (its directory has `__init__.py`) is imported by dotted name with the package's root on `sys.path`, after dropping every already-imported module of that package from `sys.modules`, so edits since the last describe count. A loose file is executed from its path under its stem name. Either way the import compiles into a fresh temporary `sys.pycache_prefix`: Python keys cached bytecode on mtime in whole seconds and file size, and an edit saved within the same second at the same length ran the old code (found in large-project test runs of the VS Code extension). A flow file (`.yaml`, `.yml`, `.json`) instead imports its `components:` module and reads the flow's name.
-2. Finds the pipelines with `find_pipelines`: module-level `Step` objects not contained in another, a top-level `def build`, and zero-argument factories named `pipeline`, `flow`, `*_pipeline` or `*_flow`. A single function step left unassembled, or a factory that needs arguments, is listed with `status: "invalid"` and a reason, so the UI can say why it is not offered. With no valid candidate the command fails with `no decider pipeline (...): define def build() or assign one at module level`. Without `pipeline`, the last valid candidate is chosen.
-3. Builds the step. A `def build(...)` is called the way `decider serve` calls it (`building.build_step`): the project root is the nearest ancestor of the file holding `configs/`, its latest config version supplies the documents and the `"params"` document, and `sample_request.json` beside `configs/` supplies a sample record with its dates converted. See [Config store](config-store.md).
+2. Finds the pipelines with `find_pipelines`: module-level `Step` objects not contained in another, a top-level `def build`, and zero-argument factories named `pipeline`, `flow`, `*_pipeline` or `*_flow`. A single function step left unassembled, or a factory that needs arguments, is listed with `status: "invalid"` and a reason, so the UI can say why it is not offered. With no valid candidate the command fails with `no decikit pipeline (...): define def build() or assign one at module level`. Without `pipeline`, the last valid candidate is chosen.
+3. Builds the step. A `def build(...)` is called the way `decikit serve` calls it (`building.build_step`): the project root is the nearest ancestor of the file holding `configs/`, its latest config version supplies the documents and the `"params"` document, and `sample_request.json` beside `configs/` supplies a sample record with its dates converted. See [Config store](config-store.md).
 4. Lowers it with `to_ir` and turns the IR into JSON with `node_json`. Each node gets its path, its origin's `source`, its durable `id`, the file and line where it is assigned or defined, and for a call node its inputs, outputs, params with defaults, `callKind`, a `code` fingerprint (a hash of the function's source plus a `ConfigurableStep`'s JSON, so the UI can tell when a step changed), the first docstring line, the one-line `formula` when the function is a single `return`, its source when it is 15 lines or fewer, a table's match expression, and `python: {file, line, bodyLine, endLine}`: the Python that runs in interpreted mode, with `bodyLine` the first statement past the docstring (where a breakpoint stops on the call, not the `def`).
 5. Adds the params schema (per node path, from `step.parameters()`), the module's `PARAMS` values, the `outcome` (emitted values plus what top-level branches set), the field metadata steps declare for their values (`Money`, `Percent`, decimals) and the size.
 
@@ -280,7 +280,7 @@ sequenceDiagram
     participant V as VS Code debug
     participant P as debugpy
     participant R as bridge.run
-    X->>V: startDebugging(type debugpy,<br/>module decider._tooling.bridge.run, args)
+    X->>V: startDebugging(type debugpy,<br/>module decikit._tooling.bridge.run, args)
     V->>P: launch
     P->>R: run the pipeline, interpreted
     R->>R: InterpretedRunner._call(node) calls your fn
@@ -292,16 +292,16 @@ sequenceDiagram
     X->>X: highlight and select that node
 ```
 
-The extension has no debug adapter of its own. The earlier prototype ran a decider debug adapter over the bridge's session, with decider breakpoints on node paths, its own step commands and a second debugpy attach to get into a step's Python. That was two debuggers and two breakpoint models, and users reached for the Python one.
+The extension has no debug adapter of its own. The earlier prototype ran a decider toolkit debug adapter over the bridge's session, with the decider toolkit breakpoints on node paths, its own step commands and a second debugpy attach to get into a step's Python. That was two debuggers and two breakpoint models, and users reached for the Python one.
 
 What makes the mirroring work:
 
-- `node_path()` in `run.py` walks up the calling frames until it finds the interpreted runner's `_call` or `_frame` code object and returns `node.origin.path` from its locals. A function used at two nodes (a step that is also a branch condition) still maps to the node that called it. When the evaluate fails (decider not importable in the debuggee), `pausedAt` falls back to the innermost frame whose file and line fall inside a node's `[python.line, python.endLine]`.
-- A breakpoint dot on a node becomes a source breakpoint at the node's `bodyLine`. In a function used by more than one node it gets the condition `__import__('decider._tooling.bridge.run', fromlist=['node_path']).node_path() == "<path>"`, so it stops at that node only. `breakpointPaths` maps every source breakpoint back to the nodes whose Python holds it, which is how dots appear when you set a breakpoint in the editor gutter.
-- Tree and table nodes run decider's own reference walker, where `justMyCode` never stops, so `userCode` excludes `callKind: "row"` nodes from breakpoint actions.
+- `node_path()` in `run.py` walks up the calling frames until it finds the interpreted runner's `_call` or `_frame` code object and returns `node.origin.path` from its locals. A function used at two nodes (a step that is also a branch condition) still maps to the node that called it. When the evaluate fails (the decider toolkit not importable in the debuggee), `pausedAt` falls back to the innermost frame whose file and line fall inside a node's `[python.line, python.endLine]`.
+- A breakpoint dot on a node becomes a source breakpoint at the node's `bodyLine`. In a function used by more than one node it gets the condition `__import__('decikit._tooling.bridge.run', fromlist=['node_path']).node_path() == "<path>"`, so it stops at that node only. `breakpointPaths` maps every source breakpoint back to the nodes whose Python holds it, which is how dots appear when you set a breakpoint in the editor gutter.
+- Tree and table nodes run the decider toolkit's own reference walker, where `justMyCode` never stops, so `userCode` excludes `callKind: "row"` nodes from breakpoint actions.
 - Any Python debug session that pauses inside the shown flow's steps is mirrored, including your own scripts and tests, as long as the pipeline runs interpreted.
 
-`run.py` on its own is also a plain runner: `python -m decider._tooling.bridge.run loan.py --row 1` prints the output frame for that record, and `--row 5` on two rows exits with `--row 5 is out of range: the data has 2 rows`.
+`run.py` on its own is also a plain runner: `python -m decikit._tooling.bridge.run loan.py --row 1` prints the output frame for that record, and `--row 5` on two rows exits with `--row 5 is out of range: the data has 2 rows`.
 
 `--debugpy PORT` on the stdio bridge (`main`) calls `debugpy.listen(("127.0.0.1", PORT))` before serving, for a host that wants to attach a Python debugger to a long-lived bridge (`test_debugpy_flag_opens_an_attach_port`).
 
@@ -309,7 +309,7 @@ What makes the mirroring work:
 
 ### `ui/lib`: the shared UI package
 
-`@decider/ui` is a pnpm workspace package holding the React UI and the model code every host shares. `src/model/` has no DOM and no React: `protocol.ts` (the generated bridge types plus the UI message unions), `compare.ts`, `sweep.ts`, `events.ts` (folding session events into what has run, tree visits and edits), `breakpoints.ts`, `experiment.ts`, `datasetRows.ts`. The components (`App`, `Graph`, `Inspector`, `StateTable`, `Timeline`, `Compare`, `Scenarios`, `Params`, `Experiments`, ...) and `layout.ts` sit beside it. It builds to plain ESM JavaScript with `tsc` because a JupyterLab prebuilt extension bundles with webpack, which does not compile a dependency's TypeScript.
+`@decikit/ui` is a pnpm workspace package holding the React UI and the model code every host shares. `src/model/` has no DOM and no React: `protocol.ts` (the generated bridge types plus the UI message unions), `compare.ts`, `sweep.ts`, `events.ts` (folding session events into what has run, tree visits and edits), `breakpoints.ts`, `experiment.ts`, `datasetRows.ts`. The components (`App`, `Graph`, `Inspector`, `StateTable`, `Timeline`, `Compare`, `Scenarios`, `Params`, `Experiments`, ...) and `layout.ts` sit beside it. It builds to plain ESM JavaScript with `tsc` because a JupyterLab prebuilt extension bundles with webpack, which does not compile a dependency's TypeScript.
 
 The host seam is one component:
 
@@ -319,7 +319,7 @@ The host seam is one component:
 
 `send` delivers UI messages to the host, the first being `{type: "ready"}`. `listen` subscribes to host messages (`describe`, `status`, `state`, `lineage`, `compare`, `sweep`, `select`, `controls`, ...). `can` lists the editor-only messages the host handles (`reveal`, `run`, `runTo`, `step`, `debugStep`, `rewind`), and the UI hides the controls whose message is missing. A host that gains a capability handles the message and adds its name to `can`, so one message channel covers every feature.
 
-Styling reads only `--decider-*` CSS variables, every rule is nested under `.decider`, and `.decider` is a size container so the narrow and wide layouts follow the panel, not the window. Each host maps its own theme onto the variables (45 variables for VS Code: 42 colours plus the font family, font size and monospace font).
+Styling reads only `--decikit-*` CSS variables, every rule is nested under `.decikit`, and `.decikit` is a size container so the narrow and wide layouts follow the panel, not the window. Each host maps its own theme onto the variables (45 variables for VS Code: 42 colours plus the font family, font size and monospace font).
 
 The graph layout in `layout.ts` is dependency-free and replaced dagre. It was timed on generated nested flows (Apple M2 Pro, Node 23): 0.8 ms for 1,000 calls and 8.8 ms for 10,000 calls fully unfolded, where dagre took 1.2 s at 1,000 and overflowed the stack at 2,000, and ELK took 0.46 s and 4.65 s. The remaining superlinear pass is `dataEdges`, 53 ms at 10,000 calls, marked in the code with a `ponytail:` comment naming the fix (an index of last writer per column).
 
@@ -334,16 +334,16 @@ flowchart LR
     EXT --> PY["python.ts<br/>ask(): one-shot bridge"]
     EXT --> DBG["debugging.ts, locate.ts<br/>debugpy launch, mirroring"]
     EXT --> GP["graphPanel.ts<br/>webview, message queue"]
-    GP --> WV["webview/main.tsx<br/>@decider/ui App"]
-    PY --> BR["python -m decider._tooling.bridge"]
-    DBG --> RUN["decider._tooling.bridge.run<br/>under debugpy"]
+    GP --> WV["webview/main.tsx<br/>@decikit/ui App"]
+    PY --> BR["python -m decikit._tooling.bridge"]
+    DBG --> RUN["decikit._tooling.bridge.run<br/>under debugpy"]
     classDef tooling fill:#ede9fe,stroke:#7c3aed,color:#4c1d95,stroke-width:1.5px;
     classDef engine fill:#ccfbf1,stroke:#0d9488,color:#134e4a,stroke-width:1.5px;
     class EXT,FL,STR,YE,DSV,PY,DBG,GP,WV tooling
     class BR,RUN engine
 ```
 
-The extension contributes four views under a decider activity-bar entry: Flows (every `flow.yaml` and every Python file that imports decider and defines a pipeline, grouped by project root), Datasets, Structure (the shown flow as a tree, with breakpoint and paused markers) and Toolbox (node types to drag into a flow file). The README lists three views; the Datasets view was added after it was written.
+The extension contributes four views under a decider toolkit activity-bar entry: Flows (every `flow.yaml` and every Python file that imports the decider toolkit and defines a pipeline, grouped by project root), Datasets, Structure (the shown flow as a tree, with breakpoint and paused markers) and Toolbox (node types to drag into a flow file). The README lists three views; the Datasets view was added after it was written.
 
 How the extension uses the bridge, end to end, when a flow is shown:
 
@@ -357,20 +357,20 @@ Messages to the webview wait in a queue until it sends `ready` (`GraphPanel`), b
 
 ### The JupyterLab host
 
-A JupyterLab 4 extension once hosted the same `@decider/ui` beside notebooks. Its transport was a kernel comm named `decider` carrying the same `{id, cmd, ...}` requests and `{id, ok, result | error}` replies, chosen over a server extension because the objects worth debugging in a notebook (a pipeline built in a cell, a frame loaded in another) live in the kernel. `Bridge(notebook=...)` is the hook it used: when a request names no file, the pipeline, `SAMPLE` and `PARAMS` come from the module that callable returns, a snapshot of the notebook's namespace. A comm answers one message at a time, so that host had no `pause` during a long `resume`.
+A JupyterLab 4 extension once hosted the same `@decikit/ui` beside notebooks. Its transport was a kernel comm named `decikit` carrying the same `{id, cmd, ...}` requests and `{id, ok, result | error}` replies, chosen over a server extension because the objects worth debugging in a notebook (a pipeline built in a cell, a frame loaded in another) live in the kernel. `Bridge(notebook=...)` is the hook it used: when a request names no file, the pipeline, `SAMPLE` and `PARAMS` come from the module that callable returns, a snapshot of the notebook's namespace. A comm answers one message at a time, so that host had no `pause` during a long `resume`.
 
 That extension is not in this repository's tree; `ui/pnpm-workspace.yaml` and the `notebook` parameter of `Bridge` are what remain of it. Notebook users get hot reload from the session side instead: `session.watch(...)` re-applies an edited pipeline after each cell (see [Debug sessions](engine/debug.md)).
 
 ### `ui/tree-editor`: the web tree editor
 
-A separate web application for editing decision trees: a FastAPI backend (`backend/dsp_decider`, with Postgres, migrations and auth), a React UI (`ui/`) and Playwright end-to-end tests that export a tree and run it with decider. It does not use the bridge. The backend imports the library directly: `decider.steps.trees.schema.load_document` and `detect_format` validate a document and tell a v3 node/edge tree from a `prioritized_flat_rule` set, and `TreeConfig(name="tree", tree=data).parameters()` builds it to catch what would fail at run time. Data sources return `decider.PolarsSchema`. The image installs decider from the wheel in `dist/`, so the editor and the engine that runs its exports are the same version. How the trees themselves work is in [Trees](configurable-steps/trees.md).
+A separate web application for editing decision trees: a FastAPI backend (`backend/dsp_decikit`, with Postgres, migrations and auth), a React UI (`ui/`) and Playwright end-to-end tests that export a tree and run it with the decider toolkit. It does not use the bridge. The backend imports the library directly: `decikit.steps.trees.schema.load_document` and `detect_format` validate a document and tell a v3 node/edge tree from a `prioritized_flat_rule` set, and `TreeConfig(name="tree", tree=data).parameters()` builds it to catch what would fail at run time. Data sources return `decikit.PolarsSchema`. The image installs the decider toolkit from the wheel in `dist/`, so the editor and the engine that runs its exports are the same version. How the trees themselves work is in [Trees](configurable-steps/trees.md).
 
 ## Guarantees and how they are tested
 
-- A run in the bridge matches compiled runs exactly. `tests/bridge/test_parity.py` debugs a flow through the bridge and compares it with `run()` and `score()` in interpreted, stepped and fused modes using `decider.testing.equivalence.assert_equivalent` (NaN equals NaN, nothing else is approximate). See [Diff and equivalence](../guides/diff-and-equivalence.md).
+- A run in the bridge matches compiled runs exactly. `tests/bridge/test_parity.py` debugs a flow through the bridge and compares it with `run()` and `score()` in interpreted, stepped and fused modes using `decikit.testing.equivalence.assert_equivalent` (NaN equals NaN, nothing else is approximate). See [Diff and equivalence](../guides/diff-and-equivalence.md).
 - The protocol round-trips over real stdio (`test_the_stdio_protocol_round_trips`), and the one-shot form answers datasets from the project's working directory (`test_the_json_lines_protocol_answers_datasets_from_the_project_cwd`).
 - A failing step is reported, not fatal: the reply carries `error` and the events hold the `Error` (`test_a_failing_step_is_reported_not_fatal`).
-- The bridge lives inside `decider`, launched as `python -m decider._tooling.bridge`, with no separate distribution (`tests/bridge/test_relocation.py`).
+- The bridge lives inside `decikit`, launched as `python -m decikit._tooling.bridge`, with no separate distribution (`tests/bridge/test_relocation.py`).
 
 The extension is tested at four levels: pytest for the bridge, a DAP test client for the old adapter, `@vscode/test-electron` with mocha inside the editor for activation and commands, and Playwright driving the editor binary headless (`--ozone-platform=headless`) for what a person sees, with screenshots. `pnpm test` in `ui/vscode` runs the TypeScript unit tests (YAML outline and edits, breakpoint and pause mapping); `pnpm test:vscode` runs inside VS Code.
 
@@ -379,5 +379,5 @@ The extension is tested at four levels: pytest for the bridge, a DAP test client
 - A child process per question. The extension host is Node, and a short-lived Python process needs no lifecycle management, cannot leak state between flows and always imports the code as it is on disk. The price is a Python start per question; describes are not on a hot path.
 - Replies on their own file descriptor. User steps print; a protocol on stdout would break the first time one did.
 - Reply types generated from Python. The Python models are the source; the TypeScript cannot drift because regenerating it is one command, and unset fields stay off the wire.
-- debugpy rather than a decider debug adapter, for the reasons above. The stepping protocol stays in the bridge for hosts that want per-node stepping, rewind, forks and comparisons without a Python debugger.
+- debugpy rather than a decider toolkit debug adapter, for the reasons above. The stepping protocol stays in the bridge for hosts that want per-node stepping, rewind, forks and comparisons without a Python debugger.
 - Forces as overrides of a condition's output. No engine change, and lineage already explains overrides.

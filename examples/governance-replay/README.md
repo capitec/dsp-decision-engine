@@ -30,32 +30,32 @@ Committee. "The system said no" is not an answer. The bank must be able to:
 | Capture | [`evidence.capture(flow, request)`](governance/evidence.py) | `Evidence`: the request as received, the response, the config version, the digest of every config document, the params in force |
 | Replay | [`replay.replay(evidence)`](governance/replay.py) | `Verdict`: `reproduced`, `reproduced_within_tolerance`, `not_reproduced` or `not_reproducible`, every divergence in execution order, the step that wrote each |
 | Explain | [`explain.explain(evidence, audience)`](governance/explain.py) | `Explanation`: text and detail for one audience |
-| Version diff | [`versions.version_diff(flow, old, new)`](governance/versions.py) | decider's step diff and proof, the changed param leaves, a summary of each changed document |
+| Version diff | [`versions.version_diff(flow, old, new)`](governance/versions.py) | The decider toolkit's step diff and proof, the changed param leaves, a summary of each changed document |
 | Swap set | [`swapset.swap_set`, `swapset.attribute`](governance/swapset.py) | who moved outcome, reasons appearing and disappearing, records that could not be compared; `attribute` gives n swap sets for a release of n changes |
 | Overlays | [`overlays.register`, `ageing`, `unwind_estimate`](governance/overlays.py) | the combined register; overdue overlays by age; decisions that change with the overlays off |
 | Coverage | [`coverage.coverage(flow, responses)`](governance/coverage.py) | hits per rule, dead and dominant rules, ids outside the rule list, static findings, cells read |
 | Certification | [`certify.certify(golden, candidate, expected_to_move)`](governance/certify.py) | `Certificate`: what moved, what moved unexpectedly, what was expected to move and did not, the proof, the changed documents, approvals |
 | Replay service | [`governance.pipeline:build`](governance/pipeline.py) | `replay_verdict`, `divergence_count`, `diverged_fields`, `first_divergence` for a flow and a decision id |
 
-Only the replay service is a decider pipeline; the rest is a library you call from a notebook, a script or a CI job
+Only the replay service is a decider toolkit pipeline; the rest is a library you call from a notebook, a script or a CI job
 (see [`scripts/tour.py`](scripts/tour.py)). Their results are nested documents with no business reason to be a flow,
 and a CI job wants a Python object, not an HTTP call.
 
-## Which decider features it uses, and what is its own
+## Which decider toolkit features it uses, and what is its own
 
-| decider feature | Where it is used |
+| Decider toolkit feature | Where it is used |
 |---|---|
-| `RequestHandler` and `JsonFileStore`: stage one immutable config version and score raw JSON request bytes exactly as `decider serve` does, so dates, defaults and output formatting match production | [replayer.py](governance/replayer.py), [flows.py](governance/flows.py) |
+| `RequestHandler` and `JsonFileStore`: stage one immutable config version and score raw JSON request bytes exactly as `decikit serve` does, so dates, defaults and output formatting match production | [replayer.py](governance/replayer.py), [flows.py](governance/flows.py) |
 | The handler's `module_fn` hook, to score the same version with other params (a what-if, the overlays off) | [replayer.py](governance/replayer.py), [overlays.py](governance/overlays.py) |
 | Config versions as the identity of the logic (`store.latest_version()`, whatever it is for each flow), plus a digest of every document so an in-place edit is detected | [evidence.py](governance/evidence.py), [replay.py](governance/replay.py) |
 | Debug `Session` (`executable.session(...)`) to order the divergences by the step that first wrote each | [replay.py](governance/replay.py) |
-| `decider.lab.diff.structure` and `prove` for the change record of a release | [versions.py](governance/versions.py) |
-| `decider.lab.checks.run` with `unreachable_branch` for logic that cannot run whatever the traffic | [coverage.py](governance/coverage.py) |
+| `decikit.lab.diff.structure` and `prove` for the change record of a release | [versions.py](governance/versions.py) |
+| `decikit.lab.checks.run` with `unreachable_branch` for logic that cannot run whatever the traffic | [coverage.py](governance/coverage.py) |
 | `assert_equivalent`: the replay service gives the same verdicts in every mode and for a single record | [tests/test_pipeline.py](tests/test_pipeline.py) |
 | `step(outputs=)`, `param`, `@allow_fallback`, warm-up from `sample_request.json` for the replay service | [pipeline.py](governance/pipeline.py) |
 | From `credit_core`: the `Overlay` rows of the `adjustment_stack` documents (`due_for_review`) and the `reason_codes` document (`ReasonCodes`); `rate_card.diff_cards` for a rate-card refresh | [overlays.py](governance/overlays.py), [versions.py](governance/versions.py) |
 
-What is the harness's own, because decider has no equivalent:
+What is the harness's own, because the decider toolkit has no equivalent:
 
 - **The evidence contract.** What a decision must keep to be replayable (request as received, response, version,
   document digests, params) and a write-once store for it ([evidence.py](governance/evidence.py)).
@@ -69,7 +69,7 @@ What is the harness's own, because decider has no equivalent:
 - **The overlay register view and ageing** (read from the flows' config documents), **rule hit counting** against each flow's rule list, and the
   three-audience **explanation**.
 
-Not used, and why: `decider.lab.diff.outputs` and `decider.lab.experiments` run a typed *frame* through the flow, and
+Not used, and why: `decikit.lab.diff.outputs` and `decikit.lab.experiments` run a typed *frame* through the flow, and
 only the handler converts a request's JSON date strings. A frame of raw business requests keeps the dates inside the
 `entities` list as strings and fails there (`'str' object has no attribute 'year'`). The harness therefore scores one
 request at a time through the handler, which also keeps each result tied to a decision id.
@@ -81,14 +81,14 @@ From the repository root, put every example on the path once (the harness import
 ```bash
 export PYTHONPATH=$(printf '%s:' "$PWD"/examples/*/)
 cd examples/governance-replay
-export DECIDER_API__CODE_PATH="$PWD" DECIDER_API__PIPELINE="governance.pipeline:build" DECIDER_CONFIG__BASEPATH="$PWD/configs"
+export DECIKIT_API__CODE_PATH="$PWD" DECIKIT_API__PIPELINE="governance.pipeline:build" DECIKIT_CONFIG__BASEPATH="$PWD/configs"
 ```
 
 Build (validates this example's own `configs/0.1.0` and warms the replay service with `sample_request.json`, which replays a loan
 decision, so the first build in a fresh checkout compiles the loan flow too):
 
 ```bash
-uv run decider build
+uv run decikit build
 # built config version 0.1.0 (pipeline governance.pipeline:build, mode fused)
 ```
 
@@ -96,7 +96,7 @@ Serve, and replay the loan decision in [`evidence/loan/`](evidence/loan). The fi
 flow (the fraud flow takes about a minute the first time numba compiles it):
 
 ```bash
-uv run decider serve --workers 1 &
+uv run decikit serve --workers 1 &
 curl -s -d @sample_request.json -H 'content-type: application/json' localhost:8080/invocations
 ```
 
@@ -217,11 +217,11 @@ tests/
 - **A candidate is a version.** `Flow.candidate(edit, root)` copies the latest config, applies `edit`, writes it as a
   new version under `root` and stages it, so a rate-card refresh, a rule change and a params change are all the same
   kind of thing and attribution does not care which. A params-only run is `Flow.replayer(params=...)`.
-- **What decider's diff covers.** `version_diff` reports decider's step-level `structure` and `prove`. The flows keep
+- **What the decider toolkit's diff covers.** `version_diff` reports the decider toolkit's step-level `structure` and `prove`. The flows keep
   their overlays, reason codes and rule-set versions in config documents, so two pipelines built from the same
-  documents are identical to decider: `diff.structure(a, a)` reports `identical` with nothing added, removed, renamed
+  documents are identical to the decider toolkit: `diff.structure(a, a)` reports `identical` with nothing added, removed, renamed
   or moved and no changed edges for each of the fraud, loan and business flows, and `prove` says `True`. A change in
-  a document is a change decider sees as well; the documents are also summarised here, because a 63,360-row rate card
+  a document is a change the decider toolkit sees as well; the documents are also summarised here, because a 63,360-row rate card
   is better read as cells than as a step diff (rate cards cell by cell by key through
   `credit_core.rate_card.diff_cards`, rule sets by rule id), and a reordered rate card shows no change.
 - **Where the overlays and reasons come from.** Nothing is imported from the flows' modules by object. `Flow.documents`
@@ -237,7 +237,7 @@ tests/
   adding or editing any document of a version after capture makes its decisions `not_reproducible`. Write a new
   version instead and capture new evidence, or keep the old version directory untouched.
 - **One declared Python boundary.** The replay service looks the flows up by code in `governance.flows.FLOWS`, a Python
-  registry, so decider reports it as hidden state when the service is built. The service is a harness, not a decision;
+  registry, so the decider toolkit reports it as hidden state when the service is built. The service is a harness, not a decision;
   there is no document to hold the flows.
 - **Rule lists.** The fraud rule list is the live rules in `rule_set.json`; the loan list is the cap waterfall's
   `REGISTER`; the business list is the roll-up rule ids. The business flow also reports a binding rule

@@ -2,9 +2,9 @@ import json
 
 import polars as pl
 import pytest
-from decider.config import JsonFileStore
-from decider.lab.testing import assert_equivalent
-from decider.serving import RequestHandler
+from decikit.config import JsonFileStore
+from decikit.lab.testing import assert_equivalent
+from decikit.serving import RequestHandler
 
 from governance.pipeline import build
 

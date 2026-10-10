@@ -1,7 +1,7 @@
 """Account state that is computed, not read: the arrears bucket and the balance band."""
 from __future__ import annotations
 
-from decider import DecisionTableConfig, missing_as
+from decikit import DecisionTableConfig, missing_as
 
 from credit_core.evidence import cell_id
 

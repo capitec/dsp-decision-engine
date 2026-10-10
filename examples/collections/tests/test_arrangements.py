@@ -1,7 +1,7 @@
 import math
 
 import pytest
-from decider.exceptions import EngineError
+from decikit.exceptions import EngineError
 
 from collections_treatment import arrangements
 

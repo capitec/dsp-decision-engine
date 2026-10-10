@@ -1,7 +1,7 @@
 """What the client is told: the ranked reasons, and the outcome."""
 from __future__ import annotations
 
-from decider import allow_fallback, flow, missing_as, step
+from decikit import allow_fallback, flow, missing_as, step
 
 from credit_core.affordability import FAIL, INDETERMINATE, MARGINAL, PASS
 from credit_core.vocab import (

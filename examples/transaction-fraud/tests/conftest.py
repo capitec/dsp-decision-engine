@@ -3,7 +3,7 @@ from datetime import date
 from pathlib import Path
 
 import pytest
-from decider import ConfigurableStep, DecisionTableConfig
+from decikit import ConfigurableStep, DecisionTableConfig
 
 from fraud_interdiction.pipeline import build
 from fraud_interdiction.rules import RuleSet

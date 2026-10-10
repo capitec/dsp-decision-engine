@@ -1,7 +1,7 @@
 """Household: dependants and living costs."""
 import math  # noqa: F401
 
-from decider import dag, param, step  # noqa: F401
+from decikit import dag, param, step  # noqa: F401
 
 
 def expenses_band(expenses: float, low: float = param(1200.0), mid: float = param(8100.0), high: float = param(19200.0)) -> float:

@@ -4,8 +4,8 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
-from decider import flow, param
-from decider._engine.params import ParamsError
+from decikit import flow, param
+from decikit._engine.params import ParamsError
 
 FRAME = pl.DataFrame({"term_cap": [60.0, 60.0]})
 

@@ -1,5 +1,5 @@
 """Home loan: secured, 60 to 360 months, loan-to-value limits. Policy rules: each rule declines an application for one reason."""
-from decider import flow, param, step
+from decikit import flow, param, step
 
 
 @step(output="hl_min_age")

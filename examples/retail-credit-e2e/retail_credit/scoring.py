@@ -1,7 +1,7 @@
 """The application scorecard: points for eight characteristics on top of a base of 600."""
 from __future__ import annotations
 
-from decider import ScorecardConfig
+from decikit import ScorecardConfig
 
 
 def build_scorecard() -> ScorecardConfig:

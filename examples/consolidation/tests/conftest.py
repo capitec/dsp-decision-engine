@@ -4,7 +4,7 @@ from datetime import date
 from pathlib import Path
 
 import pytest
-from decider import DecisionTableConfig
+from decikit import DecisionTableConfig
 
 from consolidation.pipeline import build
 

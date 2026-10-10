@@ -30,10 +30,10 @@ sys.path.insert(0, "benchmarks")
 from serving_latency import FLAGSHIP_ROW, cases, _pct  # noqa: E402
 
 # Per run, so two runs of this script never fight over an address.
-TAG = os.environ.setdefault("DECIDER_BENCH_TAG", str(os.getpid()))
+TAG = os.environ.setdefault("DECIKIT_BENCH_TAG", str(os.getpid()))
 PORT = 8000 + int(TAG) % 20000
 UDS = f".scratch/bench-{TAG}.sock"   # relative: an absolute path here overruns AF_UNIX's 108 bytes
-SHM = f"decider-bench-{TAG}"
+SHM = f"decikit-bench-{TAG}"
 NAMES = tuple(FLAGSHIP_ROW)
 FRAME = pl.DataFrame([FLAGSHIP_ROW])
 CALLS = 5_000
@@ -69,8 +69,8 @@ SCHEMA_MSG, BODIES["arrow_batch"] = split_ipc(BODIES["arrow"])
 # ── the scoring side, shared by every server ──────────────────────────────────
 
 def build():
-    from decider.config import JsonFileStore
-    from decider.serving._handler import RequestHandler
+    from decikit.config import JsonFileStore
+    from decikit.serving._handler import RequestHandler
 
     store = JsonFileStore(basepath=tempfile.mkdtemp(dir=".scratch"))
     store.create_version({"params": {}})
@@ -240,7 +240,7 @@ def serve_shm(kind):
 
 def serve_http(kind, fast=False):
     import uvicorn
-    from decider.serving._servers.starlette import create_app
+    from decikit.serving._servers.starlette import create_app
 
     handler = build()
     extra = {"loop": "uvloop", "http": "httptools"} if fast else {}

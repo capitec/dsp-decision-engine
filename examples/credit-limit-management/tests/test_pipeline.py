@@ -1,5 +1,5 @@
 import pytest
-from decider import DeciderError
+from decikit import DecikitError
 
 from conftest import switch_off_every_overlay
 from limit_mgmt import pipeline
@@ -93,7 +93,7 @@ def test_a_param_changes_the_decision_without_touching_the_code(decide, params):
 
 
 def test_a_missing_required_input_is_an_error(decide):
-    with pytest.raises(DeciderError, match="current_limit"):
+    with pytest.raises(DecikitError, match="current_limit"):
         decide(current_limit=None)
 
 

@@ -4,9 +4,9 @@ from typing import Any, Literal
 import polars as pl
 import pytest
 
-from decider import ConfigurableStep, FallbackWarning, allow_fallback, flow
-from decider._engine.ir.decls import Input, Output
-from decider._engine.ir.nodes import CallNode
+from decikit import ConfigurableStep, FallbackWarning, allow_fallback, flow
+from decikit._engine.ir.decls import Input, Output
+from decikit._engine.ir.nodes import CallNode
 
 
 def total(*, seed: float, **columns: Any) -> float:

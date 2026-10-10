@@ -1,7 +1,7 @@
 """decider_old's five decision-table tests, same configs, same answers, in every mode."""
 import polars as pl
 
-from decider.steps.tables import DecisionTableConfig
+from decikit.steps.tables import DecisionTableConfig
 
 
 def _table(parameters: dict, expression: dict, outputs: list, default: list) -> DecisionTableConfig:

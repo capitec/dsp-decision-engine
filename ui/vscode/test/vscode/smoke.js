@@ -15,10 +15,10 @@ async function until(what, fn, ms = 30000) {
   throw new Error(`timed out waiting for ${what}`);
 }
 
-/** Send one action over the window's agent socket, as `decider mcp` does. */
+/** Send one action over the window's agent socket, as `decikit mcp` does. */
 function agent(folder, action, token) {
   const name = crypto.createHash("sha256").update(fs.realpathSync(folder)).digest("hex").slice(0, 16);
-  const dir = path.join(os.homedir(), ".decider", "editor");
+  const dir = path.join(os.homedir(), ".decikit", "editor");
   token ??= fs.readFileSync(path.join(dir, `${name}.token`), "utf8");
   return new Promise((resolve, reject) => {
     let buf = "";
@@ -30,19 +30,19 @@ function agent(folder, action, token) {
 }
 
 exports.run = async function () {
-  const api = await vscode.extensions.getExtension("capitec.decider-vscode").activate();
+  const api = await vscode.extensions.getExtension("capitec.decikit-vscode").activate();
   const flow = path.join(vscode.workspace.workspaceFolders[0].uri.fsPath, "credit_flow", "flow.yaml");
 
-  await vscode.commands.executeCommand("decider.showFlow", vscode.Uri.file(flow));
+  await vscode.commands.executeCommand("decikit.showFlow", vscode.Uri.file(flow));
   assert.ok(api.state().described, `describe failed: ${api.state().error}`);
   const named = (await api.datasets()).map((d) => d.name ?? d.message);
   assert.deepStrictEqual(named.sort(), ["applicants", "portfolio"], "the shown flow's project datasets");
 
-  await vscode.commands.executeCommand("decider.toggleBreakpoint", { path: "credit/affordable/eligible" });
+  await vscode.commands.executeCommand("decikit.toggleBreakpoint", { path: "credit/affordable/eligible" });
   const [bp] = vscode.debug.breakpoints;
   assert.match(bp.condition, /node_path\(\) == "credit\/affordable\/eligible"/);
 
-  const debugging = vscode.commands.executeCommand("decider.debugFlow", vscode.Uri.file(flow));
+  const debugging = vscode.commands.executeCommand("decikit.debugFlow", vscode.Uri.file(flow));
   // The dataset picker opens once Python has listed the datasets, which takes longer on a cold start.
   await until("the dataset pick", () => {
     void vscode.commands.executeCommand("workbench.action.acceptSelectedQuickOpenItem");
@@ -59,7 +59,7 @@ exports.run = async function () {
   // With a flow shown, debugging a dataset record starts at once on that flow: no flow picker.
   let launched;
   const sub = vscode.debug.onDidStartDebugSession((s) => (launched = s.configuration));
-  await vscode.commands.executeCommand("decider.debugWithDataset", { name: "applicants", cwd: path.dirname(flow) }, 2);
+  await vscode.commands.executeCommand("decikit.debugWithDataset", { name: "applicants", cwd: path.dirname(flow) }, 2);
   await until("the dataset run to start", () => launched, 10000);
   sub.dispose();
   assert.deepStrictEqual(launched.args, [flow, "--dataset", "applicants", "--row", "2"]);

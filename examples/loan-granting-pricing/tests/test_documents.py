@@ -7,8 +7,8 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from decider import ConfigurableStep, DecisionTableConfig
-from decider.lab import diff
+from decikit import ConfigurableStep, DecisionTableConfig
+from decikit.lab import diff
 
 from loan_granting import reasons
 from loan_granting.pipeline import build

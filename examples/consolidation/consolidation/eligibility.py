@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from decider import allow_fallback, missing_as, param, step
+from decikit import allow_fallback, missing_as, param, step
 
 PROCEED, DEBT_REVIEW_PATH, DECLINE, REFER, NOT_APPLICABLE = "proceed", "debt_review_path", "decline", "refer", "not_applicable"
 

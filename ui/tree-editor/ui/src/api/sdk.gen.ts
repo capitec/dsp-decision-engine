@@ -1048,7 +1048,7 @@ export const getFolderEffectivePermissionsApiV1FoldersFolderIdEffectivePermissio
 /**
  * Get Server Info
  *
- * Get server information including installed decider version.
+ * Get server information including installed decikit version.
  *
  * Requires authentication.
  */

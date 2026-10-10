@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
-from decider import allow_fallback, missing_as, step
+from decikit import allow_fallback, missing_as, step
 
 from credit_core.vocab import ConsentChannel
 

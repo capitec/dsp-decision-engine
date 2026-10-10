@@ -1,22 +1,22 @@
 # Serving
 
-`decider.serving` answers HTTP requests with a pipeline that is built from your code and the documents of one config version. It speaks the SageMaker model-server contract: `POST /invocations` scores, `GET /ping` says whether the server can answer. Everything that is not HTTP lives in one class, `RequestHandler`, so the same object scores requests in a test, in a notebook and behind uvicorn.
+`decikit.serving` answers HTTP requests with a pipeline that is built from your code and the documents of one config version. It speaks the SageMaker model-server contract: `POST /invocations` scores, `GET /ping` says whether the server can answer. Everything that is not HTTP lives in one class, `RequestHandler`, so the same object scores requests in a test, in a notebook and behind uvicorn.
 
-This page covers the internals: how a config version becomes a live executable, what happens to one request, which errors map to which status, where the microseconds go and how processes and threads share the work. For the task view (template, build, serve, curl) read [Projects and serving](../guides/projects-and-serving.md). The store that holds the versions has its own page, [Config store](config-store.md), and the `decider build` and `decider serve` commands are covered in [CLI and MCP internals](tooling.md).
+This page covers the internals: how a config version becomes a live executable, what happens to one request, which errors map to which status, where the microseconds go and how processes and threads share the work. For the task view (template, build, serve, curl) read [Projects and serving](../guides/projects-and-serving.md). The store that holds the versions has its own page, [Config store](config-store.md), and the `decikit build` and `decikit serve` commands are covered in [CLI and MCP internals](tooling.md).
 
 ## Files
 
 | File | What it holds |
 |---|---|
-| `decider/serving/__init__.py` | Exports `RequestHandler`, the only public name. |
-| `decider/serving/_handler.py` | `RequestHandler`, `Live`, the JSON fallback for money values, `construct_handler_from_settings`. |
-| `decider/serving/_parse.py` | `DEFAULT_INPUT_HANDLERS` (content type to parser), `coerce_record`, `coerce_frame` and the synthetic warm-up record (`dummy`). |
-| `decider/serving/_format.py` | `Response` and `DEFAULT_OUTPUT_FORMATTERS` (Accept header to writer). |
-| `decider/serving/_errors.py` | The four HTTP-shaped errors: 415, 400, 406 and 500. |
-| `decider/serving/_servers/core.py` | What both servers share: `ready`, `error_response`, `parse_content_headers`, the 503 body. |
-| `decider/serving/_servers/starlette.py` | The default app: two routes, a lifespan that builds the handler, the `DeciderError` handler. |
-| `decider/serving/_servers/sanic.py` | The same app on sanic, for `decider serve --server sanic`. |
-| `decider/_settings.py` | `DeciderSettings`: what to serve (`api`), where (`serve`) and from which store (`config`). |
+| `decikit/serving/__init__.py` | Exports `RequestHandler`, the only public name. |
+| `decikit/serving/_handler.py` | `RequestHandler`, `Live`, the JSON fallback for money values, `construct_handler_from_settings`. |
+| `decikit/serving/_parse.py` | `DEFAULT_INPUT_HANDLERS` (content type to parser), `coerce_record`, `coerce_frame` and the synthetic warm-up record (`dummy`). |
+| `decikit/serving/_format.py` | `Response` and `DEFAULT_OUTPUT_FORMATTERS` (Accept header to writer). |
+| `decikit/serving/_errors.py` | The four HTTP-shaped errors: 415, 400, 406 and 500. |
+| `decikit/serving/_servers/core.py` | What both servers share: `ready`, `error_response`, `parse_content_headers`, the 503 body. |
+| `decikit/serving/_servers/starlette.py` | The default app: two routes, a lifespan that builds the handler, the `DecikitError` handler. |
+| `decikit/serving/_servers/sanic.py` | The same app on sanic, for `decikit serve --server sanic`. |
+| `decikit/_settings.py` | `DecikitSettings`: what to serve (`api`), where (`serve`) and from which store (`config`). |
 
 ## The layers
 
@@ -129,10 +129,10 @@ The invariants the tests pin down:
 
 `warm_fn` needs a record the pipeline can answer. It uses `sample_request` (a JSON file, by default `sample_request.json` in the code path) when the file exists, after converting its dates like a real request. Otherwise it builds a synthetic record with `dummy()`: `1.0` for a float (one, not zero, so a ratio does not divide by zero), `1` for an int, `""` for a string, `2000-01-01` for a date, one element for a list, every field for a TypedDict.
 
-A `ParamsError` from warm-up propagates unchanged. Any other failure is wrapped in a `DeciderError` whose message says how to fix it. A pricing step `1.0 / (rate - floor)` staged without a sample file divides by zero on the synthetic record:
+A `ParamsError` from warm-up propagates unchanged. Any other failure is wrapped in a `DecikitError` whose message says how to fix it. A pricing step `1.0 / (rate - floor)` staged without a sample file divides by zero on the synthetic record:
 
 ```text
-DeciderError
+DecikitError
 warm-up failed with ZeroDivisionError: division by zero. The synthetic inputs {'rate': 1.0, 'floor': 1.0} don't suit this pipeline; put a representative request in a JSON file passed as RequestHandler(sample_request=...) and staging warms with it instead.
 ```
 
@@ -229,7 +229,7 @@ The Accept lookup is exact too. There is no content negotiation: `Accept: applic
 
 ### What the server sends back
 
-These are real exchanges with `decider serve --workers 1` on the project `decider template loan_check` writes:
+These are real exchanges with `decikit serve --workers 1` on the project `decikit template loan_check` writes:
 
 ```text
 $ curl -s -d @sample_request.json -H 'content-type: application/json' localhost:18931/invocations
@@ -260,13 +260,13 @@ What is checked, and when:
 | Required inputs are present and not null | each request, in the engine | 400 `MissingInputError` naming the input and step |
 | Other input types | not checked by serving | whatever the engine raises (see below) |
 
-Only date inputs are validated per request. The comment in `coerce_record` gives the reason: JSON already delivers numbers, strings and bools as the step expects, and validation costs time on every request. The consequence is that a wrong type surfaces from the engine. Sending `{"income": "abc", ...}` to the template project raised `ValueError: could not convert string to float: 'abc'` in `load_record`, which is not a `DeciderError`, so the client sees a bare 500 (see the next section). Validate in `input_fn` if your callers are not trusted to send the right types.
+Only date inputs are validated per request. The comment in `coerce_record` gives the reason: JSON already delivers numbers, strings and bools as the step expects, and validation costs time on every request. The consequence is that a wrong type surfaces from the engine. Sending `{"income": "abc", ...}` to the template project raised `ValueError: could not convert string to float: 'abc'` in `load_record`, which is not a `DecikitError`, so the client sees a bare 500 (see the next section). Validate in `input_fn` if your callers are not trusted to send the right types.
 
 ## Error mapping
 
 ```mermaid
 flowchart LR
-    E["exception raised in process_fn"] --> Q{"a DeciderError?"}
+    E["exception raised in process_fn"] --> Q{"a DecikitError?"}
     Q -- yes --> S["error_response(exc)<br/>status = exc._STATUS_CODE<br/>body = {&quot;message&quot;: str(exc)}"]
     Q -- no --> U["framework default<br/>500 text/plain<br/>Internal Server Error"]
     S --> J["JSON reply"]
@@ -279,7 +279,7 @@ flowchart LR
     class U,I error
 ```
 
-Every decider error carries the status a server should answer with as `_STATUS_CODE` (500 unless the class says otherwise). Both apps register one handler for `DeciderError` that returns `error_response(exc)`. The statuses that exist today:
+Every decider toolkit error carries the status a server should answer with as `_STATUS_CODE` (500 unless the class says otherwise). Both apps register one handler for `DecikitError` that returns `error_response(exc)`. The statuses that exist today:
 
 | Error | Status | Raised by |
 |---|---|---|
@@ -288,7 +288,7 @@ Every decider error carries the status a server should answer with as `_STATUS_C
 | `MissingInputError` | 400 | the engine, a required input absent or null |
 | `UnsupportedAcceptError` | 406 | `output_fn`, no writer for the Accept header |
 | `OutputFormattingError` | 500 | `output_fn`, a writer raised |
-| any other `DeciderError` (`ParamsError`, `EngineError`, `WiringError`, ...) | 500 | JSON body with the message |
+| any other `DecikitError` (`ParamsError`, `EngineError`, `WiringError`, ...) | 500 | JSON body with the message |
 | anything else (`ValueError`, `ZeroDivisionError` from a step) | 500 | the framework's plain-text page, the traceback in the server log |
 
 A missing input, from the running template project:
@@ -352,7 +352,7 @@ So the batch content types (Arrow, Parquet, CSV, JSONL) exist for batch callers,
 
 ```mermaid
 flowchart LR
-    CLI["decider serve<br/>--workers N"] --> U["uvicorn master"]
+    CLI["decikit serve<br/>--workers N"] --> U["uvicorn master"]
     U --> W1["worker process 1"]
     U --> W2["worker process N"]
     W1 --> L1["lifespan: construct_handler_from_settings<br/>init_fn = stage() + activate()"]
@@ -368,7 +368,7 @@ flowchart LR
     class D data
 ```
 
-`decider serve` starts uvicorn with `create_app` as a factory and `workers` processes (default `2 * os.cpu_count() + 1`, computed at serve time on the target host). Each worker builds its own handler in the lifespan hook and stages and activates the store's latest version before `/ping` turns 200. Workers share nothing in memory; they share numba's disk cache, which `decider build` fills ahead of time.
+`decikit serve` starts uvicorn with `create_app` as a factory and `workers` processes (default `2 * os.cpu_count() + 1`, computed at serve time on the target host). Each worker builds its own handler in the lifespan hook and stages and activates the store's latest version before `/ping` turns 200. Workers share nothing in memory; they share numba's disk cache, which `decikit build` fills ahead of time.
 
 Inside one worker, `process_fn` is a plain method: `score()` runs on the event loop's thread, and nothing in it awaits. One worker therefore scores one request at a time, and throughput scales with worker processes, not with concurrent requests per worker.
 
@@ -380,27 +380,27 @@ Inside one worker, `process_fn` is a plain method: `score()` runs on the event l
 
 The shipped apps call `stage()` and `activate()` only at startup, through `init_fn`. There is no route for swapping versions in a running server: deploy a new version by restarting, or add a route to your `Handler` subclass that calls `stage()` and `activate()`.
 
-### `decider build` and the CPU target
+### `decikit build` and the CPU target
 
-numba caches compiled kernels on disk for the CPU it compiled on. `decider build` stages a version exactly as `serve` would, which fills that cache, and writes `decider-cpu-target.json` next to it (in `NUMBA_CACHE_DIR`, else `code_path`). `decider serve` compares the recorded target with the host's and prints a warning when they differ, since every worker would then compile at startup. It is a warning, not a failure: warm-up still compiles everything before `/ping` answers. [Kernel cache](engine/cache.md) explains how kernels are keyed.
+numba caches compiled kernels on disk for the CPU it compiled on. `decikit build` stages a version exactly as `serve` would, which fills that cache, and writes `decikit-cpu-target.json` next to it (in `NUMBA_CACHE_DIR`, else `code_path`). `decikit serve` compares the recorded target with the host's and prints a warning when they differ, since every worker would then compile at startup. It is a warning, not a failure: warm-up still compiles everything before `/ping` answers. [Kernel cache](engine/cache.md) explains how kernels are keyed.
 
 ## Startup: from settings to a handler
 
-`construct_handler_from_settings()` reads `DeciderSettings` (environment variables with the prefix `DECIDER_` and `__` between levels, case-insensitive; the CLI also loads `./.env` without overriding the real environment):
+`construct_handler_from_settings()` reads `DecikitSettings` (environment variables with the prefix `DECIKIT_` and `__` between levels, case-insensitive; the CLI also loads `./.env` without overriding the real environment):
 
 | Setting | Variable | Default |
 |---|---|---|
-| `api.code_path` | `DECIDER_API__CODE_PATH` | `.` |
-| `api.pipeline` | `DECIDER_API__PIPELINE` | `pipeline:build` |
-| `api.handler` | `DECIDER_API__HANDLER` | `inference:Handler` |
-| `api.mode` | `DECIDER_API__MODE` | `fused` |
-| `config.type` and the store's fields | `DECIDER_CONFIG__TYPE`, `DECIDER_CONFIG__BASEPATH` | `file:json`, `configs` |
-| `serve.host`, `serve.port`, `serve.workers`, `serve.server` | `DECIDER_SERVE__*` | `0.0.0.0`, `8080`, `2 * CPUs + 1`, `starlette` |
+| `api.code_path` | `DECIKIT_API__CODE_PATH` | `.` |
+| `api.pipeline` | `DECIKIT_API__PIPELINE` | `pipeline:build` |
+| `api.handler` | `DECIKIT_API__HANDLER` | `inference:Handler` |
+| `api.mode` | `DECIKIT_API__MODE` | `fused` |
+| `config.type` and the store's fields | `DECIKIT_CONFIG__TYPE`, `DECIKIT_CONFIG__BASEPATH` | `file:json`, `configs` |
+| `serve.host`, `serve.port`, `serve.workers`, `serve.server` | `DECIKIT_SERVE__*` | `0.0.0.0`, `8080`, `2 * CPUs + 1`, `starlette` |
 
 What it does, in order:
 
 1. Puts `code_path` and its parent at the front of `sys.path`, removing them first if they were already further back. A project directory that is itself a package (the template's layout) resolves from its parent, and a second project's `pipeline.py` earlier on the path cannot shadow this one.
-2. Resolves the pipeline: a flow file is joined to `code_path`; an import path is imported once to print where it came from. The server log shows `decider: pipeline loan_check.pipeline:build from .../loan_check/pipeline.py`, so a pipeline imported from the wrong project is visible before it serves wrong answers.
+2. Resolves the pipeline: a flow file is joined to `code_path`; an import path is imported once to print where it came from. The server log shows `decikit: pipeline loan_check.pipeline:build from .../loan_check/pipeline.py`, so a pipeline imported from the wrong project is visible before it serves wrong answers.
 3. Looks for the handler module. If `importlib.util.find_spec` finds it, the class must exist there, else `AttributeError` with the fix in the message. If the module does not exist at all, it falls back to the plain `RequestHandler`.
 4. Builds the store from `settings.config` (`ConfigStore.resolve(type).model_validate(...)`) and calls the handler class with the store, the pipeline, the mode and `sample_request=<code_path>/sample_request.json`.
 
@@ -409,8 +409,8 @@ What it does, in order:
 Every step of a request is a method, and `inference.py` holds a `Handler(RequestHandler)` subclass that can override any of them: `input_fn`, `output_fn`, `process_fn`, `pipeline_fn`, `warm_fn`, `init_fn`, `shutdown_fn`. The startup test replaces the output with a plain-text number:
 
 ```python
-from decider.serving._format import Response
-from decider.serving._handler import RequestHandler
+from decikit.serving._format import Response
+from decikit.serving._handler import RequestHandler
 
 class Handler(RequestHandler):
     def output_fn(self, output, accept):
@@ -424,7 +424,7 @@ Keep overrides cheap. `output_fn` and `input_fn` run on every request, and the i
 ## Debugging a server
 
 - `/ping` stays 503 with `{"message": "Server is initializing, please try again shortly."}` until a version is active. If it never turns 200, the worker's startup failed; the uvicorn log has the `stage()` exception.
-- `decider build` runs the same staging path without a server and turns any failure into `config version latest failed to build: <Type>: <message>`. Run it first.
+- `decikit build` runs the same staging path without a server and turns any failure into `config version latest failed to build: <Type>: <message>`. Run it first.
 - A `FallbackWarning` at startup names a step that runs in Python instead of a kernel. The template's own `month_end(applied_on: date)` prints one, because no kernel takes a `date`.
-- `--server sanic` without sanic installed is a clean CLI error: `serving with sanic needs sanic: pip install 'decider[serve-sanic]'`.
+- `--server sanic` without sanic installed is a clean CLI error: `serving with sanic needs sanic: pip install 'decikit[serve-sanic]'`.
 - To see what the handler does without HTTP, score through it in-process with `handler.process_fn(body, "application/json", "application/json")`, the same call the generated tests make, or `handler.score(record)` for a parsed record.

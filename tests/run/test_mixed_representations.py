@@ -7,12 +7,12 @@ from typing import TypedDict
 import polars as pl
 import pytest
 
-from decider import Engine, dag, flow, step
-from decider.ops import Columnar, Struct
-from decider.exceptions import FallbackWarning, WiringError
-from decider.ops import Text
-from decider.steps.trees import TreeConfig
-from decider.lab.testing import assert_equivalent
+from decikit import Engine, dag, flow, step
+from decikit.ops import Columnar, Struct
+from decikit.exceptions import FallbackWarning, WiringError
+from decikit.ops import Text
+from decikit.steps.trees import TreeConfig
+from decikit.lab.testing import assert_equivalent
 
 FRAME = pl.DataFrame(
     {"sector": ["private", "public"],

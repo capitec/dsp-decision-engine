@@ -3,7 +3,7 @@ import subprocess
 import pytest
 
 PIPELINE = '''
-from decider import flow
+from decikit import flow
 
 
 def ratio(income: float, debt: float) -> float:

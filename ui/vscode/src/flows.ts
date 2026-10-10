@@ -13,7 +13,7 @@ export interface FlowRef {
 }
 
 const EXCLUDE = "**/{node_modules,.venv,venv,.git,__pycache__,site-packages,dist,build,configs}/**";
-const DECIDER_IMPORT = /^\s*(from|import)\s+decider\b/m;
+const DECIKIT_IMPORT = /^\s*(from|import)\s+decikit\b/m;
 // What `find_pipelines` offers: `def build`, a zero-arg `*_pipeline`/`*_flow` factory, or a module-level flow/dag/branch/loop.
 const PIPELINE = /^(?:def\s+(build|\w*_pipeline|\w*_flow|pipeline|flow)\s*\(|(\w+)\s*(?::[^=\n]+)?=\s*(?:flow|dag|branch|loop)\()/gm;
 
@@ -23,7 +23,7 @@ export function isFlowPath(file: string): boolean {
 
 /** The pipelines a Python source defines, by the line each starts on (0-based). */
 export function pythonPipelines(text: string): { name: string; line: number }[] {
-  if (!DECIDER_IMPORT.test(text)) return [];
+  if (!DECIKIT_IMPORT.test(text)) return [];
   return [...text.matchAll(PIPELINE)].map((m) => ({ name: m[1] ?? m[2], line: text.slice(0, m.index).split("\n").length - 1 }));
 }
 
@@ -86,7 +86,7 @@ export class FlowsProvider implements vscode.TreeDataProvider<Node> {
     item.description = root ? path.relative(root, n.file) : vscode.workspace.asRelativePath(n.file);
     item.iconPath = new vscode.ThemeIcon(yaml ? "symbol-namespace" : "symbol-method", new vscode.ThemeColor(yaml ? "charts.blue" : "charts.green"));
     item.tooltip = `${n.file}${n.pipeline ? ` · ${n.pipeline}` : ""}`;
-    item.command = { command: "decider.showFlow", title: "Visualise flow", arguments: [vscode.Uri.file(n.file), n.pipeline] };
+    item.command = { command: "decikit.showFlow", title: "Visualise flow", arguments: [vscode.Uri.file(n.file), n.pipeline] };
     return item;
   }
 
@@ -107,8 +107,8 @@ export class FlowCodeLens implements vscode.CodeLensProvider {
       const range = new vscode.Range(line, 0, line, 0);
       const args = [doc.uri, name];
       return [
-        new vscode.CodeLens(range, { title: "$(type-hierarchy) Visualise flow", command: "decider.showFlow", arguments: args }),
-        new vscode.CodeLens(range, { title: "$(debug-alt) Debug flow", command: "decider.debugFlow", arguments: args }),
+        new vscode.CodeLens(range, { title: "$(type-hierarchy) Visualise flow", command: "decikit.showFlow", arguments: args }),
+        new vscode.CodeLens(range, { title: "$(debug-alt) Debug flow", command: "decikit.debugFlow", arguments: args }),
       ];
     });
   }

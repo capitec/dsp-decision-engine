@@ -6,7 +6,7 @@ Read this before changing the debug `Session`, the editor bridge, the VS Code ex
 
 - `Session` drives `runner.iterate` one checkpoint at a time and assumes nothing about which checkpoints a runner yields; fused mode yields one pair per kernel.
 - A breakpoint on any step of a fused kernel pauses before the whole kernel (`Paused.kernel` lists the steps). Not: calling it unreachable; nothing of the kernel has run and `set` on its inputs works. Setting a value an earlier step of the same kernel reads therefore differs from interpreted.
-- See: `decider/_engine/debug/session.py`, [Debug sessions](../../architecture/engine/debug.md)
+- See: `decikit/_engine/debug/session.py`, [Debug sessions](../../architecture/engine/debug.md)
 
 ## Stepping is over the batch, not per row
 
@@ -35,24 +35,24 @@ Read this before changing the debug `Session`, the editor bridge, the VS Code ex
 
 - `Session.reload` diffs `(when, path, content)` lists (function fingerprint, params with defaults, wiring); one rebuild covers modify, insert, delete, reorder. Not: per-path `replace` calls, which cannot insert or replace an anonymous root.
 - `ModuleWatcher` re-imports every module under the target's directory, `.pyc` deleted first. Not: `importlib.reload` of one file (stale `from x import f`); `__qualname__` re-resolution (swaps steps kept on purpose, lambdas have no global); `__code__` patching (breaks the IR cache).
-- Serving never hot reloads (a code change is a new deploy; the audit maps to one code version). See: [experiment](../experiments/hot-reload-edit-latency.md), `decider/_engine/debug/hot.py`, `edit.py`
+- Serving never hot reloads (a code change is a new deploy; the audit maps to one code version). See: [experiment](../experiments/hot-reload-edit-latency.md), `decikit/_engine/debug/hot.py`, `edit.py`
 
 ## JSON exists only at the edge
 
 - Commands and events are frozen dataclasses with a `kind`; a command's `kind` is the `Session` method name so `apply` dispatches by `getattr`. `Replace` carries a Python object and has no JSON form.
 - The editor bridge does not use `COMMAND`; it calls `Session` methods and serialises events.
-- See: `decider/_engine/debug/wire.py`
+- See: `decikit/_engine/debug/wire.py`
 
 ## The bridge is an adapter over `Session`, never a second debugger
 
-- It lives in `decider/_tooling/bridge/` and runs as `python -m decider._tooling.bridge`; no separate distribution and no shim for the old `decider_bridge` import.
+- It lives in `decikit/_tooling/bridge/` and runs as `python -m decikit._tooling.bridge`; no separate distribution and no shim for the old `decikit_bridge` import.
 - A bridge session runs interpreted; `assert_equivalent` pins it equal to `run()` and `score()` in all modes (`tests/bridge/test_parity.py`).
 - See: [Editor bridge](../../architecture/editor-bridge.md)
 
 ## One short-lived process per question; replies on fd 3; types generated from Python
 
 - `ask()` spawns the bridge, writes one line, reads one reply from fd 3, ignores stdout so a step's `print()` cannot corrupt the protocol. A fresh process means an edit saved a second ago counts.
-- TypeScript protocol types are generated from the pydantic reply models (`python -m decider._tooling.bridge.protocol`); every load compiles into a fresh `sys.pycache_prefix` because `.pyc` keys on whole-second mtime and size.
+- TypeScript protocol types are generated from the pydantic reply models (`python -m decikit._tooling.bridge.protocol`); every load compiles into a fresh `sys.pycache_prefix` because `.pyc` keys on whole-second mtime and size.
 
 ## Forces are overrides of a condition's output
 
@@ -74,14 +74,14 @@ Read this before changing the debug `Session`, the editor bridge, the VS Code ex
 
 ## VS Code debugs with debugpy; the extension has no debug adapter
 
-- "Debug flow" launches `python -m decider._tooling.bridge.run` under debugpy, interpreted; breakpoints are plain Python and the extension mirrors them onto the flow (`ui/vscode/src/debugging.ts`). `node_path()` walks to the runner's `_call`/`_frame` and returns `node.origin.path`, so a function reused at two nodes maps to the right one. A graph breakpoint on a reused function gets the condition `node_path() == "<path>"` at the step's `bodyLine`.
+- "Debug flow" launches `python -m decikit._tooling.bridge.run` under debugpy, interpreted; breakpoints are plain Python and the extension mirrors them onto the flow (`ui/vscode/src/debugging.ts`). `node_path()` walks to the runner's `_call`/`_frame` and returns `node.origin.path`, so a function reused at two nodes maps to the right one. A graph breakpoint on a reused function gets the condition `node_path() == "<path>"` at the step's `bodyLine`.
 - Why: the earlier DAP adapter meant two debuggers and two breakpoint models; users reached for the Python one. Per-node stepping, rewind, value breakpoints and forks stay in `Session` and the bridge (no UI caller today). Tree and table nodes (`justMyCode` never stops there) get no breakpoint actions.
 
 ## Discovery lists invalid pipeline candidates with a reason
 
 - `find_pipelines` finds module-level steps, a top-level `def build`, and zero-argument factories; an unassembled step or a factory that needs arguments is listed `invalid` with why, never guessed.
 - With none valid, `describe` fails with a message saying how to define one; with several, the last valid wins unless the host names one.
-- See: `decider/_tooling/bridge/describing.py`, [Editor bridge](../../architecture/editor-bridge.md)
+- See: `decikit/_tooling/bridge/describing.py`, [Editor bridge](../../architecture/editor-bridge.md)
 
 ## Flow files are edited from their YAML, not from `describe`
 
@@ -95,11 +95,11 @@ Read this before changing the debug `Session`, the editor bridge, the VS Code ex
 - VS Code passes `can = {"reveal"}` and hides the structure tree and breakpoint form (it has its own). Messages to the webview queue until `ready`.
 - See: `ui/lib/src/App.tsx`, `ui/vscode/webview/main.tsx`, `ui/vscode/src/graphPanel.ts`
 
-## `@decider/ui` ships built JavaScript and styles only through `--decider-*`
+## `@decikit/ui` ships built JavaScript and styles only through `--decikit-*`
 
 - `tsc` emits ESM JS; there is no `"type": "module"` (webpack would demand extensioned imports). Why built JS: a JupyterLab prebuilt extension bundles with webpack, which does not compile a dependency's TypeScript.
 - React is a peer and the host calls `createRoot`; `src/model/` has no DOM or React.
-- Every rule is nested under `.decider`, a size container that needs a definite height. A host maps its theme onto `--decider-*` (`ui/vscode/webview/theme.css`); unset ones fall back at the use site. Effects use block bodies (`scrollIntoView` returns a promise in new Chromium).
+- Every rule is nested under `.decikit`, a size container that needs a definite height. A host maps its theme onto `--decikit-*` (`ui/vscode/webview/theme.css`); unset ones fall back at the use site. Effects use block bodies (`scrollIntoView` returns a promise in new Chromium).
 
 ## The graph uses a dependency-free layout, fold-by-default and viewport culling
 

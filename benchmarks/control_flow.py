@@ -7,8 +7,8 @@ import time
 import numpy as np
 import polars as pl
 
-import decider
-from decider._engine import Engine
+import decikit
+from decikit._engine import Engine
 
 N_BRANCH = 1_000_000
 N_LOOP = 200_000
@@ -40,11 +40,11 @@ loop_frame = pl.DataFrame({"balance": rng.uniform(1000, 50000, N_LOOP), "payment
 
 
 def ours(mode="fused"):
-    limits = decider.branch(is_high, decider.step(high_limit, output="limit"), decider.step(low_limit, output="limit"),
+    limits = decikit.branch(is_high, decikit.step(high_limit, output="limit"), decikit.step(low_limit, output="limit"),
                             modifies=["limit"], name="limits")
-    repay = decider.loop(owing, decider.step(pay, output="balance"), carries=["balance"], max_iterations=360,
+    repay = decikit.loop(owing, decikit.step(pay, output="balance"), carries=["balance"], max_iterations=360,
                          name="repay")
-    return Engine().bind(decider.flow(limits), mode).run, Engine().bind(decider.flow(repay), mode).run
+    return Engine().bind(decikit.flow(limits), mode).run, Engine().bind(decikit.flow(repay), mode).run
 
 
 def rows_per_s(run, frame, reps=7):
@@ -59,7 +59,7 @@ def rows_per_s(run, frame, reps=7):
 
 results = {}
 outputs = {}
-engines = {"decider fused": ours(), "decider stepped": ours("stepped")}
+engines = {"decikit fused": ours(), "decikit stepped": ours("stepped")}
 for name, (run_branch, run_loop) in engines.items():
     reps = 2 if "stepped" in name else 7
     b, out_b = rows_per_s(run_branch, branch_frame, reps)
@@ -67,7 +67,7 @@ for name, (run_branch, run_loop) in engines.items():
     results[name] = (b, lp)
     outputs[name] = (out_b["limit"], out_l["balance"])
 
-b2, l2 = outputs["decider fused"]
+b2, l2 = outputs["decikit fused"]
 assert all(b.equals(b2) and lp.equals(l2) for b, lp in outputs.values()), "modes disagree"
 print(f"{'engine':<18}{'branch rows/s':>16}{'loop rows/s':>16}")
 for name, (b, lp) in results.items():

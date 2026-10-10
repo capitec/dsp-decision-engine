@@ -14,7 +14,7 @@ import json
 import sys
 from pathlib import Path
 
-from decider import ConfigurableStep
+from decikit import ConfigurableStep
 
 from limit_mgmt import reasons as r
 from limit_mgmt.matrix import build_matrix_table, matrix_document

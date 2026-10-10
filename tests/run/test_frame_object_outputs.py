@@ -4,7 +4,7 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
-from decider import Engine, allow_fallback, flow, step
+from decikit import Engine, allow_fallback, flow, step
 
 MODES = ("interpreted", "fused")
 

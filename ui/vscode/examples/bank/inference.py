@@ -1,5 +1,5 @@
 """Request handling for bank: override any `*_fn` method of `RequestHandler` here."""
-from decider.serving import RequestHandler
+from decikit.serving import RequestHandler
 
 
 class Handler(RequestHandler):

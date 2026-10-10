@@ -2,7 +2,7 @@
 instalment is the annuity payment plus fees."""
 from __future__ import annotations
 
-from decider import DecisionTableConfig, dag, flow, missing_as, param, step
+from decikit import DecisionTableConfig, dag, flow, missing_as, param, step
 
 from credit_core import fees, instalment, rounding
 from credit_core.evidence import cell_id

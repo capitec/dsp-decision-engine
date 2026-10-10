@@ -8,18 +8,18 @@ The user-side guide is [trees, tables and scorecards](../../guides/trees-tables-
 
 | File | Role |
 |---|---|
-| `decider/steps/tables/__init__.py` | `DecisionTableConfig`: fields, the decider 0.3 `parameters` spelling, validation, `to_ir` |
-| `decider/steps/tables/schema.py` | The condition vocabulary (`and`, `or`, `between`, `in`, `is_true`, `eq`), band ladders (`groups`, `bounds`) and `check_rows` |
-| `decider/steps/tables/_encode.py` | Column kinds, `variables`, `program` (the jump rows), `typed` (casting rows to the declared dtypes), `Shape`, `pack`, `Rows` |
-| `decider/steps/tables/_matcher.py` | `match`, the compiled matcher, with `_scan`, `_holds` and the `pick` overload |
-| `decider/steps/tables/_reference.py` | `reference`, the Python matcher |
-| `decider/_engine/params/tables.py` | `rows_like`, which formats the expected row shape in error messages |
+| `decikit/steps/tables/__init__.py` | `DecisionTableConfig`: fields, the decider 0.3 `parameters` spelling, validation, `to_ir` |
+| `decikit/steps/tables/schema.py` | The condition vocabulary (`and`, `or`, `between`, `in`, `is_true`, `eq`), band ladders (`groups`, `bounds`) and `check_rows` |
+| `decikit/steps/tables/_encode.py` | Column kinds, `variables`, `program` (the jump rows), `typed` (casting rows to the declared dtypes), `Shape`, `pack`, `Rows` |
+| `decikit/steps/tables/_matcher.py` | `match`, the compiled matcher, with `_scan`, `_holds` and the `pick` overload |
+| `decikit/steps/tables/_reference.py` | `reference`, the Python matcher |
+| `decikit/_engine/params/tables.py` | `rows_like`, which formats the expected row shape in error messages |
 
 ## From document to row node
 
 ```mermaid
 flowchart TD
-    doc["decision_table document"] --> legacy["_legacy (before):<br/>decider 0.3 'parameters' frame<br/>becomes columns + rows"]
+    doc["decision_table document"] --> legacy["_legacy (before):<br/>decikit 0.3 'parameters' frame<br/>becomes columns + rows"]
     legacy --> check["_check (after): outputs exist, default length,<br/>check_columns, variables, check_rows"]
     check --> cfg["DecisionTableConfig (frozen)"]
     cfg --> ir["to_ir(ctx)"]
@@ -192,7 +192,7 @@ The scan is linear in the number of rows, and the first matching row wins. The c
 
 ## Band ladders
 
-decider_old filled a missing band bound from the neighbouring row of the whole table and allowed an open edge only on the table's first and last rows. A table keyed by grade with bands per grade then needed `±inf` sentinels and `allow_gaps`, which turned off the contiguity check the table wanted. decider groups the rows instead: rows with equal values in every `eq` column form one ladder, in row order, and open edges, neighbour fill and contiguity apply within each ladder. Rows of different ladders may interleave. `in` lists do not split ladders, because band tables whose rows carry different channel lists but share one ladder are common, and splitting them would silently open their edges.
+decider_old filled a missing band bound from the neighbouring row of the whole table and allowed an open edge only on the table's first and last rows. A table keyed by grade with bands per grade then needed `±inf` sentinels and `allow_gaps`, which turned off the contiguity check the table wanted. The decider toolkit groups the rows instead: rows with equal values in every `eq` column form one ladder, in row order, and open edges, neighbour fill and contiguity apply within each ladder. Rows of different ladders may interleave. `in` lists do not split ladders, because band tables whose rows carry different channel lists but share one ladder are common, and splitting them would silently open their edges.
 
 This limit-multiple table interleaves grades A and B:
 
@@ -308,7 +308,7 @@ There is no matched-row output (the counterpart of a tree's `path_output`). It w
 
 ## Null semantics
 
-decider_old evaluated a table as polars `when/then`, so a comparison with a null is null and never matches. The pricing output shows each case: the `card` record with a null amount fails the band, the `auto` record matches no product, and the null product matches nothing; all three take the default. A null `eq` value in a row also never matches; decider2 treated it as a wildcard and decider does not. A null list in an `in` column matches nothing, and nulls inside a list are skipped.
+decider_old evaluated a table as polars `when/then`, so a comparison with a null is null and never matches. The pricing output shows each case: the `card` record with a null amount fails the band, the `auto` record matches no product, and the null product matches nothing; all three take the default. A null `eq` value in a row also never matches; decider2 treated it as a wildcard and the decider toolkit does not. A null list in an `in` column matches nothing, and nulls inside a list are skipped.
 
 ## The Python reference
 
@@ -327,11 +327,11 @@ From `benchmarks/table_match.py` (12 bands writing String, Int64 and Float64 out
 | Table | Engine | ns/row | `score` p50 | `score` p99 |
 |---|---|---|---|---|
 | bands | decider2 fused | 304 | 42.9 µs | 53.1 µs |
-| bands | decider fused | 164 | 27.4 µs | 36.1 µs |
-| bands | decider fused, rows param | 178 | 95.9 µs | 109.2 µs |
+| bands | decikit fused | 164 | 27.4 µs | 36.1 µs |
+| bands | decikit fused, rows param | 178 | 95.9 µs | 109.2 µs |
 | bands AND string `in` | decider2 fused | 398 | 75.4 µs | 86.8 µs |
-| bands AND string `in` | decider fused | 413 | 69.6 µs | 111.6 µs |
-| bands AND string `in` | decider fused, rows param | 423 | 137.1 µs | 157.4 µs |
+| bands AND string `in` | decikit fused | 413 | 69.6 µs | 111.6 µs |
+| bands AND string `in` | decikit fused, rows param | 423 | 137.1 µs | 157.4 µs |
 
 The rows-param rows paid for hashing the whole params document on every call. After `ParamsCache.key` started remembering the last document object and its hash, rows-param `score()` p50/p99 went from 88.6/191.9 µs to 35.8/42.9 µs. Documents are treated as immutable once passed for that reason.
 

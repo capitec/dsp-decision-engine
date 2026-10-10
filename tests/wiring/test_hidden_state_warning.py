@@ -4,9 +4,9 @@ import warnings
 import polars as pl
 import pytest
 
-from decider import Engine, HiddenStateWarning, allow_fallback, flow, step
-from decider._engine.run.hidden import warn_hidden_state
-from decider.exceptions import EngineError
+from decikit import Engine, HiddenStateWarning, allow_fallback, flow, step
+from decikit._engine.run.hidden import warn_hidden_state
+from decikit.exceptions import EngineError
 
 
 class Limits:
@@ -41,8 +41,8 @@ def test_binding_a_step_that_reads_a_global_object_warns_in_every_mode(mode):
     _, caught = bind(capped, mode=mode)
     [message] = [str(w.message) for w in caught]
     assert message.startswith("p/capped reads Limits `LIMITS` (module global in ")
-    assert "decider.lab.diff cannot compare an object" in message
-    assert "See `decider guide`, \"Shipping a step type in a package\"." in message
+    assert "decikit.lab.diff cannot compare an object" in message
+    assert "See `decikit guide`, \"Shipping a step type in a package\"." in message
 
 
 def test_allow_fallback_does_not_silence_the_warning():

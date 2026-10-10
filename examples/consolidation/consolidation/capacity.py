@@ -16,7 +16,7 @@ from assessment import modes
 from assessment.capacity import build_buffer_grid
 from assessment.documents import shipped
 from assessment.pipeline import capacity_unit
-from decider import ConfigurableStep, allow_fallback, each, flow, step
+from decikit import ConfigurableStep, allow_fallback, each, flow, step
 
 from consolidation import vocab
 from consolidation.inventory import num

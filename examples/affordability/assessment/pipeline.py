@@ -7,7 +7,7 @@ expenses. `capacity_unit()` is everything that does: obligations, discretionary 
 """
 from __future__ import annotations
 
-from decider import dag, flow
+from decikit import dag, flow
 
 from credit_core import affordability, expense_norms
 
@@ -69,7 +69,7 @@ def capacity_unit(capacity_adjustments=None, reason_codes=None):
 
 
 def build(capacity_adjustments=None, reason_codes=None):
-    """The whole assessment: what `decider serve` runs and what other projects embed.
+    """The whole assessment: what `decikit serve` runs and what other projects embed.
 
     `capacity_adjustments` (overlays on the maximum instalment) and `reason_codes` are config documents; called
     without them, `build()` uses the ones in this example's `configs/`.

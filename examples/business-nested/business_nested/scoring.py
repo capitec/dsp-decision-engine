@@ -6,7 +6,7 @@ and financial components, which grade a blended probability the same way.
 """
 from __future__ import annotations
 
-from decider import DecisionTableConfig, ScorecardConfig, flow, step
+from decikit import DecisionTableConfig, ScorecardConfig, flow, step
 
 from credit_core import calibration
 from credit_core.adjustments import AdjustmentStack

@@ -5,11 +5,11 @@ import json
 import pytest
 from typing_extensions import NotRequired, TypedDict
 
-from decider import flow
-from decider.ops import Columnar, Struct
-from decider.config import JsonFileStore
-from decider.serving import RequestHandler
-from decider.steps.trees import TreeConfig
+from decikit import flow
+from decikit.ops import Columnar, Struct
+from decikit.config import JsonFileStore
+from decikit.serving import RequestHandler
+from decikit.steps.trees import TreeConfig
 
 
 class Account(TypedDict):

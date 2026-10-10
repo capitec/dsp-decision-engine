@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 from credit_core import eligibility as core_eligibility
-from decider import ConfigurableStep
+from decikit import ConfigurableStep
 
 from retail_credit import caps, disclosure, eligibility, routing, validation
 from retail_credit.flex_card import card_tables

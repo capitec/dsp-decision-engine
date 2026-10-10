@@ -89,7 +89,7 @@ STRING_SHAPES = {"isin_str", "str_eq"}
 
 
 def tree(shape: str, n: int, part: str):
-    from decider import TreeConfig
+    from decikit import TreeConfig
 
     k, build = SHAPES[shape]
     rng = random.Random(1)
@@ -127,8 +127,8 @@ def frame(shape: str, rows: int):
 
 
 def one(shape: str, n: int, part: str, rows: int, calls: int) -> dict:
-    from decider import flow
-    from decider._engine import Engine
+    from decikit import flow
+    from decikit._engine import Engine
 
     warnings.simplefilter("ignore")
     start = time.perf_counter()

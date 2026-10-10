@@ -1,14 +1,14 @@
 # Known limitations
 
-Gaps in the current code that users and maintainers should know about before relying on it; each was checked against `decider/` when this file was written.
+Gaps in the current code that users and maintainers should know about before relying on it; each was checked against `decikit/` when this file was written.
 
 ## Compilation and caching
 
 **Object globals are keyed by identity.** A step reading an instance of a class of its own is fingerprinted with `id()` (`_engine/compile/fingerprint.py`); numbers, strings, dates, Decimals, regexes, enums, classes and plain containers of those are keyed by value. A class is keyed by its own methods' bytecode and constants, not by what its methods call, and a jitclass by its numba type, which differs per process.
-Impact: the numba disk cache from `decider build` misses on another process, and `decider.lab.diff` reads the step as always changed. Binding warns with `HiddenStateWarning` (`Engine(strict_compile=True)` raises); put the data in literals, a config document, `param()`s or `param_table`s.
+Impact: the numba disk cache from `decikit build` misses on another process, and `decikit.lab.diff` reads the step as always changed. Binding warns with `HiddenStateWarning` (`Engine(strict_compile=True)` raises); put the data in literals, a config document, `param()`s or `param_table`s.
 
 **A callable object read as `module.NAME` is not seen.** The walk follows the attributes a step reads off a module, but skips any callable that is not a function, module or class (so a ufunc or `np.searchsorted` is not flagged). An instance with `__call__` read that way (`transforms.normalise(x)` where `normalise = Normaliser(mean, std)`) is neither keyed nor warned about; read as a plain global it is.
-Impact: editing its data leaves the cache key and `decider.lab.diff` unchanged. Keep the data in a document or a `param()`, or import the object by name.
+Impact: editing its data leaves the cache key and `decikit.lab.diff` unchanged. Keep the data in a document or a `param()`, or import the object by name.
 
 **A library is versioned by the distribution of its top-level module's name.** `importlib.metadata.version("yaml")` finds no `PyYAML`, so such a library is keyed by the Python version instead.
 Impact: upgrading it changes the key of a step that calls one of its jitted functions only if that function's own bytecode changed, not if only a function it calls did; clear the numba cache (`NUMBA_CACHE_DIR`) after upgrading such a library.
@@ -80,12 +80,12 @@ Impact: a quiet report is not a proof; use the `suppress_checks` field for known
 Impact: dead arms are found only by the static structure checks.
 
 **Table overlap and gaps skip tables over 40 rows,** and tree/table reachability needs the `prove` extra (`z3-solver`); without it the z3 checks are reported under `skipped`.
-Workaround: `pip install 'decider[prove]'`; split very large tables.
+Workaround: `pip install 'decikit[prove]'`; split very large tables.
 
 **`diff.prove` stops at the IR hash and z3.** There is no normalised-document tier, no threshold-enumeration tier and no `first_divergent_step`.
 Impact: an arithmetic change that preserves outputs reads as `identical=None`, not proven equal.
 
-**`checks.yaml` is found from the current directory,** as datasets are, so `decider check` and the MCP `check_report` depend on the working directory.
+**`checks.yaml` is found from the current directory,** as datasets are, so `decikit check` and the MCP `check_report` depend on the working directory.
 Workaround: pass `--config` / `config=` explicitly.
 
 ## Serving
@@ -93,7 +93,7 @@ Workaround: pass `--config` / `config=` explicitly.
 **`RequestHandler.process_fn` runs the pipeline on the event loop.** With Starlette one worker serves requests one at a time, so `nogil` kernels never overlap inside it.
 Workaround: run several worker processes; moving scoring to a thread pool is untested and should be measured first (`engine/concurrency.md`).
 
-**`decider serve` fails when `os.cpu_count()` is `None`** and no worker count is set (`_settings.py` computes `os.cpu_count() * 2 + 1`).
+**`decikit serve` fails when `os.cpu_count()` is `None`** and no worker count is set (`_settings.py` computes `os.cpu_count() * 2 + 1`).
 Workaround: set `serve.workers` explicitly in restricted containers.
 
 **Arrow request bodies reach the kernels without a full validation pass.** `serving/_parse.py` reads Arrow IPC with polars, and the boundary shim reads string views with nanoarrow's unchecked accessor, so a malformed view that polars accepts could crash the worker. Whether polars rejects such views was not tested.

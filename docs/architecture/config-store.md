@@ -1,6 +1,6 @@
 # Config store
 
-A decision pipeline has two kinds of input that change at different speeds. The structure (which steps exist and how they are wired) changes with a code release. The values (cut-offs, multiples, tree bodies, table rows, scorecard bins) change with a policy decision, often weekly, and every past decision must stay explainable against the values it ran with. `decider.config` holds the second kind: immutable, numbered versions of JSON documents that a caller reads by version.
+A decision pipeline has two kinds of input that change at different speeds. The structure (which steps exist and how they are wired) changes with a code release. The values (cut-offs, multiples, tree bodies, table rows, scorecard bins) change with a policy decision, often weekly, and every past decision must stay explainable against the values it ran with. `decikit.config` holds the second kind: immutable, numbered versions of JSON documents that a caller reads by version.
 
 The package is small: `ConfigStore` (the interface), `JsonFileStore` (the one backend), `Version`, `VersionPart` and `VersionedConfig`. Serving reads from it at stage time ([Serving](serving.md)); the debugger reads the latest version of a project ([Editor bridge](editor-bridge.md)); the documents themselves are params documents ([Params](engine/params.md)) and `ConfigurableStep` documents ([Configurable steps](configurable-steps/index.md)). The user-level walkthrough is in [Projects and serving](../guides/projects-and-serving.md).
 
@@ -8,11 +8,11 @@ The package is small: `ConfigStore` (the interface), `JsonFileStore` (the one ba
 
 | File | What it holds |
 |---|---|
-| `decider/config/__init__.py` | Exports `ConfigStore`, `JsonFileStore`, `Version`, `VersionPart`, `VersionedConfig`. |
-| `decider/config/_store.py` | `ConfigStore`: the abstract methods, `latest_version()` and `create_version()`. |
-| `decider/config/_file.py` | `JsonFileStore`: directories of JSON files, atomic writes. |
-| `decider/config/_versions.py` | `Version` (a `major.minor.patch` named tuple), `VersionPart`, `VersionedConfig`. |
-| `decider/_settings.py` | `DeciderConfigSettings`: builds the store a server uses from `DECIDER_CONFIG__*`. |
+| `decikit/config/__init__.py` | Exports `ConfigStore`, `JsonFileStore`, `Version`, `VersionPart`, `VersionedConfig`. |
+| `decikit/config/_store.py` | `ConfigStore`: the abstract methods, `latest_version()` and `create_version()`. |
+| `decikit/config/_file.py` | `JsonFileStore`: directories of JSON files, atomic writes. |
+| `decikit/config/_versions.py` | `Version` (a `major.minor.patch` named tuple), `VersionPart`, `VersionedConfig`. |
+| `decikit/_settings.py` | `DecikitConfigSettings`: builds the store a server uses from `DECIKIT_CONFIG__*`. |
 
 ## The data structures
 
@@ -39,14 +39,14 @@ flowchart LR
 
 `Version` is a `NamedTuple` of three ints, so it compares and sorts numerically (`0.10.0` sorts after `0.9.0`, which string sorting gets wrong) and hashes for use as a key. `Version.parse` accepts a `Version` unchanged or a string of exactly three dot-separated integers. `bump` resets the lower parts: a major bump of `1.2.3` is `2.0.0`, a minor bump is `1.3.0`, a patch bump is `1.2.4`.
 
-`VersionedConfig` pairs a version with its `config`, a plain `dict` from key to JSON document. Two keys have a meaning to the rest of decider:
+`VersionedConfig` pairs a version with its `config`, a plain `dict` from key to JSON document. Two keys have a meaning to the rest of the decider toolkit:
 
 - `"params"` is the params document, keyed by step path (`{"credit": {"limit": {"multiple": 3.0}}}`). `RequestHandler.stage()` runs every request of that version with it.
 - Any other key whose name matches an argument of the pipeline's `build` function is a `ConfigurableStep` document (a tree, decision table or scorecard) that `build` receives loaded. In a flow file, `step: band` can name it too.
 
 Other keys are stored and returned like any document; nothing reads them unless your code does.
 
-`ConfigStore` is a registry root (`group="config_stores"`), the same mechanism steps and dataset providers use (see [Foundation](foundation.md)). A store is a pydantic model with `extra="forbid"`, so its settings validate, and the server builds one from its `type` tag: `ConfigStore.resolve("file:json").model_validate({"type": "file:json", "basepath": "configs"})`. A package can ship another backend under the `decider.config_stores` entry point group.
+`ConfigStore` is a registry root (`group="config_stores"`), the same mechanism steps and dataset providers use (see [Foundation](foundation.md)). A store is a pydantic model with `extra="forbid"`, so its settings validate, and the server builds one from its `type` tag: `ConfigStore.resolve("file:json").model_validate({"type": "file:json", "basepath": "configs"})`. A package can ship another backend under the `decikit.config_stores` entry point group.
 
 ## On disk
 
@@ -191,9 +191,9 @@ The store never picks a version on its own. Each caller decides:
 
 ```mermaid
 flowchart TD
-    A["decider serve<br/>worker startup"] --> I["init_fn: stage(None)"]
-    B["decider build"] --> BS["stage(None)"]
-    B2["decider build 1.2.0"] --> BV["stage(&quot;1.2.0&quot;)"]
+    A["decikit serve<br/>worker startup"] --> I["init_fn: stage(None)"]
+    B["decikit build"] --> BS["stage(None)"]
+    B2["decikit build 1.2.0"] --> BV["stage(&quot;1.2.0&quot;)"]
     C["your code<br/>handler.stage(v)"] --> BV
     I --> L["store.latest_version()<br/>max of versions()"]
     BS --> L
@@ -212,9 +212,9 @@ flowchart TD
 ```
 
 - A server stages the latest version when each worker starts. Which version is live is therefore decided by what is in `configs/` at deploy time, not at request time. A version written after startup is not served until the next start (or a `stage()` and `activate()` your own code calls).
-- `decider build [VERSION]` stages one version exactly as the server would, the latest when none is given, and fails with `Error: config version 9.9.9 failed to build: FileNotFoundError: config version 9.9.9 not found in 'configs'` for an unknown one.
+- `decikit build [VERSION]` stages one version exactly as the server would, the latest when none is given, and fails with `Error: config version 9.9.9 failed to build: FileNotFoundError: config version 9.9.9 not found in 'configs'` for an unknown one.
 - `RequestHandler.stage("1.2.0")` takes an explicit version, and `rollback()` goes back to the previously active one without reading the store again (it keeps the built `Live`).
-- The editor bridge and `python -m decider._tooling.bridge.run` look for the project root of the pipeline's file (the nearest ancestor holding `configs/`) and read its latest version, the same one `decider serve` would pick from that directory. A module's own `PARAMS` still wins over the version's params document there, so a notebook-style module can pin its values.
+- The editor bridge and `python -m decikit._tooling.bridge.run` look for the project root of the pipeline's file (the nearest ancestor holding `configs/`) and read its latest version, the same one `decikit serve` would pick from that directory. A module's own `PARAMS` still wins over the version's params document there, so a notebook-style module can pin its values.
 
 To replay a stored decision, read the version it ran with, never whatever `configs/` holds now: `store.read(version)` returns exactly the documents of that version.
 
@@ -239,19 +239,19 @@ The practical split for a project:
 | a code release: steps, wiring, branch and loop structure, function bodies | `pipeline.py`, `flows/*.yaml` | git commit |
 | a policy decision: thresholds, multiples, rates | `configs/<version>/params.json` | config version |
 | a policy decision: tree bodies, table rows, scorecard bins | `configs/<version>/<name>.json` | config version |
-| an operator: which store, which pipeline, which mode | `.env`, `DECIDER_*` variables | deployment |
+| an operator: which store, which pipeline, which mode | `.env`, `DECIKIT_*` variables | deployment |
 
 ## A project directory
 
-`decider template NAME` writes the smallest project that follows this split; see [CLI and MCP internals](tooling.md) for the template files. The project directory is itself a Python package (it has an `__init__.py`), so `import NAME.pipeline` resolves to it and two projects on one `PYTHONPATH` never shadow each other's `pipeline` module. The `.env` it writes points the server at that package and at `configs/`:
+`decikit template NAME` writes the smallest project that follows this split; see [CLI and MCP internals](tooling.md) for the template files. The project directory is itself a Python package (it has an `__init__.py`), so `import NAME.pipeline` resolves to it and two projects on one `PYTHONPATH` never shadow each other's `pipeline` module. The `.env` it writes points the server at that package and at `configs/`:
 
 ```text
-DECIDER_API__PIPELINE=loan_check.pipeline:build
-DECIDER_API__HANDLER=loan_check.inference:Handler
-DECIDER_CONFIG__BASEPATH=configs
+DECIKIT_API__PIPELINE=loan_check.pipeline:build
+DECIKIT_API__HANDLER=loan_check.inference:Handler
+DECIKIT_CONFIG__BASEPATH=configs
 ```
 
-`configs/` doubles as the marker of a project root. `project_root(start)` in `decider/lab/data/_providers/catalog.py` walks up from a file to the first directory that holds `configs/`, and the datasets folder (`datasets/`) and the checks file (`checks.yaml`) are found relative to it: `DeciderSettings.datasets_path` defaults to `${PROJECT_ROOT}/datasets` and `checks_path` to `${PROJECT_ROOT}/checks.yaml`. Datasets are not versioned with the config; see [Data](lab/data.md).
+`configs/` doubles as the marker of a project root. `project_root(start)` in `decikit/lab/data/_providers/catalog.py` walks up from a file to the first directory that holds `configs/`, and the datasets folder (`datasets/`) and the checks file (`checks.yaml`) are found relative to it: `DecikitSettings.datasets_path` defaults to `${PROJECT_ROOT}/datasets` and `checks_path` to `${PROJECT_ROOT}/checks.yaml`. Datasets are not versioned with the config; see [Data](lab/data.md).
 
 ## Behaviour pinned by tests
 
@@ -270,20 +270,20 @@ DECIDER_CONFIG__BASEPATH=configs
 | `test_failed_write_leaves_no_version` | the staging rename |
 | `test_read_errors_propagate` | a missing version or bad JSON raises |
 | `test_configurable_step_and_params_round_trip` | a step's `model_dump` survives the store and loads back |
-| `test_settings_build_the_store` | `DeciderConfigSettings.get()` builds a `JsonFileStore` |
+| `test_settings_build_the_store` | `DecikitConfigSettings.get()` builds a `JsonFileStore` |
 
 ## When a version does not load
 
 | Symptom | Cause | What to do |
 |---|---|---|
-| `FileNotFoundError: config version 9.9.9 not found in 'configs'` | the version directory does not exist under `basepath` | check `DECIDER_CONFIG__BASEPATH` and the server's working directory; `store.versions()` lists what is there |
+| `FileNotFoundError: config version 9.9.9 not found in 'configs'` | the version directory does not exist under `basepath` | check `DECIKIT_CONFIG__BASEPATH` and the server's working directory; `store.versions()` lists what is there |
 | `json.JSONDecodeError` from `read` | a hand-edited file is not valid JSON | fix the file; a stored version should not be edited by hand at all |
 | `RuntimeError: the config store has no versions to stage.` | an empty or wrong `basepath` | the first `create_version` writes `0.0.0` |
 | `KeyError: the config version has no 'band' document ...` at stage | `build(band)` needs a key the version lacks | add the document to a new version |
 | `ParamsError` at stage | the params document fails a step's declared bounds or types | fix the value in a new version; the active version keeps serving |
 | a new version is not served | servers pick the latest version only at startup | restart, or call `stage()` and `activate()` |
-| `LookupError` naming the type from `DeciderConfigSettings.get()` | `DECIDER_CONFIG__TYPE` names no registered store | `file:json` is the built-in one (`test_settings_build_the_store` pins the message for `file:yaml`) |
+| `LookupError` naming the type from `DecikitConfigSettings.get()` | `DECIKIT_CONFIG__TYPE` names no registered store | `file:json` is the built-in one (`test_settings_build_the_store` pins the message for `file:yaml`) |
 
 ## Writing another backend
 
-Subclass `ConfigStore`, give it a `type` literal and implement three methods: `versions()` (every stored version, oldest first), `read(version)` (one `VersionedConfig`) and `_write(versioned)` (store one new version, refusing one that exists). `latest_version()` and `create_version()` come from the base class and need nothing else. Keep the two guarantees the file store gives: a version appears whole or not at all, and a stored version never changes. Register the class under the `decider.config_stores` entry point group so `DECIDER_CONFIG__TYPE=<tag>` can name it, and put its own fields (a bucket, a table name) in `DECIDER_CONFIG__<FIELD>` variables; `DeciderConfigSettings` allows extra fields and passes them to the model.
+Subclass `ConfigStore`, give it a `type` literal and implement three methods: `versions()` (every stored version, oldest first), `read(version)` (one `VersionedConfig`) and `_write(versioned)` (store one new version, refusing one that exists). `latest_version()` and `create_version()` come from the base class and need nothing else. Keep the two guarantees the file store gives: a version appears whole or not at all, and a stored version never changes. Register the class under the `decikit.config_stores` entry point group so `DECIKIT_CONFIG__TYPE=<tag>` can name it, and put its own fields (a bucket, a table name) in `DECIKIT_CONFIG__<FIELD>` variables; `DecikitConfigSettings` allows extra fields and passes them to the model.

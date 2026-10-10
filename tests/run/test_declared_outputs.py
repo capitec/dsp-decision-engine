@@ -10,11 +10,11 @@ import numpy as np
 import polars as pl
 import pytest
 
-from decider import Engine, allow_fallback, flow
-from decider.config import JsonFileStore
-from decider.exceptions import FallbackWarning
-from decider.ops import Columnar, Struct
-from decider.serving import RequestHandler
+from decikit import Engine, allow_fallback, flow
+from decikit.config import JsonFileStore
+from decikit.exceptions import FallbackWarning
+from decikit.ops import Columnar, Struct
+from decikit.serving import RequestHandler
 
 MODES = ("interpreted", "stepped", "fused")
 

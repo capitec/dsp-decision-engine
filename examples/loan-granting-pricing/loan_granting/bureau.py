@@ -7,8 +7,8 @@ from __future__ import annotations
 
 from datetime import date
 
-from decider import allow_fallback, missing_as
-from decider.ops import Text
+from decikit import allow_fallback, missing_as
+from decikit.ops import Text
 
 from credit_core.vocab import ConsentVerdict
 

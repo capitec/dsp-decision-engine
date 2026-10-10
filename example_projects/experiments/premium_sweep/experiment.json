@@ -4,7 +4,7 @@
   "description": "Raise the unsecured arm's premium and see how rates, payments and approvals move.",
   "flow": {
     "entry": "example_projects.experiments.loan_pipeline:build",
-    "decider": ""
+    "decikit": ""
   },
   "revision": "HEAD",
   "input": {

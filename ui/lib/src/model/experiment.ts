@@ -1,4 +1,4 @@
-// `experiment.json` (`ExperimentDef`) and its result as `decider.lab.experiments.run` serialises them, plus the pure
+// `experiment.json` (`ExperimentDef`) and its result as `decikit.lab.experiments.run` serialises them, plus the pure
 // helpers the summary and results views render with. Kept JSON-shaped on purpose: the wire form is the contract.
 
 export type ExperimentRunStatus = "completed" | "non_reproducible" | "partial" | "failed" | "cancelled" | "timed_out";
@@ -6,7 +6,7 @@ export type ScenarioStatus = "completed" | "failed";
 
 export interface FlowSpec {
   entry: string;
-  decider?: string;
+  decikit?: string;
 }
 
 export interface InputSpec {

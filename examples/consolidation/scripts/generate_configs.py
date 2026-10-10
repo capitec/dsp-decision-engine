@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 from credit_core.evidence import cell_id
-from decider import ConfigurableStep, DecisionTableConfig
+from decikit import ConfigurableStep, DecisionTableConfig
 
 from consolidation.pipeline import build
 

@@ -4,10 +4,10 @@ import math
 import polars as pl
 import pytest
 
-from decider import flow, step
-from decider._engine import Engine
-from decider.exceptions import NotIntegralError, WiringError
-from decider.steps.tables import DecisionTableConfig
+from decikit import flow, step
+from decikit._engine import Engine
+from decikit.exceptions import NotIntegralError, WiringError
+from decikit.steps.tables import DecisionTableConfig
 
 BIG = 2**60
 

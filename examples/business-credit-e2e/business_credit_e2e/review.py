@@ -10,7 +10,7 @@ import calendar
 from datetime import date
 from functools import cache
 
-from decider import Engine, Executable
+from decikit import Engine, Executable
 
 from business_credit_e2e import history, vocab
 

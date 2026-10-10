@@ -1,5 +1,5 @@
 """Credit card: revolving limit, rate by grade. Affordability: the instalment at the offered and a stressed rate against disposable income."""
-from decider import flow, param, step
+from decikit import flow, param, step
 
 
 def cc_instalment(requested_amount: float, requested_term: float, cc_monthly_rate: float, cc_monthly_fee: float) -> float:

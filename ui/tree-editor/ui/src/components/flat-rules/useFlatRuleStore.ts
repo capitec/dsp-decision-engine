@@ -72,7 +72,7 @@ interface FlatRuleState {
   updateProjectData: (updates: any) => void;
 }
 
-// Map decider's validation_errors onto per-rule highlighting and section flags
+// Map decikit's validation_errors onto per-rule highlighting and section flags
 function buildErrorState(rawErrors: any[] | undefined, trees: PrioritizedTree[]) {
   const ruleErrors = new Map<string, string>();
   const validationErrors = new Map<number, any[]>();
@@ -470,7 +470,7 @@ const store = create<FlatRuleState>()(
           }))
         };
 
-        // Validation never blocks a save: the server returns what decider found
+        // Validation never blocks a save: the server returns what decikit found
         const saved = await flatRuleApi.updateProject(state.project.id, {
           project_data: updatedProjectData
         });

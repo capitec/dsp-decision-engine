@@ -12,7 +12,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
-from decider import ConfigurableStep, allow_fallback, helper
+from decikit import ConfigurableStep, allow_fallback, helper
 
 from credit_core.dates import EffectiveVersions
 from credit_core.obligations import Account, assess

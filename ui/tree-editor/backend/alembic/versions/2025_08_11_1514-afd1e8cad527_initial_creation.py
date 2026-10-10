@@ -311,7 +311,7 @@ def downgrade() -> None:
     )
     op.drop_table("cache_entries", schema="app_schema")
 
-    from dsp_decider.settings import settings
+    from dsp_decikit.settings import settings
 
     schema = settings.db.pg_schema
     op.execute(sa.text(f"DROP TYPE IF EXISTS {schema}.tokenscope"))

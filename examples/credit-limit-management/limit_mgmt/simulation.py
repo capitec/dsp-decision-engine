@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import NamedTuple
 
 import polars as pl
-from decider import DecisionTableConfig
+from decikit import DecisionTableConfig
 
 from limit_mgmt import overlays
 from limit_mgmt.allocation import BudgetInstruction, allocate

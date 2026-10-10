@@ -5,7 +5,7 @@ lookup and fee mechanism.
 """
 from __future__ import annotations
 
-from decider import ParamTable, allow_fallback, param, param_table, step
+from decikit import ParamTable, allow_fallback, param, param_table, step
 from loan_granting.pricing import CreditLifeIndex, PriceEvaluator, RateCardIndex
 
 from consolidation.products import Quote

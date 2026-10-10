@@ -53,20 +53,20 @@ The rules, in the order the pipeline applies them:
 
 ## Features it shows
 
-| decider feature | Where |
+| Decider toolkit feature | Where |
 |---|---|
 | Plain functions as steps; `param` for policy, `missing_as` for optional inputs | [affordability.py](credit_core/affordability.py), [income.py](credit_core/income.py), [fees.py](credit_core/fees.py) |
 | `dag` (dependency order) beside `flow` (written order, for a value written twice) | [pipeline.py](credit_core/pipeline.py): the instalment waterfall and the reason-code ranking are flows inside the dag |
 | `DecisionTableConfig` with inline rows, banded ranges and `eq` keys | [deductions.py](credit_core/deductions.py), [expense_norms.py](credit_core/expense_norms.py), [calibration.py](credit_core/calibration.py), [risk_grade.py](credit_core/risk_grade.py), [appetite.py](credit_core/appetite.py), [credit_life.py](credit_core/credit_life.py) |
 | A 63 360-row table kept as a config document, handed to `build` by name | [rate_card.py](credit_core/rate_card.py), [`configs/0.1.0/rate_card_flex_loan.json`](configs/0.1.0/rate_card_flex_loan.json), `build(rate_card_flex_loan)` in [pipeline.py](credit_core/pipeline.py) |
 | Effective dating: an `EffectiveVersions` step resolves a version id from the record's date, then it is ANDed into the table match | [dates.py](credit_core/dates.py), used by deductions, expense norms and fees |
-| `ConfigurableStep` types whose fields are the data, loaded from a config document and compared by `decider.lab.diff` | [`AdjustmentStack`](credit_core/adjustments.py), [`ReasonCodes`](credit_core/reason_codes.py), [`EffectiveVersions`](credit_core/dates.py) |
+| `ConfigurableStep` types whose fields are the data, loaded from a config document and compared by `decikit.lab.diff` | [`AdjustmentStack`](credit_core/adjustments.py), [`ReasonCodes`](credit_core/reason_codes.py), [`EffectiveVersions`](credit_core/dates.py) |
 | `ScorecardConfig` with bin edges that are params | [scorecard.py](credit_core/scorecard.py) |
 | Multi-output steps (`outputs=`) | [adjustments.py](credit_core/adjustments.py), [reason_codes.py](credit_core/reason_codes.py), [bureau.py](credit_core/bureau.py), [obligations.py](credit_core/obligations.py) |
 | `TypedDict` inputs: JSON date strings arrive as `date`s | [obligations.py](credit_core/obligations.py), [bureau.py](credit_core/bureau.py), [exposure.py](credit_core/exposure.py) |
 | `@allow_fallback` for steps that are Python on purpose (dates, lists of dicts, strings), checked by `Engine(strict_compile=True)` | [tests/test_serving.py](tests/test_serving.py) |
 | `.relabel` and `.named`: one step reused on other column names or twice with different settings | [pipeline.py](credit_core/pipeline.py), [tests/test_affordability.py](tests/test_affordability.py) |
-| `decider.ops.decimal.round` for half-up money rounding that runs the same in Python and in a kernel | [rounding.py](credit_core/rounding.py) |
+| `decikit.ops.decimal.round` for half-up money rounding that runs the same in Python and in a kernel | [rounding.py](credit_core/rounding.py) |
 | The params document and a switch that turns a whole overlay stack off | [`configs/0.1.0/params.json`](configs/0.1.0/params.json), [tests/test_quote_pipeline.py](tests/test_quote_pipeline.py) |
 | A release check that sees the overlays, reason codes and cut-overs, and no `HiddenStateWarning` | [tests/test_release_checks.py](tests/test_release_checks.py) |
 | Warm-up from `sample_request.json`, and serving the raw request bytes | [sample_request.json](sample_request.json), [tests/test_serving.py](tests/test_serving.py) |
@@ -78,21 +78,21 @@ From the repository root, put every example on the path once (the other examples
 ```bash
 export PYTHONPATH=$(printf '%s:' "$PWD"/examples/*/)
 cd examples/shared-credit-core
-export DECIDER_API__CODE_PATH="$PWD" DECIDER_API__PIPELINE="credit_core.pipeline:build" DECIDER_CONFIG__BASEPATH="$PWD/configs"
+export DECIKIT_API__CODE_PATH="$PWD" DECIKIT_API__PIPELINE="credit_core.pipeline:build" DECIKIT_CONFIG__BASEPATH="$PWD/configs"
 ```
 
 Build (validates `configs/0.1.0` and compiles and warms every kernel with `sample_request.json`; the first
 build in a fresh checkout takes a minute while numba compiles):
 
 ```bash
-uv run decider build
+uv run decikit build
 # built config version 0.1.0 (pipeline credit_core.pipeline:build, mode fused)
 ```
 
 Serve, and quote the sample application. Its dates are plain JSON strings:
 
 ```bash
-uv run decider serve --workers 1 &
+uv run decikit serve --workers 1 &
 curl -s -d @sample_request.json -H 'content-type: application/json' localhost:8080/invocations |
   jq '{outcome_code, instalment, nominal_annual_rate, score, score_unadjusted, risk_grade, max_affordable_instalment, rate_cell_id, adjustments_applied}'
 ```
@@ -133,7 +133,7 @@ To regenerate `configs/0.1.0` (the synthetic rate card, the score overlays, the 
 
 `build(rate_card_flex_loan, score_adjustments, reason_codes)` receives one document per argument, each a file in
 `configs/<version>/`. The two below are what a risk or policy owner edits; `rate_card_flex_loan.json` is the 63 360-row table.
-A change to any of them is a new config version, and `decider.lab.diff.structure` reports it: the overlays and the codes are fields
+A change to any of them is a new config version, and `decikit.lab.diff.structure` reports it: the overlays and the codes are fields
 of a step, not objects a step closes over.
 
 [`score_adjustments.json`](configs/0.1.0/score_adjustments.json) is an `adjustment_stack`: the overlays on `score`, in stack order.
@@ -230,7 +230,7 @@ fraud-verdict enums, and the names reserved for consumers (`account_id`, `event_
   `@allow_fallback`; everything else, including all the tables, runs in the numba kernel.
 - **Data in fields, not objects.** A step never closes over a register or a module-level `dict`. The overlays, reason codes and version
   histories are fields of their step; the account-type treatments and the scorecard's reason codes are tuples of pairs. A step that
-  read an object would raise `HiddenStateWarning` when it binds, could not be compared by `decider.lab.diff` and could not compile.
+  read an object would raise `HiddenStateWarning` when it binds, could not be compared by `decikit.lab.diff` and could not compile.
   Dates inside a step's constants (overlay windows, version cut-overs) are ordinals (`date.toordinal()`), because the diff hashes
   numbers and strings by content but not a `date`.
 - **The demo scores everyone.** An ineligible applicant is still scored; `outcome_code` is what gates the result.
