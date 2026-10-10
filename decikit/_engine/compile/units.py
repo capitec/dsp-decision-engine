@@ -75,11 +75,11 @@ class Kernel:
         return self._trace_fn
 
     def run(self, values: Values, valid: Values, bundles: Mapping[int, tuple], n: int,
-            trace=None, table=None) -> None:
+            trace=None, table=None) -> bool:
         if self._python:
             for fallback in self._python:
                 fallback.run(values, valid, bundles, n)
-            return
+            return False
         cols = tuple([values[v.id] for v in self.reads])
         # One shared all-valid mask: a tree can read dozens of nullable columns, and one allocation each showed in a record's run.
         ones = np.ones(n, np.bool_) if self.optional else None
@@ -129,6 +129,7 @@ class Kernel:
             values[v.id] = _ragged_values(values[v.id], sink, schema)
         for k, mask in zip(self._masked, masks):
             valid[self.writes[k][0].id] = mask
+        return trace is not None  # captured in the kernel; the Python calls of a split capture nothing
 
 
 class Fallback:
@@ -240,8 +241,7 @@ def _per_row(values: np.ndarray, python: bool) -> list:
     # shared-kernel shape) has no per-row representation of its own, so give it `build_rows`'s.
     if isinstance(values, Ragged):
         return [values.row(i) for i in range(len(values.lo))]
-    # A record array's tolist() gives tuples: a compiled body takes each record, a Python body the dict interpreted
-    # mode gives it.
+    # tolist() gives a record's fields as a tuple: a compiled body takes the record, a Python body the dict.
     if (names := values.dtype.names) is not None:
         return [dict(zip(names, row)) for row in values.tolist()] if python else list(values)
     return values.tolist()

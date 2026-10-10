@@ -212,13 +212,11 @@ class SteppedRunner(InterpretedRunner):
             # and a subset of rows would mislabel records from the buffer's
             # row-major offsets.
             top = scope.rows is None and scope.arm is None and scope.iteration is None
-            if trace is not None and isinstance(unit, Kernel) and top:
-                unit.run(values, valid, bundles, n, trace, ctx.table)
-            else:
-                unit.run(values, valid, bundles, n)
-                if trace is not None:
-                    for c in unit.calls:
-                        self._emit_rows(Kind.STEP, c.node.origin, scope, n, step=c.id + 1)
+            captured = (unit.run(values, valid, bundles, n, trace, ctx.table)
+                        if trace is not None and isinstance(unit, Kernel) and top else unit.run(values, valid, bundles, n))
+            if trace is not None and not captured:
+                for c in unit.calls:
+                    self._emit_rows(Kind.STEP, c.node.origin, scope, n, step=c.id + 1)
         except Exception as e:
             paths = [c.node.origin.path for c in unit.calls]
             where = (f"step {paths[0]}" if len(paths) == 1 else

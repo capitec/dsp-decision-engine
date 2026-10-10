@@ -4,6 +4,7 @@ from __future__ import annotations
 import numpy as np
 import polars as pl
 import pytest
+from numba.core.errors import TypingError
 
 from decikit import branch, dag, flow, frame_step, loop, param, step
 from decikit._engine import Engine
@@ -106,6 +107,21 @@ def test_step_evidence_is_equivalent_across_modes():
     shapes = {mode: step_shapes(step_events(Engine().bind(PIPELINE, mode=mode)).events()) for mode in MODES}
     assert shapes["stepped"] == shapes["interpreted"]
     assert shapes["fused"] == shapes["interpreted"]
+
+
+def refused(*args):
+    raise TypingError("a type the build did not see")
+
+
+@pytest.mark.parametrize("mode", ["stepped", "fused"])
+def test_a_kernel_that_splits_at_launch_still_traces_every_step(mode):
+    expected = step_shapes(step_events(Engine().bind(AFFORDABILITY, mode="interpreted")).events())
+    exe = Engine().bind(AFFORDABILITY, mode=mode)
+    exe.fallbacks()
+    kernel = exe.runner.units[exe.plan.calls[0].id]
+    kernel.fn = kernel._trace_fn = refused  # its traced build too
+    assert step_shapes(step_events(exe).events()) == expected  # the launch that splits
+    assert step_shapes(step_events(exe).events()) == expected  # and every launch after it
 
 
 def test_per_record_order_within_a_stream():
