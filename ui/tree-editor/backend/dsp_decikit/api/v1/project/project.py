@@ -60,7 +60,7 @@ class ProjectUpdate(BaseModel):
     project_data: t.Optional[t.Dict[str, t.Any]] = None
     base_version: t.Optional[int] = Field(
         None,
-        description="The version the caller last saw; a save is refused (409) when the project has moved on. Omit to overwrite.",
+        description="The version the caller last saw; a save of project_data is refused (409) when another save came first. Omit to overwrite.",
     )
 
 
@@ -517,7 +517,10 @@ async def move_project(
                     status_code=403, detail=f"Target folder access denied: {e}"
                 )
 
-        await save_version(session, project_id, None, {"folder_id": move_data.new_folder_id}, "rest", str(uuid.uuid4()))
+        # Move project
+        project.folder_id = move_data.new_folder_id
+        project.updated_at = datetime.now(timezone.utc)
+
         await session.commit()
         await session.refresh(project)
 

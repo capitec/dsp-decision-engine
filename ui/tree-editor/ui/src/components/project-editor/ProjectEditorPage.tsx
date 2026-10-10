@@ -35,7 +35,6 @@ import {
 import { MoreVertical, Trash2, Edit3, Save, FileText, Download } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
-import { isStaleSave, staleSaveToast } from "@/lib/stale-save";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import {
   deleteProjectApiV1ProjectsProjectIdDelete,
@@ -167,16 +166,13 @@ const ProjectEditorContent: React.FC<{ onGoBack: () => void }> = ({ onGoBack }) 
     try {
       setIsUpdating(true);
 
-      const { data } = await updateProjectApiV1ProjectsProjectIdPut({
+      await updateProjectApiV1ProjectsProjectIdPut({
         path: { project_id: projectId as string },
         body: {
           name: editName.trim(),
           description: editDescription.trim() || undefined,
-          base_version: useEditorStore.getState().version,
         }
       });
-      // Keep the new version so the next save is not stale
-      useEditorStore.setState({ version: data?.version ?? null });
 
       toast({
         title: "Project updated",
@@ -190,8 +186,7 @@ const ProjectEditorContent: React.FC<{ onGoBack: () => void }> = ({ onGoBack }) 
       setShowEditDialog(false);
     } catch (error: any) {
       console.error('Failed to update project:', error);
-      if (isStaleSave(error)) staleSaveToast();
-      else toast({
+      toast({
         title: "Update failed",
         description: error.message || "Failed to update project. Please try again.",
         variant: "destructive",

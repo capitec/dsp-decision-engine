@@ -120,10 +120,10 @@ async def _commit_version(session: AsyncSession, project: Project, ops: list, cl
 async def save_version(session: AsyncSession, project_id: uuid.UUID, base_version: t.Optional[int],
                        changes: t.Dict[str, t.Any], client_id: str, msg_id: str) -> int:
     """Write `changes` (columns of the project); the caller commits. Only a document change makes a new version,
-    logged as one root-replace op; a rename or move keeps the version. Raises StaleVersion when `base_version` is
-    given and the project has moved on."""
+    logged as one root-replace op; a rename or move keeps the version and ignores `base_version`. Raises StaleVersion
+    when a document save names a `base_version` the project has moved on from."""
     project = await _locked(session, project_id)
-    if base_version is not None and project.version != base_version:
+    if "project_data" in changes and base_version is not None and project.version != base_version:
         raise StaleVersion(project.version)
     if "project_data" not in changes:
         await session.execute(update(Project).where(Project.id == project_id)

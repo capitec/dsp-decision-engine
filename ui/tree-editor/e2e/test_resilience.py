@@ -211,9 +211,16 @@ def test_after_a_reload_the_second_tab_sees_the_first_tabs_edit_and_can_save(sig
     expect(second.get_by_text("Unsaved changes")).to_be_hidden()
     if kind == "flat":
         second.get_by_role("button", name="Add Rule").click()
-        press_save(second)
-        expect(toast(second, "Project Saved")).to_be_visible()
-        assert len(get_project(signed_in, project)["project_data"]["rules"]) == 4
+    else:
+        node_ui.nudge(second, "yes")
+    press_save(second)
+    expect(toast(second, "Project Saved")).to_be_visible()
+    stored = get_project(signed_in, project)["project_data"]
+    if kind == "flat":
+        assert len(stored["rules"]) == 4
+    else:
+        original = {n["id"]: n["position"] for n in node_ui.loan_document()["nodes"]}
+        assert all(n["position"] != original[n["id"]] for n in stored["nodes"] if n["id"] in ("root", "yes"))
 
 
 def put_project(page: Page, project: str, **body):
@@ -224,34 +231,69 @@ def test_a_save_with_a_stale_base_version_is_refused_with_the_current_version(si
     project = create_project(signed_in, "Versioned", flat_document())
     assert project["version"] == 1
 
-    saved = put_project(signed_in, project["id"], name="Renamed once", base_version=1)
-    stale = put_project(signed_in, project["id"], name="Renamed twice", base_version=1)
+    saved = put_project(signed_in, project["id"], project_data=flat_document(), name="Saved", base_version=1)
+    stale = put_project(signed_in, project["id"], project_data=flat_document(), name="Stale", base_version=1)
 
     assert saved.ok and saved.json()["version"] == 2
     assert stale.status == 409
     assert stale.json()["detail"]["current_version"] == 2
     stored = get_project(signed_in, project["id"])
-    assert (stored["name"], stored["version"]) == ("Renamed once", 2)
+    assert (stored["name"], stored["version"]) == ("Saved", 2)
+
+
+def test_concurrent_saves_of_one_base_version_let_exactly_one_through(signed_in: Page):
+    project = create_project(signed_in, "Raced", flat_document())["id"]
+
+    statuses = signed_in.evaluate(
+        """([project, doc]) => Promise.all([...Array(6).keys()].map(i => fetch(`/api/v1/projects/${project}`, {
+            method: 'PUT', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({name: `Racer ${i}`, project_data: doc, base_version: 1}),
+        }).then(r => r.status)))""",
+        [project, flat_document()],
+    )
+
+    assert sorted(statuses) == [200] + [409] * 5
+    assert get_project(signed_in, project)["version"] == 2
 
 
 def test_a_save_without_a_base_version_still_overwrites_and_bumps_the_version(signed_in: Page):
     project = create_project(signed_in, "Unversioned", flat_document())["id"]
 
-    first = put_project(signed_in, project, name="First")
-    second = put_project(signed_in, project, name="Second")
+    first = put_project(signed_in, project, project_data=flat_document(), name="First")
+    second = put_project(signed_in, project, project_data=flat_document(), name="Second")
 
     assert first.json()["version"] == 2 and second.json()["version"] == 3
     assert get_project(signed_in, project)["name"] == "Second"
 
 
-def test_moving_a_project_bumps_its_version(signed_in: Page):
+def test_renaming_or_moving_a_project_leaves_its_version(signed_in: Page):
     project = create_project(signed_in, "Moved", flat_document())["id"]
     folder = create_folder(signed_in, "Target")["id"]
 
+    renamed = put_project(signed_in, project, name="Renamed", base_version=99)
     moved = signed_in.request.post(f"/api/v1/projects/{project}/move", data={"new_folder_id": folder})
 
-    assert moved.ok and moved.json()["version"] == 2
-    assert get_project(signed_in, project)["version"] == 2
+    assert renamed.ok and renamed.json()["version"] == 1
+    assert moved.ok and moved.json()["version"] == 1
+    assert get_project(signed_in, project)["version"] == 1
+
+
+@pytest.mark.parametrize("change", ["rename", "move"])
+@pytest.mark.parametrize("kind", ["flat", "tree"])
+def test_a_rename_or_move_elsewhere_does_not_make_an_open_editors_save_stale(signed_in: Page, kind: str, change: str):
+    project = open_with_edit(signed_in, kind)
+
+    # the project list's rename and move dialogs send these requests
+    if change == "rename":
+        reply = put_project(signed_in, project, name="Renamed in the list")
+    else:
+        folder = create_folder(signed_in, "Elsewhere")["id"]
+        reply = signed_in.request.post(f"/api/v1/projects/{project}/move", data={"new_folder_id": folder})
+    assert reply.ok
+    press_save(signed_in)
+
+    expect(toast(signed_in, "Project Saved")).to_be_visible()
+    assert edit_is_stored(signed_in, project, kind)
 
 
 @pytest.mark.parametrize("kind", ["flat", "tree"])

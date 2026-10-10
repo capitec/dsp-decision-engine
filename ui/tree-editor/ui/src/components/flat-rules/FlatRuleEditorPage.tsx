@@ -19,8 +19,7 @@ import {
   useFlatRuleHasInputSchemaErrors,
   useFlatRuleHasOutputErrors,
   useFlatRuleHasParameterErrors,
-  useFlatRuleRuleErrors,
-  useFlatRuleStore,
+  useFlatRuleRuleErrors
 } from './useFlatRuleStore';
 import { useFlatRuleLive } from './useFlatRuleLive';
 import { OutputConfigurationTab } from './OutputConfigurationTab';
@@ -32,7 +31,6 @@ import { Badge } from "@/components/ui/badge";
 
 const LEAVE_MESSAGE = "You have unsaved changes in these rules. Are you sure you want to leave?";
 import { apiErrorMessage } from "@/lib/utils";
-import { isStaleSave, staleSaveToast } from "@/lib/stale-save";
 import { parseFlatRuleValidationErrors, formatRuleErrors } from "@/utils/flat-rule-validation-parser";
 
 // Header component that can access store for save functionality
@@ -197,15 +195,13 @@ export const FlatRuleEditorPage: React.FC = () => {
 
     try {
       setRenameLoading(true);
-      const updated = await flatRuleApi.updateProject(project.id, {
+      await flatRuleApi.updateProject(project.id, {
         name: renameForm.name,
-        description: renameForm.description,
-        base_version: useFlatRuleStore.getState().project.version
+        description: renameForm.description
       });
 
-      // Update local project state; the store keeps the new version so the next save is not stale
+      // Update local project state
       setProject({ ...project, name: renameForm.name, description: renameForm.description });
-      useFlatRuleStore.setState((s) => ({ project: { ...s.project, version: updated.version } }));
       setRenameDialogOpen(false);
 
       toast({
@@ -214,8 +210,7 @@ export const FlatRuleEditorPage: React.FC = () => {
       });
     } catch (err: any) {
       console.error('Failed to update project:', err);
-      if (isStaleSave(err)) staleSaveToast();
-      else toast({
+      toast({
         title: "Error",
         description: err.message || 'Failed to update project',
         variant: "destructive"
