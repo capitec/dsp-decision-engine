@@ -34,7 +34,6 @@ PRIVATE_IMPORT: dict[str, str] = {  # {"importer -> imported": reason}
     "lab.checks._builtin.structure -> _engine.wiring.plan": "the version-use check walks the resolved plan, which is internal",
     "_tooling.cli._check -> steps._entry": "import_flow has no public home",
     "_tooling.cli -> _engine.compile": "cpu_target has no public home",
-    "_tooling.bridge.protocol -> _engine.run.engine": "capabilities lists the runner names, which have no public home",
     "lab._describe -> _engine.wiring": "describe reads data edges off the resolved plan, which is internal",
     "lab._describe -> _engine.wiring.resolve": "describe reads data edges off the resolved plan, which is internal",
     "_tooling.bridge.bridge -> _engine.debug": "wire constants are internal to the bridge protocol",
