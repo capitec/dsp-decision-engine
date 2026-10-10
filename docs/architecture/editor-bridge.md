@@ -292,11 +292,11 @@ sequenceDiagram
     X->>X: highlight and select that node
 ```
 
-The extension has no debug adapter of its own. The earlier prototype ran a decider toolkit debug adapter over the bridge's session, with the decider toolkit breakpoints on node paths, its own step commands and a second debugpy attach to get into a step's Python. That was two debuggers and two breakpoint models, and users reached for the Python one.
+The extension has no debug adapter of its own. The earlier prototype ran a decider toolkit debug adapter over the bridge's session, with its own breakpoints on node paths, its own step commands and a second debugpy attach to get into a step's Python. That was two debuggers and two breakpoint models, and users reached for the Python one.
 
 What makes the mirroring work:
 
-- `node_path()` in `run.py` walks up the calling frames until it finds the interpreted runner's `_call` or `_frame` code object and returns `node.origin.path` from its locals. A function used at two nodes (a step that is also a branch condition) still maps to the node that called it. When the evaluate fails (the decider toolkit not importable in the debuggee), `pausedAt` falls back to the innermost frame whose file and line fall inside a node's `[python.line, python.endLine]`.
+- `node_path()` in `run.py` walks up the calling frames until it finds the interpreted runner's `_call` or `_frame` code object and returns `node.origin.path` from its locals. A function used at two nodes (a step that is also a branch condition) still maps to the node that called it. When the evaluate fails (`decikit` not importable in the debuggee), `pausedAt` falls back to the innermost frame whose file and line fall inside a node's `[python.line, python.endLine]`.
 - A breakpoint dot on a node becomes a source breakpoint at the node's `bodyLine`. In a function used by more than one node it gets the condition `__import__('decikit._tooling.bridge.run', fromlist=['node_path']).node_path() == "<path>"`, so it stops at that node only. `breakpointPaths` maps every source breakpoint back to the nodes whose Python holds it, which is how dots appear when you set a breakpoint in the editor gutter.
 - Tree and table nodes run the decider toolkit's own reference walker, where `justMyCode` never stops, so `userCode` excludes `callKind: "row"` nodes from breakpoint actions.
 - Any Python debug session that pauses inside the shown flow's steps is mirrored, including your own scripts and tests, as long as the pipeline runs interpreted.
@@ -343,7 +343,7 @@ flowchart LR
     class BR,RUN engine
 ```
 
-The extension contributes four views under a decider toolkit activity-bar entry: Flows (every `flow.yaml` and every Python file that imports the decider toolkit and defines a pipeline, grouped by project root), Datasets, Structure (the shown flow as a tree, with breakpoint and paused markers) and Toolbox (node types to drag into a flow file). The README lists three views; the Datasets view was added after it was written.
+The extension contributes four views under a decider toolkit activity-bar entry: Flows (every `flow.yaml` and every Python file that imports `decikit` and defines a pipeline, grouped by project root), Datasets, Structure (the shown flow as a tree, with breakpoint and paused markers) and Toolbox (node types to drag into a flow file). The README lists three views; the Datasets view was added after it was written.
 
 How the extension uses the bridge, end to end, when a flow is shown:
 

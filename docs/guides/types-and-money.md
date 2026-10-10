@@ -168,7 +168,7 @@ print([decimal.round(Decimal("2.675"), 2), decimal.round(Decimal("2.665"), 2, Ro
 
 ### Money in a pipeline
 
-A step reads and returns the decider toolkit `Decimal` values in every mode. Inside a compiled step they stay int64, so a decimal costs about what an int does. A record may carry a `str`, `int`, `float`, the decider toolkit `Decimal` or `decimal.Decimal` for a money input:
+A step reads and returns the decider toolkit's `Decimal` values in every mode. Inside a compiled step they stay int64, so a decimal costs about what an int does. A record may carry a `str`, `int`, `float`, the toolkit's `Decimal` or `decimal.Decimal` for a money input:
 
 ```python
 from decimal import Decimal as StdDecimal
