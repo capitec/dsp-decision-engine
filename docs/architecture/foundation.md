@@ -439,6 +439,7 @@ so nothing reads the environment at import time, and `get_settings.cache_clear()
 |---|---|---|
 | `serve.host`, `serve.port`, `serve.workers`, `serve.server` | `0.0.0.0`, `8080`, `None` (2 x CPUs + 1 at serve time), `starlette` | `decider serve` |
 | `api.code_path`, `api.pipeline`, `api.handler`, `api.mode` | `.`, `pipeline:build`, `inference:Handler`, `fused` | `decider build`, `decider serve`, `RequestHandler` |
+| `build.warn_shadowed_tables` | `True` | `RequestHandler.stage()` (so `decider build` and every server start): `ShadowedTableWarning` for a params document that sets a table seeded from a config document |
 | `config` | `{"type": "file:json"}` plus the store's own fields | `DeciderConfigSettings.get()`, which resolves a `ConfigStore` by tag |
 | `datasets_path` | `${PROJECT_ROOT}/datasets` | `lab.data` dataset catalog |
 | `checks_path` | `${PROJECT_ROOT}/checks.yaml` | `lab.checks` project config |

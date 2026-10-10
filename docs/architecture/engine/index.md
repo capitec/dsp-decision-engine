@@ -55,7 +55,7 @@ page has the full map.
 | Argument | Default | Effect |
 |---|---|---|
 | `params_validation` | `"eager"` | `"eager"` validates every node's params the first time a params document is seen and raises on any invalid one. `"lazy"` validates a node the first time it runs, so an invalid param in a node no row reaches never fails a run. |
-| `strict_compile` | `False` | In `"stepped"` and `"fused"` modes, a step that would fall back to Python raises at the first run instead of warning, unless the step is marked `@allow_fallback`. |
+| `strict_compile` | `False` | In `"stepped"` and `"fused"` modes, a step that would fall back to Python raises at the first run instead of warning, unless the step is marked `@allow_fallback`. In every mode, a `HiddenStateWarning` finding raises `EngineError` at `bind`. |
 
 `Engine.bind(step_or_ir, mode="interpreted")` looks the mode up in `RUNNERS`, a plain dict in
 `decider/_engine/run/engine.py`:

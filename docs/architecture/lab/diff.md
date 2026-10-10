@@ -89,7 +89,9 @@ This is the safe direction for a proof. A false "different" costs a reviewer a l
 
 ### The param declarations
 
-`decls` keeps, for each param of each call, a `(display, digest)` pair per field: `annotation`, `default`, `bounds`, `shared_key` and `on_invalid`. The digest decides whether the field changed; the display (a `repr` cut to 80 characters) is what a `ParamChange` shows. Annotations hash by their spelling and `FieldInfo` by its bounds metadata, since neither has a content hash of its own.
+`decls` keeps, for each param of each call, a `(display, digest)` pair per field: `annotation`, `default`, `bounds`, `shared_key` and `on_invalid`. The digest decides whether the field changed; the display (a `repr` cut to 80 characters) is what a `ParamChange` shows. Annotations hash by their spelling and `FieldInfo` by its bounds metadata, since neither has a content hash of its own. A `param_table`'s annotation hashes by its schema, `table((column, type), ...)`: the class behind it is built per process and its spelling holds an address.
+
+A `param_table` default (columns of `int`, `float` or `bool`) is hashed in bulk: per column its name, numpy dtype and raw bytes, after the row count, so a changed cell, row order, row count or column type changes the digest and the hash seed does not. Steps that share one default list hash it once per snapshot (`_ROWS`, cleared when the snapshot ends). The display takes the `repr` of the first 30 rows only, which is already longer than 80 characters.
 
 ## Structure diff
 
