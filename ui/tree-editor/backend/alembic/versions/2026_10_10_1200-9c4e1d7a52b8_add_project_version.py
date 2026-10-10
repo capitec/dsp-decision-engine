@@ -20,7 +20,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    """Upgrade schema: a version that every write of a project bumps."""
+    """Upgrade schema: a version that every save of a project's document bumps."""
     op.add_column(
         "projects",
         sa.Column("version", sa.Integer(), nullable=False, server_default="1"),

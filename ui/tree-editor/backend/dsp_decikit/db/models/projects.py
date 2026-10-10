@@ -89,7 +89,7 @@ class Project(SQLModel, table=True):
     version: int = Field(
         default=1,
         sa_column=Column(Integer, nullable=False, server_default="1"),
-        description="Bumped by every write; a save naming an older base_version is refused",
+        description="Bumped by every save of project_data; a save naming an older base_version is refused",
     )
 
     # Relationships

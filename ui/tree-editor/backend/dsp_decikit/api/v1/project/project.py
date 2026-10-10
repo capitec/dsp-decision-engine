@@ -58,7 +58,7 @@ class ProjectUpdate(BaseModel):
     project_data: t.Optional[t.Dict[str, t.Any]] = None
     base_version: t.Optional[int] = Field(
         None,
-        description="The version the caller last saw; a save is refused (409) when the project has moved on. Omit to overwrite.",
+        description="The version the caller last saw; a save of project_data is refused (409) when another save came first. Omit to overwrite.",
     )
 
 
@@ -430,15 +430,15 @@ async def update_project(
             except ValueError as e:
                 raise HTTPException(status_code=400, detail=str(e))
             changes["project_data"] = project_data.project_data
+            changes["version"] = Project.version + 1
 
-        # One conditional statement, so two saves of the same base cannot both pass the check
+        # One conditional statement, so two saves of the same base cannot both pass the check.
+        # The version counts document saves only: a rename or move never makes an open editor stale.
         stmt = update(Project).where(Project.id == project_id)
-        if project_data.base_version is not None:
+        if "version" in changes and project_data.base_version is not None:
             stmt = stmt.where(Project.version == project_data.base_version)
         saved = await session.execute(
-            stmt.values(
-                **changes, version=Project.version + 1, updated_at=datetime.now(timezone.utc)
-            )
+            stmt.values(**changes, updated_at=datetime.now(timezone.utc))
             .returning(Project.version)
             .execution_options(synchronize_session=False)
         )
@@ -528,7 +528,6 @@ async def move_project(
 
         # Move project
         project.folder_id = move_data.new_folder_id
-        project.version = Project.version + 1
         project.updated_at = datetime.now(timezone.utc)
 
         await session.commit()
