@@ -105,6 +105,7 @@ export const FlatRuleLeafNodeEditor: React.FC<FlatRuleLeafNodeEditorProps> = ({
   }
 
   return (
+    <div className="contents" data-testid="leaf-output">
     <LeafNodeOutputEditor
       leafValue={node.result_idx ?? -1}
       onLeafValueChange={handleOutputChange}
@@ -119,5 +120,6 @@ export const FlatRuleLeafNodeEditor: React.FC<FlatRuleLeafNodeEditorProps> = ({
       maxScrollHeight="max-h-60"
       modalWidth="fixed"
     />
+    </div>
   );
 };

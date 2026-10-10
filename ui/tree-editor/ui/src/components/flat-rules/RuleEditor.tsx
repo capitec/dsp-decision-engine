@@ -627,6 +627,7 @@ export const RuleEditor: React.FC<RuleEditorProps> = () => {
         return (
         <Card
           key={tree.id}
+          data-testid="rule-card"
           className={`border-2 transition-all duration-500 ease-in-out transform ${hasError ? 'border-red-500 bg-red-50' : ''}`}
           style={{
             transform: `translateY(0px)`,

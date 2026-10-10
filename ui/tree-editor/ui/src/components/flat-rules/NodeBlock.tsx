@@ -238,6 +238,7 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
   return (
     <div
       key={node.id}
+      data-testid="rule-node"
       className={`border rounded-md p-2 mb-1 ${bgColor} ${textColor} ${
         isFocused ? 'ring-2 ring-blue-400 shadow-md' : ''
       } ${nodeHasError ? 'ring-2 ring-red-500' : ''}`}
@@ -306,7 +307,7 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
               }
             }}
           >
-            <SelectTrigger className="w-28">
+            <SelectTrigger className="w-28" data-testid="node-type">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
