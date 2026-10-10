@@ -131,6 +131,8 @@ Engine.lazy({"polars": "decikit._engine.polars.engine"})   # P4 adds the module;
   the split into the snapshot's `fallbacks` under the runner's lock (write-once) and warns or raises per the
   runner's class. A split happens at most once per kernel, so the callback runs at most once per kernel per
   process. This is the one deliberate change inside the numba engine: reporting, not execution.
+- As built (2026-10-10): part one became a static rule instead of a probe (open question 3); part two is as
+  written.
 
 ### Changes
 
@@ -143,7 +145,7 @@ Engine.lazy({"polars": "decikit._engine.polars.engine"})   # P4 adds the module;
 | `registered()` | `decikit/_registry.py` |
 | `capabilities().modes` from the registry; allowlist entry `_tooling.bridge.protocol -> _engine.run.engine` removed | `decikit/_tooling/bridge/protocol.py`, `tests/conventions_allowlists.py` |
 | exports | `decikit/__init__.py` |
-| zero-row probe of every kernel at the end of `_build`; `Kernel.on_split`; `SteppedRunner` warns only when its class is loud; `FusedRunner` is loud; `fallbacks()` merges launch-time splits | `decikit/_engine/compile/units.py`, `decikit/_engine/run/runners/stepped.py`, `fused.py` |
+| as built: a scalar step writing a container, `bytes` or a time is a build-time `Fallback` (the zero-row probe was built, verified and removed; see open question 3); `Kernel.on_split`; `SteppedRunner` warns only when its class is loud; `FusedRunner` is loud; `fallbacks()` merges launch-time splits | `decikit/_engine/compile/units.py`, `decikit/_engine/run/runners/stepped.py`, `fused.py` |
 | tests | `tests/registry/test_engines.py`: resolve by alias and import path; `NumbaEngine` is not registered; settings round trip through `EngineSettings`; unknown tag error with did-you-mean; an engine loaded from an entry point (a test package, as `tests/mcp` does); `tests/test_imports.py` still green; `tests/serving/` builds a handler from env with `strict_compile=true` |
 | tests | `tests/compile/test_launch_time_split.py`: a step returning a `TypedDict` under fused warns once at `compile()` (the probe) and appears in `fallbacks()` before any row runs, with the numba error as the reason; raises under `strict_compile=True`; is silent and accepted under `@allow_fallback`; the same step under stepped is silent but listed, and raises under strict; under interpreted nothing is reported; the split kernel's answers equal interpreted; a kernel forced to split after the probe (monkeypatched `run`) is reported through `on_split` once |
 | docs | `docs/architecture/engine/index.md` ("Engine and bind", "Extending"), `package-layout.md` (the closed-set sentence at `:381`, the "new execution mode" row, the registry roots table gains `Engine`), `docs/guides/projects-and-serving.md`, `docs/guides/extending.md` |
@@ -227,6 +229,8 @@ frame steps.
 
 ## P6. Polars bodies and native segments (L, only on a go from P5)
 
+Not built: P5 (experiment E2) was a no-go, so P6 is not built and this section is history; see `docs/design_decisions/experiments/polars-host-vs-native.md`.
+
 Detailed design is written when P5 says go, following the shape of 09. The pieces:
 
 | Change | Where |
@@ -243,6 +247,9 @@ Exit: E2's fallback-heavy pipeline reaches the measured native speed; `assert_eq
 without impls on the example flows.
 
 ## P7. `SparkEngine` (L, out of tree first)
+
+Not built (2026-10-10): pyspark is not installed and the package is not trivial; `tests/registry/test_engines.py`
+loads an engine from a `decikit.engines` entry point, which is the seam this phase needs.
 
 - `decikit-spark` package: `SparkEngine(Engine)` with `type: Literal["spark"]`, entry point
   `decikit.engines`, the same segmentation applied to a Spark `DataFrame`, `mapInArrow` boundaries whose

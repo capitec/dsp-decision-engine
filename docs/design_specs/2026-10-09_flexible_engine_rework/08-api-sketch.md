@@ -77,6 +77,8 @@ assert_equivalent(pipeline, df, engines=("fused", "polars"))
 
 ## A polars body for a step (only if phase P6 is built)
 
+Dropped 2026-10-10: P5 (experiment E2) was a no-go, so P6 is not built and this section is history; see `docs/design_decisions/experiments/polars-host-vs-native.md`.
+
 The Python body is required and is what serving runs. A polars body is an optional optimisation that only
 the polars engine's native segments use.
 
