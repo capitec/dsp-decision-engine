@@ -33,7 +33,7 @@ def struct_schema(item: Any) -> Schema:
 
 @annotation_cache
 def to_dicts(annotation: Any) -> Callable[[Any], Any] | None:
-    """How a Python step's `Struct[Item]` or `Columnar[Item]` value becomes the dicts every mode stores; else `None`.
+    """How a Python step's `Struct[Item]` or `Columnar[Item]` value becomes the dicts every engine stores; else `None`.
 
     A step may return a struct as a tuple of its fields and rows as a list of
     them; a kernel's output reads back as dicts, so the Python paths store the same.
