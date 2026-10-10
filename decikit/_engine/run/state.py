@@ -371,7 +371,7 @@ def fill_missing(values: np.ndarray, valid: np.ndarray, fill: Any) -> np.ndarray
     """
     if not isinstance(fill, (list, dict, tuple)):
         return np.where(valid, values, fill)
-    out = values.astype(object)
+    out = _objects(values)
     for i in np.flatnonzero(~valid):
         out[i] = copy.deepcopy(fill)
     return out

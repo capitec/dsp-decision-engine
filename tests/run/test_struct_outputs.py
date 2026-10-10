@@ -6,7 +6,7 @@ from typing import TypedDict
 import polars as pl
 import pytest
 
-from decikit import FusedEngine, InterpretedEngine, SteppedEngine, allow_fallback, branch, flow, loop, step
+from decikit import FusedEngine, InterpretedEngine, SteppedEngine, allow_fallback, branch, flow, loop, missing_as, step
 from decikit.ops import Columnar, Struct
 from decikit.lab.testing import assert_equivalent
 
@@ -156,6 +156,23 @@ def test_a_python_struct_step_returning_something_other_than_its_fields_is_refus
 
 
 MIXED = pl.DataFrame({"rate": [0.1, -0.2, 0.3], "code": [1, 2, 3], "label": ["ab", "c", "def"]})
+NO_OFFER = {"rate": -9.0, "code": -9}
+
+
+@allow_fallback
+def filled_rate(offer: dict = missing_as(NO_OFFER)) -> float:
+    return offer["rate"] * 10.0 + offer["code"]
+
+
+def filled_rate_compiled(offer: Struct[Product] = missing_as(NO_OFFER)) -> float:
+    return offer["rate"] * 10.0 + offer["code"]
+
+
+@pytest.mark.parametrize("reader", (filled_rate, filled_rate_compiled), ids=("python_reader", "kernel_reader"))
+def test_a_struct_a_branch_leaves_null_on_some_rows_is_filled_in_every_engine(reader):
+    pipeline = flow(branch(positive, best_tuple, modifies=["offer"], name="priced"), reader, name="order")
+    out = assert_equivalent(pipeline, MIXED)
+    assert out[out.columns[-1]].to_list() == [2.0, -99.0, 6.0]
 
 
 @pytest.mark.parametrize("reader", (offer_rate, reads_offer), ids=("python_reader", "kernel_reader"))
