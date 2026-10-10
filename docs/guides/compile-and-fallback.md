@@ -127,7 +127,7 @@ Branches and loops pack into one fused kernel when every step inside is a plain 
 
 ## Fallback and the FallbackWarning
 
-A step that cannot compile still runs. The compiled modes run it in Python, row by row, and keep the steps before and after it compiled. Each fallback is announced once per executable with a `FallbackWarning`, and `fallbacks()` lists every one with its reason:
+A step that cannot compile still runs. The compiled modes run it in Python, row by row, and keep the steps before and after it compiled. Fused mode announces each fallback once per executable with a `FallbackWarning` (stepped mode, which exists to inspect one step at a time, does not), and `fallbacks()` lists every one with its reason:
 
 ```python
 from decikit import FallbackWarning, allow_fallback
