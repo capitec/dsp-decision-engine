@@ -65,7 +65,7 @@ class RequestHandler:
     is the params document every request runs with.
 
     Config changes are explicit: `stage(version)` binds a version with
-    `engine` (`FusedEngine()` unless given) and warms it off the request
+    `engine` (`FusedEngine()` unless given; an `Engine` or its tag) and warms it off the request
     path, `activate()` swaps it in atomically, `rollback()` goes back to the
     previous one. Errors propagate to the caller, and the
     active version keeps serving. `POST /invocations` with a JSON object
@@ -105,12 +105,16 @@ class RequestHandler:
 
     store: ConfigStore
     pipeline: t.Any = "pipeline:build"
-    engine: Engine = field(default_factory=FusedEngine)
+    engine: Engine | str = field(default_factory=FusedEngine)
     sample_request: str | None = None
     _active: Live | None = field(default=None, init=False, repr=False)
     _staged: Live | None = field(default=None, init=False, repr=False)
     _history: list[Live] = field(default_factory=list, init=False, repr=False)
     _lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
+
+    def __post_init__(self):
+        if isinstance(self.engine, str):
+            self.engine = Engine.resolve(self.engine)()
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)

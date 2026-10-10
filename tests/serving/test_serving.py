@@ -324,6 +324,12 @@ def build_labels():
     return flow(label, name="labels")
 
 
+def test_an_engine_tag_is_resolved_to_an_engine(tmp_path):
+    from decikit import SteppedEngine
+
+    assert RequestHandler(JsonFileStore(basepath=str(tmp_path)), build, engine="stepped").engine == SteppedEngine()
+
+
 def test_a_strict_engine_from_the_environment_refuses_an_undeclared_fallback_at_stage(tmp_path, monkeypatch):
     from decikit import FusedEngine
     from decikit._settings import get_settings
