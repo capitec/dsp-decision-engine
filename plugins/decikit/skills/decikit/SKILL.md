@@ -1,11 +1,11 @@
 ---
 name: decikit
-description: Decider toolkit projects, decision pipelines built from Python functions plus versioned JSON config documents. Covers setting up a project, pipelines and flow files, decision trees, rule sets, decision tables, scorecards, params documents, checks, experiments, and the decider toolkit VS Code extension. Use when a repo imports the decider toolkit or has configs/<version>/, or the task names any of these.
+description: Decider toolkit projects, decision pipelines built from Python functions plus versioned JSON config documents. Covers setting up a project, pipelines and flow files, decision trees, rule sets, decision tables, scorecards, params documents, checks, experiments, and the decider toolkit VS Code extension. Use when a repo imports `decikit` (the decider toolkit) or has configs/<version>/, or the task names any of these.
 ---
 
 # Decider toolkit
 
-The decider toolkit builds decision pipelines (credit, pricing, fraud rules, campaigns). A
+The decider toolkit (package `decikit`) builds decision pipelines (credit, pricing, fraud rules, campaigns). A
 pipeline runs over a polars frame or one record, interpreted or compiled with
 numba, and serves over HTTP with `decikit serve`. Every compiled mode gives the
 same answers as plain Python.
