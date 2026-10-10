@@ -271,7 +271,7 @@ def test_three_levels_of_folders_show_a_full_breadcrumb_and_each_level_navigates
     expect(project_card(signed_in, "Deep project")).to_be_visible()
 
 
-def test_a_project_can_be_created_in_the_third_level_through_the_api_and_found_by_search(signed_in: Page):
+def test_a_third_level_folder_shows_how_many_projects_it_holds(signed_in: Page):
     _, _, bottom = three_levels(signed_in)
     create_project(signed_in, "Deep project", flat_document(), folder_id=bottom["id"])
     open_projects(signed_in)
@@ -305,6 +305,7 @@ def test_a_folder_can_be_moved_into_another_and_back_to_the_root(signed_in: Page
 
     folder_action(signed_in, "Mover", "Move")
     dialog = signed_in.get_by_role("dialog")
+    expect(dialog.get_by_label("Target")).to_be_visible()
     dialog.get_by_label("Target").click()
     dialog.get_by_role("button", name="Move Folder").click()
     expect(toast(signed_in, "Folder moved")).to_be_visible()
