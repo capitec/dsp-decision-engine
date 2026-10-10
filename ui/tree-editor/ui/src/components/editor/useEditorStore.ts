@@ -50,6 +50,8 @@ const normalizeNode = (node: any): Node => {
   };
 };
 
+const EDITOR_KEYS = new Set(['type', 'nodes', 'edges', 'subtrees', 'input_schema', 'output', 'parameters', 'formatVersion', 'format_version']);
+
 // decikit also accepts edges without an id and a single sourceIndex instead of a list
 const normalizeEdge = (edge: any): Edge => ({
   ...edge,
@@ -121,6 +123,8 @@ interface EditorStoreState {
   projectDescription: string | null;
   autoRearrange: boolean;
   formatVersion: number;
+  // The document's keys the editor does not edit (metadata, name, ...), written back unchanged on save
+  documentRest: Record<string, any>;
 
   // Validation state
   validationErrors: ValidationError[];
@@ -189,6 +193,7 @@ const editorStore = create<EditorStoreState>()(
     projectDescription: null,
     autoRearrange: false,
     formatVersion: 3,
+    documentRest: {},
 
     // Validation state
     validationErrors: [],
@@ -532,6 +537,7 @@ const editorStore = create<EditorStoreState>()(
 
         // Prepare project data in v3 format
         const projectData = {
+          ...state.documentRest,
           type: "ui-tree", // Type discriminator (stays as "ui-tree" for all versions)
           nodes: v3Nodes,
           edges: v3Edges,
@@ -653,6 +659,7 @@ const editorStore = create<EditorStoreState>()(
 
         // Extract format version from loaded project
         formatVersion: projectData.formatVersion || projectData.format_version || 3,
+        documentRest: Object.fromEntries(Object.entries(projectData).filter(([k]) => !EDITOR_KEYS.has(k))),
 
         isDirty: false,
         error: null,
@@ -683,6 +690,7 @@ const editorStore = create<EditorStoreState>()(
         projectDescription: null,
         autoRearrange: false,
         formatVersion: 3,
+    documentRest: {},
         validationErrors: [],
         invalidNodeIds: new Set<string>(),
         hasFeatureErrors: false,
