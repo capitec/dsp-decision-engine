@@ -243,8 +243,9 @@ def stale_ops(mine, concurrent):
 def conflicts(mine, theirs, base):
     """My touched paths that overlap theirs under the offline rule (both diffed from `base`); empty means merge.
 
-    Overlap is an equal, ancestor or descendant path. Two order ops on the same list conflict only when both sides
-    changed the relative order of the keys common to base, mine and theirs, and changed it differently.
+    Overlap is an equal, ancestor or descendant path, unless both sides end with the same value at my path (they
+    made the same change). Two order ops on the same list conflict only when both sides changed the relative order
+    of the keys common to base, mine and theirs, and changed it differently.
     """
     their_paths = [_split(p) for p in touched(theirs)]
     docs = None
@@ -252,13 +253,23 @@ def conflicts(mine, theirs, base):
     for path in touched(mine):
         s = _split(path)
         hits = [t for t in their_paths if _prefix(s, t) or _prefix(t, s)]
-        if s[-1:] == [ORDER] and s in hits and len(hits) == 1:
-            docs = docs or [base, apply(base, mine)[0], apply(base, theirs)[0]]
-            if not _orders_disagree(docs, s[:-1]):
+        if not hits:
+            continue
+        docs = docs or [base, apply(base, mine)[0], apply(base, theirs)[0]]
+        if s[-1:] == [ORDER]:
+            if s in hits and len(hits) == 1 and not _orders_disagree(docs, s[:-1]):
                 continue
-        if hits:
-            found.append(path)
+        elif not diff(_at(docs[1], s), _at(docs[2], s)):
+            continue
+        found.append(path)
     return found
+
+
+def _at(doc, segments):
+    try:
+        return {"v": _walk(doc, segments)}
+    except _Dropped:
+        return {}
 
 
 def _orders_disagree(docs, at):
