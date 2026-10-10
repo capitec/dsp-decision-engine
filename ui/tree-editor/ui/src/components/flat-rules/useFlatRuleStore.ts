@@ -7,6 +7,7 @@ import { normalizeDtypes } from '@/utils/normalize-dtypes';
 import { parseFlatRuleValidationErrors, groupErrorsByRule, getSectionErrors, formatRuleErrors, type ParsedFlatRuleError } from '@/utils/flat-rule-validation-parser';
 import { subscribeToStoreActivity } from '@/lib/background-token-refresh';
 import { toast } from '@/hooks/use-toast';
+import { isStaleSave, staleSaveToast } from '@/lib/stale-save';
 import { apiErrorMessage } from '@/lib/utils';
 import { collectParamRefs } from '@/utils/param-refs';
 
@@ -494,11 +495,17 @@ const store = create<FlatRuleState>()(
 
         // Validation never blocks a save: the server returns what decikit found
         const saved = await flatRuleApi.updateProject(state.project.id, {
-          project_data: updatedProjectData
+          project_data: updatedProjectData,
+          base_version: state.project.version
         });
 
         const errorState = buildErrorState(saved.validation_errors, state.trees);
-        set({ ...errorState, savedTrees: state.trees, savedProjectData: state.project.project_data });
+        set((now) => ({
+          ...errorState,
+          project: { ...now.project, version: saved.version },
+          savedTrees: state.trees,
+          savedProjectData: state.project.project_data
+        }));
         toast(saved.validation_errors.length === 0
           ? { title: "Project Saved", description: "Your changes have been saved successfully." }
           : {
@@ -509,7 +516,8 @@ const store = create<FlatRuleState>()(
         return true;
       } catch (err: any) {
         console.error('Failed to save project:', err);
-        toast({
+        if (isStaleSave(err)) staleSaveToast();
+        else toast({
           title: "Save Failed",
           description: apiErrorMessage(err, 'Failed to save project. Please try again.'),
           variant: "destructive",

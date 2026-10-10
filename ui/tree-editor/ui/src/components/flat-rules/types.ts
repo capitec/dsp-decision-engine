@@ -32,6 +32,7 @@ export interface FlatRuleProject {
   created_by: string;
   created_at: string;
   updated_at: string;
+  version: number;
 }
 
 export interface FlatRuleProjectDetail extends FlatRuleProject {
