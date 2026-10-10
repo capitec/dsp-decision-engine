@@ -57,7 +57,7 @@ def test_interpreted_mode_also_names_the_row_counted_in_the_input_frame():
 def test_a_fused_kernel_error_names_every_step_it_runs():
     with pytest.raises(ZeroDivisionError) as err:
         FusedEngine().bind(flow(ratio, doubled)).run(FRAME)
-    assert "['ratio', 'doubled']" in notes(err) and "mode='stepped'" in notes(err)
+    assert "['ratio', 'doubled']" in notes(err) and "engine='stepped'" in notes(err)
 
 
 @needs_notes
