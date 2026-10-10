@@ -100,6 +100,17 @@ Impact: an arithmetic change that preserves outputs reads as `identical=None`, n
 **`checks.yaml` is found from the current directory,** as datasets are, so `decikit check` and the MCP `check_report` depend on the working directory.
 Workaround: pass `--config` / `config=` explicitly.
 
+## Polars engine
+
+**Warnings come twice on the polars engine.** A `HiddenStateWarning`, a `FallbackWarning` and the warning about an input column named like a param fire once for the whole pipeline (which the engine binds to run records and to check each `run` on zero rows) and once for the segment that holds the step, under the `default` warnings filter too.
+Impact: noise only. Fixing it means `run(lazy_frame)` no longer runs the whole pipeline on zero rows: shadowing from its produced names, params through `check_namespaces`, and the final columns computed statically, which a frame step of unknown outputs prevents.
+
+**A fallback step's error counts the row from the start of its batch.** When the plan streams, the `in step <path>, row <k>` note of a step that runs in Python is the row within the batch polars handed the segment, not within the frame.
+Workaround: run the same frame on the fused engine to find the row.
+
+**A frame step that declares its reads sees only the batch.** On the polars engine it gets the input columns and the values earlier segments pass on; on the fused engine it also sees every intermediate in scope.
+Impact: only a frame step that reads a column it did not declare differs. Declare every column it reads.
+
 ## Serving
 
 **`RequestHandler.process_fn` runs the pipeline on the event loop.** With Starlette one worker serves requests one at a time, so `nogil` kernels never overlap inside it.

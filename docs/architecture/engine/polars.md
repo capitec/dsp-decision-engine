@@ -15,7 +15,8 @@ The code lives in `decikit/_engine/polars/`:
 
 `PolarsEngine` registers lazily (`Engine.lazy({"polars": ...})` in `decikit/_engine/run/engines.py`, since its
 module imports that one), so `pipeline.compile("polars")` and `Engine.resolve("polars")` find it, and
-`import decikit` imports neither it nor numba.
+`import decikit` imports neither it nor numba. `Step.run(data, engine=None)` picks it for a `pl.LazyFrame`
+whatever the default engine; with an engine named, a numba engine collects the frame and runs it as one.
 
 ```mermaid
 flowchart TB

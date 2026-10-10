@@ -1,6 +1,7 @@
 # The polars engine
 
-`pipeline.compile("polars")` runs a pipeline as a polars `LazyFrame` plan. Nothing in your pipeline changes:
+`pipeline.run(lazy_frame)` runs a pipeline as a polars `LazyFrame` plan, on the polars engine whatever the
+default engine is, and `pipeline.compile("polars")` binds it once. Nothing in your pipeline changes:
 every step still runs on the fused engine's numba kernels, on each batch of rows polars hands it, and the
 answers are the fused engine's. What changes is who drives the batch: polars reads the input, splits it into
 batches, runs them on its threads and writes the result, so a batch larger than memory can be scanned from
@@ -27,15 +28,16 @@ def tier(income_rank: float, approved: bool) -> int:
     return 2 if approved and income_rank > 2 else 1
 
 pipeline = flow(ratio, approved, rank_income, tier, name="credit")
-exe = pipeline.compile("polars")
 
-plan = exe.run(pl.scan_parquet("applications.parquet"))     # a LazyFrame; nothing has run yet
+plan = pipeline.run(pl.scan_parquet("applications.parquet"))   # a LazyFrame; nothing has run yet
 plan.sink_parquet("decisions.parquet")                       # streamed batch by batch
 plan.collect()                                               # or everything in memory
 plan.collect(engine="streaming")                             # or streamed into memory
 ```
 
-`run` takes three kinds of input:
+`pipeline.run(lf, engine="fused")` names a numba engine instead: it collects the frame and returns a
+`DataFrame`. Bind once with `exe = pipeline.compile("polars")` to build many plans; its `run` takes three
+kinds of input:
 
 | `run(data)` | Returns | How |
 |---|---|---|
