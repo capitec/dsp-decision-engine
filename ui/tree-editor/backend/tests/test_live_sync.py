@@ -366,4 +366,3 @@ async def test_after_the_validator_process_dies_the_next_version_is_validated_ag
         await asyncio.sleep(0.1)
     hub.validator.shutdown()
     assert any(m["type"] == "validation" and m["version"] == 2 for m in client.ws.sent)
-
