@@ -10,7 +10,6 @@ import polars as pl
 from decikit._engine.boundary.dtypes import decimal_mantissa
 from decikit._engine.boundary.whole import check_series, int64_array
 from decikit._engine.boundary.nulls import MissingInputError
-from decikit._engine.compile import numpy_dtype
 from decikit._engine.compile.declared import check_output
 from decikit._engine.compile.rows import build_rows, rows_needs_no_fill
 from decikit._engine.ir.decls import Input, NullPolicy, base_annotation, stored_fill
@@ -21,7 +20,7 @@ from decikit._engine.run.runners.base import Checkpoint
 from decikit._engine.run.state import State, all_set, dtype_of, fill_missing, from_series, record_value
 from decikit._engine.trace.envelope import Kind
 from decikit.ops.nested import struct_item
-from decikit._engine.types import (Representation, columnar_item, decimal_boxer, decimal_scale, is_raw, item_schema,
+from decikit._engine.types import (Representation, columnar_item, decimal_boxer, decimal_scale, item_schema,
                                    representation_for, to_raw)
 from decikit._engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, ScatterGather, Sequence, NodeVersion
 
@@ -168,20 +167,20 @@ class InterpretedRunner:
         for v, out, scale, values in zip(call.writes, node.outputs, scales, columns):
             if node.kind == "scalar":
                 check_output(node.origin.path, out, values, scope.rows)
-            # A `Struct[Item]` step returning a tuple of fields is stored as the dict a reader expects,
-            # so interpreted and compiled modes agree on the value a struct step reads back.
+            # A `Struct[Item]` step returning a tuple of fields, or a `Columnar[Item]` step a list of them, is
+            # stored as the dicts a reader expects, so interpreted and compiled modes agree on the value.
             if (item := struct_item(out.annotation)) is not None:
                 fields = [name for name, _ in item_schema(item)]
-                values = tuple(None if x is None else (x if isinstance(x, dict) else dict(zip(fields, x)))
-                               for x in values)
+                values = tuple(None if x is None else _as_dict(x, fields) for x in values)
+            elif (item := columnar_item(out.annotation)) is not None:
+                fields = [name for name, _ in item_schema(item)]
+                values = tuple(None if x is None else [_as_dict(i, fields) for i in x] for x in values)
             if scale is not None:
                 values = tuple(None if x is None else to_raw(x, scale) for x in values)
             if base_annotation(out.annotation) is str:
                 values = tuple(x.text if isinstance(x, Text) else x for x in values)
-            # A `Columnar[...]` output is stored as a kernel stores it, or the modes disagree on dtype.
             row = scope.rows
-            array, valid = _array(values, numpy_dtype(out.annotation) if is_raw(out.annotation)
-                                  else dtype_of(base_annotation(out.annotation)),
+            array, valid = _array(values, dtype_of(base_annotation(out.annotation)),
                                   lambda k: f"step '{node.origin.path}' output '{v.name}'"
                                   + (f" (row {k if row is None else int(row[k])})" if m > 1 else ""))
             state.write(v, array, scope.rows, valid)
@@ -425,6 +424,10 @@ def _spans(name: str, values: np.ndarray) -> np.ndarray:
 def _absent(state: State, version: NodeVersion) -> bool:
     # A state stores every input column it was given, so one never written was absent.
     return version.producer is None and version.id not in state.values
+
+
+def _as_dict(x: Any, fields: list[str]) -> dict:
+    return x if isinstance(x, dict) else dict(zip(fields, x))
 
 
 def _array(values: tuple, dtype: np.dtype, subject: Callable[[int], str]) -> tuple[np.ndarray, np.ndarray | None]:
