@@ -268,6 +268,22 @@ def test_a_read_only_share_sees_edits_live_but_cannot_send(signed_in: Page, othe
     assert get_project(signed_in, project)["project_data"]["mode"] == "first_match"
 
 
+def test_a_reader_whose_share_is_removed_is_disconnected_without_sending_anything(signed_in: Page, other):
+    project = two_rules(signed_in)
+    share = share_project(signed_in, project, other.id, "read")
+    other.page.evaluate("""(project) => new Promise((resolve) => {
+        const ws = new WebSocket(`ws://${location.host}/api/v1/projects/${project}/live`);
+        ws.onopen = () => ws.send(JSON.stringify({type: 'hello', since: 0, client_id: 'reader'}));
+        ws.onmessage = (e) => { if (JSON.parse(e.data).type === 'ready') resolve(); };
+        ws.onclose = (e) => { window.liveClosed = e.code; };
+    })""", project)
+
+    assert signed_in.request.delete(f"/api/v1/projects/{project}/shares/{share['id']}").ok
+
+    other.page.wait_for_function("window.liveClosed !== undefined", timeout=30_000)
+    assert other.page.evaluate("window.liveClosed") == 1008
+
+
 def handshake(base_url: str, project: str, cookie: str | None, origin: str | None) -> int:
     """The HTTP status of a websocket handshake on the live route (101 when accepted)."""
     url = urlparse(base_url)
