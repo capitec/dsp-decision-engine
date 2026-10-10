@@ -8,7 +8,6 @@ Proposed 2026-10-09, being built on branch `engine/flexible-rework`; each bullet
 phase lands. The design, alternatives and plan: [flexible engine rework](../../design_specs/2026-10-09_flexible_engine_rework/README.md).
 
 - Proposed: `run` on a `LazyFrame` takes the polars engine (until then it is collected and run as a frame).
-- Proposed: `Step.run` and `compile` follow a context-scoped default engine set with `decikit.engine(...)`, fused when unset; `Step.session` opens interpreted unless given an engine. Built (P3); `Step.run` does not cache executables, see the repeated-run cost in `known-limitations.md`.
 - Proposed: the polars engine is lazy and starts as a host (the fused pipeline inside `map_batches`, split only at frame steps); polars-native step bodies are built only if a measurement against the host justifies them.
 - Proposed: a Spark engine comes last, outside `decikit/`, and shapes nothing else.
 
@@ -18,6 +17,14 @@ phase lands. The design, alternatives and plan: [flexible engine rework](../../d
 - Why: the registry already gives settings-driven construction, entry-point discovery (`decikit.engines`) and `json_schema()`; `strict_compile` and `params_validation` could not be set for `decikit serve` before. A dict would add extensibility and nothing else.
 - Cost: pydantic on `Engine`, which holds settings only, so nothing awkward moves onto a model.
 - See: [engine](../../architecture/engine/index.md), [extending](../../guides/extending.md), [flexible engine rework](../../design_specs/2026-10-09_flexible_engine_rework/03-design-choices.md)
+
+## `run` follows a context-scoped default engine, fused when unset
+
+- `Step.run` and `compile` with no engine take the engine a `decikit.engine(...)` block sets (a `ContextVar`), else `FusedEngine()`. `Step.session` opens interpreted whatever is set, and serving holds its own engine and never reads the default. Not: `run` staying interpreted, or a process-global setter.
+- Why: `run` should be fast and answer as serving does, and one line should switch a notebook. A global setter is a footgun under threads; `contextvars` is how `decimal`, numpy and polars scope such settings. A session exists to pause at every node, which fused cannot.
+- The name `decikit.engine` shadows a common variable name when imported bare; accepted, since `use_engine` reads worse in the guide.
+- `run` binds on every call and caches no executable: a cached one would keep a step's compiled globals after a notebook edits them. The cost is in [known limitations](../known-limitations.md).
+- See: [engine](../../architecture/engine/index.md), [flexible engine rework](../../design_specs/2026-10-09_flexible_engine_rework/03-design-choices.md) (choice 11)
 
 ## Pipeline structure lives in Python
 
