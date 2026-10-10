@@ -58,7 +58,7 @@ df = pl.DataFrame({
 })
 ```
 
-`pipeline.run(df)` gives `term_cap = [54.0, 36.0, 54.0]` and `affordable = [True, False, True]`.
+`pipeline.run(df)` gives `term_cap = [54.0, 36.0, 54.0]` and `affordable = [True, False, True]`. `run` follows the default engine (fused when unset); while you edit and rerun a small frame, `with decikit.engine("interpreted"):` is instant, where a fused `run` binds and builds on every call. Sessions below open interpreted either way.
 
 ## Looking at a flow: `describe`
 
@@ -128,7 +128,7 @@ override@afford/affordable
 - `set(name, value)` overrides an input column or any value produced so far, from here on. `value` is one value for every row or a list with one per row (`None` is null), cast to the declared dtype. The override is recorded as a version produced by `override@<current path>`, so the trail shows who changed what.
 - `output()` is the frame `run` would have returned, overrides applied. It raises `RuntimeError: the run hasn't finished; resume() it first` before the end.
 
-`session` takes the same arguments as `run` plus an engine, a tag or an instance: `pipeline.session(df, params=doc, engine="stepped")`. For engine options pass an instance: `engine=SteppedEngine(params_validation="lazy")`. An `Executable` from `compile()` has `exe.session(df, params)` too.
+`session` takes the same arguments as `run` plus an engine, a tag or an instance (it opens interpreted unless given one, and ignores the default engine): `pipeline.session(df, params=doc, engine="stepped")`. For engine options pass an instance: `engine=SteppedEngine(params_validation="lazy")`. An `Executable` from `compile()` has `exe.session(df, params)` too.
 
 ```mermaid
 flowchart LR

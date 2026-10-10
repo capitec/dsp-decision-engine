@@ -41,7 +41,9 @@ fused {'income': 1000.0, 'expenses': 300.0, 'debt': 200.0, 'affordable': True}
 | `"stepped"` | each step as its own numba kernel over all rows, with a Python driver between steps | every step | debugging compiled behaviour, finding which step of a kernel raised |
 | `"fused"` | one kernel per run of consecutive compilable steps; branches and loops of plain scalar steps packed into one kernel | kernel boundaries only | serving (`decikit serve`'s default), batch runs |
 
-`pipeline.run(df)` is interpreted. An engine is a settings document named by its tag: `pipeline.compile(FusedEngine(strict_compile=True))` takes the engine options (`strict_compile=`, `params_validation=`), and `Engine.registered()` lists the tags. An unknown tag is refused: `RegistryError: 'fsued' is not a registered Engine type. Did you mean 'fused'?`.
+`pipeline.run(df)` and `pipeline.compile()` follow the default engine, which is fused when nothing sets another. Set one for a block with `with decikit.engine("interpreted"):`, or for one call with `run(df, engine="interpreted")`; `session` opens interpreted whatever the default, and `decikit serve` reads its engine from its own document, not from this default. A fused `run` binds and builds on every call (no numba compile after the first), so repeating it on a small frame costs two to three times the interpreted run, about 2 ms more on a small flow and about 40 ms on a large one: compile once with `compile()` and call the executable, or switch to interpreted while you iterate.
+
+An engine is a settings document named by its tag: `pipeline.compile(FusedEngine(strict_compile=True))` takes the engine options (`strict_compile=`, `params_validation=`), and `Engine.registered()` lists the tags. An unknown tag is refused: `RegistryError: 'fsued' is not a registered Engine type. Did you mean 'fused'?`.
 
 Measured on a flagship pipeline at 1M rows through `run` and 20k single-record `run` calls (CPython 3.14, dev box):
 
@@ -192,7 +194,7 @@ Reading the report:
 - `flagged` has an `import` in its body. numba refused it with `UnsupportedBytecodeError`, one of the compile-time errors that trigger a fallback.
 - `via_legacy` calls a function marked `@allow_fallback`, which makes the call an intentional Python boundary: no warning, but still listed with `@allow_fallback:` in front.
 
-Interpreted mode never falls back, so its `fallbacks()` is always empty. The warning text is `FallbackWarning: <path> runs in Python, row by row: <reason>`. Python-row speed is below 1M rows/s in a batch against a kernel's hundreds of millions, and under 10 µs extra on a single `run(record)` (the figures the guide gives).
+Interpreted mode never falls back, so its `fallbacks()` is always empty. Because `run` is fused by default, a `run` over such a step prints the warning too: put `@allow_fallback` on the function if you mean it, or run interpreted. The warning text is `FallbackWarning: <path> runs in Python, row by row: <reason>`. Python-row speed is below 1M rows/s in a batch against a kernel's hundreds of millions, and under 10 µs extra on a single `run(record)` (the figures the guide gives).
 
 Only compile-time failures fall back, because catching every exception would turn a real bug, such as a `ZeroDivisionError`, into a silent "needed a fallback". A runtime error always propagates, with a note naming the step:
 
