@@ -21,6 +21,36 @@ CREDIT_LIFE_COLUMNS = {"cell": int, "cover_type": int, "age_lo": float, "age_hi"
 RATE_CARD_TABLE = "rate_card.flex_loan"
 OPEN = 1e9  # an open band edge: a params document cannot hold infinity
 
+_BUILT: dict[int, tuple] = {}
+
+
+def _once(table, build):
+    """`build(table)`, remembered per table object while its columns are read-only.
+
+    A cached params bundle hands its steps the same table object on every call, and a changed params document is a
+    new bundle with a new table, so the answer never outlives its rows. The entry holds the table, so its `id` is
+    not reused while the entry is there.
+    """
+    if any(column.flags.writeable for column in table):
+        return build(table)
+    hit = _BUILT.get(id(table))
+    if hit is None:
+        if len(_BUILT) >= 16:
+            _BUILT.clear()
+        hit = _BUILT[id(table)] = (table, build(table))
+    return hit[1]
+
+
+def _card_arrays(card) -> tuple:
+    """The card's columns as memoryviews, which hand back Python numbers, and the per-grade band starts found so far."""
+    return (*(memoryview(column) for column in (card.grade, card.amt_lo, card.term_lo, card.rate, card.amt_band,
+                                                card.term_band)), {})
+
+
+def _credit_life_rows(table) -> list[tuple]:
+    return list(zip(table.cover_type.tolist(), table.age_lo.tolist(), table.age_hi.tolist(), table.term_lo.tolist(),
+                    table.term_hi.tolist(), table.rate.tolist(), table.cell.tolist()))
+
 
 def rate_card_rows(card: DecisionTableConfig) -> tuple[list[dict], str]:
     """The card's rows sorted by grade, amount band and term band, and the card's version.
@@ -55,18 +85,17 @@ class RateCardTable:
     """The rate card as arrays sorted by grade, amount band and term band: `lookup` and `amount_bands` as `RateCardIndex`.
 
     It bisects the table's own arrays through memoryviews, which hand back Python numbers: a search asks hundreds of
-    times, and numpy calls or copying a grade's rows cost more than the questions.
+    times, and numpy calls or copying a grade's rows cost more than the questions. The views and each grade's band
+    starts are built once per table object (see `_once`), so constructing it again for the same bundle is cheap.
 
         index = RateCardTable(card, "rc-2026.09")     # `card` is a `param_table(RATE_CARD_COLUMNS)` argument
         index.lookup(50_000.0, 60, 9)                  # (rate in percent, cell id), or None
     """
 
     def __init__(self, card, version: str):
-        self._grade_col, self._amount, self._term, self._rate, self._amount_band, self._term_band = (
-            memoryview(column) for column in (card.grade, card.amt_lo, card.term_lo, card.rate, card.amt_band,
-                                              card.term_band))
+        (self._grade_col, self._amount, self._term, self._rate, self._amount_band, self._term_band,
+         self._grades) = _once(card, _card_arrays)
         self.version = version
-        self._grades: dict[int, tuple[int, int, list[int]]] = {}
 
     def _rows(self, grade: int) -> tuple[int, int, list[int]]:
         """The grade's rows `[first, end)` and the first row of each of its amount bands."""
@@ -106,8 +135,7 @@ class CreditLifeTable:
     """
 
     def __init__(self, table, version: str):
-        self._rows = list(zip(table.cover_type.tolist(), table.age_lo.tolist(), table.age_hi.tolist(),
-                              table.term_lo.tolist(), table.term_hi.tolist(), table.rate.tolist(), table.cell.tolist()))
+        self._rows = _once(table, _credit_life_rows)
         self.version = version
 
     def lookup(self, applicant_age_years: float, term_months: float, is_joint: bool) -> tuple[float, str | None]:
