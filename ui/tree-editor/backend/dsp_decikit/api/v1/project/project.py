@@ -37,7 +37,7 @@ from dsp_decikit.services.documents import (
     imported_document,
     validation_errors,
 )
-from dsp_decikit.services.live_sync import StaleVersion, save_version
+from dsp_decikit.services.live_sync import StaleVersion, first_version, save_version
 from dsp_decikit.settings import settings
 
 # ================================
@@ -366,6 +366,8 @@ async def create_project(
         )
 
         session.add(project)
+        await session.flush()
+        session.add(first_version(project))
         await session.commit()
         await session.refresh(project)
 
@@ -811,6 +813,8 @@ async def import_project(
         )
 
         session.add(new_project)
+        await session.flush()
+        session.add(first_version(new_project))
         await session.commit()
         await session.refresh(new_project)
 
