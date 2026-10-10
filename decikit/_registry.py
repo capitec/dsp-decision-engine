@@ -164,8 +164,14 @@ class BaseRegistryModule(BaseModel, ABC):
                             "module that defines it first, or name it by import path, '<module>:<Class>'.")
 
     @classmethod
-    def json_schema(cls) -> dict[str, dict[str, t.Any]]:
-        """`{tag: JSON schema}` for every registered subclass of `cls`, for UI forms."""
+    def registered(cls: type[R]) -> dict[str, type[R]]:
+        """`{tag: class}` for every registered subclass of `cls`, the built-in lazy ones imported first.
+
+        One entry per class, under its alias, else its import path.
+
+        Example:
+            Engine.registered()  # {"fused": FusedEngine, "interpreted": InterpretedEngine, "stepped": SteppedEngine}
+        """
         root = cls._root()
         with root._lock:
             modules = list(root._lazy.values())
@@ -173,9 +179,13 @@ class BaseRegistryModule(BaseModel, ABC):
             importlib.import_module(module)
         with root._lock:
             registered = list(root._registry.values())
-        classes = {c._tag: c for c in registered if issubclass(c, cls)}
+        return {c._tag: c for c in registered if issubclass(c, cls)}
+
+    @classmethod
+    def json_schema(cls) -> dict[str, dict[str, t.Any]]:
+        """`{tag: JSON schema}` for every registered subclass of `cls`, for UI forms."""
         schemas = {}
-        for tag, klass in sorted(classes.items()):
+        for tag, klass in sorted(cls.registered().items()):
             schema = klass.model_json_schema()
             schema["properties"]["type"] = {"const": tag, "default": tag, "type": "string"}
             schemas[tag] = schema
