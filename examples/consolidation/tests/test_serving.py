@@ -54,13 +54,20 @@ def test_other_decisions_are_served_the_same_as_interpreted(handler, assess, sam
     assert {name: served[name] for name in FIGURES} == {name: interpreted[name] for name in FIGURES}
 
 
+def present(value):
+    """A frame row holds every declared key, null where a single record left it out; compare with those keys read as absent."""
+    if isinstance(value, dict):
+        return {k: present(v) for k, v in value.items() if v is not None}
+    return [present(v) for v in value] if isinstance(value, list) else value
+
+
 def test_a_json_array_of_requests_is_decided_like_the_same_requests_one_by_one(handler, sample):
     requests = [sample, sample | {"decision_id": "con-2026-0000555002", "channel_code": 2}]
     batch = post(handler, requests)
     assert len(batch) == 2
     for served, request in zip(batch, requests):
         alone = post(handler, request)
-        assert {name: served[name] for name in FIGURES} == {name: alone[name] for name in FIGURES}
+        assert present({name: served[name] for name in FIGURES}) == present({name: alone[name] for name in FIGURES})
 
 
 def test_every_step_that_runs_in_python_says_so_on_purpose(documents):

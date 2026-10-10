@@ -9,6 +9,7 @@ from decikit import ParamTable, allow_fallback, param, param_table, step
 from loan_granting.pricing import CreditLifeIndex, PriceEvaluator, RateCardIndex
 
 from consolidation.products import Quote
+from consolidation.records import FlexLoanPolicy
 from consolidation.vocab import PRODUCT_FLEX_LOAN_CONSOLIDATION
 
 CODE = PRODUCT_FLEX_LOAN_CONSOLIDATION
@@ -34,7 +35,7 @@ def flex_loan_policy(
     min_discretionary: float = param(850.0, ge=500.0, le=2_500.0),
     margin_per_grade_bps: float = param(2.0, ge=0.0), margin_bands: ParamTable = MARGIN_BANDS,
     candidate_terms: ParamTable = TERMS,
-) -> dict:
+) -> FlexLoanPolicy:
     """The limits and intervention thresholds product 11's team owns, as one record for the search."""
     return {
         "product_code": CODE, "min_accounts": min_accounts, "max_accounts": max_accounts, "min_amount": min_amount,
