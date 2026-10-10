@@ -17,16 +17,17 @@ Pipelines:
 
 Configurations (`<engine>-<mode>`):
 - `fused-mem`: eager `run(df)` on a frame already in memory. `fused-io`: `read_parquet`, `run`, `write_parquet` (the like-for-like of the streamed runs).
-- `host-mem`: `run(df.lazy()).collect()`. `host-stream`: `run(scan_parquet(...)).sink_parquet(...)`.
+- `host-mem`: `run(df.lazy()).collect()`. `host-memstream`: the same frame collected with `collect(engine="streaming")`. `host-stream`: `run(scan_parquet(...)).sink_parquet(...)`.
 - `native-mem`, `native-stream`: hand-written polars for the same logic, the ceiling a native translator could reach. The tree is one `pl.when` chain that finds the leaf, then one `replace_strict` lookup per output column.
 - `frames-mem`, `frames-stream` (`fallback` only): the host with the ten steps rewritten as ten `frame_step`s whose bodies are one `with_columns` expression each. `frame1-*`: one `frame_step` holding all ten expressions.
 - `copy-stream` (`flagship` only): a plain scan into a sink, to separate what the sink costs.
+- Knobs for round 2: `E2_ROWGROUP` (input parquet row-group size, default 1M), `E2_SINGLE=1` (one merged file instead of 20 parts of 2.5M rows), `POLARS_MAX_THREADS`. Each result line records the child's thread count, row-group size and the number of batches the host handed its segment.
 
 Streamed runs include reading and writing parquet, in-memory runs do not, so compare `*-stream` with `fused-io` and `*-mem` with each other.
 
 Correctness first: on 10k rows `check` compares every configuration's output with eager fused, in memory and streamed with a 1000-row streaming chunk, column by column with exact equality and dtype. All 16 comparisons were equal (no float tolerance was needed: the polars arithmetic and the Python arithmetic agree bit for bit on these data).
 
-Box: 28 polars threads (`pl.thread_pool_size()`), polars 1.41.2, Python 3.14.5, 31 GB shared with other sessions. One-minute load average at the start and end of the four timed invocations: 106 and 15 (10k and 1M, first pass), 7.3 and 9.0 and 8.8 and 12.7 (the re-run of flagship and tree at 10k and 1M, then of fallback at 1M), 8.9 (50M flagship, no end record). Other sessions' work is in the spread, which is why the min-max is given.
+Box: 28 polars threads (`pl.thread_pool_size()`), polars 1.41.2, Python 3.14.5, 31 GB shared with other sessions. One-minute load average at the start and end of the four timed invocations: 106 and 15 (10k and 1M, first pass), 7.3 and 9.0 and 8.8 and 12.7 (the re-run of flagship and tree at 10k and 1M, then of fallback at 1M), 8.9 (50M flagship, no end record). Round 2, start and end: memstream flagship 8.9 and 14.9, tree 14.9 and 11.2, fallback 11.2 and 6.2; flagship memory runs 6.2 and 14.7, 14.7 and 10.7, 10.7 and 13.6, 12.8 and 12.3; fallback 5M 18.1 and 9.1; one-file flagship 9.3 and 12.4, 12.4 and 11.7; tree 50M 11.7 and 54.8, 54.8 and 17.8, 17.8 and 14.1 (another session was running during the first of those). Other sessions' work is in the spread, which is why the min-max is given.
 
 ## Result
 
@@ -85,7 +86,7 @@ What the numbers show:
 | fallback 1M | 24.4 (23.2-24.4) | 28.5 (28.0-30.0) | |
 
 - At 50M rows the streaming engine makes the host 3.7x faster than its own in-memory `collect()`, and it is still 4.3x slower than hand-written polars in memory.
-- On the tree at 1M it is 3.6x faster than both the host's in-memory collect and the hand-written chain.
+- On the tree at 1M it is 3.4 to 3.6x faster than both the host's in-memory collect and the hand-written chain.
 - At 1M on the flagship it is 2.8x slower than in-memory `collect()` (29 ms against 11 ms): the fixed cost of the streaming engine and 28 batches outweighs 10 ms of work.
 - The fallback pipeline stays single-threaded (the Python bodies hold the GIL): 17% slower than in-memory `collect()` (28.5 against 24.4 s), RSS 756 against 881 MB.
 
@@ -133,6 +134,6 @@ Not measured: the fallback pipeline at 50M, and the eager tree and eager fallbac
 The rule from the spec: P6 (polars bodies and native segments) is not built if the host is within noise of hand-written polars on the flagship and the tree, and the `frame_step` rewrite closes most of the gap on the fallback-heavy pipeline.
 
 - Second clause: met on the 1M numbers. The rewrite closes 84% (ten frame steps) to 93% (one frame step) of the gap in memory and 82 to 89% streamed.
-- First clause, streamed: on the flagship the host's wall time is within noise of hand-written polars in the first session (50M and 1M) and 10 to 26% above it in the second (50M, six layouts); on the tree at 1M it is within noise, and at 50M only the host finishes inside the 7 GB cap. First clause, in memory: met on the tree (1M) and not on the flagship, where hand-written polars was 18x faster at 50M rows (and 1.7x at 1M with overlapping ranges). Collecting the in-memory frame with the streaming engine narrows the 50M flagship gap to 4.3x (0.93 against 0.218 s) and makes the host 3.6x faster than hand-written polars on the tree at 1M.
+- First clause, streamed: on the flagship the host's wall time is within noise of hand-written polars in the first session (50M and 1M) and 10 to 26% above it in the second (50M, six layouts); on the tree at 1M it is within noise, and at 50M only the host finishes inside the 7 GB cap. First clause, in memory: met on the tree (1M) and not on the flagship, where hand-written polars was 18x faster at 50M rows (and 1.7x at 1M with overlapping ranges). Collecting the in-memory frame with the streaming engine narrows the 50M flagship gap to 4.3x (0.93 against 0.218 s) and makes the host 3.4x faster than hand-written polars on the tree at 1M.
 - The fallback-heavy gap is the Python bodies, which only a rewrite by the author (frame steps, which the engine already supports) or a translator of Python to expressions would remove; the rewrite is 5x to 10x faster than the host at 1M and 5.7x to 7.9x at 5M, with a memory cost that grows with the rows.
 - P4's exit asked for peak RSS well under the frame size at 50M rows, streamed, on a pipeline without frame steps. With the host: 4.0 GB with one merged input file and default threads, 2.8 GB with 20 parts, 2.5 GB with 20 parts and 100k row groups, 0.68 GB with 4 threads and 100k row groups (frame 2.0 GB). In each setting hand-written polars peaks within 2 to 9% of the host's figure and a plain scan-to-sink copy at 0.37 to 3.5 GB.
