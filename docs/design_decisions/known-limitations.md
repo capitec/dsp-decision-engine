@@ -34,6 +34,9 @@ Impact: Windows, and slim containers without a compiler, cannot run compiled mod
 **`score()` is not instantaneous.** A short flow costs about 28 µs per record fused and 59 µs interpreted; a one-row frame through `run()` costs about 150 µs.
 Workaround: serve single records as a dict through `score()`; see [serving latency](../architecture/serving.md).
 
+**A compiled record call compiles again for each new pattern of null inputs.** `score()` on a fused pipeline specialises on which inputs are null, so the first record with a pattern not seen before compiles: about 0.5 to 2.4 s per new pattern for a 32-rule flat set and about 29 s for a 200-rule set (measured for the tree editor's e2e suite, `ui/tree-editor/e2e/data/README.md`); a pattern seen before is instant.
+Impact: a served tree with many nullable features pays a compile per new pattern (up to 2^n of them) in its first requests; send representative null patterns when warming, or score through `run()`.
+
 ## Numbers
 
 **int64 arithmetic wraps silently.** Kernels do not saturate, and interpreted mode raises `OverflowError` where fused wraps.
