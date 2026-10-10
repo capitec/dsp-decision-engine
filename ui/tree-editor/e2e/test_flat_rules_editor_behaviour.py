@@ -62,7 +62,7 @@ def test_saved_edit_survives_reload_and_leaving_and_coming_back(signed_in: Page)
     rename_rule(signed_in, "Edited")
     save(signed_in)
     signed_in.get_by_role("button", name="Back").click()
-    expect(signed_in).to_have_url(re.compile(r"/flat-rules$"))
+    expect(signed_in.get_by_role("heading", name="Overview")).to_be_visible()  # Back lands on the overview
     signed_in.go_back()
     expect(signed_in).to_have_url(re.compile(rf"/flat-rules/{project}$"))
 
