@@ -20,13 +20,19 @@ class ServeSettings(BaseModel):
     server: t.Literal["starlette", "sanic"] = "starlette"
 
 
+class EngineSettings(BaseModel):
+    """The engine serving binds with: its `type` tag plus that engine's own fields (e.g. `strict_compile`)."""
+    model_config = ConfigDict(extra='allow')
+    type: str = "fused"
+
+
 class APISettings(BaseModel):
     """What the server serves: `handler` is an import path; `pipeline` is an import path or a
     `.yaml`/`.yml`/`.json` flow file, both resolved from `code_path`."""
     code_path: str = "."
     pipeline: str = "pipeline:build"
     handler: str = "inference:Handler"
-    mode: str = "fused"
+    engine: EngineSettings = Field(default_factory=EngineSettings)
 
 
 class BuildSettings(BaseModel):

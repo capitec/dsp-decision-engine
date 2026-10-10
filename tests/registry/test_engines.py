@@ -67,3 +67,17 @@ class EpEngine(Engine):
     assert flow(ratio, name="p").compile("ep_engine").run({"income": 4.0, "debt": 1.0})["ratio"] == 0.25
     cls = Engine.resolve("ep_engine")
     assert cls.__name__ == "EpEngine" and cls.model_validate({"type": "ep_engine", "factor": 5}).factor == 5
+
+
+def test_engine_settings_from_the_environment_round_trip_into_the_engine(monkeypatch):
+    from decikit._settings import DecikitSettings, EngineSettings
+
+    monkeypatch.setenv("DECIKIT_API__ENGINE__TYPE", "stepped")
+    monkeypatch.setenv("DECIKIT_API__ENGINE__STRICT_COMPILE", "true")
+    monkeypatch.setenv("DECIKIT_API__ENGINE__PARAMS_VALIDATION", "lazy")
+    settings = DecikitSettings().api.engine
+    engine = Engine.resolve(settings.type).model_validate(settings.model_dump())
+    assert engine == SteppedEngine(strict_compile=True, params_validation="lazy")
+    again = EngineSettings.model_validate(engine.model_dump())
+    assert Engine.resolve(again.type).model_validate(again.model_dump()) == engine
+    assert EngineSettings().type == "fused"

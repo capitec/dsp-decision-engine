@@ -100,25 +100,28 @@ def build(version: str | None) -> None:
     except Exception as e:
         raise click.ClickException(f"config version {version or 'latest'} failed to build: {type(e).__name__}: {e}") from e
     _cpu_target_path(s).write_text(json.dumps(cpu_target()))
-    click.echo(f"built config version {staged} (pipeline {s.api.pipeline}, mode {s.api.mode})")
+    click.echo(f"built config version {staged} (pipeline {s.api.pipeline}, engine {s.api.engine.type})")
 
 
 @cli.command()
 @click.option("--host", help="Default: DECIKIT_SERVE__HOST or 0.0.0.0.")
 @click.option("--port", type=int, help="Default: DECIKIT_SERVE__PORT or 8080.")
 @click.option("--workers", type=int, help="Default: DECIKIT_SERVE__WORKERS or 2 * CPUs + 1.")
-@click.option("--mode", type=click.Choice(["interpreted", "stepped", "fused"]), help="Default: DECIKIT_API__MODE or fused.")
+@click.option("--engine", help="An engine tag, e.g. interpreted, stepped or fused. Default: DECIKIT_API__ENGINE__TYPE or fused.")
 @click.option("--server", type=click.Choice(["starlette", "sanic"]), help="Default: DECIKIT_SERVE__SERVER or starlette.")
-def serve(host, port, workers, mode, server) -> None:
+def serve(host, port, workers, engine, server) -> None:
     """Serve the latest config version: POST /invocations, GET /ping.
 
     Each worker imports the pipeline and `inference.Handler` from
     DECIKIT_API__CODE_PATH (default: the current directory), then stages and
-    activates the store's latest version before answering /ping.
+    activates the store's latest version before answering /ping. The
+    engine's own settings come from DECIKIT_API__ENGINE__*, e.g.
+    DECIKIT_API__ENGINE__STRICT_COMPILE=true.
     """
     from decikit._engine.compile import cpu_target
 
-    s = _settings(serve__host=host, serve__port=port, serve__workers=workers, api__mode=mode, serve__server=server)
+    s = _settings(serve__host=host, serve__port=port, serve__workers=workers, api__engine__type=engine,
+                  serve__server=server)
     recorded = _cpu_target_path(s)
     built = tuple(json.loads(recorded.read_text())) if recorded.exists() else cpu_target()
     if built != cpu_target():
