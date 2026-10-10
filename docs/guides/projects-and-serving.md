@@ -158,7 +158,7 @@ RUN bake
 ```
 
 - A baked image keeps numba's disk cache for your step functions, which skips their compilation at start (measured: 16 s instead of 35 s to `/ping` for one worker of `examples/loan-granting-pricing`, 39 s instead of 119 s for `examples/transaction-fraud`). The fused kernels are still built in every worker at start, so wait for `GET /ping` before sending traffic.
-- The cache is valid on the CPU that built the image. On another CPU `decider serve` warns and every worker compiles at start; build with `--build-arg CPU_TARGET=generic` to make the cache portable.
+- The image compiles for a generic x86-64 CPU (`CPU_TARGET=generic`, the default), so the baked cache hits on any x86-64 host; per record that measured the same as code for the build machine's CPU. `--build-arg CPU_TARGET=host` compiles for the build machine instead: on another CPU model `decider serve` then warns and every worker compiles at start, 2 to 3 times slower to `/ping`.
 - Rootless podman: the mounted folder must be readable by "others", or add `--userns=keep-id`.
 - The header of `docker/Dockerfile` lists every build argument and variable. `docker/smoke.sh` builds, runs and checks each example under `examples/`.
 
