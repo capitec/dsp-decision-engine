@@ -100,7 +100,7 @@ def test_a_kernel_numba_cannot_type_runs_in_python(mode):
     # Each step compiles alone; the dict param is only seen when the kernel launches.
     pipeline = flow(ratio, scaled)
     df = FRAME.head(2)
-    expected = pipeline.run(df)
+    expected = pipeline.run(df, engine="interpreted")
     assert Engine.resolve(mode)().bind(pipeline).run(df).equals(expected)
 
 
