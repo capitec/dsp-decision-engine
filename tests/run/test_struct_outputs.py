@@ -155,6 +155,46 @@ def test_a_python_struct_step_returning_something_other_than_its_fields_is_refus
         engine().bind(flow(fn, name="order")).run(LABELLED)
 
 
+MIXED = pl.DataFrame({"rate": [0.1, -0.2, 0.3], "code": [1, 2, 3], "label": ["ab", "c", "def"]})
+
+
+@pytest.mark.parametrize("reader", (offer_rate, reads_offer), ids=("python_reader", "kernel_reader"))
+@pytest.mark.parametrize("arms, offers", [
+    ((best_tuple, best_named), [{"rate": 0.1, "code": 1}, {"rate": -0.2, "code": 1}, {"rate": 0.3, "code": 3}]),
+    ((best_named, best_tuple), [{"rate": 0.1, "code": 2}, {"rate": -0.2, "code": 2}, {"rate": 0.3, "code": 3}]),
+], ids=("kernel_arm_first", "python_arm_first"))
+def test_a_struct_one_arm_writes_in_a_kernel_and_another_in_python_agrees_in_every_engine(arms, offers, reader):
+    pipeline = flow(branch(positive, *arms, modifies=["offer"], name="priced"), reader, name="order").emit("offer")
+    assert assert_equivalent(pipeline, MIXED)["offer"].to_list() == offers
+
+
+@step(output="going")
+def below_two(rate: float) -> bool:
+    return rate < 2.0
+
+
+@step(outputs=("offer", "rate"))
+def raise_tuple(rate: float, code: int) -> tuple[Struct[Product], float]:
+    return (rate + 1.0, code), rate + 1.0
+
+
+@allow_fallback
+@step(outputs=("offer", "rate"))
+def raise_named(rate: float, label: str) -> tuple[Struct[Product], float]:
+    return (rate + 1.0, len(label) * 10), rate + 1.0
+
+
+@pytest.mark.parametrize("seed, body, offers", [
+    (best_named, raise_tuple, [{"rate": 2.0, "code": 7}, {"rate": 5.0, "code": 1}, {"rate": 2.5, "code": 9}]),
+    (best_tuple, raise_named, [{"rate": 2.0, "code": 20}, {"rate": 5.0, "code": 8}, {"rate": 2.5, "code": 30}]),
+], ids=("python_seed", "python_body"))
+def test_a_struct_loop_carry_written_in_a_kernel_and_in_python_agrees_in_every_engine(seed, body, offers):
+    search = loop(below_two, flow(body, name="body"), carries=["offer", "rate"], max_iterations=5, name="search")
+    frame = pl.DataFrame({"rate": [0.0, 5.0, 1.5], "code": [7, 8, 9], "label": ["ab", "c", "def"]})
+    out = assert_equivalent(flow(seed, search, offer_rate, name="order").emit("offer"), frame)
+    assert out["offer"].to_list() == offers
+
+
 def test_a_struct_can_be_a_loop_carry_and_packs_into_one_kernel():
     @step(output="going")
     def more(rate: float) -> bool:
