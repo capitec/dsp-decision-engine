@@ -162,7 +162,7 @@ export const CasesNodeEditor: React.FC<CasesNodeEditorProps> = ({ node }) => {
           <div className="space-y-1">
             <label className="flex items-center gap-2 cursor-pointer">
               <Checkbox
-                checked={node.data.strict ?? false}
+                checked={node.data.strict ?? true}
                 onCheckedChange={(checked) => {
                   const isEnablingStrictMode = !!checked;
 
@@ -176,15 +176,14 @@ export const CasesNodeEditor: React.FC<CasesNodeEditorProps> = ({ node }) => {
                       applyStrictMode();
                     }
                   } else {
-                    // Just toggle off strict mode, keep conditions as-is
-                    updateNodeData(node.id, { strict: false });
+                    updateNodeData(node.id, { strict: isEnablingStrictMode });
                   }
                 }}
               />
               <span className="text-sm text-gray-700">Strict Mode</span>
             </label>
             <p className="text-xs text-gray-500 ml-6">
-              {node.data.strict
+              {(node.data.strict ?? true)
                 ? 'Lower bounds auto-inferred from previous max'
                 : 'Enabling will clear lower bounds and sort by upper bound'}
             </p>
@@ -198,7 +197,7 @@ export const CasesNodeEditor: React.FC<CasesNodeEditorProps> = ({ node }) => {
           onUpdate={(newConditions) => updateNodeData(node.id, { conditions: newConditions })}
           availableParameters={availableParametersForInput}
           onManageParameters={() => setParametersDialogOpen(true)}
-          strictMode={node.data.op === 'ranges' ? (node.data.strict ?? false) : false}
+          strictMode={node.data.op === 'ranges' ? (node.data.strict ?? true) : false}
         />
       </div>
 

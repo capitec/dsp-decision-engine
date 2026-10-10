@@ -292,6 +292,7 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
                   id: node.id,
                   type: 'cases',
                   op: 'ranges',
+                  strict: false,
                   feature: '',
                   conditions: [],
                   branches: [],
@@ -331,6 +332,7 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
                   updateNode(treeId, node.id, {
                     type: 'cases',
                     op: 'ranges',
+                    strict: false,
                     feature: currentFeature,
                     conditions: [],
                     branches: [],
@@ -686,7 +688,7 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
                 <div className="mt-2 p-2 rounded bg-white bg-opacity-60">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <Checkbox
-                      checked={(node as any).strict ?? false}
+                      checked={(node as any).strict ?? true}
                       onCheckedChange={(checked) => {
                         const isEnablingStrictMode = !!checked;
 
@@ -708,7 +710,7 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
                     <span className="text-sm text-gray-700">Strict Mode (auto-infer lower bounds)</span>
                   </label>
                   <p className="text-xs text-gray-500 mt-1 ml-6">
-                    {(node as any).strict
+                    {((node as any).strict ?? true)
                       ? 'Only upper bounds needed. Lower bounds auto-filled from previous condition.'
                       : 'Manual mode: specify both min and max for each range.'}
                   </p>
@@ -736,7 +738,7 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
                       {/* Table rows */}
                       <div className="divide-y divide-gray-200">
                       {node.conditions.map((condition, idx) => {
-                        const isStrictMode = (node as any).strict ?? false;
+                        const isStrictMode = (node as any).strict ?? true;
                         const prevMax = idx > 0 ? (node.conditions[idx - 1].when as any).max : null;
                         const displayMin = isStrictMode ? prevMax : (condition.when as any).min;
 
@@ -837,7 +839,7 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
                             size="sm"
                             className="h-8 text-xs border-dashed w-full"
                             onClick={() => {
-                              const isStrictMode = (node as any).strict ?? false;
+                              const isStrictMode = (node as any).strict ?? true;
                               const prevMax = node.conditions.length > 0
                                 ? (node.conditions[node.conditions.length - 1].when as any).max
                                 : null;
