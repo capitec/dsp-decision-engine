@@ -9,16 +9,9 @@ from canonical import as_lines, own_parts
 from real_trees import BY_ID, TREES, tree_files
 from round_trip import cases, expected_items, round_trip
 
-METADATA = "the tree editor drops the document's `metadata` (name, description) on save"
-SUBTREE_NAMES = "the tree editor replaces the subtrees' names with generated ones ('Main' -> 'x > $hi')"
-SUBTREE_ORDER = "the tree editor reorders `subtrees`, so the export's first subtree (the root decikit runs) changes"
-
-# tree id -> why the check is known to fail for it
-MATCHES_SOURCE = {
-    "campaign-23": METADATA,
-    "stored-rich-v3": f"{METADATA}; {SUBTREE_NAMES}; it adds computed expressions to `input_schema`",
-    "stored-upgraded-v1": f"{METADATA}; {SUBTREE_NAMES}; {SUBTREE_ORDER}",
-}
+OWN_NAME = ("the export writes the project's name over the document's own `metadata.name` (decikit never reads it): "
+            "needs a decision on which name an export carries")
+NAMED = [tree for tree in TREES if (tree.document.get("metadata") or {}).get("name")]
 
 
 @pytest.mark.parametrize("tree", cases({}))
@@ -31,11 +24,16 @@ def test_real_tree_opens_and_saves_without_errors(page: Page, tree):
     assert trip.page_errors == []
 
 
-@pytest.mark.parametrize("tree", cases(MATCHES_SOURCE))
+@pytest.mark.parametrize("tree", cases({}))
 def test_real_tree_export_matches_its_source(page: Page, tree):
     export = round_trip(page, tree).export
     assert as_lines(export) == as_lines(tree.document)
-    assert {key: export.get(key) for key in own_parts(tree.document)} == own_parts(tree.document)
+    assert own_parts(export, tree.document) == own_parts(tree.document, tree.document)
+
+
+@pytest.mark.parametrize("tree", cases({tree.id: OWN_NAME for tree in NAMED}, NAMED))
+def test_real_tree_export_keeps_the_documents_own_name(page: Page, tree):
+    assert round_trip(page, tree).export["metadata"]["name"] == tree.document["metadata"]["name"]
 
 
 @pytest.mark.parametrize("tree", cases({}))

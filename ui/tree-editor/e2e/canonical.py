@@ -1,5 +1,5 @@
-"""A tree document with only what the editor may legitimately add or normalise taken out (data/README.md lists
-each and why), so a source and its export compare equal unless something was lost or changed."""
+"""A tree document with only what the editor may legitimately add or normalise taken out, so a source and its
+export compare equal unless something was lost or changed."""
 
 import json
 import re
@@ -22,12 +22,12 @@ def _clean(value):
 def canonical(document: dict) -> dict:
     """`document` without the editor's own additions, numbers as floats; compare with `as_lines`."""
     doc = _clean(document)
-    metadata = doc.pop("metadata", {})
-    if "exported_at" in metadata:  # the export stamps its own metadata, with the project's name as `name`
-        metadata = {k: v for k, v in metadata.items() if k not in EXPORT_STAMP}
+    # The export stamps its own metadata, with the project's name over the document's `name`, which
+    # test_real_tree_export_keeps_the_documents_own_name checks on its own.
+    metadata = {k: v for k, v in doc.pop("metadata", {}).items() if k not in EXPORT_STAMP}
     if metadata:
         doc["metadata"] = metadata
-    # Absent at source the editor fills these in; present, `own_parts` compares them as they are.
+    # Absent at source the editor fills these in; present, `own_parts` compares them.
     for key in OWN_PARTS:
         doc.pop(key, None)
     doc.pop("parameters_col", None)  # a field decikit never reads
@@ -56,6 +56,14 @@ def as_lines(document: dict) -> list[str]:
     return json.dumps(canonical(document), sort_keys=True, indent=1).splitlines()
 
 
-def own_parts(document: dict) -> dict:
-    """The parts the editor fills in when they are missing (`input_schema`, `subtrees`), where the document has them."""
-    return {key: document[key] for key in OWN_PARTS if document.get(key)}
+def own_parts(document: dict, source: dict) -> dict:
+    """`document`'s parts the editor fills in when missing (`input_schema`, `subtrees`) that `source` has.
+
+    `input_schema` keeps only the features `source` lists: the editor may add the ones the tree reads but the
+    source leaves out (their types are checked on their own).
+    """
+    parts = {key: document.get(key) for key in OWN_PARTS if source.get(key)}
+    if "input_schema" in parts:
+        listed = {name for name, _ in source["input_schema"]}
+        parts["input_schema"] = [entry for entry in parts["input_schema"] or [] if entry[0] in listed]
+    return parts
