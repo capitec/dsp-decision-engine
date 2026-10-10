@@ -165,11 +165,13 @@ It answers in this order, cheapest first, and stops at the first reason:
 5. The signature is probed: each input, param and const is typed as the value the kernel will
    pass (`_probe_signature`), and `dispatcher.compile(sig)` runs. Its failure, if any, is cached
    per `(key, sig)`. A function step whose body compiles but which writes a container (a `dict`, a
-   TypedDict, a `list`, a `tuple`, a `set` or a numpy array) is then refused with `writes
+   TypedDict, a `list`, a `tuple`, a `set` or a numpy array), `bytes` or a time (`date`, `datetime`,
+   `time`, `timedelta`, numpy's `datetime64`, `timedelta64`) is then refused with `writes
    '<output>' as <type>, which no kernel stores`: it compiles alone, but no kernel column stores
    its value, so in a kernel it would fail at launch and take the other steps of the kernel into
-   Python with it (an array would be cut to its first element). Any other output (`Any`, a numpy
-   number, a `NewType` of `float`) is left to numba.
+   Python with it (an array would be cut to its first element, and a time from a body returning only
+   `None` stored as float64). Any other output (`Any`, a numpy number, a `NewType` of `float`) is
+   left to numba.
 6. Output checks that need the compiled return type: a `Struct[...] | None` output, a `Struct`
    returned as a dict, a `Columnar[...]` returned as a list of dicts, or one declared `| None`.
 7. A `Columnar[...]` input that is OPTIONAL, or read by a row node, runs as a per-row
@@ -479,7 +481,9 @@ Kernel ['credit/offer_limit']
 
 Inside the first kernel, `offer` is a record pointer to a stack buffer; `offer_limit` reads the
 stored record array, so the run is split before it. A step returning a dict for a `Struct` output
-still runs, in Python.
+still runs, in Python. A struct column a kernel writes on some rows and a Python step on others (two
+branch arms, a loop's seed and its body) is held as the dicts a Python step returns, and a kernel
+reading it builds its records from them (`State.write`).
 
 ### Sinks: `Columnar` outputs
 
