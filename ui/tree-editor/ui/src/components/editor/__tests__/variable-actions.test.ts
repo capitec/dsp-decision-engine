@@ -34,7 +34,7 @@ describe('parameter actions over tree nodes', () => {
   });
 
   it('rename keeps the identity of nodes that do not use the parameter and changes the ones that do', () => {
-    const out = renameParameterInNodes(nodes, 'hi', 'top');
+    const out: any[] = renameParameterInNodes(nodes, 'hi', 'top');
     expect(out[2]).toBe(nodes[2]);
     expect(out[3]).toBe(nodes[3]);
     expect(out[0].data.condition).toMatchObject({ min: p('lo'), max: p('top') });
@@ -42,13 +42,13 @@ describe('parameter actions over tree nodes', () => {
   });
 
   it('rename reaches a reference two composites down', () => {
-    const out = renameParameterInNodes(nodes, 'lo', 'floor');
+    const out: any[] = renameParameterInNodes(nodes, 'lo', 'floor');
     expect(out[2].data.conditions[0].conditions[0].threshold).toEqual(p('floor'));
     expect(extractParameterReferences(out)).toEqual(['floor', 'hi']);
   });
 
   it('delete turns bounds into open bounds and thresholds into 0, leaving other parameters', () => {
-    const out = deleteParameterFromNodes(nodes, 'lo');
+    const out: any[] = deleteParameterFromNodes(nodes, 'lo');
     expect(out[0].data.condition).toMatchObject({ min: null, max: p('hi') });
     expect(out[1].data.conditions).toEqual([{ min: null, max: null }, { min: null, max: p('hi') }]);
     expect(out[2].data.conditions[0].conditions[0].threshold).toBe(0);
