@@ -41,7 +41,8 @@ function mapProjectDetailToFlatRuleDetail(project: ProjectDetailResponse): FlatR
     version: project.version,
     created_by: project.created_by,
     project_data: projectData,
-    validation_errors: project.validation_errors as any[]
+    validation_errors: project.validation_errors as any[],
+    live_collab: project.live_collab
   };
 }
 

@@ -22,6 +22,7 @@ export default defineConfig({
         target: apiTarget,
         changeOrigin: false,
         secure: false,
+        ws: true,
       },
       '/auth': {
         target: apiTarget,

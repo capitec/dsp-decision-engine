@@ -9,7 +9,7 @@ import decikit
 
 from fastapi import Depends, HTTPException, Query, UploadFile, File, Form, Response
 from fastapi.responses import JSONResponse
-from sqlalchemy import select, case, update
+from sqlalchemy import select, case
 from fastapi_pagination import Page, Params, paginate
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -37,6 +37,8 @@ from dsp_decikit.services.documents import (
     imported_document,
     validation_errors,
 )
+from dsp_decikit.services.live_sync import StaleVersion, save_version
+from dsp_decikit.settings import settings
 
 # ================================
 # Request/Response Models
@@ -98,6 +100,7 @@ class ProjectDetailResponse(BaseModel):
     version: int
     is_owner: bool
     access_mode: AccessMode
+    live_collab: bool = Field(False, description="Edit this project live over its websocket instead of saving it")
 
     @classmethod
     def from_project(cls, project: Project, is_owner: bool, access_mode: AccessMode):
@@ -115,6 +118,7 @@ class ProjectDetailResponse(BaseModel):
             version=project.version,
             is_owner=is_owner,
             access_mode=access_mode,
+            live_collab=settings.live_collab,
         )
 
 
@@ -401,11 +405,6 @@ async def update_project(
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
     async with db_session() as session:
-        # Reload project in this session
-        query = select(Project).where(Project.id == project_id)
-        result = await session.execute(query)
-        project = result.scalar_one()
-
         changes: t.Dict[str, t.Any] = {}
         if project_data.name is not None:
             changes["name"] = project_data.name
@@ -430,31 +429,23 @@ async def update_project(
             except ValueError as e:
                 raise HTTPException(status_code=400, detail=str(e))
             changes["project_data"] = project_data.project_data
-            changes["version"] = Project.version + 1
 
-        # One conditional statement, so two saves of the same base cannot both pass the check.
-        # The version counts document saves only: a rename or move never makes an open editor stale.
-        stmt = update(Project).where(Project.id == project_id)
-        if "version" in changes and project_data.base_version is not None:
-            stmt = stmt.where(Project.version == project_data.base_version)
-        saved = await session.execute(
-            stmt.values(**changes, updated_at=datetime.now(timezone.utc))
-            .returning(Project.version)
-            .execution_options(synchronize_session=False)
-        )
-        if saved.first() is None:
-            await session.refresh(project)
+        # Live editors see a save as one version that replaces the whole document
+        try:
+            await save_version(session, project_id, project_data.base_version, changes, "rest", str(uuid.uuid4()))
+        except StaleVersion as e:
             raise HTTPException(
                 status_code=409,
                 detail={
                     "code": "stale_version",
                     "message": "The project was saved by someone else since you opened it",
-                    "current_version": project.version,
+                    "current_version": e.current,
                 },
             )
 
         await session.commit()
-        await session.refresh(project)
+        project = (await session.execute(select(Project).where(Project.id == project_id)
+                                         .execution_options(populate_existing=True))).scalar_one()
 
         return ProjectDetailResponse.from_project(project, is_owner, access_mode)
 
