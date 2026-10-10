@@ -51,23 +51,21 @@ def result_indices(page: Page, project: str) -> dict:
     return {n["id"]: n["data"]["result_idx"] for n in nodes if n["data"]["type"] == "leaf"}
 
 
-def test_records_added_in_edit_output_are_saved_in_order_and_picked_by_a_leaf(signed_in: Page):
-    project = open_tree(signed_in, banded(output_table(default="decline"), indices=(-1, -1, -1)))
+def test_record_added_in_edit_output_is_saved_last_and_can_be_picked_by_a_leaf(signed_in: Page):
+    project = open_tree(signed_in, banded(output_table("approve", "review"), indices=(-1, -1, -1)))
     dialog = open_output_editor(signed_in)
-    for _ in range(2):
-        dialog.get_by_role("button", name="Add Record").click()
-    for field, text in zip(dialog.locator("input").all(), ["review", "approve", "decline"]):
-        field.fill(text)
+    dialog.get_by_role("button", name="Add Record").click()
+    dialog.locator("tbody tr").nth(2).locator("input").fill("refer")
     close_dialog(signed_in)
     select_node(signed_in, "low")
     signed_in.get_by_role("combobox").nth(1).click()
-    signed_in.get_by_role("option", name=re.compile("approve")).click()
+    signed_in.get_by_role("option", name=re.compile("refer")).click()
     assert save(signed_in)["validation_errors"] == []
 
     output = get_project(signed_in, project)["project_data"]["output"]
-    assert [row["decision"] for row in output["data"]] == ["review", "approve", "decline"]
-    assert result_indices(signed_in, project)["low"] == 1
-    assert run(export_document(signed_in, project), amount=[50.0, 5000.0]) == ["approve", output["default"]["decision"]]
+    assert [row["decision"] for row in output["data"]] == ["approve", "review", "refer"]
+    assert result_indices(signed_in, project)["low"] == 2
+    assert run(export_document(signed_in, project), amount=[50.0, 5000.0]) == ["refer", "decline"]
 
 
 def test_editing_a_record_changes_what_its_leaves_return(signed_in: Page):
@@ -134,18 +132,17 @@ def test_deleting_the_record_a_leaf_points_at_sends_it_to_the_default(signed_in:
     assert result_indices(signed_in, project) == {"low": 0, "mid": 1, "high": -1}
 
 
-def test_the_first_record_cannot_be_deleted(signed_in: Page):
+@pytest.mark.xfail(strict=True, reason="the first record is shown as the Default row and has no delete button")
+def test_the_first_record_can_be_deleted_like_any_other(signed_in: Page):
     project = open_tree(signed_in, banded(output_table("approve", "review", "refer")))
-    seen = []
     dialog = open_output_editor(signed_in)
-    signed_in.once("dialog", lambda d: (seen.append(d.message), d.accept()))
-    expect(dialog.locator("tbody tr").nth(0).get_by_role("button")).to_have_count(0)  # a Default badge, no delete button
-    assert seen == []
+    delete_first = dialog.locator("tbody tr").nth(0).get_by_role("button")
+    expect(delete_first).to_have_count(1)
+    delete_first.click()
     close_dialog(signed_in)
-    nudge(signed_in, "low")
     save(signed_in)
 
-    assert len(get_project(signed_in, project)["project_data"]["output"]["data"]) == 3
+    assert result_indices(signed_in, project) == {"low": -1, "mid": 0, "high": 1}
 
 
 def test_leaf_output_picker_lists_the_default_and_every_record(signed_in: Page):
@@ -282,8 +279,8 @@ def test_feature_picked_in_a_node_is_added_to_the_input_schema_when_it_is_new(si
     assert "income" in names
 
 
-@pytest.mark.xfail(strict=True, reason="deleting a feature a node uses blanks the node's feature and saves with no message")
-def test_deleting_a_feature_a_cases_node_uses_clears_the_node_feature_and_says_so_when_saved(signed_in: Page):
+@pytest.mark.xfail(strict=True, reason="deleting a feature a node uses blanks the node's feature and saves with no message; the export then sends every row to otherwise")
+def test_deleting_a_feature_a_cases_node_uses_is_refused_or_reported_when_saved(signed_in: Page):
     project = open_tree(signed_in, banded(output_table("approve", "review", "refer")))
     dialog = open_features(signed_in)
     dialog.locator("input[placeholder='Field name']").first.locator("xpath=ancestor::div[1]/..").get_by_role("button").last.click()
@@ -291,8 +288,7 @@ def test_deleting_a_feature_a_cases_node_uses_clears_the_node_feature_and_says_s
     reply = save(signed_in)
 
     data = next(n for n in get_project(signed_in, project)["project_data"]["nodes"] if n["id"] == "root")["data"]
-    assert data["feature"] == ""
-    assert reply["validation_errors"] != []
+    assert data["feature"] == "amount" or reply["validation_errors"]
 
 
 # ---- parameters -----------------------------------------------------------------------------------------------------

@@ -3,7 +3,9 @@
 import json
 import re
 
+import polars as pl
 import pytest
+from decikit import TreeConfig
 from playwright.sync_api import Page, expect
 
 from node_ui import (
@@ -26,7 +28,7 @@ from node_ui import (
     sidebar,
     unary,
 )
-from seed import create_project, get_project
+from seed import create_project, export_document, get_project
 
 
 def export_from_menu(page: Page, tmp_path) -> dict:
@@ -163,13 +165,17 @@ def test_invalid_computed_feature_is_named_with_the_expression(signed_in: Page):
     assert '"root"' in message and "expression" in message, message
 
 
-@pytest.mark.xfail(strict=True, reason="a threshold naming a parameter that is not defined saves with no message")
-def test_parameter_that_is_not_defined_is_named_in_the_message(signed_in: Page):
+def test_parameter_that_is_not_declared_is_a_parameter_the_run_must_pass(signed_in: Page):
+    # decikit reads a reference with no declared default as a required run-time param, so this is valid
     doc = loan_document()
     doc["nodes"][0]["data"]["condition"]["threshold"] = {"param": "ghost"}
     project = create_project(signed_in, "Ghost", doc, project_type="tree")
 
-    assert any("ghost" in e["msg"] for e in project["validation_errors"]), project["validation_errors"]
+    assert project["validation_errors"] == []
+    tree = TreeConfig.load({"type": "tree", "name": "t", "tree": export_document(signed_in, project["id"])})
+    assert tree.parameters() == {"t": {"ghost": {"type": "float", "required": True}}}
+    out = tree.run(pl.DataFrame({"amount": [500.0, 2000.0]}), params={"t": {"ghost": 1000.0}})
+    assert out["decision"].to_list() == ["approve", "review"]
 
 
 def test_a_cycle_is_reported_when_saving(signed_in: Page):
@@ -201,7 +207,7 @@ def test_leaf_pointing_past_the_output_records_is_reported_with_its_node(signed_
 
 # ---- editor behaviour: unsaved changes, leaving, export ---------------------------------------------------------------
 
-@pytest.mark.xfail(strict=True, reason="a tree with no saved subtree entries opens marked 'Unsaved changes' before any edit")
+@pytest.mark.xfail(strict=True, reason="every tree opens marked 'Unsaved changes' before any edit, also one the editor has just saved")
 def test_clean_tree_has_no_unsaved_indicator_and_save_is_disabled(signed_in: Page):
     open_tree(signed_in, loan_document())
     signed_in.wait_for_load_state("networkidle")
@@ -248,7 +254,7 @@ def test_back_with_unsaved_edits_leaves_without_saving_when_confirmed(signed_in:
     assert condition["threshold"] == 1000
 
 
-@pytest.mark.xfail(strict=True, reason="browser Back from the editor with unsaved edits leaves the editor even when its prompt is dismissed")
+@pytest.mark.xfail(strict=True, reason="browser Back from the editor with unsaved edits leaves without asking, and the edits are lost")
 def test_browser_back_with_unsaved_edits_asks_and_staying_keeps_the_editor(signed_in: Page):
     page = signed_in.context.new_page()
     create_project(page, "Back button", loan_document(), project_type="tree")
