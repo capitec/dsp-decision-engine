@@ -495,7 +495,7 @@ export const ProjectListPage: React.FC = () => {
             {viewMode === 'grid' ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {paginatedProjects.map((project) => (
-                  <Card key={project.id} className="hover:shadow-lg transition-shadow">
+                  <Card key={project.id} data-testid="project-card" className="hover:shadow-lg transition-shadow">
                     <CardHeader>
                       <div className="flex justify-between items-start">
                         <div className="flex items-center gap-2">
@@ -508,7 +508,7 @@ export const ProjectListPage: React.FC = () => {
                         </div>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 flex-shrink-0">
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 flex-shrink-0" data-testid="project-list-menu">
                               <MoreVertical className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
@@ -580,7 +580,7 @@ export const ProjectListPage: React.FC = () => {
                   </TableHeader>
                   <TableBody>
                     {paginatedProjects.map((project) => (
-                      <TableRow key={project.id} className="hover:bg-muted/50">
+                      <TableRow key={project.id} data-testid="project-row" className="hover:bg-muted/50">
                         <TableCell className="font-medium">
                           <button
                             onClick={() => handleOpenProject(project)}
@@ -613,7 +613,7 @@ export const ProjectListPage: React.FC = () => {
                             </Button>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0" data-testid="project-list-menu">
                                   <MoreVertical className="h-4 w-4" />
                                 </Button>
                               </DropdownMenuTrigger>

@@ -123,6 +123,7 @@ export const FolderTreeView: React.FC<FolderTreeViewProps> = ({
     return (
       <div key={node.id}>
         <div
+          data-testid="folder-row"
           className={cn(
             'group flex items-center gap-1 py-1.5 px-2 rounded-md hover:bg-gray-100 cursor-pointer transition-colors',
             isSelected && 'bg-blue-50 hover:bg-blue-100',
@@ -185,7 +186,7 @@ export const FolderTreeView: React.FC<FolderTreeViewProps> = ({
           <div className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
             <DropdownMenu>
               <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                <Button variant="ghost" size="sm" className="h-6 w-6 p-0" data-testid="folder-menu">
                   <MoreVertical className="h-3.5 w-3.5" />
                 </Button>
               </DropdownMenuTrigger>
