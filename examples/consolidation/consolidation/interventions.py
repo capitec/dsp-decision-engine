@@ -14,11 +14,6 @@ from consolidation.records import Intervention
 PASSED, FAILED, NOT_APPLICABLE = "passed", "failed", "not_applicable"
 
 
-def _as_float(x: float | None) -> float | None:
-    # A count and a ratio share the `actual` column, which is one float type
-    return None if x is None else float(x)
-
-
 def evaluate(facts: dict, policy: dict, decision_date: date, consolidations_24m: int, max_consolidations_24m: int,
              overlay_set: tuple, stack_enabled: bool = True) -> list[Intervention]:
     """All fourteen interventions for one priced scenario, by number.
@@ -59,7 +54,7 @@ def evaluate(facts: dict, policy: dict, decision_date: date, consolidations_24m:
     ]
     return [{
         "intervention": number, "name": name, "status": (PASSED if passes else FAILED) if applies else NOT_APPLICABLE,
-        "actual": _as_float(actual) if applies else None, "threshold": _as_float(threshold) if applies else None,
-        "base_threshold": _as_float(policy["anti_harm"] if number == 4 else threshold) if applies else None,
+        "actual": actual if applies else None, "threshold": threshold if applies else None,
+        "base_threshold": (policy["anti_harm"] if number == 4 else threshold) if applies else None,
         "overlay_id": anti_harm_overlays[0] if number == 4 and anti_harm_overlays else None,
     } for number, name, actual, threshold, passes, applies in rows]
