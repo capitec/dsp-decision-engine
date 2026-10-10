@@ -5,7 +5,7 @@ from collections import Counter
 import polars as pl
 import pytest
 
-from decikit import ConfigurableStep, Value, branch, flow, step
+from decikit import ConfigurableStep, SteppedEngine, Value, branch, flow, step
 from decikit._engine.debug import COMMAND, EVENT_LOG, Delete, Edited, Paused, Replace
 from decikit.exceptions import WiringError
 from decikit.lab.testing import MODES, no_recompile
@@ -77,6 +77,12 @@ def test_an_edit_downstream_of_the_pause_keeps_the_session_where_it_was(mode):
     assert (cp.origin.path, cp.when) == ("disposable_income", "before")
     s.resume()
     assert s.value("disposable_income").to_list() == [1900.0, 3500.0, -1000.0]
+
+
+def test_an_edited_session_keeps_the_engine_it_was_opened_with():
+    s = pipeline.session(FRAME, engine="stepped")
+    s.replace("affordability_ratio", halved_ratio)
+    assert s.executable.engine == SteppedEngine()
 
 
 def test_replacing_before_the_run_starts_just_swaps_the_pipeline():
