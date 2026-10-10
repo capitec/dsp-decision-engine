@@ -206,13 +206,14 @@ def test_deleting_the_then_branch_makes_a_match_use_the_default_row(signed_in: P
     assert decisions_for(export_document(signed_in, project), {"amount": [50.0, 150.0]}) == ["decline", "decline"]
 
 
-@pytest.mark.xfail(strict=True, reason="choosing a record for an OTHERWISE leaf is ignored while the node has no THEN branch")
 def test_otherwise_leaf_can_be_pointed_at_a_record_when_there_is_no_then_branch(signed_in: Page):
     project = open_doc(signed_in)
-    card = unary_rule(signed_in, "<=", then=None)
+    card = rule_card(signed_in)
+    set_node_type(signed_in, card, "Unary")
+    choose_feature(signed_in, card, "amount")
     fill_number(card, "100")
     add_otherwise(card)
-    choose_output(signed_in, card, "approve", 0)
+    choose_output(signed_in, card, "approve", 0)  # the only leaf: OTHERWISE
 
     reply = save(signed_in)
     assert saved_rule(reply)["otherwise"]["result_idx"] == 0
@@ -234,12 +235,11 @@ def test_otherwise_branch_can_be_added_pointed_at_a_record_and_deleted(signed_in
     assert "otherwise" not in saved_rule(save(signed_in))
 
 
-@pytest.mark.xfail(strict=True, reason="the Branch button on a unary node shows nothing but stores a stray branches array")
-def test_branch_button_on_a_unary_node_changes_nothing_in_the_saved_rule(signed_in: Page):
+def test_a_unary_node_offers_no_branch_list_and_saves_none(signed_in: Page):
     project = open_doc(signed_in)
     card = unary_rule(signed_in, "<=")
     fill_number(card, "100")
-    card.get_by_role("button", name="Branch", exact=True).click()
+    expect(card.get_by_role("button", name="Branch", exact=True)).to_have_count(0)  # only cases nodes have branch lists
 
     reply = save(signed_in)
     assert reply["validation_errors"] == []
