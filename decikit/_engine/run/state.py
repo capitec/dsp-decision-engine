@@ -103,14 +103,17 @@ class State:
             self.valid[vid] = np.zeros(self.n, bool)
         elif values.dtype == object and target.dtype != object:
             if valid is not None and not valid.any():
-                # Only nulls (an arm that left the name unwritten): keep the typed storage, since as
-                # objects a struct's records turn into tuples, which no reader takes for a struct.
+                # Only nulls (an arm that left the name unwritten): keep the typed storage.
                 values = target[rows]
             else:
-                target = self.values[vid] = target.astype(object)
+                target = self.values[vid] = _objects(target)
         elif values.dtype != object and target.dtype == object and values.dtype.names is not None:
-            # A struct carry seeded null (object) is later written as a record; rows still null stay zero records.
-            target = self.values[vid] = np.zeros(self.n, values.dtype)
+            if (mask := self.valid.get(vid)) is not None and not mask.any():
+                # A struct carry seeded null (object) is later written as a record; rows still null stay zero records.
+                target = self.values[vid] = np.zeros(self.n, values.dtype)
+            else:
+                # Records beside a Python step's dicts (another arm, a loop's seed): all dicts, losing neither.
+                values = _objects(values)
         target[rows] = values
         mask = self.valid.get(vid)
         if mask is None:
@@ -276,6 +279,16 @@ def _series(name: str, values: np.ndarray, valid: np.ndarray | None, annotation:
         # The int64 mantissa as a Decimal(38, scale): cast scales it up, the division brings it back.
         s = s.cast(pl.Decimal(38, info.scale)) / 10 ** info.scale
     return s
+
+
+def _objects(values: np.ndarray) -> np.ndarray:
+    # `astype(object)` makes a record a tuple, which no reader takes for a struct; spell it as the dict a step returns.
+    if values.dtype.names is None:
+        return values.astype(object)
+    out = np.empty(len(values), object)
+    for i, row in enumerate(values.tolist()):
+        out[i] = dict(zip(values.dtype.names, row))
+    return out
 
 
 def all_set(mask: np.ndarray) -> bool:
