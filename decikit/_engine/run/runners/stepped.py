@@ -201,7 +201,8 @@ class SteppedRunner(InterpretedRunner):
                     raise MissingInputError(decl.name, path, int((~mask).sum()), len(mask), absent=_absent(state, v))
                 if not filled and _fills(decl, mask, kind):
                     # ponytail: one fill per version per kernel; two readers with different fills share the first.
-                    x = fill_missing(x, mask, stored_fill(decl)).astype(x.dtype, copy=False)
+                    # A struct's records come back as dicts beside the fill, as a Python body takes them.
+                    x = fill_missing(x, mask, stored_fill(decl)).astype(object if x.dtype.names else x.dtype, copy=False)
                 valid[v.id] = mask
             values.setdefault(v.id, x)
         try:
