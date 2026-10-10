@@ -9,9 +9,11 @@ import asyncio
 import contextlib
 import json
 import logging
+import multiprocessing
 import time
 import typing as t
 import uuid
+from concurrent.futures import ProcessPoolExecutor
 
 from fastapi import WebSocket
 from sqlalchemy import func, select
@@ -44,6 +46,7 @@ class Hub:
     def __init__(self):
         self.rooms: t.Dict[uuid.UUID, Room] = {}
         self.listener: t.Optional[asyncio.Task] = None
+        self.validator: t.Optional[ProcessPoolExecutor] = None
 
     async def join(self, project_id: uuid.UUID, client: Client, since: int) -> None:
         """Bring `client` up to date from version `since` (a snapshot when the log does not reach back), then
@@ -114,7 +117,8 @@ class Hub:
 
     async def _validate(self, project_id: uuid.UUID, room: Room) -> None:
         # Validating a large document takes a few hundred ms, so it runs off the write path, once per version that
-        # is still the latest when the previous run ends.
+        # is still the latest when the previous run ends, in a process of its own: in a thread it holds the GIL
+        # and every write on this node waits behind it.
         while room.clients:
             async with db_session() as session:
                 version, doc = (await session.execute(select(Project.version, Project.project_data)
@@ -122,7 +126,7 @@ class Hub:
             if version == room.validated:
                 return
             started = time.perf_counter()
-            errors = await asyncio.to_thread(validation_errors, doc)
+            errors = await asyncio.get_running_loop().run_in_executor(self.validator, validation_errors, doc)
             logger.info("live validation project=%s version=%d errors=%d ms=%.1f", project_id, version, len(errors),
                         (time.perf_counter() - started) * 1e3)
             room.validation = json.dumps({"type": "validation", "version": version, "errors": errors})
@@ -131,9 +135,12 @@ class Hub:
                 await _send(client, room.validation)
 
     def start(self) -> None:
+        self.validator = ProcessPoolExecutor(1, mp_context=multiprocessing.get_context("spawn"))
         self.listener = asyncio.create_task(self._listen())
 
     async def stop(self) -> None:
+        if self.validator:
+            self.validator.shutdown(cancel_futures=True)
         if self.listener:
             self.listener.cancel()
             with contextlib.suppress(asyncio.CancelledError):
