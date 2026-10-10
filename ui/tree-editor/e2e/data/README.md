@@ -118,5 +118,6 @@ rest exactly (as sorted-key JSON lines, so a failure shows the differing lines):
 
 Opening a flat-rule set renders every rule at once: 64 rules open in about 3 s, 114 in 10 s, 200 in 13 s, and 521
 rules take the browser past 3 GB (the cap e2e runs have) before they open, so `fraud-live` and `generated-521` are
-listed as known failures that are not run. The round trips of `fraud-shadow` and `generated-200` take about 30 s
+listed as known failures that are not run; their import, export and run without the editor are checked instead
+(`test_rule_set_too_big_to_open_exports_and_runs_like_its_source`). The round trips of `fraud-shadow` and `generated-200` take about 30 s
 and are marked `slow`.
