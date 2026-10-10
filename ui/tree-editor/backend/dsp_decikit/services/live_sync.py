@@ -2,9 +2,13 @@
 the new version in `project_ops` and notifies the `project_ops` channel in the same transaction.
 
 A live message (`apply_message`) follows the online rule: an op inside something another client changed since the
-message's base is dropped, the rest apply, and the last writer wins per field. A REST save (`save_version`) is
-one root-replace op; only document changes make versions.
+message's base is dropped, the rest apply, and the last writer wins per field. An offline message (edits made while
+disconnected, sent as one batch) merges whole only when none of its paths overlaps what others changed since its base
+and it brings no new validation error; otherwise it is rejected whole. A REST save (`save_version`) is one
+root-replace op; only document changes make versions.
 """
+
+import asyncio
 
 import json
 import logging
@@ -19,8 +23,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from dsp_decikit.db.models.projects import Project, ProjectOp
 from dsp_decikit.db.session import db_session
-from dsp_decikit.services.documents import check_document
-from dsp_decikit.services.live_ops import apply, diff, stale_ops
+from dsp_decikit.services.documents import check_document, validation_errors
+from dsp_decikit.services.live_ops import apply, conflicts, diff, rebase_orders, stale_ops
 
 CHANNEL = "project_ops"
 MAX_OPS = 5000
@@ -28,7 +32,11 @@ logger = logging.getLogger("uvicorn.error").getChild("live")
 
 
 class Rejected(Exception):
-    """A message the server refuses whole; the reason goes back to its author."""
+    """A message the server refuses whole; the reason (and an offline batch's conflicting paths) go to its author."""
+
+    def __init__(self, reason: str, conflicts: t.Sequence[str] = ()):
+        super().__init__(reason)
+        self.conflicts = list(conflicts)
 
 
 class StaleVersion(Exception):
@@ -134,27 +142,79 @@ async def save_version(session: AsyncSession, project_id: uuid.UUID, base_versio
     return await _commit_version(session, project, ops, client_id, msg_id, **changes)
 
 
-async def _concurrent(session: AsyncSession, project: Project, base: int, client_id: str) -> list:
+def _unreachable(base: int) -> Rejected:
+    return Rejected(f"the log no longer reaches back to version {base}; reload the project")
+
+
+async def _since(session: AsyncSession, project: Project, base: int) -> list:
     if base > project.version:
         raise Rejected(f"base {base} is newer than the project (version {project.version})")
-    rows = (await session.execute(select(ProjectOp.client_id, ProjectOp.ops)
+    rows = (await session.execute(select(ProjectOp.version, ProjectOp.client_id, ProjectOp.msg_id, ProjectOp.ops)
                                   .where(ProjectOp.project_id == project.id, ProjectOp.version > base)
                                   .order_by(ProjectOp.version))).all()
     if len(rows) != project.version - base:
-        raise Rejected(f"the log no longer reaches back to version {base}; reload the project")
-    return [op for row in rows if row.client_id != client_id for op in row.ops]
+        raise _unreachable(base)
+    return rows
 
 
-async def apply_message(project_id: uuid.UUID, client_id: str, msg_id: str, base: int, ops: list) -> Applied:
-    """Apply one live message under the online rule and commit it as the next version.
+async def _document_at(session: AsyncSession, project_id: uuid.UUID, version: int) -> dict:
+    # Replayed from the last whole-document write at or before `version` (a new project's first version is one).
+    # ponytail: replays every version since that write; store a snapshot every N versions if replays get long.
+    start = await session.scalar(select(func.max(ProjectOp.version)).where(
+        ProjectOp.project_id == project_id, ProjectOp.version <= version, ProjectOp.ops[0]["path"].astext == ""))
+    if start is None:
+        raise _unreachable(version)
+    rows = (await session.scalars(select(ProjectOp.ops).where(
+        ProjectOp.project_id == project_id, ProjectOp.version.between(start, version))
+        .order_by(ProjectOp.version))).all()
+    return apply({}, [op for ops in rows for op in ops])[0]
 
-    Raises Rejected (nothing stored) when the base is unknown or the result is not a document of the project's type.
+
+def _error_keys(errors: list) -> set:
+    return {(e.get("type"), e.get("msg")) for e in errors}
+
+
+async def _new_errors(merged: dict, current: dict, own: t.Callable[[], dict], executor) -> list:
+    """The validation errors of `merged` that neither `current` nor my own document has (each computed only when
+    still needed: validating a large document takes a few hundred ms)."""
+    loop = asyncio.get_running_loop()
+    errors = await loop.run_in_executor(executor, validation_errors, merged)
+    for other in (lambda: current, own):
+        if not errors:
+            break
+        known = _error_keys(await loop.run_in_executor(executor, validation_errors, other()))
+        errors = [e for e in errors if (e.get("type"), e.get("msg")) not in known]
+    return errors
+
+
+async def apply_message(project_id: uuid.UUID, client_id: str, msg_id: str, base: int, ops: list,
+                        offline: bool = False, executor=None) -> Applied:
+    """Apply one live message and commit it as the next version; a message already in the log is not applied again.
+
+    Online, an op inside something another client changed since `base` is dropped. `offline` merges the batch whole
+    or not at all (Rejected names the conflicting paths); `executor` runs its validation. Raises Rejected (nothing
+    stored) when the base is unknown or the result is not a document of the project's type.
     """
     started = time.perf_counter()
     async with db_session() as session:
         project = await _locked(session, project_id)
         locked = time.perf_counter()
-        stale = stale_ops(ops, await _concurrent(session, project, base, client_id))
+        rows = await _since(session, project, base)
+        for row in rows:
+            if (row.client_id, row.msg_id) == (client_id, msg_id):
+                return Applied(row.version, row.ops)
+        theirs = [op for row in rows if row.client_id != client_id for op in row.ops]
+        stale, base_doc, replayed, compared = [], None, locked, locked
+        if offline:
+            base_doc = await _document_at(session, project_id, base)
+            replayed = time.perf_counter()
+            found = conflicts(ops, theirs, base_doc)
+            compared = time.perf_counter()
+            if found:
+                raise Rejected("someone else changed what your offline edits change", found)
+            ops = rebase_orders(ops, base_doc, project.project_data)
+        else:
+            stale = stale_ops(ops, theirs)
         fresh = [op for op in ops if not any(op is s for s in stale)]
         doc, failed = apply(project.project_data, fresh)
         applied = [op for op in fresh if not any(op is f for f in failed)]
@@ -164,14 +224,31 @@ async def apply_message(project_id: uuid.UUID, client_id: str, msg_id: str, base
         except ValueError as e:
             raise Rejected(str(e))
         checked = time.perf_counter()
+        if offline:
+            mine = [op for row in rows if row.client_id == client_id for op in row.ops] + ops
+            # ponytail: validates under the row lock (other writers wait); validate first and re-check the
+            # version if offline batches on large trees make that wait show.
+            new = await _new_errors(doc, project.project_data, lambda: apply(base_doc, mine)[0], executor)
+            if new:
+                raise Rejected("merging your offline edits would add these errors: "
+                               + "; ".join(sorted({e["msg"] for e in new})))
+        validated = time.perf_counter()
         version = await _commit_version(session, project, applied, client_id, msg_id, project_data=doc)
         await session.commit()
     done = time.perf_counter()
-    logger.info("live apply project=%s version=%d ops=%d dropped=%d lock_ms=%.1f apply_ms=%.1f check_ms=%.1f "
-                "persist_ms=%.1f total_ms=%.1f", project_id, version, len(ops), len(stale) + len(failed),
-                (locked - started) * 1e3, (applying - locked) * 1e3, (checked - applying) * 1e3,
-                (done - checked) * 1e3, (done - started) * 1e3)
+    logger.info("live apply project=%s version=%d offline=%s ops=%d dropped=%d lock_ms=%.1f replay_ms=%.1f "
+                "conflicts_ms=%.1f apply_ms=%.1f check_ms=%.1f validate_ms=%.1f persist_ms=%.1f total_ms=%.1f",
+                project_id, version, offline, len(ops), len(stale) + len(failed), (locked - started) * 1e3,
+                (replayed - locked) * 1e3, (compared - replayed) * 1e3, (applying - compared) * 1e3,
+                (checked - applying) * 1e3, (validated - checked) * 1e3, (done - validated) * 1e3,
+                (done - started) * 1e3)
     return Applied(version, applied, stale + failed)
+
+
+def first_version(project: Project) -> ProjectOp:
+    """The log row of a new project's first version, so later versions can be rebuilt from the log."""
+    return ProjectOp(project_id=project.id, version=1, client_id="server", msg_id=str(uuid.uuid4()),
+                     ops=[{"op": "replace", "path": "", "value": project.project_data}])
 
 
 async def stamp_project(project_id: uuid.UUID) -> None:

@@ -1,9 +1,11 @@
 """`WS /api/v1/projects/{id}/live`: live editing of one project.
 
 Client -> server: `hello {since, client_id}` (catch up from version `since`, 0 for a snapshot), then
-`ops {id, base, ops}`. Server -> client: `snapshot {version, doc}`, `applied {version, client_id, msg_id, ops}` for
-every version in order (the author's ack included), `ready {version}` once caught up, `dropped {msg_id, version, ops}`
-and `rejected {msg_id, reason}` to the author only, `validation {version, errors}` for the latest version.
+`ops {id, base, ops, offline?}` (`offline: true` for edits made while disconnected: merged whole or rejected whole),
+and `ping` (answered `pong`). Server -> client: `snapshot {version, doc}`, `applied {version, client_id, msg_id, ops}`
+for every version in order (the author's ack included), `ready {version}` once caught up, `dropped {msg_id, version,
+ops}` and `rejected {msg_id, reason, conflicts}` to the author only, `validation {version, errors}` for the latest
+version.
 READ access connects and receives; WRITE sends ops. The session and access are checked again on every message.
 """
 
@@ -97,6 +99,8 @@ async def live(ws: WebSocket, project_id: uuid.UUID):
                     await stamp_project(project_id)
                 client = Client(ws, client_id[:64])
                 await hub.join(project_id, client, since)
+            elif kind == "ping":
+                await ws.send_text(json.dumps({"type": "pong"}))
             elif kind == "ops":
                 await _ops(ws, project_id, client, message, writer)
                 logger.info("live message project=%s auth_ms=%.1f total_ms=%.1f bytes=%d", project_id,
@@ -118,9 +122,11 @@ async def _ops(ws: WebSocket, project_id: uuid.UUID, client: t.Optional[Client],
         check_message(message)
         if not writer:
             raise Rejected("read-only access: your edits are not saved")
-        applied = await apply_message(project_id, client.client_id, msg_id, message["base"], message["ops"])
+        applied = await apply_message(project_id, client.client_id, msg_id, message["base"], message["ops"],
+                                      offline=message.get("offline") is True, executor=hub.validator)
     except Rejected as e:
-        await ws.send_text(json.dumps({"type": "rejected", "msg_id": msg_id, "reason": str(e)}))
+        await ws.send_text(json.dumps({"type": "rejected", "msg_id": msg_id, "reason": str(e),
+                                       "conflicts": e.conflicts}))
         return
     if applied.dropped:
         await ws.send_text(json.dumps({"type": "dropped", "msg_id": msg_id, "version": applied.version,
