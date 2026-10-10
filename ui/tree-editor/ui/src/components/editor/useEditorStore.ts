@@ -43,9 +43,18 @@ const normalizeNode = (node: any): Node => {
     measured: node.measured || undefined,
     selected: false,
     dragging: false,
-    ...node
+    ...node,
+    // decikit lets a document leave out positions (they default to 0, 0); the canvas is laid out on load then
+    position: node.position ?? { x: 0, y: 0 },
   };
 };
+
+// decikit also accepts edges without an id and a single sourceIndex instead of a list
+const normalizeEdge = (edge: any): Edge => ({
+  ...edge,
+  id: edge.id ?? `${edge.source}:${edge.target}`,
+  data: { ...edge.data, sourceIndex: [edge.data?.sourceIndex ?? 0].flat() },
+});
 
 // Helper function to extract feature name from v3 Feature type
 const getFeatureName = (feature: string | { type?: 'computed'; expression: string } | undefined): string | null => {
@@ -622,7 +631,8 @@ const editorStore = create<EditorStoreState>()(
         projectDescription: response.description,
         input_schema: inputSchema,
         nodes: normalizedNodes,
-        edges: projectData.edges || [],
+        edges: (projectData.edges || []).map(normalizeEdge),
+        ...((projectData.nodes || []).some((n: any) => !n.position) && { autoRearrange: true }),
         subtrees: projectData.subtrees || [],
 
         // v2 format - backend handles backward compatibility
