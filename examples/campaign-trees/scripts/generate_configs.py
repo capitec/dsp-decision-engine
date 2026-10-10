@@ -41,8 +41,9 @@ def main(cycle_date: str = "2026-09-24", version: str = "0.1.0") -> None:
     (out / "cap_reductions.json").write_text(json.dumps(CAP_REDUCTIONS, indent=2) + "\n")
     pipeline = build(tree, DecisionTableConfig.load(card), ConfigurableStep.load(CAP_REDUCTIONS))
     params = pipeline.parameters().defaults()
-    # The rate card document is the one copy of the card; the params document holds the policy numbers only.
-    for table in ("flex_loan_rate_card", "credit_life_rates"):
+    # The rate card document is the one copy of the card; the params document holds the policy numbers only, and the
+    # versions of the card and the credit life rates follow their rows.
+    for table in ("flex_loan_rate_card", "flex_loan_rate_card_version", "credit_life_rates", "credit_life_version"):
         del params["campaign_trees"]["evaluate"]["evaluation"]["pre_assessment"][table]
     shifts, stack_id = overlays.resolve(overlays.TREE_OVERLAYS, overlays.CAMPAIGN_ID, date.fromisoformat(cycle_date),
                                         tree.tree.to_tree().required_params())
