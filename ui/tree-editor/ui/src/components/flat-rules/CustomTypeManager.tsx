@@ -385,6 +385,7 @@ export const CustomTypeManager: React.FC<CustomTypeManagerProps> = ({
                               e.stopPropagation();
                               handleDelete(typeId);
                             }}
+                            data-testid="custom-type-delete"
                             className="p-1 h-7 w-7 text-red-600 hover:text-red-700"
                           >
                             <Trash2 className="h-3 w-3" />

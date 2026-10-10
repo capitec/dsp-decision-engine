@@ -81,6 +81,7 @@ export const UnaryConditionForm: React.FC<UnaryConditionFormProps> = ({
             <span className="font-medium text-gray-600 text-sm w-20">Min:</span>
             <ParameterizedNumericInput
               value={(condition as any).min ?? null}
+              allowEmpty
               onChange={(newValue) => onChange({ ...condition, min: newValue } as any)}
               availableParameters={availableParameters}
               label=""
@@ -95,6 +96,7 @@ export const UnaryConditionForm: React.FC<UnaryConditionFormProps> = ({
             <span className="font-medium text-gray-600 text-sm w-20">Max:</span>
             <ParameterizedNumericInput
               value={(condition as any).max ?? null}
+              allowEmpty
               onChange={(newValue) => onChange({ ...condition, max: newValue } as any)}
               availableParameters={availableParameters}
               label=""
@@ -117,7 +119,7 @@ export const UnaryConditionForm: React.FC<UnaryConditionFormProps> = ({
             onChange={(newValues) => onChange({ ...condition, values: newValues } as any)}
             availableParameters={availableParameters}
             label=""
-            placeholder="Type integers and press Enter"
+            placeholder="Type numbers and press Enter"
             onManageParameters={onManageParameters}
             showManageParameters={true}
           />
@@ -190,7 +192,7 @@ export const UnaryConditionForm: React.FC<UnaryConditionFormProps> = ({
               value={(condition as any).match_type || 'exact'}
               onValueChange={(value) => onChange({ ...condition, match_type: value } as any)}
             >
-              <SelectTrigger className="w-32 h-8">
+              <SelectTrigger className="w-32 h-8" data-testid="match-type">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

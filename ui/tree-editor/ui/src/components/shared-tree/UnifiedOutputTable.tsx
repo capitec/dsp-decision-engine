@@ -562,6 +562,7 @@ export const UnifiedOutputTable: React.FC<UnifiedOutputTableProps> = ({
                             variant="ghost"
                             size="sm"
                             onClick={() => handleRemoveRecord(recordIndex)}
+                            data-testid="output-record-delete"
                             className="text-red-600 hover:text-red-700 p-1 h-8 w-8"
                           >
                             <Trash2 className="h-4 w-4" />
