@@ -230,6 +230,19 @@ def test_the_subtree_listed_first_is_the_tree_that_runs(signed_in: Page):
     assert run(export_document(signed_in, project), amount=[500.0, 2000.0]) == ["decline", "decline"]
 
 
+@pytest.mark.xfail(strict=True, reason="saved subtrees are rebuilt in node order on open, so the next save changes which subtree runs")
+def test_saving_after_an_unrelated_edit_keeps_the_subtree_that_runs(signed_in: Page):
+    base = loan_document()
+    doc = {**base, "nodes": [*base["nodes"], leaf("stray", -1, 900, 0)],
+           "subtrees": [{"id": "stray", "name": "Leaf -1"}, {"id": "root", "name": "amount ≤ 1000"}]}
+    project = open_tree(signed_in, doc)
+    assert run(export_document(signed_in, project), amount=[500.0, 2000.0]) == ["decline", "decline"]
+    nudge(signed_in, "yes")
+    save(signed_in)
+
+    assert run(export_document(signed_in, project), amount=[500.0, 2000.0]) == ["decline", "decline"]
+
+
 @pytest.mark.xfail(strict=True, reason="a node nothing connects to is silently ignored: no message names the stray node")
 def test_unreachable_node_is_named_in_the_validation_messages(signed_in: Page):
     open_tree(signed_in, loan_document())
