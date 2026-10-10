@@ -47,6 +47,13 @@ class Account(TypedDict, total=False):
     quotation_expiry_date: date
 
 
+class PreparedAccount(Account):
+    months_since_opened: int
+    quotation_held: bool
+    is_nominated: bool
+    is_excluded: bool
+
+
 def num(account: dict, field: str) -> float:
     """A numeric field of an account, 0 where the account does not carry it."""
     return account.get(field) or 0.0
@@ -56,7 +63,7 @@ def num(account: dict, field: str) -> float:
 def prepared_accounts(
     accounts: list[Account], decision_date: date,
     client_nominated_settle: list[int] = missing_as([]), client_excluded_settle: list[int] = missing_as([]),
-) -> list[dict]:
+) -> list[PreparedAccount]:
     """The accounts with the facts the per-account rules need: age, whether a quotation is held and unexpired, and
     what the client asked for."""
     out = []

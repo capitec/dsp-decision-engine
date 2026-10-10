@@ -17,6 +17,7 @@ from decikit import allow_fallback, missing_as, param, step
 
 from consolidation import eligibility, reasons, vocab
 from consolidation.inventory import num
+from consolidation.records import BeforeAndAfter, ChosenOffer, Settlement
 
 _GATE_REASONS = (("CON-ELIG-02", reasons.ADMINISTRATION), ("CON-ELIG-03", reasons.SERIAL_CONSOLIDATION),
                  ("CON-ELIG-05", reasons.NO_INCOME), ("CON-ELIG-06", reasons.NO_BUREAU_VIEW),
@@ -83,7 +84,7 @@ def outcome(
     short_circuit_applies: bool, plain_offer: dict, chosen_scenario: dict, classified_accounts: list[dict],
     settlements: list[dict], decision_date: date, requested_amount: float = missing_as(0.0),
     offer_validity_days: int = param(21, ge=1, le=90),
-) -> tuple[int, list[int], dict, list[str], str | None, dict, list[dict]]:
+) -> tuple[int, list[int], ChosenOffer, list[str], str | None, BeforeAndAfter, list[Settlement]]:
     """The outcome code, the reasons that fired, and for an approval the offer in full.
 
     The reasons are ranked, and the primary one chosen, by the `client_reason_codes` step that follows.
