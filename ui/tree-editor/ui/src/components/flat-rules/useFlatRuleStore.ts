@@ -461,6 +461,7 @@ const store = create<FlatRuleState>()(
           rules: state.trees.map(tree => ({
             meta: {
               name: tree.name,
+              ...(tree.description && { description: tree.description }),
               position: { x: 0, y: 0 }
             },
             rule: tree.rootNode
@@ -547,7 +548,7 @@ const store = create<FlatRuleState>()(
               name: root.meta?.name || `Rule ${index + 1}`,
               priority: index + 1,
               rootNode: ensureNodeIds(root.rule) || createDefaultLeafNode(),
-              description: ''
+              description: root.meta?.description || ''
             }))
           : [{
               id: crypto.randomUUID(),
