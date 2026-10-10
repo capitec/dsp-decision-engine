@@ -8,6 +8,13 @@ Read this before changing how a request is parsed, scored or transported, or how
 - Why: `run(one-row frame)` took 150 us against `run(dict)`'s 30.4 us (flagship).
 - See: [serving latency budget](../experiments/serving-latency-budget.md), `decikit/serving/_handler.py`
 
+## Serving binds the engine its settings name, and builds it before warm-up
+
+- `DECIKIT_API__ENGINE__TYPE` (default `fused`) names the engine and `DECIKIT_API__ENGINE__<FIELD>` sets its own fields (`STRICT_COMPILE`, `PARAMS_VALIDATION`); `decikit serve --engine <tag>` sets the type. `RequestHandler(engine=...)` takes an `Engine` or a tag, resolved once. Serving never reads the `decikit.engine(...)` default. `serve` validates the engine document before it starts workers.
+- `stage()` builds the kernels (`exe.fallbacks()`) before `warm_fn`, so a `strict_compile` refusal raises as `EngineError` unwrapped; a warm-up failure keeps the sample-request hint.
+- Why: `strict_compile` and `params_validation` could not be set for a served project before, and a worker that cannot build its engine dies and is restarted forever. Warming first blamed a strict refusal on the sample request.
+- See: [engine](engine.md) ("An engine is a registry document"), `decikit/serving/_handler.py`, `decikit/_tooling/cli/__init__.py`
+
 ## The handler hooks are synchronous, and `score` is the in-process entry
 
 - `init_fn`, `input_fn`, `process_fn` and `shutdown_fn` are plain methods; a subclass that defines one with `async def` gets a `TypeError` when the class is created. `score(record_or_frame)` is `process_fn` without the bytes. `score` is not a hook: `process_fn` calls `RequestHandler.score` itself, so a subclass's own `score` (a replay service's, say) never changes what a request does.
