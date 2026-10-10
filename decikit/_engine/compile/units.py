@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Iterator, Mapping, Union
 
 import numpy as np
+from numba.core.dispatcher import Dispatcher
 
 from decikit._engine.boundary.whole import refuse
 from decikit._engine.compile.declared import check_output
@@ -11,7 +12,7 @@ from decikit._engine.compile.njit import FALLBACK_ERRORS, compile_call, paramete
 from decikit._engine.compile.outputs import CodeTable, coded, coded_values, output_dtype
 from decikit._engine.compile.rows import Ragged
 from decikit._engine.compile.sink import Sink
-from decikit._engine.compile.structs import Schema
+from decikit._engine.compile.structs import Schema, to_dicts
 from decikit._engine.ir.decls import Input, NullPolicy, base_annotation, is_typed, nullable
 from decikit._engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, ScatterGather, Sequence, NodeVersion
 from decikit.ops.nested import struct_item
@@ -74,11 +75,11 @@ class Kernel:
         return self._trace_fn
 
     def run(self, values: Values, valid: Values, bundles: Mapping[int, tuple], n: int,
-            trace=None, table=None) -> None:
+            trace=None, table=None) -> bool:
         if self._python:
             for fallback in self._python:
                 fallback.run(values, valid, bundles, n)
-            return
+            return False
         cols = tuple([values[v.id] for v in self.reads])
         # One shared all-valid mask: a tree can read dozens of nullable columns, and one allocation each showed in a record's run.
         ones = np.ones(n, np.bool_) if self.optional else None
@@ -128,6 +129,7 @@ class Kernel:
             values[v.id] = _ragged_values(values[v.id], sink, schema)
         for k, mask in zip(self._masked, masks):
             valid[self.writes[k][0].id] = mask
+        return trace is not None  # captured in the kernel; the Python calls of a split capture nothing
 
 
 class Fallback:
@@ -136,7 +138,8 @@ class Fallback:
     Same `run` and `writes` as `Kernel`; it stores every version it writes.
     """
 
-    __slots__ = ("calls", "fn", "reason", "declared", "writes", "_boxes", "_scales", "_tables", "_whole", "_checks", "_ks")
+    __slots__ = ("calls", "fn", "reason", "declared", "writes", "_boxes", "_scales", "_tables", "_whole", "_checks",
+                 "_ks", "_dicts", "_python")
 
     def __init__(self, call: Call, fn, reason: str, declared: bool = False):
         self.calls = (call,)
@@ -157,6 +160,8 @@ class Fallback:
         self._tables = tuple(CodeTable(*c) if node.kind == "row" and (c := coded_values(o.annotation)) is not None
                              else None for o in node.outputs)
         self._ks = range(len(self.writes))
+        self._dicts = tuple(to_dicts(o.annotation) for o in node.outputs)
+        self._python = not isinstance(fn, Dispatcher)
         self._whole = tuple(dtype == np.int64 for _, dtype in self.writes)
         # A number, Decimal or bool has its declared type already; only an object output can be a wrong shape.
         self._checks = tuple(node.kind == "scalar" and dtype == object for _, dtype in self.writes)
@@ -165,15 +170,15 @@ class Fallback:
         call = self.calls[0]
         node = call.node
         bundle = bundles[call.id] if node.params else ()
-        cols = [(i.arg, _per_row(values[v.id]), valid.get(v.id) if i.null_policy is NullPolicy.OPTIONAL else None)
-                for i, v in zip(node.inputs, call.reads)]
+        cols = [(i.arg, _per_row(values[v.id], self._python),
+                 valid.get(v.id) if i.null_policy is NullPolicy.OPTIONAL else None) for i, v in zip(node.inputs, call.reads)]
         outs = [np.empty(n, dtype) for _, dtype in self.writes]
         masks: list = [None] * len(outs)  # made when a null turns up
         consts = tuple(v for _, v in node.consts)
         fixed = dict(node.consts) | {d.arg: b for d, b in zip(node.params, bundle)}
         boxes = self._boxes
         fixed = {a: boxes[a](x) if a in boxes else x for a, x in fixed.items()}
-        scales, whole, ks = self._scales, self._whole, self._ks
+        scales, whole, ks, dicts = self._scales, self._whole, self._ks, self._dicts
         single = len(outs) == 1 and node.kind == "scalar"
         for r in range(n):
             args = [(a, None if m is not None and not m[r] else boxes[a](col[r]) if a in boxes else col[r])
@@ -192,6 +197,8 @@ class Fallback:
                     masks[k][r], x = False, 0
                 elif scales[k] is not None:
                     x = to_raw(x, scales[k])
+                elif dicts[k] is not None:
+                    x = dicts[k](x)
                 elif whole[k] and isinstance(x, (float, np.floating)) and not x.is_integer():
                     raise refuse(f"step '{node.origin.path}' output '{call.writes[k].name}'"
                                  + (f" (row {r})" if n > 1 else ""), x)
@@ -229,13 +236,15 @@ def _ragged_values(hi: np.ndarray, sink: Sink, schema: Schema) -> np.ndarray:
     return out
 
 
-def _per_row(values: np.ndarray) -> list:
+def _per_row(values: np.ndarray, python: bool) -> list:
     # A kernel that fails at run time retries by calling each step once per row; a `Ragged` (the
     # shared-kernel shape) has no per-row representation of its own, so give it `build_rows`'s.
     if isinstance(values, Ragged):
         return [values.row(i) for i in range(len(values.lo))]
-    # A record array's tolist() gives plain tuples, which a step reading a struct's fields can't read.
-    return list(values) if values.dtype.names else values.tolist()
+    # tolist() gives a record's fields as a tuple: a compiled body takes the record, a Python body the dict.
+    if (names := values.dtype.names) is not None:
+        return [dict(zip(names, row)) for row in values.tolist()] if python else list(values)
+    return values.tolist()
 
 
 Unit = Union[Kernel, Fallback]

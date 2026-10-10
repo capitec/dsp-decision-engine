@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime as dt
 import dis
 import inspect
 import os
@@ -224,10 +225,14 @@ def compile_call(node: CallNode) -> tuple[str, Callable, str | None, bool]:
 
 
 def _stored(annotation: Any) -> bool:
-    # Containers only: a kernel column also stores `Any`, a numpy number or a NewType of float, which a list
-    # of what it stores would refuse. An array would be cut to its first element.
+    # What no kernel column holds: a container (an array would be cut to its first element), a time or bytes
+    # (stored as the float64 of a body that only returns None). A column does hold `Any`, a numpy number or a
+    # NewType of float, which a list of what it stores would refuse.
     container = (get_origin(annotation) or annotation) in (dict, list, tuple, set, frozenset, np.ndarray)
-    return not (container or te.is_typeddict(annotation))
+    return not (container or te.is_typeddict(annotation) or annotation in _UNSTORED)
+
+
+_UNSTORED = (bytes, dt.date, dt.datetime, dt.time, dt.timedelta, np.datetime64, np.timedelta64)
 
 
 def _ragged_reason(output: Output, item: Any, dispatcher: Dispatcher, sig: tuple) -> str | None:

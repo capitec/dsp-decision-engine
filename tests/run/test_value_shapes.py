@@ -2,13 +2,14 @@
 from __future__ import annotations
 
 import warnings
-from datetime import date
+from datetime import date, datetime, time, timedelta
 from typing import TypedDict
 
+import numpy as np
 import polars as pl
 import pytest
 
-from decikit import Engine, FusedEngine, flow, missing_as
+from decikit import Engine, FusedEngine, allow_fallback, flow, missing_as
 from decikit.ops import Columnar, Struct
 from decikit.ops import Text
 from decikit.exceptions import FallbackWarning
@@ -345,3 +346,58 @@ def out_list_of_dicts(sector: str) -> list[dict]:
                          ids=["out_bytes", "out_list_of_dicts"])
 def test_the_remaining_output_shapes_come_back_the_same_in_every_mode(fn, expected):
     assert assert_equivalent(flow(fn, name="p"), FRAME)[fn.__name__].to_list() == expected
+
+
+NULL_OUTPUTS = [(str, pl.String), (bytes, pl.Binary), (date, pl.Date), (datetime, pl.Datetime("us")),
+                (time, pl.Time)]
+
+
+@pytest.mark.parametrize("annotation, dtype", NULL_OUTPUTS, ids=[a.__name__ for a, _ in NULL_OUTPUTS])
+def test_an_all_null_output_keeps_its_declared_dtype_in_every_mode(annotation, dtype):
+    def nothing(sector: str):
+        return None
+
+    nothing.__annotations__["return"] = annotation | None
+    assert assert_equivalent(flow(nothing, name="p"), FRAME)["nothing"].dtype == dtype
+    assert assert_equivalent(flow(nothing, name="p"), FRAME.clear())["nothing"].dtype == dtype
+
+
+UNSTORED = [(date, pl.Date), (datetime, pl.Datetime("us")), (time, pl.Time), (timedelta, pl.Null), (bytes, pl.Binary),
+            (np.datetime64, pl.Null), (np.timedelta64, pl.Null)]
+
+
+@pytest.mark.parametrize("annotation, dtype", UNSTORED, ids=[a.__name__ for a, _ in UNSTORED])
+def test_a_step_declaring_an_output_no_kernel_column_holds_runs_in_python_in_every_engine(annotation, dtype):
+    def nothing(x: float):
+        return None  # numba compiles this body whatever the declared type
+
+    nothing.__annotations__["return"] = annotation | None
+    pipeline = flow(allow_fallback(nothing), name="p")
+    assert assert_equivalent(pipeline, pl.DataFrame({"x": [1.0, 2.0]}))["nothing"].dtype == dtype
+    assert "which no kernel stores" in FusedEngine().bind(pipeline).fallbacks()["p/nothing"]
+
+
+def as_int64(x: float) -> np.int64:
+    return np.int64(x)
+
+
+def as_int32(x: float) -> np.int32:
+    return np.int32(x)
+
+
+def as_float32(x: float) -> np.float32:
+    return np.float32(x * 1.5)
+
+
+def as_bool(x: float) -> np.bool_ | None:
+    return np.bool_(x > 1.0)
+
+
+NUMPY_OUTPUTS = [(as_int64, pl.Int64, [1, 2]), (as_int32, pl.Int64, [1, 2]), (as_float32, pl.Float64, [1.5, 3.0]),
+                 (as_bool, pl.Boolean, [False, True])]
+
+
+@pytest.mark.parametrize("fn, dtype, expected", NUMPY_OUTPUTS, ids=[fn.__name__ for fn, _, _ in NUMPY_OUTPUTS])
+def test_a_numpy_number_output_is_the_python_number_it_holds_in_every_mode(fn, dtype, expected):
+    out = assert_equivalent(flow(fn, name="p"), pl.DataFrame({"x": [1.0, 2.0]}))[fn.__name__]
+    assert (out.dtype, out.to_list()) == (dtype, expected)
