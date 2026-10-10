@@ -1,6 +1,7 @@
 """A `NotRequired` key that a frame column holds as null, which a single record would not have."""
 from __future__ import annotations
 
+from functools import lru_cache
 from typing import Any, get_args, get_origin
 
 import typing_extensions as te
@@ -17,6 +18,12 @@ def has_optional_key(annotation: Any) -> bool:
     return any(has_optional_key(a) for a in get_args(annotation))
 
 
+@lru_cache(maxsize=256)
+def _hints(typed_dict: Any) -> dict[str, Any]:
+    # Resolving the hints is 20 us a record when done on every value.
+    return te.get_type_hints(typed_dict)
+
+
 def without_absent(value: Any, annotation: Any) -> Any:
     """`value` with the null of every `NotRequired` key (not declared `| None`) removed, at any depth.
 
@@ -26,7 +33,7 @@ def without_absent(value: Any, annotation: Any) -> Any:
     if isinstance(value, list) and get_origin(a) is list:
         return [without_absent(v, get_args(a)[0]) for v in value]
     if isinstance(value, dict) and te.is_typeddict(a):
-        hints = te.get_type_hints(a)
+        hints = _hints(a)
         return {k: without_absent(v, hints[k]) if k in hints else v for k, v in value.items()
                 if not (v is None and k in a.__optional_keys__ and not nullable(hints[k]))}
     return value
