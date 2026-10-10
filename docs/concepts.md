@@ -93,7 +93,7 @@ There are two ways to call a pipeline. `run(df)` takes a polars frame and return
 <div class="diagram" markdown>
 ![Three run modes over a four-step pipeline: interpreted calls every step in Python, stepped compiles each step into its own kernel with a Python driver between, fused compiles consecutive steps into one kernel; a step reading a date runs in Python in both compiled modes and splits the fused kernel](assets/diagrams/concepts-run-modes.svg)
 
-*`month_end` reads a `date`, which no kernel holds, so both compiled modes run it in Python and say so with a `FallbackWarning`.*
+*`month_end` reads a `date`, which no kernel holds, so both compiled modes run it in Python; fused mode says so with a `FallbackWarning`.*
 </div>
 
 - `"interpreted"` calls each function in Python for each row. It needs no compile, pauses at every step in a debug session, and is the reference the other modes are tested against.

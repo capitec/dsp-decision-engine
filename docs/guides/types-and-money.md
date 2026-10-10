@@ -18,7 +18,7 @@ from decikit.ops import Columnar, Currency, Decimal, Duration, FieldMetadata, Pe
 | a date, a dict, a list of anything | `date`, `dict`, `list[dict]` | no | runs in Python, same answers |
 | a rate or a term, for display | `Annotated[float, Percent()]`, `Annotated[int, Duration("months")]` | yes | the engine runs the plain type |
 
-The plain type always works. A `str`, `date` or `list[dict]` step runs in every mode and gives the same answer; in a compiled mode it runs row by row in Python and says so once. [Compiled modes and fallback](compile-and-fallback.md) has the details. The examples below build on each other; run them top to bottom.
+The plain type always works. A `str`, `date` or `list[dict]` step runs in every mode and gives the same answer; in a compiled mode it runs row by row in Python, and fused mode says so once. [Compiled modes and fallback](compile-and-fallback.md) has the details. The examples below build on each other; run them top to bottom.
 
 ## Text: strings a kernel can test
 
