@@ -1,14 +1,25 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from '@/hooks/use-toast';
 import { LiveSync, liveUrl } from '@/lib/live-sync';
 import type { Json, Op } from '@/lib/live-ops';
 import { buildDocument, useFlatRuleStore } from './useFlatRuleStore';
 import type { FlatRuleProjectDetail } from './types';
 
-/** Sync the flat-rule store live with the server while `project` (as loaded, before the editor's defaults) is open. */
+/** Offline edits the server refused: what they collided with, and my version of the document with them. */
+export interface OfflineConflict {
+  names: string[];
+  reason: string;
+  doc: Json;
+}
+
+/**
+ * Sync the flat-rule store live with the server while `project` (as loaded, before the editor's defaults) is open.
+ * Returns the last refused offline batch (null when none) and a function that dismisses it.
+ */
 export function useFlatRuleLive(project: FlatRuleProjectDetail | null) {
   const enabled = !!project?.live_collab;
   const projectId = project?.id;
+  const [conflict, setConflict] = useState<OfflineConflict | null>(null);
 
   useEffect(() => {
     if (!enabled || !project) return;
@@ -17,6 +28,13 @@ export function useFlatRuleLive(project: FlatRuleProjectDetail | null) {
     const names = new Map<string, string>();
     const remember = (doc: any) => doc?.rules?.forEach((r: any) => r?.rule?.id && names.set(r.rule.id, r.meta?.name));
     let showing = false;
+    // What a path names for a person: the rule's name, or the part of the document.
+    const label = (path: string) => {
+      const [, list, key] = path.split('/');
+      if (list !== 'rules') return list || 'the whole document';
+      if (key === '#order') return 'the rule order';
+      return key ? names.get(key.replace(/~1/g, '/').replace(/~0/g, '~')) ?? 'a rule' : 'the rules';
+    };
 
     const markSavedIfIdle = () => {
       if (!sync.idle()) return;
@@ -42,10 +60,7 @@ export function useFlatRuleLive(project: FlatRuleProjectDetail | null) {
       },
       status: (live) => store.setState({ live }),
       dropped: (ops: Op[]) => {
-        const rules = ops.map((op) => {
-          const [, list, key] = op.path.split('/');
-          return list === 'rules' && key ? names.get(key.replace(/~1/g, '/').replace(/~0/g, '~')) ?? 'a rule' : `/${list}`;
-        });
+        const rules = ops.map((op) => label(op.path));
         toast({
           title: "Edit Discarded",
           description: `Your edit to ${[...new Set(rules)].join(', ')} was discarded: someone else changed or deleted it.`,
@@ -54,6 +69,11 @@ export function useFlatRuleLive(project: FlatRuleProjectDetail | null) {
         });
       },
       rejected: (reason) => toast({ title: "Edit Refused", description: reason, variant: "destructive", duration: 10000 }),
+      merged: () => toast({ title: "Offline Edits Merged", description: "Your offline edits were merged." }),
+      offlineRejected: ({ reason, conflicts, doc }) => {
+        remember(doc);
+        setConflict({ names: [...new Set(conflicts.map(label))], reason, doc });
+      },
       validation: (errors, version) => {
         if (version === sync.version) store.getState().setValidationErrors(errors);
       },
@@ -67,10 +87,13 @@ export function useFlatRuleLive(project: FlatRuleProjectDetail | null) {
       { equalityFn: (a, b) => a[0] === b[0] && a[1] === b[1] },
     );
     return () => {
+      setConflict(null);
       unsubscribe();
       sync.stop();
       store.setState({ live: null, liveSettle: null });
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, projectId]);
+
+  return { conflict, dismiss: () => setConflict(null) };
 }
