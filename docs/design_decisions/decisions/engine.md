@@ -2,6 +2,18 @@
 
 Why the engine (IR, wiring, runners, kernels, compile cache, fallback, `score`, `each`) is shaped the way it is; read it before changing any of those or proposing an alternative.
 
+## Proposed: the flexible engine rework
+
+Proposed 2026-10-09, being built on branch `engine/flexible-rework`; each bullet becomes a section below when its
+phase lands. The design, alternatives and plan: [flexible engine rework](../../design_specs/2026-10-09_flexible_engine_rework/README.md).
+
+- Proposed: an engine is a registry document (`Engine` is a `BaseRegistryModule` root; `InterpretedEngine`, `SteppedEngine`, `FusedEngine` keep the mode strings as aliases), and serving settings name an engine document instead of a mode string.
+- Proposed: `run` dispatches on its input (a dict takes the record path, a `DataFrame` the frame path, a `LazyFrame` the polars engine) and `score` is removed.
+- Proposed: `Step.run` and `compile` follow a context-scoped default engine set with `decikit.engine(...)`, fused when unset; `Step.session` opens interpreted unless given an engine.
+- Proposed: loudness is per engine: fused warns about every step that does not run compiled, kernels that split at their first launch included; stepped and interpreted never warn; `strict_compile=True` raises wherever it is set.
+- Proposed: the polars engine is lazy and starts as a host (the fused pipeline inside `map_batches`, split only at frame steps); polars-native step bodies are built only if a measurement against the host justifies them.
+- Proposed: a Spark engine comes last, outside `decikit/`, and shapes nothing else.
+
 ## Pipeline structure lives in Python
 
 - Config holds params documents and `ConfigurableStep` documents and refers to code only by registered tag; flow files (YAML beside the code) are the one copy of structure. Not: `output_fn` pointers or code in config.
