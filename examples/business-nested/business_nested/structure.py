@@ -40,6 +40,41 @@ class Entity(TypedDict, total=False):
     adverse_events: list[AdverseEvent]
 
 
+class ResolvedEvent(TypedDict):
+    """An adverse event as an entity's rules read it: its facts plus the context they need."""
+    event_id: int
+    event_type_code: int
+    event_date: date
+    amount: float | None
+    status_is_active: bool
+    is_disputed: bool
+    is_satisfied: bool
+    decision_date: date
+    sector_code: int
+    criticality_class: int
+
+
+class ResolvedEntity(TypedDict):
+    """One person, its paths merged, with its events and the context its rules read."""
+    entity_id: int
+    entity_key: str
+    is_natural_person: bool
+    relationship_type_code: int
+    effective_ownership_pct: float
+    is_controlling: bool
+    is_required_surety: bool
+    is_sole_principal: bool
+    is_owner: bool
+    path_count: int
+    criticality_class: int
+    bureau_score: float | None
+    months_on_record: float | None
+    worst_delinquency_months: float | None
+    decision_date: date
+    requested_amount: float
+    adverse_events: list[ResolvedEvent]
+
+
 def criticality_class(
     effective_ownership_pct: float, is_controlling: bool, is_required_surety: bool, is_sole_principal: bool,
     relationship_type_code: int, critical_ownership_pct: float, significant_ownership_pct: float,
@@ -74,7 +109,7 @@ def resolved_entities(
     entities: list[Entity], decision_date: date, sector_code: int, requested_amount: float,
     critical_ownership_pct: float = param(25.0, ge=0.0, le=100.0),
     significant_ownership_pct: float = param(10.0, ge=0.0, le=100.0),
-) -> list[dict]:
+) -> list[ResolvedEntity]:
     """One record per person, sorted by `entity_id`, with its events sorted by `event_id`.
 
     Ownership adds up across paths, the role is the most senior one, control is any path's, and an event
