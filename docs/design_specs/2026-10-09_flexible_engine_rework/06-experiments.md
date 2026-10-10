@@ -44,6 +44,8 @@ to measure.
   hand-written polars on the flagship and the tree, and the `frame_step` rewrite closes most of the gap on
   the fallback-heavy pipeline, P6 is not built and `impl` is dropped from the spec.
 - Script: `benchmarks/polars_engine.py`.
+- Result (2026-10-10): no-go for P6; E3 to E5 are not run. See
+  `docs/design_decisions/experiments/polars-host-vs-native.md`.
 
 ### E3. Boundary count (only if P6 goes ahead)
 
