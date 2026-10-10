@@ -7,7 +7,6 @@ import {
   clearParamRefs,
   paramRefName,
   isParamRef,
-  boundLabel,
 } from '../param-refs';
 
 const p = (param: string) => ({ param });
@@ -51,9 +50,7 @@ const rule = () => ({
 const ALL = ['thr', 'lo', 'hi', 'set', 'member', 'pat', 'band1', 'whenSet', 'whenPat', 'inBranch', 'inOtherwise'];
 
 describe('paramRefName', () => {
-  it('reads {param}, the legacy {key}, and prefers param when both are present', () => {
-    expect(paramRefName({ param: 'a' })).toBe('a');
-    expect(paramRefName({ key: 'b' })).toBe('b');
+  it('prefers {param} over the legacy {key}, falls back to key when param is not a string, and keeps an empty name', () => {
     expect(paramRefName({ param: 'a', key: 'b' })).toBe('a');
     expect(paramRefName({ param: 5, key: 'b' })).toBe('b');
     expect(paramRefName({ param: '' })).toBe('');
@@ -185,16 +182,5 @@ describe('mapParamRefs', () => {
     expect(mapParamRefs('s', () => 1)).toBe('s');
     expect(mapParamRefs([], () => 1)).toEqual([]);
     expect(mapParamRefs({}, () => 1)).toEqual({});
-  });
-});
-
-describe('boundLabel', () => {
-  it('prints parameter names with a dollar sign, numbers as they are and a missing bound as -inf', () => {
-    expect(boundLabel({ param: 'a' })).toBe('$a');
-    expect(boundLabel(0)).toBe('0');
-    expect(boundLabel(-2.5)).toBe('-2.5');
-    expect(boundLabel('abc')).toBe('abc');
-    expect(boundLabel(null)).toBe('-∞');
-    expect(boundLabel(undefined)).toBe('-∞');
   });
 });

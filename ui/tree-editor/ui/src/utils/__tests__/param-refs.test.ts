@@ -66,5 +66,6 @@ describe('boundLabel', () => {
     expect(boundLabel(null)).toBe('-∞');
     expect(boundLabel(undefined)).toBe('-∞');
     expect(boundLabel(1000)).toBe('1000');
+    expect(boundLabel(0)).toBe('0');
   });
 });
