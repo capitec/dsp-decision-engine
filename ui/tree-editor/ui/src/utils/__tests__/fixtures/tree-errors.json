@@ -1,0 +1,499 @@
+{
+ "valid": [],
+ "empty_composite": [
+  {
+   "type": "value_error",
+   "loc": [
+    "v3",
+    "nodes",
+    0,
+    "data",
+    "composite"
+   ],
+   "msg": "Value error, a composite needs at least one condition",
+   "input": {
+    "type": "composite",
+    "op": "and",
+    "conditions": []
+   },
+   "ctx": {
+    "error": "a composite needs at least one condition"
+   }
+  }
+ ],
+ "not_with_two_conditions": [
+  {
+   "type": "value_error",
+   "loc": [
+    "v3",
+    "nodes",
+    0,
+    "data",
+    "composite"
+   ],
+   "msg": "Value error, NOT operator must have exactly 1 condition",
+   "input": {
+    "type": "composite",
+    "op": "not",
+    "conditions": [
+     {
+      "type": "unary",
+      "feature": "x",
+      "op": ">",
+      "threshold": 1
+     },
+     {
+      "type": "unary",
+      "feature": "x",
+      "op": ">",
+      "threshold": 1
+     }
+    ]
+   },
+   "ctx": {
+    "error": "NOT operator must have exactly 1 condition"
+   }
+  }
+ ],
+ "between_without_bounds": [
+  {
+   "type": "value_error",
+   "loc": [
+    "v3",
+    "nodes",
+    0,
+    "data",
+    "unary",
+    "condition",
+    "between"
+   ],
+   "msg": "Value error, At least one of min or max must be specified",
+   "input": {
+    "type": "unary",
+    "feature": "x",
+    "op": "between"
+   },
+   "ctx": {
+    "error": "At least one of min or max must be specified"
+   }
+  }
+ ],
+ "empty_param_name": [
+  {
+   "type": "int_type",
+   "loc": [
+    "v3",
+    "nodes",
+    0,
+    "data",
+    "unary",
+    "condition",
+    ">",
+    "threshold",
+    "int"
+   ],
+   "msg": "Input should be a valid integer",
+   "input": {
+    "param": ""
+   }
+  },
+  {
+   "type": "float_type",
+   "loc": [
+    "v3",
+    "nodes",
+    0,
+    "data",
+    "unary",
+    "condition",
+    ">",
+    "threshold",
+    "float"
+   ],
+   "msg": "Input should be a valid number",
+   "input": {
+    "param": ""
+   }
+  },
+  {
+   "type": "value_error",
+   "loc": [
+    "v3",
+    "nodes",
+    0,
+    "data",
+    "unary",
+    "condition",
+    ">",
+    "threshold",
+    "ParamRef",
+    "param"
+   ],
+   "msg": "Value error, no parameter chosen: pick a parameter or type its name",
+   "input": "",
+   "ctx": {
+    "error": "no parameter chosen: pick a parameter or type its name"
+   }
+  }
+ ],
+ "bad_op": [
+  {
+   "type": "union_tag_invalid",
+   "loc": [
+    "v3",
+    "nodes",
+    0,
+    "data",
+    "unary",
+    "condition"
+   ],
+   "msg": "Input tag '~~' found using 'op' does not match any of the expected tags: '<=', '<', '==', '>', '>=', '!=', 'between', 'isin', 'string_match', 'is_true', 'is_false'",
+   "input": {
+    "type": "unary",
+    "feature": "x",
+    "op": "~~",
+    "threshold": 1
+   },
+   "ctx": {
+    "discriminator": "'op'",
+    "tag": "~~",
+    "expected_tags": "'<=', '<', '==', '>', '>=', '!=', 'between', 'isin', 'string_match', 'is_true', 'is_false'"
+   }
+  }
+ ],
+ "result_idx_out_of_range": [
+  {
+   "loc": [],
+   "msg": "tree node 'l0': result_idx 9 is not a row of the output (2 rows, or -1 for the default)",
+   "type": "build_error"
+  }
+ ],
+ "cycle": [
+  {
+   "type": "value_error",
+   "loc": [
+    "v3"
+   ],
+   "msg": "Value error, tree has no root node (its nodes form a cycle)",
+   "input": {
+    "parameters_col": "parameters",
+    "parameters": {
+     "hi": {
+      "type": "Float64",
+      "default_value": 0.7
+     },
+     "codes": {
+      "type": "Int64",
+      "default_value": 3
+     }
+    },
+    "output": {
+     "dtypes": [
+      [
+       "Action",
+       "string"
+      ],
+      [
+       "Severity",
+       "Int64"
+      ],
+      [
+       "Tier",
+       {
+        "type": "Custom",
+        "type_id": "tier"
+       }
+      ]
+     ],
+     "type_defs": {
+      "tier": {
+       "name": "tier",
+       "type": "categorical",
+       "definition": {
+        "categories": [
+         "gold",
+         "silver"
+        ]
+       }
+      }
+     },
+     "data": [
+      {
+       "Action": "Alert",
+       "Severity": 1,
+       "Tier": "gold"
+      },
+      {
+       "Action": "Block",
+       "Severity": 2,
+       "Tier": "silver"
+      }
+     ],
+     "default": {
+      "Action": "Allow",
+      "Severity": 0,
+      "Tier": "silver"
+     }
+    },
+    "type": "ui-tree",
+    "metadata": {
+     "name": "n",
+     "description": "d"
+    },
+    "edges": [
+     {
+      "id": "a->b",
+      "source": "a",
+      "target": "b",
+      "data": {
+       "sourceIndex": [
+        0
+       ]
+      }
+     },
+     {
+      "id": "b->a",
+      "source": "b",
+      "target": "a",
+      "data": {
+       "sourceIndex": [
+        0
+       ]
+      }
+     },
+     {
+      "id": "a->l0",
+      "source": "a",
+      "target": "l0",
+      "data": {
+       "sourceIndex": [
+        1
+       ]
+      }
+     },
+     {
+      "id": "b->l0",
+      "source": "b",
+      "target": "l0",
+      "data": {
+       "sourceIndex": [
+        1
+       ]
+      }
+     }
+    ],
+    "nodes": [
+     {
+      "id": "a",
+      "position": {
+       "x": 0,
+       "y": 0
+      },
+      "data": {
+       "type": "unary",
+       "condition": {
+        "type": "unary",
+        "feature": "x",
+        "op": ">",
+        "threshold": 1
+       }
+      }
+     },
+     {
+      "id": "b",
+      "position": {
+       "x": 0,
+       "y": 0
+      },
+      "data": {
+       "type": "unary",
+       "condition": {
+        "type": "unary",
+        "feature": "x",
+        "op": ">",
+        "threshold": 2
+       }
+      }
+     },
+     {
+      "id": "l0",
+      "position": {
+       "x": 0,
+       "y": 0
+      },
+      "data": {
+       "type": "leaf",
+       "result_idx": 0
+      }
+     }
+    ],
+    "subtrees": [
+     {
+      "id": "a",
+      "name": "Main"
+     }
+    ],
+    "input_schema": [
+     [
+      "x",
+      "Float64"
+     ],
+     [
+      "s",
+      "String"
+     ]
+    ],
+    "formatVersion": 3
+   },
+   "ctx": {
+    "error": "tree has no root node (its nodes form a cycle)"
+   }
+  }
+ ],
+ "unknown_child_id": [
+  {
+   "type": "value_error",
+   "loc": [
+    "v3"
+   ],
+   "msg": "Value error, edge a->ghost refers to unknown node 'ghost'",
+   "input": {
+    "parameters_col": "parameters",
+    "parameters": {
+     "hi": {
+      "type": "Float64",
+      "default_value": 0.7
+     },
+     "codes": {
+      "type": "Int64",
+      "default_value": 3
+     }
+    },
+    "output": {
+     "dtypes": [
+      [
+       "Action",
+       "string"
+      ],
+      [
+       "Severity",
+       "Int64"
+      ],
+      [
+       "Tier",
+       {
+        "type": "Custom",
+        "type_id": "tier"
+       }
+      ]
+     ],
+     "type_defs": {
+      "tier": {
+       "name": "tier",
+       "type": "categorical",
+       "definition": {
+        "categories": [
+         "gold",
+         "silver"
+        ]
+       }
+      }
+     },
+     "data": [
+      {
+       "Action": "Alert",
+       "Severity": 1,
+       "Tier": "gold"
+      },
+      {
+       "Action": "Block",
+       "Severity": 2,
+       "Tier": "silver"
+      }
+     ],
+     "default": {
+      "Action": "Allow",
+      "Severity": 0,
+      "Tier": "silver"
+     }
+    },
+    "type": "ui-tree",
+    "metadata": {
+     "name": "n",
+     "description": "d"
+    },
+    "edges": [
+     {
+      "id": "a->l0",
+      "source": "a",
+      "target": "l0",
+      "data": {
+       "sourceIndex": [
+        0
+       ]
+      }
+     },
+     {
+      "id": "a->ghost",
+      "source": "a",
+      "target": "ghost",
+      "data": {
+       "sourceIndex": [
+        1
+       ]
+      }
+     }
+    ],
+    "nodes": [
+     {
+      "id": "a",
+      "position": {
+       "x": 0,
+       "y": 0
+      },
+      "data": {
+       "type": "unary",
+       "condition": {
+        "type": "unary",
+        "feature": "x",
+        "op": ">",
+        "threshold": 1
+       }
+      }
+     },
+     {
+      "id": "l0",
+      "position": {
+       "x": 0,
+       "y": 0
+      },
+      "data": {
+       "type": "leaf",
+       "result_idx": 0
+      }
+     }
+    ],
+    "subtrees": [
+     {
+      "id": "a",
+      "name": "Main"
+     }
+    ],
+    "input_schema": [
+     [
+      "x",
+      "Float64"
+     ],
+     [
+      "s",
+      "String"
+     ]
+    ],
+    "formatVersion": 3
+   },
+   "ctx": {
+    "error": "edge a->ghost refers to unknown node 'ghost'"
+   }
+  }
+ ]
+}
