@@ -367,4 +367,4 @@ def test_parameter_name_with_a_space_is_refused_in_the_dialog(signed_in: Page):
     dialog.get_by_role("button", name="Add", exact=True).click()
 
     expect(dialog.locator("tbody tr").filter(has=signed_in.get_by_placeholder("parameter_name"))).to_be_visible()
-    expect(dialog.get_by_text(re.compile("name", re.I)).first).to_be_visible()
+    expect(dialog.get_by_text('"my limit" is not a valid name')).to_be_visible()

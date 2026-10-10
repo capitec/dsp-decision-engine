@@ -168,22 +168,6 @@ def add_composite_condition(page: Page, feature: str, op: str, value: str, n: in
     card.get_by_placeholder("0", exact=True).fill(value)
 
 
-@pytest.mark.parametrize("logic", ["AND", "OR"])
-def test_composite_logic_is_saved_with_both_conditions(signed_in: Page, logic):
-    project = open_tree(signed_in, two_leaves(unary("root")))
-    select_node(signed_in, "root")
-    set_node_type(signed_in, "Composite")
-    if logic != "AND":
-        sidebar(signed_in).get_by_role("combobox").filter(has_text=re.compile(r"^AND$")).click()
-        signed_in.get_by_role("option", name=logic, exact=True).click()
-    add_composite_condition(signed_in, "amount", "≥", "500", 1)
-    add_composite_condition(signed_in, "code", "==", "1", 2)
-    assert save(signed_in)["validation_errors"] == []
-
-    data = saved_data(signed_in, project)
-    assert (data["op"], len(data["conditions"])) == (logic.lower(), 2)
-
-
 def test_composite_and_requires_both_conditions(signed_in: Page):
     project = open_tree(signed_in, two_leaves(unary("root")))
     select_node(signed_in, "root")
@@ -192,6 +176,8 @@ def test_composite_and_requires_both_conditions(signed_in: Page):
     add_composite_condition(signed_in, "code", "==", "1", 2)
     assert save(signed_in)["validation_errors"] == []
 
+    data = saved_data(signed_in, project)
+    assert (data["op"], len(data["conditions"])) == ("and", 2)
     assert run(export_document(signed_in, project), amount=[100.0, 900.0, 900.0], code=[1, 1, 2]) == [
         "review", "approve", "review"]
 
@@ -206,6 +192,8 @@ def test_composite_or_needs_one_condition(signed_in: Page):
     add_composite_condition(signed_in, "code", "==", "1", 2)
     assert save(signed_in)["validation_errors"] == []
 
+    data = saved_data(signed_in, project)
+    assert (data["op"], len(data["conditions"])) == ("or", 2)
     assert run(export_document(signed_in, project), amount=[100.0, 100.0, 900.0], code=[2, 1, 2]) == [
         "review", "approve", "approve"]
 
