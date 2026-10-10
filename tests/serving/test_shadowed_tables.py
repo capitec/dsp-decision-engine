@@ -3,7 +3,7 @@ import warnings
 
 import pytest
 
-from decikit import ParamTable, ShadowedTableWarning, flow, param_table
+from decikit import InterpretedEngine, ParamTable, ShadowedTableWarning, flow, param_table
 from decikit._settings import get_settings
 from decikit.config import JsonFileStore
 from decikit.serving import RequestHandler
@@ -33,7 +33,7 @@ def unseeded(score: int, rates: ParamTable = param_table(COLUMNS, default=ROWS))
 def stage(tmp_path, step, params):
     store = JsonFileStore(basepath=str(tmp_path / "configs"))
     store.create_version({"params": params})
-    handler = RequestHandler(store, flow(step, name="p"), mode="interpreted")
+    handler = RequestHandler(store, flow(step, name="p"), engine=InterpretedEngine())
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         handler.stage()
@@ -80,7 +80,7 @@ def test_a_run_time_params_override_stays_silent_and_applies(tmp_path):
 def test_the_warning_can_be_ignored_by_category(tmp_path):
     store = JsonFileStore(basepath=str(tmp_path / "configs"))
     store.create_version({"params": {"p": {"seeded": {"rates": ROWS[:1]}}}})
-    handler = RequestHandler(store, flow(seeded, name="p"), mode="interpreted")
+    handler = RequestHandler(store, flow(seeded, name="p"), engine=InterpretedEngine())
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         warnings.filterwarnings("ignore", category=ShadowedTableWarning)

@@ -314,3 +314,34 @@ def test_startup_uses_the_inference_handler_and_activates_the_latest_version(sto
     assert type(app.state.handler).__name__ == "Handler"
     assert app.state.handler.active == Version(0, 1, 0)
     assert _request(app, "POST", "/invocations", json.dumps(RECORD).encode())[1] == b"3000"
+
+
+def label(code: str) -> bool:  # reads a str, which no kernel takes: it runs in Python
+    return code.startswith("A")
+
+
+def build_labels():
+    return flow(label, name="labels")
+
+
+def test_a_strict_engine_from_the_environment_refuses_an_undeclared_fallback_at_stage(tmp_path, monkeypatch):
+    from decikit import FusedEngine
+    from decikit._settings import get_settings
+    from decikit.exceptions import DecikitError
+    from decikit.serving._handler import construct_handler_from_settings
+
+    JsonFileStore(basepath=str(tmp_path)).create_version({"params": {}})
+    monkeypatch.setenv("DECIKIT_API__CODE_PATH", str(tmp_path))
+    monkeypatch.setenv("DECIKIT_API__PIPELINE", f"{__name__}:build_labels")
+    monkeypatch.setenv("DECIKIT_CONFIG__BASEPATH", str(tmp_path))
+    monkeypatch.setenv("DECIKIT_API__ENGINE__TYPE", "fused")
+    monkeypatch.setenv("DECIKIT_API__ENGINE__STRICT_COMPILE", "true")
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    get_settings.cache_clear()
+    try:
+        handler = construct_handler_from_settings()
+    finally:
+        get_settings.cache_clear()
+    assert handler.engine == FusedEngine(strict_compile=True)
+    with pytest.raises(DecikitError, match="labels/label runs in Python"):
+        handler.stage()
