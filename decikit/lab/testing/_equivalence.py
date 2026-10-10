@@ -27,7 +27,8 @@ def assert_equivalent(
     engine's `run(frame)` each one checks:
 
     - `run(frame)` (on polars, `run(frame.lazy()).collect()`): same columns,
-      dtypes and values (NaN equals NaN, nothing else is approximate);
+      dtypes and values (NaN equals NaN, nothing else is approximate), except
+      that polars may type a column or nested field the others leave `Null`;
     - `run(record)` for every row, as a dict: the same dict as that row of its
       `run(frame)`, or, when the pipeline has a frame step, as its run of a
       one-row frame of that record, since a cross-row step sees only that row;
@@ -76,7 +77,8 @@ def assert_equivalent(
             raise AssertionError(f"run() raised {e!r} on the {name} engine but not on {first}") from e
         if expected is None:
             expected = out
-        _same_frame(out, expected, f"run() on the {name} engine differs from {first}")
+        _same_frame(out, expected if numba else _typed_like(expected, out),
+                    f"run() on the {name} engine differs from {first}")
         rows = ((_run(exe, frame.slice(i, 1), params, numba).row(0, named=True) for i in range(frame.height))
                 if one_row else out.iter_rows(named=True))
         for i, (record, row) in enumerate(zip(frame.iter_rows(named=True), rows)):
@@ -117,6 +119,25 @@ def _same_frame(got: pl.DataFrame, want: pl.DataFrame, what: str) -> None:
         assert_frame_equal(got, want, check_exact=True)
     except AssertionError as e:
         raise AssertionError(f"{what}: {e}") from None
+
+
+def _typed_like(want: pl.DataFrame, got: pl.DataFrame) -> pl.DataFrame:
+    # The numba engines leave `Null` a column, or a field of a list of records, that no value types; the
+    # polars engine types it from the declaration. Only those parts may differ.
+    fix = {c: got.schema[c] for c, t in want.schema.items()
+           if c in got.schema and t != got.schema[c] and _fills(t, got.schema[c])}
+    return want.cast(fix) if fix else want
+
+
+def _fills(want: pl.DataType, got: pl.DataType) -> bool:
+    if want == pl.Null or want == got:
+        return True
+    if isinstance(want, pl.List) and isinstance(got, pl.List):
+        return _fills(want.inner, got.inner)
+    if isinstance(want, pl.Struct) and isinstance(got, pl.Struct):
+        return ([f.name for f in want.fields] == [f.name for f in got.fields]
+                and all(_fills(a.dtype, b.dtype) for a, b in zip(want.fields, got.fields)))
+    return False
 
 
 def _same_record(got: dict, want: dict, what: str) -> None:

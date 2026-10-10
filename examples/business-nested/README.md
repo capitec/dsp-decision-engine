@@ -275,7 +275,7 @@ Later examples import `business_nested` by package name. These names are stable:
 | `pipeline.build()` | The whole decision as one step. Embed it in another `flow`, and rename its inputs with `.relabel(reads=...)`. Optional arguments are the four documents; omitted, the shipped ones |
 | `pipeline.decision_unit(pd_adjustments=None, reason_codes=None)`, `DECISION_OUTPUTS` | Everything after the entities: reads `assessed_entities` and the business's fields. Run it again over changed entities |
 | `entity.entity_unit(event_overlays=None, score_adjustments=None)`, `entity.entities_unit(...)` | The flow for one resolved entity (a child of `each`, or run alone), and the structure step plus that `each` over all of them |
-| `structure.resolved_entities`, `structure.structure_check`, `structure.criticality_class`, `Entity`, `AdverseEvent` | The nested request schema, the merge of paths, and the structure bounds |
+| `structure.resolved_entities`, `structure.structure_check`, `structure.criticality_class`, `Entity`, `AdverseEvent`, `ResolvedEntity`, `ResolvedEvent` | The nested request schema, the merged entity each assessment reads, the merge of paths, and the structure bounds |
 | `events.event_unit(overlays=None)`, `events.build_threshold_table()`, `events.OverlaidThresholds` | Classify one event; the threshold table; the overlay step type |
 | `rollup.rollup()`, `rollup.adverse_verdict`, `rollup.AE_R_01` ... | A verdict from classified events, the step that writes it, and the rule ids |
 | `scoring.entity_scoring_unit(score_adjustments=None)`, `scoring.grade_lookup()` | Score one entity; a grade ladder on any probability column and key column |
