@@ -9,4 +9,4 @@ and `docs/architecture/` describes the result; the spec folder stays as history.
 
 | Spec | Status |
 |---|---|
-| [2026-10-09 flexible engine rework](2026-10-09_flexible_engine_rework/README.md) | proposal |
+| [2026-10-09 flexible engine rework](2026-10-09_flexible_engine_rework/README.md) | in progress on branch `engine/flexible-rework`, base `44232809` |
