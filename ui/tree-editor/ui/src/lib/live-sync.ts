@@ -5,6 +5,8 @@
  * the server has not acknowledged yet); the editor shows `apply(confirmed, pending)`. Local edits are diffed into a
  * message about 150 ms after the last one; every server version arrives in order (my own as the ack), and before one
  * is applied the editor's un-diffed edits are pushed first, so a remote change never overwrites a local one unseen.
+ * After a disconnect (a closed socket, or no answer to a ping for ~10 s) the edits made meanwhile, and the messages
+ * the catch-up did not show applied, go back as one offline batch the server merges whole or rejects whole.
  *
  * @example
  * const sync = new LiveSync(liveUrl(projectId), project.project_data, project.version, {
@@ -17,7 +19,7 @@
 import { apply, diff, type Json, type Op } from './live-ops'
 
 export type LiveStatus = 'connecting' | 'live' | 'reconnecting'
-type Message = { id: string; base: number; ops: Op[] }
+type Message = { id: string; base: number; ops: Op[]; offline?: boolean }
 type Socket = Pick<WebSocket, 'send' | 'close' | 'onopen' | 'onmessage' | 'onclose'>
 
 export interface LiveHooks {
@@ -30,6 +32,10 @@ export interface LiveHooks {
   dropped?: (ops: Op[]) => void
   /** The server refused one of my messages whole; its edits are gone from the editor. */
   rejected?: (reason: string) => void
+  /** My offline edits were merged. */
+  merged?: () => void
+  /** My offline edits were refused whole and are gone from the editor; `doc` is my version with them. */
+  offlineRejected?: (rejection: { reason: string; conflicts: string[]; doc: Json }) => void
   validation?: (errors: unknown[], version: number) => void
   /** Every edit is on the server (nothing pending). */
   settled?: (version: number) => void
@@ -51,6 +57,11 @@ export class LiveSync {
   private timer?: ReturnType<typeof setTimeout>
   private socket?: Socket
   private waiters: Array<() => void> = []
+  private heard = true
+  private heartbeat: ReturnType<typeof setInterval>
+  /** The version (and document) my edits since the disconnect were made on. */
+  private offlineBase?: { version: number; doc: Json }
+  private offlineDoc: Json = null
 
   constructor(
     private url: string,
@@ -59,10 +70,18 @@ export class LiveSync {
     private hooks: LiveHooks,
     private debounceMs = 150,
     private open: (url: string) => Socket = (u) => new WebSocket(u),
+    heartbeatMs = 10000,
   ) {
     this.confirmed = this.view = doc
     this.version = version
     this.connect()
+    // A dead TCP connection otherwise goes unnoticed for minutes.
+    this.heartbeat = setInterval(() => {
+      if (!this.socket) return
+      if (!this.heard) return this.lost(this.socket)
+      this.heard = false
+      if (this.ready) this.send({ type: 'ping' })
+    }, heartbeatMs)
   }
 
   /** The editor changed: push the change once the edits pause. */
@@ -108,20 +127,47 @@ export class LiveSync {
   stop() {
     this.stopped = true
     clearTimeout(this.timer)
+    clearInterval(this.heartbeat)
     this.socket?.close()
   }
 
   private connect() {
     this.ready = false
+    this.heard = true
     const socket = (this.socket = this.open(this.url))
     socket.onopen = () => this.hello()
-    socket.onmessage = (event) => this.receive(JSON.parse(event.data))
-    socket.onclose = () => {
-      if (this.stopped || socket !== this.socket) return
-      this.ready = false
-      this.hooks.status?.('reconnecting')
-      setTimeout(() => this.connect(), Math.min(250 * 2 ** this.retries++, 4000))
+    socket.onmessage = (event) => {
+      this.heard = true
+      this.receive(JSON.parse(event.data))
     }
+    socket.onclose = () => this.lost(socket)
+  }
+
+  private lost(socket: Socket) {
+    if (this.stopped || socket !== this.socket) return
+    this.socket = undefined
+    socket.onopen = socket.onmessage = socket.onclose = null
+    socket.close()
+    this.ready = false
+    this.offlineBase ??= { version: this.version, doc: this.confirmed }
+    this.hooks.status?.('reconnecting')
+    setTimeout(() => this.connect(), Math.min(250 * 2 ** this.retries++, 4000))
+  }
+
+  /** After a reconnect: everything pending goes as one offline batch (resent as is when it already is one). */
+  private sendOffline(base: { version: number; doc: Json }) {
+    const [first] = this.pending
+    const batch = this.pending.length === 1 && first.offline
+      ? first
+      : { id: crypto.randomUUID(), base: base.version, ops: this.pending.flatMap((p) => p.ops), offline: true }
+    this.pending = [batch]
+    this.offlineDoc = apply(base.doc, batch.ops)[0]
+    this.send({ type: 'ops', ...batch })
+  }
+
+  private offlineDone() {
+    // A batch settled during a catch-up leaves the edits still pending based on the version reached so far.
+    this.offlineBase = this.ready ? undefined : { version: this.version, doc: this.confirmed }
   }
 
   private hello() {
@@ -139,6 +185,8 @@ export class LiveSync {
       this.retries = 0
       this.hooks.status?.('live')
       // Messages applied before a reconnect came back in the catch-up and are no longer pending.
+      if (this.offlineBase && this.pending.length) return this.sendOffline(this.offlineBase)
+      this.offlineBase = undefined
       for (const message of this.pending) this.send({ type: 'ops', ...message })
     } else if (m.type === 'snapshot') {
       this.flush()
@@ -151,13 +199,19 @@ export class LiveSync {
       this.flush()
       this.confirmed = apply(this.confirmed, m.ops)[0]
       this.version = m.version
-      if (m.client_id === this.clientId) this.pending = this.pending.filter((p) => p.id !== m.msg_id)
+      const mine = m.client_id === this.clientId ? this.pending.find((p) => p.id === m.msg_id) : undefined
+      this.pending = this.pending.filter((p) => p !== mine)
+      if (mine?.offline) this.offlineDone()
       this.refresh()
+      if (mine?.offline) this.hooks.merged?.()
     } else if (m.type === 'rejected') {
       this.flush()
-      this.pending = this.pending.filter((p) => p.id !== m.msg_id)
+      const mine = this.pending.find((p) => p.id === m.msg_id)
+      this.pending = this.pending.filter((p) => p !== mine)
       this.refresh()
-      this.hooks.rejected?.(m.reason)
+      if (!mine?.offline) return this.hooks.rejected?.(m.reason)
+      this.offlineDone()
+      this.hooks.offlineRejected?.({ reason: m.reason, conflicts: m.conflicts ?? [], doc: this.offlineDoc })
     } else if (m.type === 'dropped') {
       this.hooks.dropped?.(m.ops)
     } else if (m.type === 'validation') {
