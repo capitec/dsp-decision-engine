@@ -7,7 +7,7 @@ import pytest
 
 pytest.importorskip("z3")
 
-from decikit import flow  # noqa: E402
+from decikit import FusedEngine, flow  # noqa: E402
 from decikit.lab import diff
 from decikit.steps.tables import DecisionTableConfig  # noqa: E402
 from decikit.steps.trees import TreeConfig  # noqa: E402
@@ -67,6 +67,15 @@ def test_a_moved_threshold_gives_a_counterexample_the_real_steps_disagree_on():
     row = proof.evidence.counterexample
     assert 5 < row["x"] <= 6
     assert old.run(frame_of(row))["o"].to_list() != new.run(frame_of(row))["o"].to_list()
+
+
+def test_a_counterexample_is_checked_interpreted_whatever_the_default_engine(monkeypatch):
+    def unbuildable(self, step):
+        raise AssertionError("the counterexample check built a fused executable")
+
+    monkeypatch.setattr(FusedEngine, "bind", unbuildable)
+    proof = diff.prove(tree((cond("x", ">", 5), 1, 0)), tree((cond("x", ">", 6), 1, 0)))
+    assert (proof.tier, proof.identical) == ("smt", None) and 5 < proof.evidence.counterexample["x"] <= 6
 
 
 def test_an_int_feature_compares_exactly_so_greater_than_five_is_at_least_six():
