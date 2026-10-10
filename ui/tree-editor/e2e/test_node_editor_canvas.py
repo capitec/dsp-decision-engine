@@ -196,7 +196,6 @@ def big_tree(internal: int) -> dict:
 
 
 @pytest.mark.slow
-@pytest.mark.xfail(strict=True, reason="the campaign example's root is a composite node, and a composite root crashes the editor on open")
 def test_campaign_tree_imports_opens_and_exports_the_same_nodes(signed_in: Page):
     tree = json.loads(CAMPAIGN.read_text())["tree"]
     project = import_document(signed_in, "Campaign", tree)["project_id"]
