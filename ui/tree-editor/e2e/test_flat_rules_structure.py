@@ -164,7 +164,7 @@ def test_cases_ranges_in_strict_mode_infer_the_lower_bounds(signed_in: Page):
     assert reply["validation_errors"] == []
     assert saved_rule(reply)["strict"] is True
     decided = decisions_for(export_document(signed_in, project), {"amount": [-50.0, 9.0, 15.0, 25.0]})
-    assert decided[:3] == ["approve", "approve", "review"]
+    assert decided == ["approve", "approve", "review", "decline"]  # past the last band: otherwise, branch 0
 
 
 def manual_ranges(page: Page, bands: list[tuple[str, str, int]]):
