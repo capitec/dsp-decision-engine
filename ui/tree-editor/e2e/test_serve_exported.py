@@ -1,6 +1,8 @@
 """Exported trees served: a project whose `build(tree)` takes the export by name scores like the library does,
 in-process for every tree and through a real `decikit build` + `decikit serve` for a representative few."""
 
+import os
+
 import pytest
 from playwright.sync_api import Page
 
@@ -11,8 +13,9 @@ from tree_runs import probe_frame, run
 
 pytestmark = pytest.mark.serve
 
-# flat rules with params, a v3 tree, the campaign tree, a 200-rule set; one port each
-SERVED = [pytest.param(tree_id, 8650 + i, id=tree_id, marks=[
+# flat rules with params, a v3 tree, the campaign tree, a 200-rule set; one port each, from E2E_SERVE_PORT on
+PORT = int(os.environ.get("E2E_SERVE_PORT", 8650))
+SERVED = [pytest.param(tree_id, PORT + i, id=tree_id, marks=[
     *([pytest.mark.xfail(strict=True, reason=CANNOT_TRIP[tree_id])] if tree_id in CANNOT_TRIP else []),
     *([pytest.mark.slow] if tree_id in SLOW else []),
 ]) for i, tree_id in enumerate(["stored-rich-flat", "stored-rich-v3", "campaign-23", "generated-200"])]

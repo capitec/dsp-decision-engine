@@ -8,7 +8,8 @@
 #   ./stack.sh test [pytest args]   run the suite against this stack (e.g. -m smoke)
 #
 # E2E_PORT (8600), E2E_PG_PORT (55432), E2E_RUNTIME (podman), E2E_STATE (<repo>/.scratch/ui-e2e-stack),
-# E2E_TMPDIR (/var/tmp/dtmp-ui-e2e: temp files and browser profiles on disk, not in a RAM-backed /tmp).
+# E2E_TMPDIR (/var/tmp/dtmp-ui-e2e: temp files and browser profiles on disk, not in a RAM-backed /tmp),
+# E2E_SERVE_PORT (8650: the first of the four ports the `decikit serve` tests use).
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$here/../../.." && pwd)
