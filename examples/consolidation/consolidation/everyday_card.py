@@ -16,6 +16,7 @@ from decikit import ParamTable, allow_fallback, param, param_table, step
 from consolidation import vocab
 from consolidation.products import Quote
 from consolidation.rate_tables import PROMOTIONAL_CARD, REVERSION_CARD
+from consolidation.records import EverydayCardPolicy
 from consolidation.vocab import PRODUCT_EVERYDAY_CARD
 
 CODE = PRODUCT_EVERYDAY_CARD
@@ -35,7 +36,7 @@ def everyday_card_policy(
     dsr_ceiling: float = param(0.45, ge=0.30, le=0.60), min_discretionary: float = param(850.0, ge=500.0, le=2_500.0),
     max_revolving_in_arrears: int = param(1, ge=0), transfer_cooldown_months: int = param(12, ge=0),
     candidate_promotional_months: ParamTable = PROMOTIONAL_MONTHS,
-) -> dict:
+) -> EverydayCardPolicy:
     """The limits and intervention thresholds product 20's team owns, as one record for the search."""
     return {
         "product_code": CODE, "min_accounts": 1, "max_accounts": max_accounts, "min_limit": min_limit,
