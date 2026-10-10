@@ -33,7 +33,7 @@ class TreeConfig(ConfigurableStep):
     of whole rules, each its own node `<name>/part_<k>`, because compile time
     grows with the square of the outputs one call returns. A part costs about
     15-20 us per request, so a bigger `part_outputs` (or `None`, no parts) makes
-    `score()` faster and the first build slower (a 521-rule tree takes about
+    `run()` on a record faster and the first build slower (a 521-rule tree takes about
     4 minutes to bind unsplit); a smaller one (32) makes `run()` over a big frame
     up to twice as fast. A tree with params is never split.
 

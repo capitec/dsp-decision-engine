@@ -122,10 +122,10 @@ def test_a_string_built_at_run_time_is_refused_not_answered_wrongly():
 
 
 @pytest.mark.parametrize("mode", COMPILED)
-def test_score_reads_one_record_through_the_same_operations(mode):
+def test_a_record_run_reads_one_record_through_the_same_operations(mode):
     exe = Engine(strict_compile=True).bind(flow(eq_literal, name="p"), mode=mode)
-    assert exe.score({"sector": WANT})["eq_literal"] is True
-    assert exe.score({"sector": "public"})["eq_literal"] is False
+    assert exe.run({"sector": WANT})["eq_literal"] is True
+    assert exe.run({"sector": "public"})["eq_literal"] is False
 
 
 def other(sector: Text | None, alias: Text | None) -> bool:

@@ -13,7 +13,7 @@ PERSON = {"is_natural_person": True, "bureau_score": 705.0, "months_on_record": 
 
 
 def scored(params=None, **changes):
-    return score.score(PERSON | changes, params)
+    return score.run(PERSON | changes, params)
 
 
 def pd(points):
@@ -72,9 +72,9 @@ grade = Engine().bind(scoring.grade_lookup("pd", "grade"), mode="interpreted")
     (4, 0.0, 1), (4, 0.0099, 1), (4, 0.0101, 2), (4, 0.0599, 4), (4, 0.0601, 5), (4, 0.5999, 11), (4, 0.99, 12),
     (5, 0.0079, 1), (5, 0.0081, 2), (5, 0.99, 12), (9, 0.001, 12)])
 def test_the_grade_ladder_by_segment(segment, probability, expected):
-    assert grade.score({"pd": probability, "segment_code": float(segment)})["grade"] == expected
+    assert grade.run({"pd": probability, "segment_code": float(segment)})["grade"] == expected
 
 
 def test_the_ladder_cell_that_gave_the_grade_is_recorded():
-    out = grade.score({"pd": 0.05, "segment_code": 4.0})
+    out = grade.run({"pd": 0.05, "segment_code": 4.0})
     assert out["grade_cell_id"] == "grade_ladder@bus-rg-2026.09#4|4"

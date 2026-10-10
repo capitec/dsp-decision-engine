@@ -48,7 +48,7 @@ def decide(pipeline, sample, params):
                 record.pop(field, None)
             else:
                 record[field] = value
-        return pipeline.score(parse_dates(record), params_document or params)
+        return pipeline.run(parse_dates(record), params_document or params)
 
     return run
 
@@ -63,6 +63,6 @@ def solve_once(params):
     request = {"requested_amount": 95_000.0, "amount_cap": 95_000.0, "product_min_amount": 2_000.0,
                "product_max_amount": 500_000.0, "amount_grid": 250.0, "risk_grade": 7, "applicant_age_years": 34.0, "cover_type_code": 1,
                "offer_term_months": 60.0, "rate_addon_bps": 0.0, "instalment_ceiling": 2_500.0}
-    return lambda **changes: executable.score({**request, **changes}, unit_params)
+    return lambda **changes: executable.run({**request, **changes}, unit_params)
 
 

@@ -111,7 +111,7 @@ def test_a_nan_or_infinite_float_into_an_int_variable_is_refused(bad):
     with pytest.raises(Exception, match="(?i)nan|inf|integer|Int64"):
         exe.run(pl.DataFrame({"code": [bad]}))
     with pytest.raises((ValueError, OverflowError)):
-        exe.score({"code": bad})
+        exe.run({"code": bad})
 
 
 def test_declared_int_over_a_float_column_is_refused():
@@ -186,10 +186,10 @@ def test_a_float_variable_beside_an_int_variable_keeps_both_lanes(run):
 def test_a_fractional_float_into_an_int_variable_is_refused_and_a_whole_one_matches(mode):
     exe = Engine().bind(by_code(EQ_ROWS), mode=mode)
     with pytest.raises(NotIntegralError, match="input 'code'"):
-        exe.score({"code": 7.5})
+        exe.run({"code": 7.5})
     with pytest.raises(NotIntegralError, match=r"input 'code' \(row 1\)"):
         exe.run(pl.DataFrame({"code": [7.0, 7.5]}))
-    assert exe.score({"code": 7.0})["pts"] == 1
+    assert exe.run({"code": 7.0})["pts"] == 1
 
 
 @pytest.mark.parametrize("mode", ["interpreted", "stepped", "fused"])
@@ -199,6 +199,6 @@ def test_an_int_step_writing_a_fraction_into_an_int_variable_is_refused_naming_t
         return raw / 2
 
     exe = Engine().bind(flow(halved, by_code(EQ_ROWS), name="p"), mode=mode)
-    assert exe.score({"raw": 14.0})["pts"] == 1
+    assert exe.run({"raw": 14.0})["pts"] == 1
     with pytest.raises(NotIntegralError, match="p/halved"):
-        exe.score({"raw": 15.0})
+        exe.run({"raw": 15.0})

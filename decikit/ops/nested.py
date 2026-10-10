@@ -24,7 +24,7 @@ class Columnar(Generic[T]):
     and `missing_as([])` reads it as a row with no items.
 
     Reach for it when the work per item is heavy or the lists are long: it
-    costs about 20 us a `score()` call to build the arrays, so a short list
+    costs about 20 us a record `run()` call to build the arrays, so a short list
     with a one-line body is faster left as a plain `list[dict]` step.
 
     Example::

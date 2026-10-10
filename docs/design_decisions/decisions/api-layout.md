@@ -57,7 +57,7 @@ The rules that shape the public surface (layers, private names, checks, diff, th
 ## Everything on the serving path is thread-safe; nothing else has to be
 
 - One `Executable` is called from many threads, including its first call; `Session`, `TraceSink`, experiments, checks, diff and the bridge are single-caller.
-- Rules: no per-call state on `self`; compile into locals and publish one immutable snapshot; caches are write-once with `setdefault`; module caches use `once(cache, key, build)`; `exe.report` is per thread. A warm `score()` takes no lock.
+- Rules: no per-call state on `self`; compile into locals and publish one immutable snapshot; caches are write-once with `setdefault`; module caches use `once(cache, key, build)`; `exe.report` is per thread. A warm `run(record)` takes no lock.
 - Not relied on: the GIL. The rules hold on a free-threaded build.
 - `tests/serving/test_concurrency.py` and the runner `self`-write test in `test_conventions.py` guard it.
 - See: [Concurrency](../../architecture/engine/concurrency.md)

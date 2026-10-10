@@ -155,7 +155,7 @@ wrote, and the fused kernel is built from LLVM IR by an intrinsic, once per proc
 the step dispatchers, and a closure over a dispatcher never hits numba's disk cache.
 
 The fused kernel compile therefore stays in every new process. In this run of a one-step pipeline,
-the first `score()` of a fresh process took 391 ms with a cold step cache and 345 ms with the step
+the first `run(record)` of a fresh process took 391 ms with a cold step cache and 345 ms with the step
 loaded from disk; most of that is building the kernel around it. Serving pays it during warm-up:
 `decikit build`, and each serving worker as it stages a config version, score a warm-up record
 through every kernel, and a worker answers `/ping` only after that (see [serving](../serving.md)).
@@ -262,7 +262,8 @@ FallbackWarning : loan/uses_regex runs in Python, row by row:
  ('Kernel', ['loan/instalment'])]
 ```
 
-There is one `FallbackWarning` per step and executable, raised when the runner builds its units.
+In fused mode there is one `FallbackWarning` per step and executable, raised when the runner
+builds its units; stepped mode only lists the step in `fallbacks()`.
 A step that still runs compiled but outside the shared kernel (a `Columnar[...]` input read by a
 row node, or an OPTIONAL one) gets a different message: `... runs compiled, one call per row
 outside the shared kernel: ...`. `exe.fallbacks()` reports both kinds by step path.
@@ -291,7 +292,11 @@ ValueError : loan/uses_regex runs in Python, row by row:
 Each call of a kernel compiled alone, but a kernel can still fail as a whole when it is launched:
 a value numba only meets then (a param it cannot type, for instance) makes the kernel's own
 compile fail. `Kernel.run` catches `FALLBACK_ERRORS` on that launch, replaces itself with one
-`Fallback` per call for the rest of its life, and reruns. A `Packed` branch or loop does not split;
+`Fallback` per call for the rest of its life, and reruns. The split is reported like a build-time
+fallback, through the `on_split` callback the runner installs: listed in `fallbacks()` as
+`split at launch: <error>`, warned about in fused mode, refused under `strict_compile`. A step
+returning a `dict`, a TypedDict, a `list`, a `tuple`, a `set` or an array never reaches a kernel:
+`compile_call` refuses it, so it falls back alone at build. A `Packed` branch or loop does not split;
 it raises, and the [fused runner](runners.md) drops the packing for that path and runs the branch
 or loop unpacked from then on.
 
@@ -307,6 +312,7 @@ sequenceDiagram
         K-->>R: values stored
     else NumbaError on first launch
         N-->>K: compile error
+        K->>R: on_split(fallbacks): listed, warned (fused), raised (strict)
         K->>K: _python = one Fallback per call
         K->>K: run each call in Python
         K-->>R: values stored

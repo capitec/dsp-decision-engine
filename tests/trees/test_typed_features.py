@@ -49,7 +49,7 @@ def test_int64_above_2_53_is_compared_exactly_in_every_mode(run):
     assert run(tree, frame)["hit"].to_list() == [1, 0]
     for mode in MODES:
         exe = Engine().bind(tree, mode=mode)
-        assert (exe.score({"n": BIG})["hit"], exe.score({"n": BIG + 1})["hit"]) == (1, 0), mode
+        assert (exe.run({"n": BIG})["hit"], exe.run({"n": BIG + 1})["hit"]) == (1, 0), mode
 
 
 def test_an_int_threshold_past_2_53_that_float64_cannot_hold_is_accepted(run):
@@ -70,7 +70,7 @@ def test_a_bool_feature_stays_a_bool_end_to_end(run):
     assert kinds(tree) == {"flag": bool}
     assert run(tree, pl.DataFrame({"flag": [True, False, True]}))["hit"].to_list() == [1, 0, 1]
     for mode in MODES:
-        assert Engine().bind(tree, mode=mode).score({"flag": False})["hit"] == 0, mode
+        assert Engine().bind(tree, mode=mode).run({"flag": False})["hit"] == 0, mode
 
 
 def test_an_int_feature_stays_an_int_end_to_end(run):

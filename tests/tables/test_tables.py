@@ -69,10 +69,10 @@ def test_eq_on_a_string_column(run):
 
 
 @pytest.mark.parametrize("mode", ["interpreted", "stepped", "fused"])
-def test_score_takes_a_string_input(mode):
+def test_a_record_run_takes_a_string_input(mode):
     exe = Engine().bind(_bureau(), mode=mode)
-    assert exe.score({"BureauKey": "experian"})["pts"] == 10
-    assert exe.score({"BureauKey": "equifax"})["pts"] == 0
+    assert exe.run({"BureauKey": "experian"})["pts"] == 10
+    assert exe.run({"BureauKey": "equifax"})["pts"] == 0
 
 
 def test_in_on_numeric_sets(run):
@@ -146,7 +146,7 @@ def test_the_python_matcher_visits_each_row_it_tries():
     exe = Engine().bind(bands())
     seen = []
     exe.runner.visit = seen.append
-    exe.score({"score": 50.0})
+    exe.run({"score": 50.0})
     assert seen == ["0", "1"]
 
 

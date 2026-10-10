@@ -1,4 +1,4 @@
-"""A JSON record or array declaring an `int` takes 7 or 7.0 and refuses 7.5, like `score` and `run`."""
+"""A JSON record or array declaring an `int` takes 7 or 7.0 and refuses 7.5, like `run` on a record or a frame."""
 import json
 
 import pytest

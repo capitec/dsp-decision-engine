@@ -56,7 +56,7 @@ def test_a_clean_step_does_not_warn_and_running_does_not_warn_again():
     with warnings.catch_warnings():
         warnings.simplefilter("error", HiddenStateWarning)
         assert exe.run(pl.DataFrame({"x": [1.0, 500.0]}))["capped"].to_list() == [1.0, 100.0]
-        assert exe.score({"x": 3.0})["capped"] == 3.0
+        assert exe.run({"x": 3.0})["capped"] == 3.0
 
 
 def test_each_hidden_variable_of_a_step_is_one_warning():

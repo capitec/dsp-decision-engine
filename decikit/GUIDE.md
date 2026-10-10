@@ -5,9 +5,9 @@ and the docstrings (`help(decikit)`, `help(decikit.flow)`, ...) are current.
 `decikit guide` prints this guide.
 
 The decider toolkit builds decision pipelines (credit, pricing, fraud rules, campaigns)
-from plain Python functions. A pipeline runs over a polars frame (`run`) or one
-record (`score`, a dict), interpreted or compiled with numba, and serves over
-HTTP with `decikit serve`.
+from plain Python functions. A pipeline runs over a polars frame or one
+record (a dict), both through `run`, interpreted or compiled with numba,
+and serves over HTTP with `decikit serve`.
 
 ## Mental model
 
@@ -57,7 +57,7 @@ HTTP with `decikit serve`.
 | why a record got its answer; what-if | `pipeline.session(df)` |
 | modes, batch and single record agree | `decikit.lab.testing.assert_equivalent` |
 
-## Steps, params, run and score
+## Steps, params and run
 
 ```python
 from datetime import date
@@ -96,10 +96,10 @@ except DecikitError as error:        # the base of every error a user handles; P
     assert isinstance(error, ParamsError)
 
 exe: Executable = pipeline.compile("fused")      # compile once, call many times
-assert exe.score({"income": 1000.0, "debt": 350.0, "applied_on": date(2026, 1, 5)}, params)["approved"] is False
+assert exe.run({"income": 1000.0, "debt": 350.0, "applied_on": date(2026, 1, 5)}, params)["approved"] is False
 ```
 
-`run` and `score` treat a params document as immutable: the one you pass is
+`run` treats a params document as immutable: the one you pass is
 validated once and remembered by identity, so editing it in place and passing
 it again keeps the old values, silently. Pass a new dict to change a value
 (`copy.deepcopy(params)`, then edit the copy). In the example above the edit
@@ -110,12 +110,12 @@ a null value or an absent column raises `MissingInputError`. To default it for a
 step you reuse as it is, put a step in front that writes the column
 (`def income(income: float = missing_as(0.0)) -> float: return income`).
 
-For one record, call `score(record)`, never `run(df)` on a one-row frame: `run`
-builds a frame, exports it through Arrow and assembles an output frame, which
-costs about five times what `score` does on the same record.
+For one record, pass a dict to `run`, never a one-row frame: a frame is exported
+through Arrow and an output frame assembled, which costs about five times as much
+on the same record.
 
 An `int` input or `-> int` output takes a whole float (`7.0`) but never truncates one: `7.5`, NaN
-and infinity raise `NotIntegralError` naming the input or step, in `score` and `run`, interpreted
+and infinity raise `NotIntegralError` naming the input or step, for a record or a frame, interpreted
 or compiled. Where you mean to drop the fraction, say so in the step (`int(x)`, `round(x)`).
 
 ### Rounding
@@ -133,7 +133,7 @@ from decikit.ops.decimal import Rounding
 def instalment(amount: float, months: float = param(12.0)) -> float:
     return decimal.round(amount / months, 2, mode=Rounding.HALF_EVEN)
 
-assert flow(instalment).compile("fused").score({"amount": 100.0})["instalment"] == 8.33
+assert flow(instalment).compile("fused").run({"amount": 100.0})["instalment"] == 8.33
 assert decimal.round(2.5) == 3.0 and decimal.round(2.5, mode=Rounding.HALF_EVEN) == 2.0
 ```
 
@@ -159,9 +159,9 @@ def fee(instalment: Currency["R"], floor: Currency = param(Currency(5, 5000))) -
     return max(instalment, floor) + Currency(1, 2500)       # Currency(major, minor): 1.25
 
 exe = flow(instalment, fee, name="loan").compile("fused")
-out = exe.score({"principal": "1000.50"})                   # a str, int, float, Decimal or decimal.Decimal
+out = exe.run({"principal": "1000.50"})                     # a str, int, float, Decimal or decimal.Decimal
 assert out["fee"] == Currency("11.88") and repr(out["fee"]) == "R 11.8800"
-assert exe.score({"principal": 10}, {"loan": {"fee": {"floor": "20"}}})["fee"] == Currency("21.25")
+assert exe.run({"principal": 10}, {"loan": {"fee": {"floor": "20"}}})["fee"] == Currency("21.25")
 
 frame = pl.DataFrame({"principal": [StdDecimal("1000.50"), StdDecimal("2.5")]}, schema={"principal": pl.Decimal(18, 2)})
 result = exe.run(frame)                                      # a Decimal column in, Decimal(38, 4) out
@@ -436,7 +436,7 @@ with no_recompile():                              # more rows, new values: same 
     params = {"pricing": {"rate": {"ladder": [{"floor": 0, "rate": 0.25}, {"floor": 500, "rate": 0.15},
                                               {"floor": 700, "rate": 0.08}]}}}
     assert exe.run(df, params=params)["rate"].to_list() == [0.15, 0.08]
-    assert exe.score({"score": 720}, params)["rate"] == 0.08
+    assert exe.run({"score": 720}, params)["rate"] == 0.08
 ```
 
 Rows are checked when the document arrives: a missing or undeclared column or
@@ -537,7 +537,7 @@ projects on one path never shadow each other):
   command and option; there are no others.
 
 JSON dates (`"2026-01-15"`) arrive as the declared `date` inputs, but only through
-the handler: `Executable.score` and `run` take typed values (`date` objects), and a
+the handler: `Executable.run` takes typed values (`date` objects), and a
 string date reaches the step as a string. In-process, `handler.score` takes the
 parsed record (or a frame) and converts dates exactly as `decikit serve` does;
 `handler.process_fn` takes raw bytes. Both are plain calls, and the `*_fn` hooks are
@@ -675,10 +675,10 @@ like `DECIKIT_API__PIPELINE=myapp.pipeline:build`.
 **The plain type always works.** Annotate a step `str`, `date`, `list[dict]`,
 `dict` or a TypedDict and it runs in every mode and gives the same answer. A
 numba kernel holds only numbers (`float`, `int`, `bool`, `Decimal`) and `Text`, so a step
-reading or writing anything else runs on its own, row by row, in Python, and says so once
-per step with a `FallbackWarning`. Only speed changes: such a step runs at
-under 1M rows/s in a batch instead of a kernel's hundreds of millions, and
-costs under 10 µs more on a single `score()`. Trees and decision tables read
+reading or writing anything else runs on its own, row by row, in Python. Fused mode says so
+once per step with a `FallbackWarning`; stepped mode only lists it in `fallbacks()`. Only
+speed changes: such a step runs at under 1M rows/s in a batch instead of a kernel's hundreds
+of millions, and costs under 10 µs more on a single record's `run()`. Trees and decision tables read
 their strings as byte spans inside their kernels, so a string rule set does not
 pay this at all.
 
@@ -691,7 +691,7 @@ is. A `Struct` or
 `Columnar` step returning tuples that can't be the declared record (wrong arity, a float for an `int`
 field) is caught when it compiles and falls back with that reason.
 
-`score` returns each value as the step made it. A plain `dict` or `list[dict]` output declares no
+`run` on a record returns each value as the step made it. A plain `dict` or `list[dict]` output declares no
 shape, so a frame from `run` takes one type per field: an int beside a float comes back as a
 float, a number beside a string raises, and non-string keys of a `dict` become strings, so a
 JSON, CSV or Arrow response can carry it. Declare a TypedDict to have the fields checked at the
@@ -733,7 +733,7 @@ assert exe.fallbacks() == {
 }
 
 strict = Engine(strict_compile=True).bind(flow(order_total, name="q"), mode="fused")
-assert strict.score({"items": [{"price": 2.0}]})["order_total"] == 2.0
+assert strict.run({"items": [{"price": 2.0}]})["order_total"] == 2.0
 ```
 
 **A step must not read a Python object it did not receive.** Binding a pipeline
@@ -836,7 +836,7 @@ as its plain type in every mode:
   *not* a list of per-item dicts — `for i in items` iterates the *fields*, not
   the items, so index each field by position. An `Item` field may be `float`,
   `int`, `bool`, `str`, or `float | None` / `str | None`; reach for it when the
-  per-item work is heavy or the lists are long (it costs ~20 µs a `score()` call
+  per-item work is heavy or the lists are long (it costs ~20 µs a record `run()` call
   to build the arrays).
 
 ```python
@@ -904,7 +904,7 @@ assert pipeline.parameters().defaults() == {"order": {"items": {"heavy_kg": 20.0
 ```
 
 `execution_mode=EachMode.PER_ROW` (the default) runs the child once per parent
-row in Python — fastest on a single `score()`, slower on a large batch.
+row in Python — fastest on a single record's `run()`, slower on a large batch.
 `EachMode.BATCH` explodes the list into one child frame and runs the child once
 over all items — faster on a large batch, slower on a single record. A null list
 reads as a row with no items in both modes.
@@ -981,7 +981,7 @@ s.set("ratio", 0.1)                      # what-if
 s.resume()
 assert s.output()["approved"].to_list() == [True, True]
 
-out = assert_equivalent(pipeline, df)    # every mode; run == score per row == a session
+out = assert_equivalent(pipeline, df)    # every mode; a frame run == a record run per row == a session
 assert out["approved"].to_list() == [False, True]
 for frame in corpus(pipeline).values():  # zeros, negatives, empty and chunked frames
     assert_equivalent(pipeline, frame)
@@ -1010,7 +1010,7 @@ def instalment(loan: Currency["R"], term_months: Annotated[int, Duration("months
                rate: Annotated[float, Percent()] = param(0.25)) -> Currency["R"]:
     return loan * (1 + rate) / term_months
 
-assert flow(instalment, name="loan").compile("fused").score({"loan": 1200, "term_months": 12})["instalment"] == Currency(125)
+assert flow(instalment, name="loan").compile("fused").run({"loan": 1200, "term_months": 12})["instalment"] == Currency(125)
 ```
 
 Subclass `decikit.ops.FieldMetadata` for another kind.

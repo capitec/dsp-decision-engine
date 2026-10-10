@@ -44,7 +44,7 @@ def request_for(sample):
 
 @pytest.fixture
 def decide(executable, params, request_for):
-    return lambda **changes: executable.score(request_for(**changes), params)
+    return lambda **changes: executable.run(request_for(**changes), params)
 
 
 @pytest.fixture
@@ -52,7 +52,7 @@ def originate(executable, params):
     """`originate(store, request)` scores a new application and files the decision of record as the first of its facility."""
 
     def run(store, request):
-        result = executable.score(request, params)
+        result = executable.run(request, params)
         return store.append(history.decision_of_record(
             request, result, assessment_kind_code=vocab.EP1_NEW_TO_BANK, comparison_basis_code=vocab.COMPARISON_ORIGINATION))
 

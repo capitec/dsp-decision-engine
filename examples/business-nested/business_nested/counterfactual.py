@@ -1,7 +1,7 @@
 """Questions asked of a decision after the fact: what if one event were not there, and what if one entity were corrected.
 
 Both run the same flows as the decision itself, so an answer cannot drift from it. Records are the pipeline's
-input with its dates already parsed, exactly as `Executable.score` takes them.
+input with its dates already parsed, exactly as `Executable.run` takes them.
 """
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ def single_event_counterfactual(executable: Executable, record: dict, event_id: 
     `executable` is the bound `build()` pipeline. Works for any event, not only the one a decline rests on.
     Example: `single_event_counterfactual(exe, record, 41)["outcome_before"]` is 4 and `["outcome_after"]` 1.
     """
-    before, after = executable.score(record, params), executable.score(without_event(record, event_id), params)
+    before, after = executable.run(record, params), executable.run(without_event(record, event_id), params)
     entity = next(e for e in before["assessed_entities"] if any(ev["event_id"] == event_id for ev in e["adverse_events"]))
     event = next(ev for ev in entity["adverse_events"] if ev["event_id"] == event_id)
     verdict_after = next(e for e in after["assessed_entities"] if e["entity_id"] == entity["entity_id"])
@@ -73,6 +73,6 @@ def reassess_entity(record: dict, original: dict, entity_id: int) -> dict:
     `original` lacks.
     """
     assessed_before = {e["entity_id"]: e for e in original["assessed_entities"]}
-    assessed = [_entity_executable().score(e) if e["entity_id"] == entity_id else assessed_before[e["entity_id"]]
-                for e in _resolver().score(record)["resolved_entities"]]
-    return _decision_executable().score({**record, "assessed_entities": assessed})
+    assessed = [_entity_executable().run(e) if e["entity_id"] == entity_id else assessed_before[e["entity_id"]]
+                for e in _resolver().run(record)["resolved_entities"]]
+    return _decision_executable().run({**record, "assessed_entities": assessed})

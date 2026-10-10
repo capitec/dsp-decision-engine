@@ -11,7 +11,7 @@
     <text x="105" y="36">mode</text>
     <text x="305" y="30">exe.run(frame)</text>
     <text x="305" y="48" font-weight="400" font-size="13">vs the first mode</text>
-    <text x="515" y="30">exe.score(record)</text>
+    <text x="515" y="30">exe.run(record)</text>
     <text x="515" y="48" font-weight="400" font-size="13">each row vs this mode's run</text>
     <text x="715" y="30">session resumed to end</text>
     <text x="715" y="48" font-weight="400" font-size="13">vs this mode's run</text>

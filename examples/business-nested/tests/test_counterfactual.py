@@ -55,13 +55,13 @@ def test_the_counterfactual_uses_the_policy_it_is_given(executable, record, with
 @pytest.fixture
 def original_and_corrected(executable, record, params):
     corrected = counterfactual.without_event(record, 41)  # the judgment is rescinded
-    return executable.score(record, params), corrected
+    return executable.run(record, params), corrected
 
 
 def test_reassessing_one_entity_gives_the_decision_a_full_run_gives(executable, original_and_corrected, params):
     original, corrected = original_and_corrected
     partial = counterfactual.reassess_entity(corrected, original, entity_id=1)
-    full = executable.score(corrected, params)
+    full = executable.run(corrected, params)
     assert {name: partial[name] for name in DECISION_OUTPUTS} == {name: full[name] for name in DECISION_OUTPUTS}
     assert (original["outcome_code"], partial["outcome_code"]) == (4, 1)
 
@@ -72,9 +72,9 @@ def test_reassessing_one_entity_assesses_only_that_entity(monkeypatch, original_
     real = counterfactual._entity_executable()
 
     class Spy:
-        def score(self, item):
+        def run(self, item):
             scored.append(item["entity_id"])
-            return real.score(item)
+            return real.run(item)
 
     monkeypatch.setattr(counterfactual, "_entity_executable", lambda: Spy())
     counterfactual.reassess_entity(corrected, original, entity_id=3)

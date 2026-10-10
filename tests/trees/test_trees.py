@@ -233,12 +233,12 @@ def test_strict_ranges_must_be_contiguous():
             [], pts(1.0)))
 
 
-def test_retuning_changes_score_without_recompiling():
+def test_retuning_changes_a_record_run_without_recompiling():
     tree = two_level(score={"param": "score_floor", "default": 700.0})
     assert tree.parameters()["risk"]["score_floor"]["default"] == 700.0
     exe = Engine().bind(tree, mode="fused")
     record = {"age": 25.0, "score": 800.0}
-    assert exe.score(record)["pts"] == 10.0
+    assert exe.run(record)["pts"] == 10.0
     before = compiled_counts()
-    assert exe.score(record, params={"risk": {"score_floor": 900.0}})["pts"] == 20.0
+    assert exe.run(record, params={"risk": {"score_floor": 900.0}})["pts"] == 20.0
     assert compiled_counts() == before
