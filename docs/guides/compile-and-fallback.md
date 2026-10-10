@@ -191,8 +191,6 @@ Reading the report:
 - `flagged` has an `import` in its body. numba refused it with `UnsupportedBytecodeError`, one of the compile-time errors that trigger a fallback.
 - `via_legacy` calls a function marked `@allow_fallback`, which makes the call an intentional Python boundary: no warning, but still listed with `@allow_fallback:` in front.
 
-A step that returns a `dict`, a TypedDict or a `list` compiles on its own, but no kernel column holds what it returns, so the kernel it shares runs in Python as a whole: every step of that kernel is listed as `split at launch: <numba's error>`. Building finds this before any row runs. Return a `Struct[Item]` or `Columnar[Item]` of tuples to keep such a step compiled.
-
 Interpreted mode never falls back, so its `fallbacks()` is always empty. The warning text is `FallbackWarning: <path> runs in Python, row by row: <reason>`. Python-row speed is below 1M rows/s in a batch against a kernel's hundreds of millions, and under 10 µs extra on a single `score()` (the figures the guide gives).
 
 Only compile-time failures fall back, because catching every exception would turn a real bug, such as a `ZeroDivisionError`, into a silent "needed a fallback". A runtime error always propagates, with a note naming the step:
