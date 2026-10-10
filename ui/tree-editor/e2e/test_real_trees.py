@@ -9,8 +9,6 @@ from canonical import as_lines, own_parts
 from real_trees import BY_ID, TREES, tree_files
 from round_trip import cases, expected_items, round_trip
 
-OWN_NAME = ("the export writes the project's name over the document's own `metadata.name` (decikit never reads it): "
-            "needs a decision on which name an export carries")
 NAMED = [tree for tree in TREES if (tree.document.get("metadata") or {}).get("name")]
 
 
@@ -31,7 +29,7 @@ def test_real_tree_export_matches_its_source(page: Page, tree):
     assert own_parts(export, tree.document) == own_parts(tree.document, tree.document)
 
 
-@pytest.mark.parametrize("tree", cases({tree.id: OWN_NAME for tree in NAMED}, NAMED))
+@pytest.mark.parametrize("tree", cases({}, NAMED))
 def test_real_tree_export_keeps_the_documents_own_name(page: Page, tree):
     assert round_trip(page, tree).export["metadata"]["name"] == tree.document["metadata"]["name"]
 
