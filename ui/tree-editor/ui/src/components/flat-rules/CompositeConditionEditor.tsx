@@ -84,11 +84,11 @@ export const CompositeConditionEditor: React.FC<CompositeConditionEditorProps> =
                   let updatedCond: any;
 
                   if (value === 'and' || value === 'or' || value === 'not') {
-                    updatedCond = { type: 'composite', op: value, conditions: [] };
+                    updatedCond = { type: 'composite', op: value, conditions: cond.conditions ?? [] };
                   } else {
                     const feature = cond.feature || '';
                     if (['<=', '<', '==', '>', '>=', '!='].includes(value)) {
-                      updatedCond = { type: 'unary', op: value, feature, threshold: 0 };
+                      updatedCond = { type: 'unary', op: value, feature, threshold: cond.threshold ?? 0 };
                     } else if (value === 'between') {
                       updatedCond = { type: 'unary', op: value, feature, min: null, max: null };
                     } else if (value === 'isin') {
