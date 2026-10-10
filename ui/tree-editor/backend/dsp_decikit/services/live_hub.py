@@ -14,6 +14,7 @@ import time
 import typing as t
 import uuid
 from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
 
 from fastapi import WebSocket
 from sqlalchemy import func, select
@@ -131,8 +132,15 @@ class Hub:
                                                       .where(Project.id == project_id))).one()
             if version == room.validated:
                 return
-            started = time.perf_counter()
-            errors = await asyncio.get_running_loop().run_in_executor(self.validator, validation_errors, doc)
+            started, pool = time.perf_counter(), self.validator
+            try:
+                errors = await asyncio.get_running_loop().run_in_executor(pool, validation_errors, doc)
+            except BrokenProcessPool:
+                # The process was killed (out of memory, say); a new one validates the next version.
+                logger.warning("live validator died on project=%s version=%d", project_id, version)
+                if self.validator is pool:
+                    self.validator = _validator()
+                return
             logger.info("live validation project=%s version=%d errors=%d ms=%.1f", project_id, version, len(errors),
                         (time.perf_counter() - started) * 1e3)
             room.validation = json.dumps({"type": "validation", "version": version, "errors": errors})
@@ -141,7 +149,7 @@ class Hub:
                 await _send(client, room.validation)
 
     def start(self) -> None:
-        self.validator = ProcessPoolExecutor(1, mp_context=multiprocessing.get_context("spawn"))
+        self.validator = _validator()
         self.listener = asyncio.create_task(self._listen())
 
     async def stop(self) -> None:
@@ -182,6 +190,10 @@ class Hub:
                     with contextlib.suppress(Exception):
                         await conn.close()
             await asyncio.sleep(1)
+
+
+def _validator() -> ProcessPoolExecutor:
+    return ProcessPoolExecutor(1, mp_context=multiprocessing.get_context("spawn"))
 
 
 async def _send(client: Client, text: str) -> bool:
