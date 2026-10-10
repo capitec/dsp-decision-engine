@@ -6,12 +6,12 @@ from business_nested import counterfactual
 
 def test_assessing_only_the_changed_entity_gives_the_full_runs_decision(executable, params, request_for):
     record = request_for()
-    original = executable.score(record, params)
+    original = executable.run(record, params)
 
     corrected = copy.deepcopy(record)
     corrected["entities"][3]["bureau_score"] = 700.0  # Van Wyk, who was 540
     partial = counterfactual.reassess_entity(corrected, original, entity_id=3)
-    full = executable.score(corrected, params)
+    full = executable.run(corrected, params)
 
     for name in ("people_pd", "people_grade", "probability_of_default", "risk_grade", "outcome_code", "offered_amount"):
         assert partial[name] == full[name], name

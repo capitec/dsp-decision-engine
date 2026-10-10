@@ -104,7 +104,7 @@ def test_a_runner_subclass_overriding_iterate_without_quiet_still_runs_and_sees_
 
     exe.runner.__class__ = Counting
     assert exe.run(_frame(2))["term_cap"].to_list() == [54.0, 60.0]
-    assert exe.score({"requested_term": 72.0, "sector_code": 1})["term_cap"] == 54.0
+    assert exe.run({"requested_term": 72.0, "sector_code": 1})["term_cap"] == 54.0
     assert seen and all(isinstance(c, Checkpoint) for c in seen)
 
 

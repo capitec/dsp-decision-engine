@@ -47,7 +47,7 @@ def test_a_not_integral_error_is_a_decikit_value_error():
 def test_a_record_input_declared_int_refuses_a_float_that_is_not_whole(bind, value):
     exe = bind(flow(to_int, name="p"))
     with pytest.raises(NotIntegralError, match="input 'x'"):
-        exe.score({"x": value})
+        exe.run({"x": value})
 
 
 @pytest.mark.parametrize("value", NOT_WHOLE)
@@ -59,7 +59,7 @@ def test_a_frame_input_declared_int_refuses_a_float_that_is_not_whole(bind, valu
 
 def test_a_whole_float_is_accepted_for_an_int_input_as_a_record_and_a_frame(bind):
     exe = bind(flow(to_int, name="p"))
-    assert exe.score({"x": 7.0})["to_int"] == 7
+    assert exe.run({"x": 7.0})["to_int"] == 7
     assert exe.run(pl.DataFrame({"x": [7.0, 8.0]}))["to_int"].to_list() == [7, 8]
 
 
@@ -67,45 +67,45 @@ def test_a_whole_float_is_accepted_for_an_int_input_as_a_record_and_a_frame(bind
 def test_a_step_returning_a_float_that_is_not_whole_for_an_int_output_is_refused(bind, value):
     exe = bind(flow(half, name="p"))
     with pytest.raises(NotIntegralError, match="p/half"):
-        exe.score({"y": value})
+        exe.run({"y": value})
     with pytest.raises(NotIntegralError, match="p/half"):
         exe.run(pl.DataFrame({"y": [4.0, value]}))
 
 
 def test_a_step_returning_a_whole_float_for_an_int_output_is_accepted(bind):
     exe = bind(flow(half, name="p"))
-    assert exe.score({"y": 10.0})["half"] == 5
+    assert exe.run({"y": 10.0})["half"] == 5
     assert exe.run(pl.DataFrame({"y": [4.0, 10.0]}))["half"].to_list() == [2, 5]
 
 
 def test_an_optional_int_output_is_refused_too_and_a_null_is_not(bind):
     exe = bind(flow(maybe_half, name="p"))
     with pytest.raises(NotIntegralError, match="p/maybe_half"):
-        exe.score({"y": 3.0})
-    assert exe.score({"y": 4.0})["maybe_half"] == 2
+        exe.run({"y": 3.0})
+    assert exe.run({"y": 4.0})["maybe_half"] == 2
 
 
 def test_a_nan_from_a_float_step_into_an_int_output_is_refused_in_every_mode(bind):
     exe = bind(flow(source, half, name="p"))
     with pytest.raises(NotIntegralError):
-        exe.score({"y": float("nan")})
+        exe.run({"y": float("nan")})
 
 
 @pytest.mark.filterwarnings("ignore::decikit.exceptions.FallbackWarning")
 def test_a_python_run_step_returning_a_float_that_is_not_whole_for_an_int_output_is_refused(bind):
     exe = bind(flow(band_points, name="p"))
-    assert exe.score({"band": "b"})["band_points"] == 2
+    assert exe.run({"band": "b"})["band_points"] == 2
     with pytest.raises(NotIntegralError, match="p/band_points"):
-        exe.score({"band": "a"})
+        exe.run({"band": "a"})
     with pytest.raises(NotIntegralError, match="p/band_points"):
         exe.run(pl.DataFrame({"band": ["b", "a"]}))
 
 
 def test_an_allow_fallback_step_returning_a_fraction_for_an_int_output_is_refused(bind):
     exe = bind(flow(declared_python, name="p"))
-    assert exe.score({"y": 3.0})["declared_python"] == 3
+    assert exe.run({"y": 3.0})["declared_python"] == 3
     with pytest.raises(NotIntegralError, match="p/declared_python"):
-        exe.score({"y": 3.5})
+        exe.run({"y": 3.5})
 
 
 def test_a_tree_int_feature_refuses_a_fraction_in_a_record_and_a_frame(bind):
@@ -117,13 +117,13 @@ def test_a_tree_int_feature_refuses_a_fraction_in_a_record_and_a_frame(bind):
                   {"source": "root", "target": "no", "data": {"sourceIndex": 1}}],
         "output": {"data": [{"hit": 0}, {"hit": 1}], "default": {"hit": -1}, "dtypes": [["hit", "Int64"]]}})
     exe = bind(tree)
-    assert exe.score({"n": 7.0})["hit"] == 1
+    assert exe.run({"n": 7.0})["hit"] == 1
     with pytest.raises(NotIntegralError, match="input 'n'"):
-        exe.score({"n": 7.5})
+        exe.run({"n": 7.5})
     with pytest.raises(NotIntegralError, match="input 'n'"):
         exe.run(pl.DataFrame({"n": [7.0, 7.5]}))
 
 
 def test_an_int_input_next_to_a_float_step_is_read_unchanged(bind):
     exe = bind(flow(source, reader, name="p"))
-    assert exe.score({"y": 0.5})["reader"] is True
+    assert exe.run({"y": 0.5})["reader"] is True

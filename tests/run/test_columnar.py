@@ -44,7 +44,7 @@ def test_bundle_total_agrees_across_every_mode():
 @pytest.mark.parametrize("mode", MODES)
 def test_a_row_with_no_items_is_zero_items_not_an_error(mode):
     exe = Engine().bind(flow(bundle_total, name="p"), mode=mode)
-    assert exe.score({"mask": 0, "items": []})["bundle_total"] == 0.0
+    assert exe.run({"mask": 0, "items": []})["bundle_total"] == 0.0
 
 
 @pytest.mark.parametrize("mode", ("stepped", "fused"))
@@ -206,7 +206,7 @@ def test_a_null_item_field_raises_in_every_mode_rather_than_summing_as_nan(mode)
     exe = Engine().bind(flow(total, name="p"), mode=mode)
     record = {"items": [{"price": 2.0}, {"price": None}]}
     with pytest.raises(ValueError, match=r"'price' is null in item 1 of row 0"):
-        exe.score(record)
+        exe.run(record)
     with pytest.raises(ValueError, match=r"'price' is null in item 1 of row 0"):
         exe.run(pl.DataFrame({"items": [record["items"]]},
                              schema={"items": pl.List(pl.Struct({"price": pl.Float64}))}))

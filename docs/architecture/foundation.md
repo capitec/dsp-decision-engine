@@ -139,7 +139,7 @@ df = pl.DataFrame({"principal": [10000.0, 2500.5]}).with_columns(pl.col("princip
 for mode in ("interpreted", "stepped", "fused"):
     out = Engine().bind(pipe, mode).run(df)
     print(mode, out["instalment"].to_list(), out.schema["instalment"])
-print(pipe.compile("fused").score({"principal": Currency(10000)}))
+print(pipe.compile("fused").run({"principal": Currency(10000)}))
 ```
 
 ```text
@@ -179,7 +179,7 @@ Python.
 `Columnar[Item]` and `Struct[Item]` in `decikit/ops/nested.py` are markers with no behaviour of their own; `Item` is a
 `TypedDict`. `Columnar[Item]` reads a `list[dict]` column as one flat array per field (struct of arrays), so
 `items.price[j]` is the `j`th item's price and a kernel can loop over it. Its docstring prices the arrays at about
-20 µs per `score()` call, so a short list with a one-line body is faster as a plain `list[dict]` step in Python.
+20 µs per `run(record)` call, so a short list with a one-line body is faster as a plain `list[dict]` step in Python.
 `Struct[Item]` is one record per row. `struct_item(annotation)` returns the `Item` of a `Struct[Item]`. The engine's
 `compile/rows.py` and `compile/structs.py` do the work; [Kernels](engine/kernels.md) covers them.
 

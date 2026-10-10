@@ -105,10 +105,10 @@ def test_flat_rules_with_every_rule_return_structs_and_lists(run):
 
 
 @pytest.mark.parametrize("mode", ["interpreted", "stepped", "fused"])
-def test_score_returns_records_a_caller_may_edit(mode):
+def test_a_record_run_returns_records_a_caller_may_edit(mode):
     exe = Engine().bind(_tree([["Actions", {"type": "List", "inner": ACT}]], [{"Actions": ["Approve"]}, {}]), mode=mode)
-    exe.score({"score": 0.9})["Actions"][0]["Code"] = 99
-    assert exe.score({"score": 0.9})["Actions"] == [APPROVE]
+    exe.run({"score": 0.9})["Actions"][0]["Code"] = 99
+    assert exe.run({"score": 0.9})["Actions"] == [APPROVE]
 
 
 def test_list_outputs_run_in_the_shared_kernel():

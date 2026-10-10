@@ -30,7 +30,7 @@ def test_annotated_steps_run_like_plain_ones_in_every_mode():
     assert p.run(pl.DataFrame({"loan": [1200.0]}))["instalment"].to_list() == [12.0]
     for mode in ("fused", "stepped"):
         exe = Engine().bind(p, mode=mode)
-        assert exe.score({"loan": 1200.0})["instalment"] == 12.0
+        assert exe.run({"loan": 1200.0})["instalment"] == 12.0
         assert exe.fallbacks() == {}          # the kernel reads the plain type, not one call per row
     assert p.parameters().defaults() == {"f": {"instalment": {"rate": 0.12}}}
 
@@ -55,7 +55,7 @@ def test_a_declaration_keeps_its_metadata_and_the_engine_reads_through_it():
     for mode in ("interpreted", "stepped", "fused"):
         exe = Engine().bind(p, mode=mode)
         assert exe.run(df)["doubled"].to_list() == [2400.0, 0.0]
-        assert exe.score({"loan": 1200.0})["doubled"] == 2400.0
+        assert exe.run({"loan": 1200.0})["doubled"] == 2400.0
         assert exe.fallbacks() == {}
 
 

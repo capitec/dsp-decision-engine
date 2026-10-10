@@ -1,6 +1,6 @@
 # Concurrency
 
-Serving answers every request from one shared `Executable`, and an embedder may call that executable from as many threads as it likes. So everything on the `run` and `score` path has to be safe when many threads call it at once, including the very first call, which compiles. Everything else (debug sessions, trace sinks, experiments, the bridge) is single-caller by contract.
+Serving answers every request from one shared `Executable`, and an embedder may call that executable from as many threads as it likes. So everything on the `run` path, frame or record, has to be safe when many threads call it at once, including the very first call, which compiles. Everything else (debug sessions, trace sinks, experiments, the bridge) is single-caller by contract.
 
 Two helpers in `decikit/_engine/concurrency.py` implement most of the contract: `once`, for caches built once and read without a lock, and a per-thread pool for reusable scratch. Serving's own request handling is in [Serving](../serving.md).
 
@@ -8,11 +8,11 @@ Two helpers in `decikit/_engine/concurrency.py` implement most of the contract: 
 
 | Must be safe from many threads | Why |
 |---|---|
-| `Executable.run` and `score` on one shared executable: same or different params documents, traced or not, including the first call | `RequestHandler` serves every request from one executable, and kernels are `nogil=True` so threads overlap |
+| `Executable.run` on one shared executable, frame or record: same or different params documents, traced or not, including the first call | `RequestHandler` serves every request from one executable, and kernels are `nogil=True` so threads overlap |
 | `RequestHandler.process_fn` while `stage`, `activate` or `rollback` run | versions are swapped under load |
 | `Engine().bind(...)` while other executables run | staging a new version compiles while the old one serves, and both touch the module-global compile caches |
 | registry `resolve` and `lazy` | loading a document can import and register types while requests run |
-| input extraction, `raw_str` codes, params validation and conversion | all reached from `run` and `score` |
+| input extraction, `raw_str` codes, params validation and conversion | all reached from `run` |
 
 | Single caller by contract | Why |
 |---|---|
@@ -38,7 +38,7 @@ The rules the code follows:
 5. Module-global build caches use a double-checked lock: a lock-free `dict.get` on the hit path, a lock, a second check, the build and one insert on the miss path.
 6. No rule depends on the GIL making dict operations atomic. The decider toolkit runs on CPython with the GIL today; rule 3's `setdefault` relies only on per-object dict atomicity, which free-threaded CPython keeps.
 
-Locks appear only on miss paths, so a warm `score()` takes none.
+Locks appear only on miss paths, so a warm `run(record)` takes none.
 
 ## `once(cache, key, build)`
 
@@ -163,7 +163,7 @@ another thread gets its own: True made: 3
 
 The one user today is input extraction. `decikit/_engine/boundary/extract.py` checks out a `FrameView` per `FramePlan` from the `"views"` pool, binds it to the incoming frame, reads the columns, then calls `view.release()` and checks it back in. A `FrameView` hands raw buffer addresses to kernels and `release()` invalidates them, so two threads sharing one view would free each other's spans mid-kernel. See [The boundary](boundary.md) for the view itself.
 
-A per-(plan, thread) reusable `State` for `score()` on the same pattern is planned; it has not landed.
+A per-(plan, thread) reusable `State` for `run(record)` on the same pattern is planned; it has not landed.
 
 ## The runner's compiled snapshot
 
@@ -220,7 +220,7 @@ Two details sit outside the guarantee. A `Fallback` that calls a numba dispatche
 
 ## Inside one serving process
 
-`RequestHandler.process_fn` calls `score()` or `run()` directly on the event loop (it is a plain method, not a coroutine). With Starlette, one worker process therefore runs requests one at a time, and its `nogil` kernels never overlap. Concurrency today comes from embedders calling one executable from their own threads, and from running several processes. The contract holds either way. Moving scoring to a thread pool (`anyio.to_thread.run_sync`) would trade a thread hop per request for not blocking the loop; that is left to a benchmark.
+`RequestHandler.process_fn` calls `run()` directly on the event loop (it is a plain method, not a coroutine). With Starlette, one worker process therefore runs requests one at a time, and its `nogil` kernels never overlap. Concurrency today comes from embedders calling one executable from their own threads, and from running several processes. The contract holds either way. Moving scoring to a thread pool (`anyio.to_thread.run_sync`) would trade a thread hop per request for not blocking the loop; that is left to a benchmark.
 
 `stage`, `activate` and `rollback` take the handler's `_lock` and swap the active `Live` with one assignment. `Live.dates` defaults to an empty `MappingProxyType`, so the shared default cannot be mutated. The registry takes its root's `RLock` on the miss path of `resolve` and `lazy`, and `bundle_class` in `decikit/_engine/params/bundles.py` builds each namedtuple class under a module lock.
 
@@ -270,7 +270,7 @@ sequenceDiagram
 
 | Test | Covers |
 |---|---|
-| `test_concurrent_first_calls_on_a_cold_executable_agree_with_one_thread` | race 2, `score`, every mode |
+| `test_concurrent_first_calls_on_a_cold_executable_agree_with_one_thread` | race 2, `run(record)`, every mode |
 | `test_concurrent_first_frame_runs_on_a_cold_executable_agree_with_one_thread` | race 2, `run`, every mode |
 | `test_str_params_on_the_span_path_survive_concurrent_first_use` | race 1 |
 | `test_each_traced_call_gets_exactly_its_own_events` | race 3 |

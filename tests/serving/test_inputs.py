@@ -211,7 +211,7 @@ def test_code_path_wins_over_an_earlier_path_entry_and_the_pipeline_file_is_repo
     handler.stage()
     handler.activate()
     live = handler.module_fn()
-    assert "mine" in live.executable.score({"x": 1.0})
+    assert "mine" in live.executable.run({"x": 1.0})
     assert str(tmp_path / "mine" / "pipeline.py") in capsys.readouterr().err
     monkeypatch.delitem(sys.modules, "pipeline")
 

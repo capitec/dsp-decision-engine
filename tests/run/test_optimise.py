@@ -76,7 +76,7 @@ def test_a_disqualified_bundle_is_counted_and_excluded():
 
 def test_an_empty_list_reads_as_no_candidates():
     exe = Engine().bind(pipeline(), mode="fused")
-    got = exe.score({"items": []})
+    got = exe.run({"items": []})
     assert got["best_index"] == -1 and got["best_score"] == -1e300
     assert got["evaluated"] == 0 and got["disqualified"] == 0
 
@@ -182,4 +182,4 @@ def test_a_record_carries_through_a_tie_to_the_earlier_candidate():
 def test_a_record_optimise_compiles_without_a_fallback():
     exe = Engine(strict_compile=True).bind(record_pipeline(), mode="fused")
     assert exe.fallbacks() == {}
-    assert exe.score({"items": [{"price": 2.0, "weight": 1.0}]})["record"] == {"total": 2.0, "weight": 1.0}
+    assert exe.run({"items": [{"price": 2.0, "weight": 1.0}]})["record"] == {"total": 2.0, "weight": 1.0}

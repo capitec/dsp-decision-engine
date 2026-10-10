@@ -281,7 +281,7 @@ def record_value(value: Any, annotation: Any = None) -> Any:
 
     A compiled struct output is a numpy record, which `tolist()` turns into a
     tuple of fields (or leaves as a `np.void` in an object array); a step
-    returns a dict, so `score` must agree. A Decimal value is boxed by the caller.
+    returns a dict, so a record's run must agree. A Decimal value is boxed by the caller.
     """
     item = struct_item(base_annotation(annotation))
     if item is not None and value is not None and not isinstance(value, dict):
@@ -294,8 +294,8 @@ def load_record(state: State, record: Mapping[str, Any], versions: list[NodeVers
     """Write `record`'s value of every one-row `versions` `dtype` groups into `state`.
 
     One array per dtype, viewed per input, is far cheaper than one array per
-    input; shared by `Engine.score`'s record path and `each`'s per-item runs,
-    so both score a plain dict the same way.
+    input; shared by `Executable.run`'s record path and `each`'s per-item runs,
+    so both read a plain dict the same way.
     """
     given = [v for v in versions if v.name in record]
     if not given:

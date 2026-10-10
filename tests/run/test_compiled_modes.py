@@ -1,4 +1,4 @@
-"""Stepped and fused modes: one answer with interpreted, one kernel for run and score, no recompiles."""
+"""Stepped and fused modes: one answer with interpreted, one kernel for a frame and a record run, no recompiles."""
 import polars as pl
 import pytest
 
@@ -51,12 +51,12 @@ def test_fused_runs_the_flagship_as_one_kernel_and_stepped_as_one_per_step():
     assert all(isinstance(u, Kernel) for u in fused.runner.units.values())
 
 
-def test_score_and_run_use_the_same_compiled_kernel():
+def test_a_record_and_a_frame_run_use_the_same_compiled_kernel():
     exe = Engine().bind(flagship, mode="fused")
     batch = exe.run(FRAME)
     (unit,) = {id(u): u for u in exe.runner.units.values()}.values()
     kernel, signatures = unit.fn, len(unit.fn.signatures)
-    record = exe.score(ROW)
+    record = exe.run(ROW)
     assert Engine().bind(flagship, mode="fused").run(FRAME).equals(batch)
     (again,) = {id(u): u for u in exe.runner.units.values()}.values()
     assert again.fn is kernel and len(kernel.signatures) == signatures
@@ -71,22 +71,22 @@ def test_repeated_calls_do_not_rebuild_the_driver(mode):
     exe = Engine().bind(flow(_sub), mode=mode)
     frame = pl.DataFrame({"x": [1.0] * 64, "y": [2.0] * 64})
     exe.run(frame)
-    exe.score({"x": 1.0, "y": 2.0})
+    exe.run({"x": 1.0, "y": 2.0})
     with no_recompile():
         for _ in range(3):
             exe.run(frame)
-            exe.score({"x": 1.0, "y": 2.0})
+            exe.run({"x": 1.0, "y": 2.0})
 
 
 @pytest.mark.parametrize("mode", ["stepped", "fused"])
 def test_retuning_never_recompiles(mode):
     exe = Engine().bind(flagship, mode=mode)
     exe.run(FRAME)
-    exe.score(ROW)
+    exe.run(ROW)
     with no_recompile():
         retuned = exe.run(FRAME, params={"cap_by_income_band": {"cap": 24.0}})
-        scored = exe.score(ROW, params={"cap_by_income_band": {"cap": 12.0}})
-        back = exe.score(ROW)
+        scored = exe.run(ROW, params={"cap_by_income_band": {"cap": 12.0}})
+        back = exe.run(ROW)
     assert retuned["cap_by_income_band"].to_list() == [60.0, 24.0, 60.0, 24.0]
     assert (scored["cap_by_income_band"], back["cap_by_income_band"]) == (12.0, 48.0)
 
@@ -106,7 +106,7 @@ def test_retuning_a_string_literal_never_recompiles():
                                   ("public", [1.0, 0.9, 1.0, 1.0])]:
             out = exe.run(SECTORS, params={"sector_rate": {"private": literal}})
             assert out["sector_rate"].to_list() == expected
-        assert exe.score({"sector": "public"}, params={"sector_rate": {"private": "public"}})["sector_rate"] == 0.9
+        assert exe.run({"sector": "public"}, params={"sector_rate": {"private": "public"}})["sector_rate"] == 0.9
 
 
 def text_rate(sector: Text, private: Text = param("private"), rate: float = param(0.9, gt=0)) -> float:
@@ -129,7 +129,7 @@ def test_retuning_a_text_param_never_recompiles():
         for literal, expected in [("government", [1.0, 1.0, 1.0, 0.9]), ("martian", [1.0] * 4),
                                   ("public", [1.0, 0.9, 1.0, 1.0])]:
             assert exe.run(SECTORS, params={"text_rate": {"private": literal}})["text_rate"].to_list() == expected
-        assert exe.score({"sector": "public"}, params={"text_rate": {"private": "public"}})["text_rate"] == 0.9
+        assert exe.run({"sector": "public"}, params={"text_rate": {"private": "public"}})["text_rate"] == 0.9
 
 
 @pytest.mark.parametrize("mode", ["stepped", "fused"])
@@ -200,7 +200,7 @@ def small(x: float, k: float = param(1.0, ge=0)) -> float:
     return x * k
 
 
-def test_score_equals_run_row_for_row_through_a_branch_and_nulls():
+def test_a_record_run_equals_a_frame_run_row_for_row_through_a_branch_and_nulls():
     def bump(y: float, extra: float | None) -> float:
         return y + (0.0 if extra is None else extra)
 
@@ -254,7 +254,7 @@ def test_a_row_node_of_400_inputs_answers_in_every_mode():
     for m in MODES:
         exe = Engine().bind(node, mode=m)
         assert exe.run(frame)["total"].to_list() == expected
-        assert exe.score(frame.row(1, named=True))["total"] == expected[1]
+        assert exe.run(frame.row(1, named=True))["total"] == expected[1]
 
 
 def test_a_scalar_step_of_twenty_inputs_answers_in_every_mode():

@@ -11,7 +11,7 @@ from decikit import Engine
 
 exe = Engine(params_validation="lazy").bind(pipeline, mode="fused")
 exe.run(df, params=doc)          # a polars DataFrame
-exe.score(record, doc)           # a dict
+exe.run(record, doc)             # a dict
 exe.session(df)                  # a debug Session, paused before anything runs
 ```
 
@@ -105,10 +105,10 @@ call only does the rest. For the plan it was given it builds:
 - `_produced`, `_params_at` and `_watched`: the names the pipeline writes, and where each param lives in a params
   document. A frame or record holding one of these names is an error or a warning (below).
 - `_declared`: the polars dtype each input column is cast to when the frame holds an all-null column.
-- `_inputs`: the input versions grouped by numpy dtype, so `score` fills one array per dtype.
+- `_inputs`: the input versions grouped by numpy dtype, so `run(record)` fills one array per dtype.
 - `_results`, `_boxers`, `_structs`, `_hidden`: the output versions, which of them are Decimals or structs, and
   which frame columns the output leaves out.
-- `_record_path`: true when the plan has no frame steps, so `score` can skip polars entirely.
+- `_record_path`: true when the plan has no frame steps, so `run(record)` can skip polars entirely.
 - `_trace_table`: the per-run `StepTable` of origins a [trace](trace.md) sink receives.
 
 None of this changes after `__init__`. The convention test `test_runners_and_executable_keep_no_per_call_state`
@@ -227,14 +227,19 @@ sequenceDiagram
    times cheaper than building a new frame, and otherwise it builds a new `pl.DataFrame` from the kept columns and
    the outputs.
 
-## score: one record without polars
+## run on a record: one record without polars
 
-`score(record, params=None, trace=None)` takes a dict and returns a dict. When the plan has no frame steps
+`run` dispatches on its input: a `dict` takes the record path at once, a `pl.LazyFrame` is collected and run as a
+frame, a `pl.DataFrame` takes the frame path, any other `Mapping` takes the record path, and anything else raises
+`TypeError`. The `dict` check comes first because the record path is the serving hot path: it costs about
+0.06 µs, where the frame and `Mapping` checks would cost about 0.5 µs a record.
+
+`run(record, params=None, trace=None)` takes a dict and returns a dict. When the plan has no frame steps
 (`_record_path`), it never builds a polars frame:
 
 ```mermaid
 flowchart TD
-    A["score(record, params)"]:::author --> B{"plan has a<br/>frame step?"}:::engine
+    A["run(record, params)"]:::author --> B{"plan has a<br/>frame step?"}:::engine
     B -- yes --> C["pl.DataFrame([record])<br/>then prepare(df, n=1)"]:::data
     C --> D["run the plan"]:::engine
     D --> E["output(state).row(0, named=True)"]:::data
@@ -255,7 +260,7 @@ specialisation. On the way out, a Decimal output is boxed from its int64 back to
 becomes the dict a step returns.
 
 ```text
->>> exe.score({"net_income": 9000.0, "expenses": 3000.0,
+>>> exe.run({"net_income": 9000.0, "expenses": 3000.0,
 ...            "employment_type": 1, "instalment": 1500.0})
 {'net_income': 9000.0, 'expenses': 3000.0, 'employment_type': 1,
  'instalment': 1500.0, 'limit': 18000.0, 'affordable': True}
@@ -265,14 +270,14 @@ Building one array per input took about 8 µs of a 36 µs call,
 and hashing an empty params document took 3.7 µs, so the empty document's key is now a constant. The benchmark
 (`benchmarks/modes.py`, flagship pipeline, 20k calls, CPython 3.14) measured:
 
-| Engine | Batch rows/s | `score` p50 | `score` p99 |
+| Engine | Batch rows/s | `run(record)` p50 | `run(record)` p99 |
 |---|---|---|---|
 | decikit fused | 12.5M | 27.7 µs | 34.7 µs |
 | decikit stepped | 12.9M | 37.1 µs | 47.6 µs |
 | decikit interpreted | 0.25M | 59.1 µs | 84.5 µs |
 
 Running the credit pipeline above in fused mode on a loaded development machine while writing this page gave a
-`score` p50 of 80.7 µs against 192.4 µs for `run` on the same record as a one-row frame. `score` takes a dict
+`run(record)` p50 of 80.7 µs against 192.4 µs for `run` on the same record as a one-row frame. `run` takes a record as a dict
 because matching keyword names against a 400-argument signature cost 1190 µs per call, against 60 µs for a dict.
 
 ## session and fallbacks
@@ -319,7 +324,7 @@ An exception raised inside a step keeps its type, and the runner adds a note nam
 mode, the row:
 
 ```text
->>> exe.score({"net_income": 1.0, "employment_type": 1, "instalment": 0.0})
+>>> exe.run({"net_income": 1.0, "employment_type": 1, "instalment": 0.0})
 ZeroDivisionError: division by zero
 in step credit/affordable, row 0
 ```
@@ -373,5 +378,5 @@ and a new step type only implements `to_ir` ([IR](ir.md)). The two compiled runn
 with compiled calls, so branches, loops, row subsets and frame steps have one implementation, and a debug session
 gets the same checkpoints from every mode ([runners](runners.md)). Params are always runtime arguments: retuning
 validates a new document and builds new bundles, and never rebuilds the IR or recompiles a kernel
-([params](params.md)). `score` takes a dict because keyword arguments cost more than the whole optimised call on
+([params](params.md)). `run` takes a record as a dict because keyword arguments cost more than the whole optimised call on
 wide records.

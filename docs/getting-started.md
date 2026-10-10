@@ -99,11 +99,11 @@ flowchart LR
 
 ## Score one record
 
-A service answers one request at a time. Compile the pipeline once, then call `score` with a dict for each record. `"fused"` is the fastest [compiled mode](guides/compile-and-fallback.md): numba turns both steps into one machine-code kernel the first time it runs.
+A service answers one request at a time. Compile the pipeline once, then call `run` with a dict for each record. `"fused"` is the fastest [compiled mode](guides/compile-and-fallback.md): numba turns both steps into one machine-code kernel the first time it runs.
 
 ```python
 exe = pipeline.compile("fused")
-print(exe.score({"income": 1000.0, "debt": 200.0}))
+print(exe.run({"income": 1000.0, "debt": 200.0}))
 ```
 
 ```text
@@ -112,8 +112,8 @@ print(exe.score({"income": 1000.0, "debt": 200.0}))
 
 The first call compiles, which takes a noticeable fraction of a second. Later calls reuse the kernel and take tens of microseconds. Every mode gives the same answers, so `pipeline.run(df)` (interpreted, plain Python) is the reference the compiled modes are tested against.
 
-!!! warning "Score single records with `score`"
-    Do not score one record by building a one-row frame and calling `run`. `run` builds a frame, exports it through Arrow and assembles an output frame, which the guide measures at about five times the cost of `score` on the same record.
+!!! warning "Pass a single record as a dict"
+    Do not score one record by building a one-row frame and passing it to `run`. A frame is exported through Arrow and an output frame assembled, which the guide measures at about five times the cost of passing the dict on the same record.
 
 ## Retune a param
 
@@ -135,7 +135,7 @@ Tighten the limit and pass the document to the same compiled executable. Nothing
 ```python
 params["afford"]["affordable"]["limit"] = 0.3
 print(exe.run(df, params=params))
-print(exe.score({"income": 800.0, "debt": 300.0}, params))
+print(exe.run({"income": 800.0, "debt": 300.0}, params))
 ```
 
 ```text
@@ -152,7 +152,7 @@ shape: (3, 3)
 {'income': 800.0, 'debt': 300.0, 'affordable': False}
 ```
 
-In a deployed project that document is `configs/<version>/params.json`, and a new version of it changes the decision without a code release. [Steps, params, run and score](guides/steps-and-params.md) covers validation, ranges, required and shared params.
+In a deployed project that document is `configs/<version>/params.json`, and a new version of it changes the decision without a code release. [Steps, params and run](guides/steps-and-params.md) covers validation, ranges, required and shared params.
 
 ## Read the guide from the terminal
 
@@ -258,7 +258,7 @@ flowchart LR
 ## Where to go next
 
 - [Core concepts](concepts.md) has the mental model and a glossary of every term on this site.
-- [Steps, params, run and score](guides/steps-and-params.md) covers steps, params and the errors you will meet first.
+- [Steps, params and run](guides/steps-and-params.md) covers steps, params and the errors you will meet first.
 - [Branches, loops and frame steps](guides/branches-loops-frames.md) adds per-row logic, iteration and whole-frame work.
 - [Types, text, money and nested data](guides/types-and-money.md) covers `Text`, `Currency`, `Decimal` and list columns.
 - [Compiled modes and fallback](guides/compile-and-fallback.md) explains what compiles and what runs in Python.

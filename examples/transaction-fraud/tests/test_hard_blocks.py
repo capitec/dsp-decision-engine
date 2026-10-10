@@ -11,7 +11,7 @@ GATE_INPUTS = {1: "sanctions_list_match", 2: "account_frozen", 4: "mule_watchlis
 @pytest.fixture(scope="module")
 def gates():
     executable = Engine(strict_compile=True).bind(flow(hard_blocks.hard_block_step, name="gates"), mode="fused")
-    return lambda **held: executable.score(held)
+    return lambda **held: executable.run(held)
 
 
 def test_no_gate_forces_nothing(gates):

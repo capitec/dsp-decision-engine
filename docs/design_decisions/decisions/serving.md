@@ -2,10 +2,10 @@
 
 Read this before changing how a request is parsed, scored or transported, or how frames reach kernels; the walkthrough is `docs/architecture/serving.md` and `docs/architecture/engine/boundary.md`.
 
-## One record goes through `score(dict)`, never a frame
+## One record goes through `run(dict)`, never a frame
 
-- `process_fn` branches on the parsed body: a JSON object calls `Executable.score`, anything else (array, JSONL, CSV, Parquet, Arrow IPC) calls `run` on a frame.
-- Why: `run(one-row frame)` took 150 us against `score()`'s 30.4 us (flagship).
+- `process_fn` branches on the parsed body: a JSON object calls `Executable.run` on a dict, anything else (array, JSONL, CSV, Parquet, Arrow IPC) calls `run` on a frame.
+- Why: `run(one-row frame)` took 150 us against `run(dict)`'s 30.4 us (flagship).
 - See: [serving latency budget](../experiments/serving-latency-budget.md), `decikit/serving/_handler.py`
 
 ## The handler hooks are synchronous, and `score` is the in-process entry
@@ -30,7 +30,7 @@ Read this before changing how a request is parsed, scored or transported, or how
 ## No Arrow-native, Flight or socket server, and no pyarrow dependency
 
 - Not: a specialised server. The codec is 2-6% of a request, so a free codec saves about 2 us; the long-lived pyarrow record-batch stream measured slowest of every transport except HTTP.
-- Not: pyarrow (146.7 MiB installed against polars' 7.9, a second Arrow runtime beside the shim). A co-located caller should `import decikit` and call `score()`; a remote caller's network dwarfs the rest.
+- Not: pyarrow (146.7 MiB installed against polars' 7.9, a second Arrow runtime beside the shim). A co-located caller should `import decikit` and call `run()` with a dict; a remote caller's network dwarfs the rest.
 - See: [Arrow codec and transports](../experiments/arrow-codec-and-transports.md)
 
 ## HTTP framing is the largest transport term, and the one lever is deployment
@@ -46,16 +46,16 @@ Read this before changing how a request is parsed, scored or transported, or how
 - Not: a background compile thread. numba compiles one function at a time (two threads: 1.04x) and a `nogil` kernel then loses 5.2 ms per call to the GIL hand-off, 26% of throughput. Run `decikit build` in its own process first so `stage()` loads cached user steps.
 - See: [experiment](../experiments/stage-a-version-while-serving.md), `decikit/serving/_handler.py`
 
-## Not landed: the in-process engine floor for `score()`
+## Not landed: the in-process engine floor for `run(record)`
 
-- `score()` still builds a `State`, per-dtype arrays and output buffers each call: 39.4 us for a whole flagship request against about 7 us with everything pre-bound (tree: 77.2 against about 18).
+- `run(record)` still builds a `State`, per-dtype arrays and output buffers each call: 39.4 us for a whole flagship request against about 7 us with everything pre-bound (tree: 77.2 against about 18).
 - A fix must key a per-(plan, thread) cache on plan identity, cache only `n == 1`, follow the per-thread `FrameView` pool, and never hand a cached `State` to a `Session`.
 - See: [serving latency budget](../experiments/serving-latency-budget.md), `docs/architecture/engine/concurrency.md`
 
 ## Strings for one record are described from their own bytes
 
-- Up to 32 values (`score()`), `spans()` points at each value's own `bytes` object; above that it exports the frame's column.
-- Why: building spans through a frame cost 71.7 us for one 3-byte string (gated tree `score()` 136 us, now 82 us, against 63 us ungated).
+- Up to 32 values (`run(record)`), `spans()` points at each value's own `bytes` object; above that it exports the frame's column.
+- Why: building spans through a frame cost 71.7 us for one 3-byte string (gated tree `run(record)` 136 us, now 82 us, against 63 us ungated).
 - See: [string representations](../experiments/string-representations.md), `decikit/_engine/run/representations.py`, `docs/architecture/engine/boundary.md`
 
 ## A frame is read through one `__arrow_c_stream__` export and one C call
@@ -76,7 +76,7 @@ Read this before changing how a request is parsed, scored or transported, or how
 ## Nullable columns are still copied; zero-copy validity is not adopted
 
 - Validity becomes a byte mask per row. Reading `(bitmap, offset)` in the kernel made null-heavy wide frames 6-7x faster at 1M rows but touched about 17 boundary tests and the kernel ABI, and was left behind a flag that is no longer in the code.
-- `score(dict)` never goes through polars/Arrow (126 us against 30 us on flagship); it builds the same `(values, validity)` arrays from the dict.
+- `run(dict)` never goes through polars/Arrow (126 us against 30 us on flagship); it builds the same `(values, validity)` arrays from the dict.
 - Cheap batch wins left: `Enum.gather` for `Literal` outputs (about -40 ms per 1M tree rows) and `Series.set(mask, None)` for nullable outputs.
 - See: [zero-copy Arrow gather spike](../experiments/zero-copy-arrow-gather-spike.md)
 
@@ -125,7 +125,7 @@ Read this before changing how a request is parsed, scored or transported, or how
 - Every example answered 200 with its README figures. First requests of `consolidation` (413 ms), `governance-replay` (872 ms), `retail-credit-e2e` (214 ms) and `business-credit-e2e` (115 ms) are slower than the others because they stage something lazily; the rest took 5 to 34 ms.
 - The cache is keyed by source path and CPU, so it hits because the project sits at `/opt/ml/model/code` when built and when served, and only on the CPU that built it. Simulating another CPU (`NUMBA_CPU_NAME=generic` at run time on a host-built image) printed the "`decikit build` ran for CPU 'raptorlake' but this host is 'generic'" warning and brought the start back to the empty-cache figures (39 s and 123 s). No warning appears when the image runs on the CPU that built it.
 - `CPU_TARGET=generic` is the default: the runtime and project images build and serve with `NUMBA_CPU_NAME=generic` (baseline x86-64, no AVX), so a baked cache hits on any x86-64 CPU. `CPU_TARGET=host` compiles for the build machine.
-- Why generic: it costs nothing measurable per record, and host code costs a 2 to 3 times slower start on any other CPU model. Per record (`Executable.score` p50, 3 alternating processes, outside a container): generic against host -1.3% to +0.5% on five examples (affordability, shared-credit-core, loan-granting-pricing, collections, transaction-fraud; geometric mean -0.2%, best of 3). In containers (one worker, 2 CPUs, 300 requests over HTTP, 3 alternating starts): HTTP p50 generic against host -1.1% (loan-granting-pricing, 8.2 ms), +0.4% (transaction-fraud, 17.4 ms), -0.7% (collections, 13.1 ms); start to `/ping` the same (12.2, 31.1, 9.7 s). The host image under `NUMBA_CPU_NAME=generic` (another CPU, simulated) warned and took 28.5, 99.3 and 24.9 s. Only this CPU (raptorlake) was tried.
+- Why generic: it costs nothing measurable per record, and host code costs a 2 to 3 times slower start on any other CPU model. Per record (`Executable.run` on a dict, p50, 3 alternating processes, outside a container): generic against host -1.3% to +0.5% on five examples (affordability, shared-credit-core, loan-granting-pricing, collections, transaction-fraud; geometric mean -0.2%, best of 3). In containers (one worker, 2 CPUs, 300 requests over HTTP, 3 alternating starts): HTTP p50 generic against host -1.1% (loan-granting-pricing, 8.2 ms), +0.4% (transaction-fraud, 17.4 ms), -0.7% (collections, 13.1 ms); start to `/ping` the same (12.2, 31.1, 9.7 s). The host image under `NUMBA_CPU_NAME=generic` (another CPU, simulated) warned and took 28.5, 99.3 and 24.9 s. Only this CPU (raptorlake) was tried.
 - `NUMBA_CPU_NAME` is chosen by a stage, not an `ENV ${ARG}`: an empty value makes numba name an empty CPU but keep the host features.
 - Not verified: the docker daemon, a second CPU model, an internal index through `PIP_CONF`.
 

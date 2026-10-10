@@ -28,7 +28,7 @@ RECORD = {"entities": [{"items": [{"x": 1.0}, {"x": 2.0}]}]}
 @pytest.mark.parametrize("mode", MODES)
 def test_a_nested_each_writing_another_column_gathers_its_items(mode):
     p = flow(each("entities", entity("inner"), name="entities"), name="p")
-    got = Engine().bind(p, mode=mode).score(RECORD)["entities"][0]
+    got = Engine().bind(p, mode=mode).run(RECORD)["entities"][0]
     assert got["inner"] == [{"x": 1.0, "double": 2.0}, {"x": 2.0, "double": 4.0}]
     assert got["total"] == 6.0
 
@@ -37,7 +37,7 @@ def test_a_nested_each_writing_another_column_gathers_its_items(mode):
 def test_a_nested_each_overwriting_its_own_column_gathers_its_items(mode):
     inner = flow(each("items", flow(step(double, output="double"), name="item"), name="items"), name="entity")
     p = flow(each("entities", inner, name="entities"), name="p")
-    got = Engine().bind(p, mode=mode).score(RECORD)["entities"][0]
+    got = Engine().bind(p, mode=mode).run(RECORD)["entities"][0]
     assert got["items"] == [{"x": 1.0, "double": 2.0}, {"x": 2.0, "double": 4.0}]
 
 
@@ -55,6 +55,6 @@ def test_a_dag_does_not_count_an_eachs_child_names_as_its_own_writes():
 
     child = flow(step(rate, output="rate"), step(reads_rate, output="y"), name="item")
     p = dag(each("xs", child, name="xs"), step(rate, output="rate"), step(g, output="g"), name="p")
-    out = Engine().bind(p.emit("xs", "rate", "g"), mode="interpreted").score({"xs": [{}, {}]})
+    out = Engine().bind(p.emit("xs", "rate", "g"), mode="interpreted").run({"xs": [{}, {}]})
     assert out["xs"] == [{"rate": 1.0, "y": 2.0}, {"rate": 1.0, "y": 2.0}]
     assert out["g"] == 2.0

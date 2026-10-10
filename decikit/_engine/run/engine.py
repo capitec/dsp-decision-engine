@@ -3,7 +3,8 @@ from __future__ import annotations
 import json
 import threading
 import warnings
-from typing import TYPE_CHECKING, Any, Literal, Mapping
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 import polars as pl
@@ -87,7 +88,7 @@ class Engine:
 
 
 class Executable:
-    """A bound pipeline: `run` a frame, or `score` one record.
+    """A bound pipeline: `run` a polars frame or one record (a dict).
 
     `report` describes the params validation of the latest call on the
     calling thread; `step` is what it was bound from (a step, a function or
@@ -97,7 +98,7 @@ class Executable:
 
         exe = Engine().bind(pipeline)
         exe.run(df)                       # a polars DataFrame
-        exe.score({"net_income": 4100.0, ...})   # a dict
+        exe.run({"net_income": 4100.0, ...})   # a dict
     """
 
     def __init__(self, plan: Plan, runner: Runner, lazy: bool, step: Any = None):
@@ -131,7 +132,7 @@ class Executable:
         # A Decimal output is stored as its int64 and handed back as a Decimal.
         self._boxers = {k: box for k, v in self._results if (box := decimal_boxer(v.annotation)) is not None}
         # Only a struct output's annotation shapes its record; looking up any other per call hashes it,
-        # and hashing a `Literal` of thousands of choices cost more than the rest of score().
+        # and hashing a `Literal` of thousands of choices cost more than the rest of a record's run.
         self._structs = {k: v.annotation for k, v in self._results if struct_item(base_annotation(v.annotation))}
         self._hidden = set(plan.drops) | {k for k, _ in self._results}
         self._record_path = not any(c.node.kind == "frame" for c in plan.calls)
@@ -197,37 +198,41 @@ class Executable:
                 run.bundle(call_id, n)
         return True
 
-    def run(self, df: pl.DataFrame, params: Mapping[str, Any] | None = None, trace=None) -> pl.DataFrame:
-        """Run over a frame: the input columns plus every output, minus drops.
+    def run(self, data: Any, params: Mapping[str, Any] | None = None, trace=None) -> pl.DataFrame | dict[str, Any]:
+        """Run a polars frame, or one record given as a dict of input values.
 
-        `params` is treated as immutable: it is validated once and reused
-        while the same object is passed, so pass a new dict to change a value
-        rather than editing one in place. `trace` is an optional `TraceSink`:
-        when it is not given, nothing is captured (no-op).
+        A `DataFrame` returns a `DataFrame`: the input columns plus every
+        output, minus drops. A `LazyFrame` is collected first. A dict returns
+        a dict of the output row, through the same kernels; a pipeline without
+        frame steps never builds a polars frame for it, so this is the fast
+        path for one record.
+
+        `params` is treated as immutable: pass the same document object call
+        after call and it is never hashed or validated again, so a value
+        edited in place is not seen. To change a value, pass a new dict
+        (`copy.deepcopy(doc)`, then edit the copy). `trace` is an optional
+        `TraceSink`: when it is not given, nothing is captured (no-op).
 
         Example::
 
             out = exe.run(df, params={"shared": {"min_ratio": 0.4}})
+            exe.run({"net_income": 4100.0, "expenses": 1500.0})["disposable_income"]  # 2600.0
         """
-        state, run = self.prepare(df, params)
-        self._iterate(state, run, trace)
-        return self.output(state)
+        # A dict first: it is the serving hot path, the `Mapping` check is slow, and a dict is never a frame.
+        if isinstance(data, dict):
+            return self._run_record(data, params, trace)
+        if isinstance(data, pl.LazyFrame):
+            data = data.collect()
+        if isinstance(data, pl.DataFrame):
+            state, run = self.prepare(data, params)
+            self._iterate(state, run, trace)
+            return self.output(state)
+        if isinstance(data, Mapping):
+            return self._run_record(data, params, trace)
+        raise TypeError(f"run() takes a dict record, a polars DataFrame or LazyFrame, not {type(data).__name__}")
 
-    def score(self, record: Mapping[str, Any], params: Mapping[str, Any] | None = None,
-              trace=None) -> dict[str, Any]:
-        """Run one record, given as a dict of input values; returns a dict of the output row.
-
-        Uses the same kernels as `run`. A pipeline without frame steps never
-        builds a polars frame on this path. As in `run`, `params` is treated
-        as immutable: pass the same document object call after call and it is
-        never hashed or validated again, so a value edited in place is not
-        seen. To change a value, pass a new dict (`copy.deepcopy(doc)`, then
-        edit the copy). `trace` is an optional `TraceSink`.
-
-        Example::
-
-            exe.score({"net_income": 4100.0, "expenses": 1500.0})["disposable_income"]  # 2600.0
-        """
+    def _run_record(self, record: Mapping[str, Any], params: Mapping[str, Any] | None = None,
+                    trace=None) -> dict[str, Any]:
         if not self._record_path:
             state, run = self.prepare(pl.DataFrame([dict(record)]), params, n=1)
             self._iterate(state, run, trace)

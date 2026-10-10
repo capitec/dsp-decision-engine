@@ -80,7 +80,7 @@ class Capacity:
                   "applicant1_internal_accounts": internal}
         if proposed_instalment is not None:
             record["proposed_instalment"] = proposed_instalment
-        return self._exe.score(record, self._params[stack_enabled])
+        return self._exe.run(record, self._params[stack_enabled])
 
 
 def _behaviour(document) -> str:

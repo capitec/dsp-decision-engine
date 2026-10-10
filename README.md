@@ -40,7 +40,7 @@ pipeline = flow(ratio, affordable, name="afford")
 df = pl.DataFrame({"income": [1000.0, 500.0], "debt": [200.0, 400.0]})
 pipeline.run(df)                                                   # income, debt, affordable
 pipeline.run(df, params={"afford": {"affordable": {"limit": 0.9}}})
-Engine().bind(pipeline, mode="fused").score({"income": 1000.0, "debt": 200.0})   # one record
+Engine().bind(pipeline, mode="fused").run({"income": 1000.0, "debt": 200.0})  # one record
 ```
 
 ## CLI

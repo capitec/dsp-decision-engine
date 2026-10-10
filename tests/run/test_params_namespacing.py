@@ -1,4 +1,4 @@
-"""Params reach nodes by path, the same way in run and score; unknown entries are hard errors."""
+"""Params reach nodes by path, the same way in a frame and a record run; unknown entries are hard errors."""
 from __future__ import annotations
 
 import polars as pl
@@ -32,9 +32,9 @@ def test_a_named_flow_is_tuned_through_its_path(bind):
     assert tuned["plus_headroom"].to_list() == [45.0, 45.0]
 
 
-def test_score_is_namespaced_the_same_way_as_run(bind):
+def test_a_record_run_is_namespaced_the_same_way_as_a_frame_run(bind):
     exe = bind(band)
-    assert exe.score({"term_cap": 60.0}, params={"band": {"net_of_floor": {"floor": 20.0}}})["plus_headroom"] == 43.0
+    assert exe.run({"term_cap": 60.0}, params={"band": {"net_of_floor": {"floor": 20.0}}})["plus_headroom"] == 43.0
 
 
 def test_a_shared_param_is_read_from_the_shared_entry(bind):

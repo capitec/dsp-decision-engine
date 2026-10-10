@@ -1,4 +1,4 @@
-"""A `dict` input as an Arrow struct: score() latency and batch throughput.
+"""A `dict` input as an Arrow struct: run(record) latency and batch throughput.
 
 `uv run python benchmarks/structs.py`
 """
@@ -67,12 +67,12 @@ def latency(cases: list[tuple]) -> list[tuple[float, float, float]]:
     # Interleaved: a busy box drifts every variant the same way, so p50s stay comparable.
     for exe, record in cases:
         for _ in range(200):
-            exe.score(record)
+            exe.run(record)
     times: list[list[float]] = [[] for _ in cases]
     for _ in range(CALLS):
         for (exe, record), ts in zip(cases, times):
             t = time.perf_counter()
-            exe.score(record)
+            exe.run(record)
             ts.append((time.perf_counter() - t) * 1e6)
     out = []
     for ts in times:

@@ -56,6 +56,6 @@ def test_changing_a_reason_severity_changes_the_ranking_step(shipped):
 
 def test_a_tighter_overlay_lowers_the_served_capacity(sample, parse, params):
     sample = sample | {"product_code": 10}
-    base = build().compile("interpreted").score(parse(sample), params)["max_affordable_instalment"]
+    base = build().compile("interpreted").run(parse(sample), params)["max_affordable_instalment"]
     tighter = rebuilt(lambda doc: doc["adjustments"][0]["effect"].update(value=0.80))
-    assert tighter.compile("interpreted").score(parse(sample), params)["max_affordable_instalment"] < base
+    assert tighter.compile("interpreted").run(parse(sample), params)["max_affordable_instalment"] < base

@@ -3,7 +3,7 @@
 A runner executes a [Plan](wiring.md) over a `State`. There are three, one per mode, and they share one driver:
 `InterpretedRunner` walks the plan in Python and calls every step row by row, `SteppedRunner` replaces how a call
 runs (a numba kernel per call), and `FusedRunner` also replaces how a sequence, a branch and a loop run (one kernel
-for several calls). Every runner is a generator of checkpoints, so `run`, `score` and a debug session all go
+for several calls). Every runner is a generator of checkpoints, so `run` on a frame or a record and a debug session all go
 through the same code.
 
 The code lives in `decikit/_engine/run/`:
@@ -53,7 +53,7 @@ first, so the rows a write never touches stay null. `read(version, rows=None)` r
 rows; a version never written reads as all null.
 
 The input columns are loaded once, as nullable, by `State.from_frame` (through the [boundary](boundary.md)) or by
-`load_record` on the `score` path. Raw values plus masks are loaded because
+`load_record` on the record path. Raw values plus masks are loaded because
 two steps may read one column with different null policies (`x: float` and `x: float | None`), so the policy is
 applied per reader.
 
@@ -139,7 +139,7 @@ after  credit/affordable                      arm=None rows=None
 after  credit                                 arm=None rows=None
 ```
 
-`Executable.run` and `score` drain the generator with a `for _ in ...: pass`. A [debug session](debug.md) advances
+`Executable.run` drains the generator with a `for _ in ...: pass`. A [debug session](debug.md) advances
 it to a breakpoint, inspects or overrides values in `state`, and advances it again. Nothing in the runner knows
 which of the two is driving it, so a breakpoint sees exactly the state a run would have at that point. Two hooks
 serve the session: `visit` (called with each locator a tree's `reference` reports, so a session can step inside a
@@ -360,7 +360,7 @@ A string input reaches a step in one of three representations (`Representation` 
 `representations.py` keeps the runners in agreement. `span_objects` wraps values as `Text` objects (filling a
 `missing_as` fill on null rows), `spans` builds the `(address, length)` pairs a kernel reads, zero-copy from the input
 frame's Arrow buffers when the version still holds that column, and `despan` turns `Text` back into `str` for
-output. For up to 32 values (the `score` path) `spans` borrows each value's own `bytes` buffer instead of exporting a
+output. For up to 32 values (the record path) `spans` borrows each value's own `bytes` buffer instead of exporting a
 frame, and keeps those buffers alive alongside the result so a kernel never reads freed memory.
 
 `State.representation(version, kind, build)` caches each built representation per version and kind, and drops the
@@ -370,7 +370,7 @@ interpreted step reading `Text` and a compiled one share the key `(RAW_BYTES, "o
 
 ## score without polars
 
-On the record path (no frame steps), `score` builds a `State` over an empty frame with `n=1` and fills it with
+On the record path (no frame steps), `run` builds a `State` over an empty frame with `n=1` and fills it with
 `load_record`, one read-only array per dtype viewed per input, then runs the same `iterate`. Nothing in the runner
 changes: it reads and writes arrays of length one. The output dict is built from `state.read` of each output version.
 The [engine overview](index.md) has the flow and the numbers.
