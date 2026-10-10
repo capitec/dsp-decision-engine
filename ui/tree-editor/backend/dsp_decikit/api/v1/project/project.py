@@ -2,6 +2,8 @@ import typing as t
 import uuid
 from datetime import datetime, timezone
 import json
+import re
+from urllib.parse import quote
 
 import decikit
 
@@ -201,8 +203,8 @@ async def list_projects(
             query = select(Project)
             if search:
                 query = query.where(
-                    (Project.name.ilike(f"%{search}%"))
-                    | (Project.description.ilike(f"%{search}%"))
+                    (Project.name.icontains(search, autoescape=True))
+                    | (Project.description.icontains(search, autoescape=True))
                 )
             if project_type:
                 query = query.where(Project.project_type == project_type)
@@ -232,8 +234,8 @@ async def list_projects(
         owned_query = select(Project).where(Project.created_by == current_user.user_id)
         if search:
             owned_query = owned_query.where(
-                (Project.name.ilike(f"%{search}%"))
-                | (Project.description.ilike(f"%{search}%"))
+                (Project.name.icontains(search, autoescape=True))
+                | (Project.description.icontains(search, autoescape=True))
             )
         if project_type:
             owned_query = owned_query.where(Project.project_type == project_type)
@@ -251,8 +253,8 @@ async def list_projects(
         )
         if search:
             shared_query = shared_query.where(
-                (Project.name.ilike(f"%{search}%"))
-                | (Project.description.ilike(f"%{search}%"))
+                (Project.name.icontains(search, autoescape=True))
+                | (Project.description.icontains(search, autoescape=True))
             )
         if project_type:
             shared_query = shared_query.where(Project.project_type == project_type)
@@ -271,8 +273,8 @@ async def list_projects(
         )
         if search:
             team_shared_query = team_shared_query.where(
-                (Project.name.ilike(f"%{search}%"))
-                | (Project.description.ilike(f"%{search}%"))
+                (Project.name.icontains(search, autoescape=True))
+                | (Project.description.icontains(search, autoescape=True))
             )
         if project_type:
             team_shared_query = team_shared_query.where(
@@ -664,7 +666,7 @@ async def search_users(q: str, _: SessionInfo = Depends(get_current_user_session
     async with db_session() as session:
         query = (
             select(User.id, User.email, User.full_name)
-            .where(User.email.ilike(f"%{q}%"))
+            .where(User.email.icontains(q, autoescape=True))
             .where(User.is_active == True)
             .limit(10)
         )
@@ -688,7 +690,7 @@ async def search_teams(q: str, _: SessionInfo = Depends(get_current_user_session
     async with db_session() as session:
         query = (
             select(Team.id, Team.name, Team.description)
-            .where(Team.name.ilike(f"%{q}%"))
+            .where(Team.name.icontains(q, autoescape=True))
             .limit(10)
         )
         result = await session.execute(query)
@@ -737,12 +739,14 @@ async def export_project(
     }
 
     formatted_json = json.dumps(export_data, indent=2, ensure_ascii=False)
-    filename = project.name.replace(" ", "_")
+    # Any name may hold quotes or non-Latin-1 characters: an ASCII fallback plus the RFC 5987 UTF-8 form
+    filename = project.name.replace(" ", "_") + "_export.json"
+    fallback = re.sub(r"[^A-Za-z0-9._-]", "_", filename)
     return Response(
         content=formatted_json,
         media_type="application/json",
         headers={
-            "Content-Disposition": f'attachment; filename="{filename}_export.json"'
+            "Content-Disposition": f"attachment; filename=\"{fallback}\"; filename*=UTF-8''{quote(filename)}"
         },
     )
 
