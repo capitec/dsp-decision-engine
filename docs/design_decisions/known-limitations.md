@@ -105,7 +105,7 @@ Workaround: pass `--config` / `config=` explicitly.
 **Warnings come twice on the polars engine.** A `HiddenStateWarning`, a `FallbackWarning` and the warning about an input column named like a param fire once for the whole pipeline (which the engine binds to run records and to check each `run` on zero rows) and once for the segment that holds the step, under the `default` warnings filter too.
 Impact: noise only. Fixing it means `run(lazy_frame)` no longer runs the whole pipeline on zero rows: shadowing from its produced names, params through `check_namespaces`, and the final columns computed statically, which a frame step of unknown outputs prevents.
 
-**The polars engine refuses an output it cannot type.** A column crossing a frame step or reaching the output must have a polars dtype before the first row, so a step returning an untyped `dict`, a bare `list` or `Any` there raises `EngineError` naming the step. Consolidation, loan-granting-pricing and retail-credit-e2e are refused this way.
+**The polars engine refuses an output it cannot type.** A column crossing a frame step or reaching the output must have a polars dtype before the first row, so a step returning an untyped `dict`, a bare `list` or `Any` there raises `EngineError` naming the step. None of the 12 examples is refused this way.
 Workaround: annotate the output (`TypedDict`, `list[float]`, `Struct[Item]`), or run on the numba engine.
 
 **A fallback step's error counts the row from the start of its batch.** When the plan streams, the `in step <path>, row <k>` note of a step that runs in Python is the row within the batch polars handed the segment, not within the frame.
