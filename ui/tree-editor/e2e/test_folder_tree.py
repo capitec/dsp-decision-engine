@@ -183,7 +183,6 @@ def test_cancelling_the_folder_delete_dialog_keeps_the_folder(signed_in: Page):
     expect(folder_row(signed_in, "Stay")).to_be_visible()
 
 
-@pytest.mark.smoke
 def test_deleting_a_folder_with_contents_moves_them_to_the_root_by_default(signed_in: Page):
     folder = create_folder(signed_in, "Full")
     child = create_folder(signed_in, "Child folder", parent_id=folder["id"])
@@ -247,7 +246,6 @@ def test_deleting_the_open_folder_returns_to_all_projects(signed_in: Page):
 
 # ---- nesting and breadcrumbs ------------------------------------------------------------------------------------------
 
-@pytest.mark.smoke
 def test_three_levels_of_folders_show_a_full_breadcrumb_and_each_level_navigates(signed_in: Page):
     top, middle, bottom = three_levels(signed_in)
     create_project(signed_in, "Deep project", flat_document(), folder_id=bottom["id"])
