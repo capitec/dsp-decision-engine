@@ -58,7 +58,7 @@ ones, under `NumbaEngine`. `Engine.registered()` gives `{tag: class}` and `Engin
 | Setting | Default | Effect |
 |---|---|---|
 | `params_validation` | `"eager"` | `"eager"` validates every node's params the first time a params document is seen and raises on any invalid one. `"lazy"` validates a node the first time it runs, so an invalid param in a node no row reaches never fails a run. |
-| `strict_compile` | `False` | On a numba engine (`NumbaEngine`), a step that would fall back to Python raises at the first run instead of running, unless the step is marked `@allow_fallback`. In every engine, a `HiddenStateWarning` finding raises `EngineError` at `bind`. |
+| `strict_compile` | `False` | On `SteppedEngine` and `FusedEngine`, a step that would fall back to Python raises at the first run instead of running, unless the step is marked `@allow_fallback`. On every engine, a `HiddenStateWarning` finding raises `EngineError` at `bind`. |
 
 `NumbaEngine.bind(step_or_ir)` builds its runner (passing `strict=` to the two compiled ones), calls
 `resolve(step_or_ir)` to get the [Plan](wiring.md), and returns `Executable(plan, runner, lazy, step_or_ir, engine=self)`.

@@ -50,9 +50,11 @@ class NumbaEngine(Engine):
     """An engine that runs the plan through the numba driver; a subclass supplies the runner.
 
     Args:
-        strict_compile: a step that would run in Python raises instead of
-            running, a step of a kernel numba refuses at launch included. Mark
-            the ones you accept `@allow_fallback`.
+        strict_compile: on the stepped and fused engines, a step that would
+            run in Python raises instead of running, a step of a kernel numba
+            refuses at launch included; mark the ones you accept
+            `@allow_fallback`. On every engine, a step reading hidden state
+            raises at `bind`.
 
     Example::
 
