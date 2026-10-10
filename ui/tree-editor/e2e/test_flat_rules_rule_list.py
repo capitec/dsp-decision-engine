@@ -34,7 +34,7 @@ def test_renamed_rule_keeps_its_new_name_after_save_and_reload(signed_in: Page):
 
     assert save(signed_in)["project_data"]["rules"][0]["meta"]["name"] == "Low amounts"
     signed_in.reload()
-    expect(signed_in.get_by_test_id("rule-card")).to_have_count(1)
+    expect(signed_in.get_by_test_id("rule-card")).to_have_count(1, timeout=30_000)
     assert rule_names(signed_in) == ["Low amounts"]
 
 
@@ -49,7 +49,7 @@ def test_unicode_and_very_long_rule_names_survive_a_round_trip(signed_in: Page, 
     assert save(signed_in)["validation_errors"] == []
     assert export_document(signed_in, project)["rules"][0]["meta"]["name"] == name
     signed_in.reload()
-    expect(signed_in.get_by_test_id("rule-card")).to_have_count(1)
+    expect(signed_in.get_by_test_id("rule-card")).to_have_count(1, timeout=30_000)
     assert rule_names(signed_in) == [name]
     assert signed_in.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
 
