@@ -7,6 +7,7 @@ import types as py_types
 from typing import Any, Callable, Literal, get_origin
 
 import numpy as np
+import typing_extensions as te
 from numba import from_dtype, njit, typeof
 from numba.core import types
 from numba.core.caching import FunctionCache, IndexDataCacheFile, NullCache
@@ -23,7 +24,7 @@ from decikit._engine.compile.rows import rows_probe
 from decikit._engine.compile.span import SPAN
 from decikit._engine.compile.structs import bad_field, struct_dtype, struct_schema
 from decikit._engine.ir.decls import (KIND_DTYPES, FeatureKind, Input, NullPolicy, Output, base_annotation,
-                                     feature_kind, is_typed, nullable)
+                                     feature_kind, nullable)
 from decikit._engine.ir.nodes import CallNode
 from decikit._engine.params import NodeParams
 from decikit.steps._helpers import allows_fallback, helper_signatures
@@ -172,8 +173,8 @@ def compile_call(node: CallNode) -> tuple[str, Callable, str | None, bool]:
                           if base_annotation(i.annotation) is str), None))
     if no_kernel is not None:
         return key, dispatcher.py_func, no_kernel, declared
-    # A function step returning a dict, a list or another object compiles alone, but no kernel column
-    # stores it: inside a kernel it fails at launch and takes every other step of the kernel with it.
+    # A function step returning a dict, a TypedDict, a list, a tuple, a set or an array compiles alone, but no
+    # kernel column stores it: inside a kernel it fails at launch and takes every other step of the kernel with it.
     unstored = next((f"writes '{o.name}' as {o.annotation}, which no kernel stores" for o in node.outputs
                      if node.kind == "scalar" and not _stored(base_annotation(o.annotation))), None)
     sig = _probe_signature(node)
@@ -223,9 +224,10 @@ def compile_call(node: CallNode) -> tuple[str, Callable, str | None, bool]:
 
 
 def _stored(annotation: Any) -> bool:
-    # A number, a `Struct` record or `Columnar` rows; `Any` is left to numba, as an unannotated step's output.
-    return (annotation is Any or is_typed(annotation) or struct_item(annotation) is not None
-            or columnar_item(annotation) is not None)
+    # Containers only: a kernel column also stores `Any`, a numpy number or a NewType of float, which a list
+    # of what it stores would refuse. An array would be cut to its first element.
+    container = (get_origin(annotation) or annotation) in (dict, list, tuple, set, frozenset, np.ndarray)
+    return not (container or te.is_typeddict(annotation))
 
 
 def _ragged_reason(output: Output, item: Any, dispatcher: Dispatcher, sig: tuple) -> str | None:

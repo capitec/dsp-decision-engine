@@ -3,8 +3,9 @@
 Fused warns about both, stepped only lists them, interpreted reports nothing, and strict refuses both.
 """
 import warnings
-from typing import TypedDict
+from typing import NewType, TypedDict
 
+import numpy as np
 import polars as pl
 import pytest
 from numba.core.errors import TypingError
@@ -48,6 +49,24 @@ def halved(x: float) -> float:
 
 FRAME = pl.DataFrame({"x": [1.0, 4.0]})
 
+Score = NewType("Score", float)
+
+
+def as_numpy(x: float) -> np.float64:
+    return x * 2
+
+
+def as_score(x: float) -> Score:
+    return x * 2
+
+
+def as_either(x: float) -> int | float:
+    return x * 2
+
+
+def as_array(x: float) -> np.ndarray:
+    return np.array([x, x])
+
 
 def caught_fallbacks(run) -> list[str]:
     with warnings.catch_warnings(record=True) as caught:
@@ -56,8 +75,9 @@ def caught_fallbacks(run) -> list[str]:
     return [str(w.message) for w in caught if issubclass(w.category, FallbackWarning)]
 
 
-@pytest.mark.parametrize("fn, annotation", [(offer, Offer), (loose, dict), (offers, list[Offer])])
-def test_a_step_returning_a_dict_or_a_list_falls_back_when_built_naming_its_output(fn, annotation):
+@pytest.mark.parametrize("fn, annotation", [(offer, Offer), (loose, dict), (offers, list[Offer]),
+                                            (as_array, np.ndarray)])
+def test_a_step_returning_a_container_falls_back_when_built_naming_its_output(fn, annotation):
     exe = Engine().bind(flow(fn, name="p"), mode="fused")
     reason = f"writes '{fn.__name__}' as {annotation}, which no kernel stores"
     assert caught_fallbacks(exe.fallbacks) == [f"p/{fn.__name__} runs in Python, row by row: {reason}"]
@@ -73,6 +93,22 @@ def test_the_steps_beside_a_dict_step_stay_compiled_with_the_answers_of_interpre
     assert caught_fallbacks(lambda: (exe.run(FRAME), exe.run(FRAME), exe.score({"x": 1.0}))) == [
         f"p/offer runs in Python, row by row: writes 'offer' as {Offer}, which no kernel stores"]
     assert [type(exe.runner.units[c.id]) for c in exe.plan.calls] == [Kernel, Fallback]
+
+
+def test_a_step_returning_an_array_answers_as_interpreted_rather_than_its_first_element():
+    pipeline = flow(as_array, name="p")
+    want = Engine().bind(pipeline, mode="interpreted").run(FRAME)
+    with pytest.warns(FallbackWarning):
+        assert Engine().bind(pipeline, mode="fused").run(FRAME).equals(want)
+
+
+@pytest.mark.parametrize("fn", [as_numpy, as_score, as_either])
+def test_a_step_writing_a_number_under_another_annotation_stays_in_the_shared_kernel(fn):
+    exe = Engine(strict_compile=True).bind(flow(half, fn, name="p"), mode="fused")
+    assert exe.run(FRAME)[fn.__name__].to_list() == [2.0, 8.0]
+    assert exe.fallbacks() == {}
+    first, second = (exe.runner.units[c.id] for c in exe.plan.calls)
+    assert isinstance(first, Kernel) and first is second
 
 
 @pytest.mark.parametrize("mode", ["stepped", "fused"])
