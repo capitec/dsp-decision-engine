@@ -9,6 +9,7 @@ from dsp_decikit.services.documents import (
     check_document,
     default_project_data,
     detect_project_type,
+    imported_document,
     validation_errors,
 )
 
@@ -125,3 +126,17 @@ def test_parameter_default_the_tree_cannot_use_is_reported_under_parameters():
 @pytest.mark.parametrize("default", [1000, 999.5, "1000", None])
 def test_parameter_default_the_tree_can_use_is_valid(default):
     assert validation_errors(_flat_with_param(default)) == []
+
+
+def test_a_step_document_imports_as_its_tree():
+    tree = default_project_data(ProjectType.TREE)
+    step = {"type": "tree", "name": "campaign", "path_output": "path", "tree": tree}
+    assert imported_document(step) == tree
+    assert imported_document(tree) == tree
+
+
+@pytest.mark.parametrize("data", [{"type": "rule_set", "rules": {}}, {"a": 1}])
+def test_a_document_that_is_no_tree_is_refused_naming_what_it_is(data):
+    with pytest.raises(ValueError, match="not a tree") as e:
+        detect_project_type(data)
+    assert data.get("type", "not a tree") in str(e.value)
