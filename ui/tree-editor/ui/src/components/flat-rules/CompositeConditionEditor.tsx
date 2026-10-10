@@ -156,7 +156,6 @@ export const CompositeConditionEditor: React.FC<CompositeConditionEditorProps> =
                       onUpdate(newConditions);
                     }}
                     availableFeatures={availableFeatures}
-                    availableParameters={availableParameters}
                   />
                 </div>
               </div>

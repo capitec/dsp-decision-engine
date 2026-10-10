@@ -112,7 +112,6 @@ export const CasesNodeEditor: React.FC<CasesNodeEditorProps> = ({ node }) => {
               value={node.data.feature || ''}
               onChange={(value) => updateNodeData(node.id, { feature: value })}
               availableFeatures={availableFeatures}
-              availableParameters={availableParametersForInput}
               placeholder="feature or expression (e.g., feature1 + feature2)"
             />
           </div>

@@ -662,7 +662,6 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
                     value={node.feature || ''}
                     onChange={(newFeature: string | { type: 'computed'; expression: string }) => updateNode(treeId, node.id, { feature: newFeature } as any)}
                     availableFeatures={availableFeatures}
-                    availableParameters={availableParameters}
                   />
                 </div>
 

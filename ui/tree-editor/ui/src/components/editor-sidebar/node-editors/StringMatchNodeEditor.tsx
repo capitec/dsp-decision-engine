@@ -10,7 +10,6 @@ import { useEditorStore } from '../../editor/useEditorStore';
 import { ComputedFeatureInput } from '../../shared-tree/ComputedFeatureInput';
 import { Node, CasesStringMatchNodeData } from '../../editor/types';
 import { TStringMatchType, getCasesNodeBranchSourceIndex, getCasesNodeOtherwiseSourceIndex } from '@/types/tree-v3-types';
-import { useParameterManagement } from '../../editor/useParameterManagement';
 
 interface StringMatchNodeEditorProps {
   node: Node<CasesStringMatchNodeData>;
@@ -26,7 +25,6 @@ export const StringMatchNodeEditor: React.FC<StringMatchNodeEditorProps> = ({ no
   const [matchType, setMatchType] = useState<TStringMatchType>('exact');
   const [caseSensitive, setCaseSensitive] = useState(true);
 
-  const { availableParameters } = useParameterManagement();
 
   // Ref for scrolling to bottom of the patterns list
   const patternsListRef = React.useRef<HTMLDivElement>(null);
@@ -82,7 +80,6 @@ export const StringMatchNodeEditor: React.FC<StringMatchNodeEditorProps> = ({ no
             value={feature}
             onChange={(newFeature: string | { type: 'computed'; expression: string }) => updateNodeData(node.id, { ...nodeData, feature: newFeature })}
             availableFeatures={featureNames}
-            availableParameters={availableParameters}
           />
         </div>
 

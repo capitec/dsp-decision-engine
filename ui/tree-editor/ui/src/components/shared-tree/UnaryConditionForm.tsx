@@ -51,7 +51,6 @@ export const UnaryConditionForm: React.FC<UnaryConditionFormProps> = ({
             value={featureValue}
             onChange={(value) => onChange({ ...condition, feature: value as any })}
             availableFeatures={availableFeatures}
-            availableParameters={availableParameters}
             placeholder="feature or expression (e.g., feature1 + feature2)"
           />
         </div>
