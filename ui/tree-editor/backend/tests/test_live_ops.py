@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from dsp_decikit.services.live_ops import apply, conflicts, diff, is_related, stale_ops
+from dsp_decikit.services.live_ops import apply, conflicts, diff, is_related, rebase_orders, stale_ops
 
 # The vitest suite runs the same cases against the TypeScript twin.
 CASES = json.loads((Path(__file__).parent / "data/live_ops_cases.json").read_text())
@@ -166,3 +166,26 @@ def test_diff_then_apply_rebuilds_every_edit_of_a_real_tree(tree, stamped):
         assert json.dumps(doc, sort_keys=True) == before
         assert diff(edited, copy.deepcopy(edited)) == []
         doc = edited
+
+
+def _rules(*keys):
+    return {"rules": [{"rule": {"id": k}} for k in keys]}
+
+
+def _order(doc):
+    return [r["rule"]["id"] for r in doc["rules"]]
+
+
+def test_my_insert_merged_onto_their_reorder_keeps_their_order():
+    mine = [{"op": "add", "path": "/rules/d", "value": {"rule": {"id": "d"}}},
+            {"op": "order", "path": "/rules", "value": ["a", "d", "b", "c"]}]
+
+    merged, _ = apply(_rules("c", "b", "a"), rebase_orders(mine, _rules("a", "b", "c"), _rules("c", "b", "a")))
+
+    assert _order(merged) == ["c", "b", "a", "d"]
+
+
+def test_my_reorder_is_not_rebased():
+    mine = [{"op": "order", "path": "/rules", "value": ["c", "a", "b"]}]
+
+    assert rebase_orders(mine, _rules("a", "b", "c"), _rules("a", "e", "b", "c")) == mine
