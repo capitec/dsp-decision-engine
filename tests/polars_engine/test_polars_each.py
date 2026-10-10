@@ -8,7 +8,9 @@ import pytest
 from polars.testing import assert_frame_equal
 
 from decikit import FusedEngine, PolarsEngine, each, flow, missing_as
+from decikit._engine.polars.host import PolarsExecutable
 from decikit.exceptions import EngineError
+from decikit.lab.testing import assert_equivalent
 
 
 def heavy(weight: float = missing_as(0.0)) -> bool:
@@ -126,3 +128,14 @@ def test_undeclared_item_column_is_refused_naming_the_step_that_writes_it():
     pipe = flow(loose, each("loose", flow(heavy, name="line"), name="each_line"), name="p")
     with pytest.raises(EngineError, match=r"p/each_line.*'loose'.*p/loose.*list\[dict\].*Annotate"):
         host(pl.DataFrame({"n": [1, 2]}), pipe)
+
+
+def test_assert_equivalent_accepts_polars_typing_a_field_fused_leaves_null(monkeypatch):
+    df = frame([[item(None, code=None, parts=())]])
+    assert FusedEngine().bind(PIPE).run(df).schema["items"] != GATHERED
+    assert assert_equivalent(PIPE, df)["items"].to_list() == FusedEngine().bind(PIPE).run(df)["items"].to_list()
+    run = PolarsExecutable.run
+    monkeypatch.setattr(PolarsExecutable, "run", lambda self, data, params=None, trace=None:
+                        run(self, data, params).with_columns(pl.col("id").cast(pl.Float64)))
+    with pytest.raises(AssertionError, match="polars engine differs"):
+        assert_equivalent(PIPE, df, engines=("fused", "polars"))
