@@ -17,7 +17,7 @@ The user side (opening a session from a notebook, what to type at each pause) is
 | `decikit/debug.py` | the public facade: `Session` and the event classes |
 | `decikit/_tooling/bridge/controls.py` | `Controls`: forced arms, forced loop counts, value and iteration breakpoints, built on top of a session |
 
-A session is opened with `Step.session(df, params, mode=...)` or `Executable.session(df, params)`. Both end in `Session(executable, frame, params)`.
+A session is opened with `Step.session(df, params, engine=...)` or `Executable.session(df, params)`. Both end in `Session(executable, frame, params)`.
 
 <div class="diagram" markdown>
 ![The session sits between its clients (notebook, editor bridge, JSON wire adapters) and a private copy of the bound runner, whose generator yields checkpoints over a State](../../assets/diagrams/engine-debug-layers.svg)
@@ -281,7 +281,7 @@ Stepped mode yields the same checkpoints as interpreted. Fused mode yields one c
 `_index` reads `runner.units` and `runner.packed` and builds `_kernels`, which maps a kernel's first path to every path it covers. `_covers` uses it, so a breakpoint on any step of a kernel stops before the whole kernel, and `Paused.kernel` lists the steps:
 
 ```python
-s = pipeline.session(df, mode="fused")
+s = pipeline.session(df, engine="fused")
 s.break_at("loan/ratio")
 p = (s.resume(), s.events[-1])[1]
 print(p.origin.path, p.reason, p.kernel)
@@ -304,7 +304,7 @@ after  loan/repay  kernel=('loan/repay', 'loan/repay/unpaid', 'loan/repay/month/
 after  loan  kernel=()
 ```
 
-Pausing before the kernel was chosen over calling the breakpoint unreachable: nothing in the kernel has run yet, and `set` on its inputs still works. A value that only lives inside a kernel is never stored, so `value` and `set` on it raise a `KeyError`. `_check_stored` makes that error name the kernel and suggest `mode='stepped'` when the name was produced inside a kernel but nothing of it is stored; when the name has never been produced at all (as for `ratio` above, paused before its kernel ran), the plain "neither an input column nor a value produced so far" message comes first.
+Pausing before the kernel was chosen over calling the breakpoint unreachable: nothing in the kernel has run yet, and `set` on its inputs still works. A value that only lives inside a kernel is never stored, so `value` and `set` on it raise a `KeyError`. `_check_stored` makes that error name the kernel and suggest `engine='stepped'` when the name was produced inside a kernel but nothing of it is stored; when the name has never been produced at all (as for `ratio` above, paused before its kernel ran), the plain "neither an input column nor a value produced so far" message comes first.
 
 One consequence is that a session can disagree with interpreted mode. Breaking on step 2 of a kernel and setting a value step 1 reads gives a different answer, because in interpreted mode step 1 has already run at that point. The same break and set on an input only later steps read agrees in every mode. `tests/debug/test_session_modes.py` pins the agreeing cases across all three modes.
 

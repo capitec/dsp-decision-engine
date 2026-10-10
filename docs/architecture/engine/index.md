@@ -3,13 +3,13 @@
 The engine turns a pipeline into something that runs. It takes a step, a plain function or an IR node, lowers it
 to the [IR](ir.md), binds every name the IR reads to a version of a value ([wiring](wiring.md)), prepares the
 [params](params.md), and drives one of three [runners](runners.md) over a polars frame or a single dict record.
-Everything lives under `decikit/_engine/`. Users reach it through `Engine` and `Executable` (both exported from
-`decikit`), or through `Step.run`, `Step.compile` and `Step.session`, which build an `Engine()` and call `bind`.
+Everything lives under `decikit/_engine/`. Users reach it through the engine classes and `Executable` (all exported
+from `decikit`), or through `Step.run`, `Step.compile` and `Step.session`, which resolve an engine and call `bind`.
 
 ```python
-from decikit import Engine
+from decikit import FusedEngine
 
-exe = Engine(params_validation="lazy").bind(pipeline, mode="fused")
+exe = FusedEngine(params_validation="lazy").bind(pipeline)
 exe.run(df, params=doc)          # a polars DataFrame
 exe.run(record, doc)             # a dict
 exe.session(df)                  # a debug Session, paused before anything runs
@@ -50,41 +50,33 @@ page has the full map.
 
 ## Engine and bind
 
-`Engine` holds two settings and nothing else:
+An engine is a settings document in the registry, named by its `type` tag. `Engine` is the abstract root;
+`InterpretedEngine`, `SteppedEngine` and `FusedEngine` (tags `"interpreted"`, `"stepped"`, `"fused"`) are the built-in
+ones, under `NumbaEngine`. `Engine.registered()` gives `{tag: class}` and `Engine.resolve(tag)` the class. `compile` and
+`session` take a tag or an instance (`engine="fused"`, `FusedEngine(strict_compile=True)`).
 
-| Argument | Default | Effect |
+| Setting | Default | Effect |
 |---|---|---|
 | `params_validation` | `"eager"` | `"eager"` validates every node's params the first time a params document is seen and raises on any invalid one. `"lazy"` validates a node the first time it runs, so an invalid param in a node no row reaches never fails a run. |
-| `strict_compile` | `False` | In `"stepped"` and `"fused"` modes, a step that would fall back to Python raises at the first run instead of warning, unless the step is marked `@allow_fallback`. In every mode, a `HiddenStateWarning` finding raises `EngineError` at `bind`. |
+| `strict_compile` | `False` | On a numba engine (`NumbaEngine`), a step that would fall back to Python raises at the first run instead of warning, unless the step is marked `@allow_fallback`. In every engine, a `HiddenStateWarning` finding raises `EngineError` at `bind`. |
 
-`Engine.bind(step_or_ir, mode="interpreted")` looks the mode up in `RUNNERS`, a plain dict in
-`decikit/_engine/run/engine.py`:
+`NumbaEngine.bind(step_or_ir)` builds its runner (passing `strict=` to the two compiled ones), calls
+`resolve(step_or_ir)` to get the [Plan](wiring.md), and returns `Executable(plan, runner, lazy, step_or_ir, engine=self)`.
+`resolve` calls `to_ir` when it is given anything but an IR node, so `bind` accepts a step, a plain function or a
+hand-built IR.
 
-```python
-RUNNERS = {
-    "interpreted": InterpretedRunner,
-    "stepped": SteppedRunner,
-    "fused": FusedRunner,
-}
-```
-
-It builds the runner (passing `strict=` to the two compiled ones), calls `resolve(step_or_ir)` to get the
-[Plan](wiring.md), and returns `Executable(plan, runner, lazy, step_or_ir)`. `resolve` calls `to_ir` when it is
-given anything but an IR node, so `bind` accepts a step, a plain function or a hand-built IR.
-
-Both settings are checked up front:
+Both the tag and the settings are checked up front:
 
 ```text
->>> Engine().bind(credit, "turbo")
-EngineError: unknown mode 'turbo'; expected one of
-  ['fused', 'interpreted', 'stepped']
->>> Engine(params_validation="sometimes")
-EngineError: params_validation must be 'eager' or 'lazy', not 'sometimes'
+>>> credit.compile("turbo")
+RegistryError: 'turbo' is not a registered Engine type. Import the module that defines it first, ...
+>>> FusedEngine(params_validation="sometimes")
+ValidationError: ... params_validation ...
 ```
 
-The three modes give the same answers. They differ in what runs compiled and where a debug session can pause:
+The three engines give the same answers. They differ in what runs compiled and where a debug session can pause:
 
-| Mode | Runner | What runs compiled | Pauses at |
+| Engine | Runner | What runs compiled | Pauses at |
 |---|---|---|---|
 | `interpreted` | `InterpretedRunner` | nothing; plain Python, row by row | every node, and inside trees through `visit` |
 | `stepped` | `SteppedRunner` | each scalar or row call as its own numba kernel | every node |
@@ -169,7 +161,7 @@ df = pl.DataFrame({
 ```
 
 ```text
->>> Engine().bind(credit).run(df)
+>>> InterpretedEngine().bind(credit).run(df)
 shape: (4, 6)
 ┌────────────┬──────────┬─────────────────┬────────────┬─────────┬────────────┐
 │ net_income ┆ expenses ┆ employment_type ┆ instalment ┆ limit   ┆ affordable │
@@ -290,7 +282,7 @@ the same `prepare` and the same `runner.iterate`, and advances the generator onl
 the interpreted runner. For a compiled runner it compiles the plan if no call has done so yet:
 
 ```text
->>> Engine().bind(credit, "fused").fallbacks()
+>>> FusedEngine().bind(credit).fallbacks()
 {}
 ```
 
@@ -351,15 +343,16 @@ helper answers without it.
 
 ## Extending and debugging the engine
 
-A new execution mode is one entry in `RUNNERS` and a class with an `iterate(plan, state, params, trace=None,
-table=None)` generator method (the `Runner` protocol in `decikit/_engine/run/runners/base.py`). A compiled mode
-also implements `CompiledRunner`: `_compile(plan, lazy)` and `fallbacks()`. Subclassing `InterpretedRunner` and
+A new engine is a subclass of `Engine` with a `type` tag, registered by an entry point in the `decikit.engines`
+group (the registry takes it from there). A numba engine subclasses `NumbaEngine` and supplies `_runner()`: a class with
+an `iterate(plan, state, params, trace=None, table=None)` generator method (the `Runner` protocol in
+`decikit/_engine/run/runners/base.py`). A compiled runner also implements `CompiledRunner`: `_compile(plan, lazy)` and `fallbacks()`. Subclassing `InterpretedRunner` and
 overriding `_call` is how `SteppedRunner` does it.
 
 To see what the engine is doing, drive the generator yourself:
 
 ```python
-exe = Engine().bind(credit)
+exe = InterpretedEngine().bind(credit)
 state, params = exe.prepare(df)
 for cp in exe.runner.iterate(exe.plan, state, params):
     print(cp.when, cp.origin.path, cp.arm, cp.rows)

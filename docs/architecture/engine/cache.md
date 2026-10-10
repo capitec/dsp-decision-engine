@@ -9,7 +9,7 @@ in Python and says so, and the steps around it stay compiled.
 The code is in `decikit/_engine/compile/njit.py` (`jit`, the salted disk cache, `compile_call`,
 `FALLBACK_ERRORS`), `compile/fingerprint.py` (`fingerprint`, `cpu_target`), `compile/kernel.py`
 (the fused kernel cache) and `compile/units.py` (`Fallback`). The [stepped runner](runners.md)
-turns fallbacks into warnings, `Engine(strict_compile=True)` in `decikit/_engine/run/engine.py`
+turns fallbacks into warnings, `FusedEngine(strict_compile=True)` in `decikit/_engine/run/engines.py`
 turns them into errors, and `decikit build` and `decikit serve` in `decikit/_tooling/cli/` record
 and check the CPU target. How a compiled kernel is assembled is on [compilation](compile.md).
 
@@ -274,7 +274,7 @@ outside the shared kernel: ...`. `exe.fallbacks()` reports both kinds by step pa
   an intentional Python boundary, and the calling step falls back instead of compiling it. Trees,
   tables, scorecards, branches and loops fall back as a whole, so the decorator on one raises
   `TypeError`; filter the warning category for those.
-- `Engine(strict_compile=True)` turns an unaccepted Python fallback into an error at the first
+- `FusedEngine(strict_compile=True)` turns an unaccepted Python fallback into an error at the first
   run. It raises a plain `ValueError` (not a `DecikitError`):
 
 ```text

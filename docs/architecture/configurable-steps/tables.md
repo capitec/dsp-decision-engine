@@ -86,7 +86,7 @@ DOC = {
 t = DecisionTableConfig.load(DOC)
 df = pl.DataFrame({"product": ["loan", "loan", "card", "card", "auto", None],
                    "amount": [5000.0, 25000.0, 900.0, None, 100.0, 50.0]})
-print(Engine().bind(t, mode="fused").run(df))
+print(FusedEngine().bind(t).run(df))
 ```
 
 ```text

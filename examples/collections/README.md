@@ -93,7 +93,7 @@ In the order the pipeline applies them:
 | `.relabel` and `.named`: one step on other column names, or twice with different settings | `resolve_path_position_as_at_now` in [path.py](collections_treatment/path.py), the two roll probabilities in [scoring.py](collections_treatment/scoring.py) |
 | Overlays as config documents, one `adjustment_stack` document per target, switched off with one param through the same code | [overlays.py](collections_treatment/overlays.py), [`configs/0.1.0/score_shift.json`](configs/0.1.0/score_shift.json) and its five siblings |
 | Another example's pipeline halves, reused in arrangement mode | `assessment_unit` in [arrangements.py](collections_treatment/arrangements.py) |
-| `@allow_fallback` for steps that are Python on purpose (dates, lists, strings), checked by `Engine(strict_compile=True)` | [tests/test_serving.py](tests/test_serving.py) |
+| `@allow_fallback` for steps that are Python on purpose (dates, lists, strings), checked by `FusedEngine(strict_compile=True)` | [tests/test_serving.py](tests/test_serving.py) |
 | Warm-up from `sample_request.json`, and serving the raw request bytes | [sample_request.json](sample_request.json), [tests/test_serving.py](tests/test_serving.py) |
 
 ## Run it
@@ -111,7 +111,7 @@ fresh checkout takes a minute while numba compiles):
 
 ```bash
 uv run decikit build
-# built config version 0.1.0 (pipeline collections_treatment.pipeline:build, mode fused)
+# built config version 0.1.0 (pipeline collections_treatment.pipeline:build, engine fused)
 ```
 
 Serve, and decide the sample account. Its dates are plain JSON strings:

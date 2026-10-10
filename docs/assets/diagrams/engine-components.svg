@@ -9,7 +9,7 @@
   <!-- authoring -->
   <rect x="40" y="24" width="440" height="72" rx="10" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
   <text x="60" y="52" font-size="16" font-weight="600" fill="#7c2d00">A step, a plain function, or an IR node</text>
-  <text x="60" y="78" font-size="14" fill="#7c2d00">Engine(...).bind(pipeline, mode="fused")</text>
+  <text x="60" y="78" font-size="14" fill="#7c2d00">FusedEngine(...).bind(pipeline)</text>
 
   <line x1="260" y1="96" x2="260" y2="128" stroke="#374151" stroke-width="1.5" marker-end="url(#a)"/>
 
