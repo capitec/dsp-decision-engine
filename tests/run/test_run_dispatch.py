@@ -1,4 +1,6 @@
 """`run` takes a dict record, a polars DataFrame or a LazyFrame, and nothing else."""
+from types import MappingProxyType
+
 import polars as pl
 import pytest
 
@@ -20,6 +22,10 @@ FRAME = pl.DataFrame({"net_income": [4100.0, 2500.0], "expenses": [1500.0, 1000.
 def test_a_dict_in_gives_a_dict_out(bind):
     assert bind(pipeline).run({"net_income": 4100.0, "expenses": 1500.0}) == {
         "net_income": 4100.0, "expenses": 1500.0, "affordable": True}
+
+
+def test_any_mapping_takes_the_record_path(bind):
+    assert bind(pipeline).run(MappingProxyType({"net_income": 4100.0, "expenses": 1500.0}))["affordable"] is True
 
 
 def test_a_frame_in_gives_a_frame_out(bind):
