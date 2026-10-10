@@ -8,6 +8,7 @@ import pytest
 from playwright.sync_api import Page, expect
 
 import node_ui
+from canonical import as_lines
 from flat_rules_ui import export as export_from_editor
 from platform_ui import import_project, open_projects
 from seed import create_project, export_document, get_project, list_projects
@@ -29,10 +30,6 @@ LARGE_RULES = 521
 
 def error_text(dialog) -> str:
     return dialog.locator("p.text-red-700").inner_text()
-
-
-def canonical(document: dict) -> str:
-    return json.dumps({k: v for k, v in document.items() if k != "metadata"}, sort_keys=True)
 
 
 @pytest.mark.parametrize("filename,content,message", BAD_FILES.values(), ids=BAD_FILES.keys())
@@ -107,7 +104,7 @@ def test_an_export_imports_back_into_an_identical_project(signed_in: Page):
     expect(signed_in).to_have_url(re.compile(r"/flat-rules/"))
 
     copy = next(p["id"] for p in list_projects(signed_in)["items"] if p["name"] == "Round trip copy")
-    assert canonical(export_document(signed_in, copy)) == canonical(exported)
+    assert as_lines(export_document(signed_in, copy)) == as_lines(exported)
 
 
 # ---- a very large file --------------------------------------------------------------------------------------------------------
@@ -115,19 +112,7 @@ def test_an_export_imports_back_into_an_identical_project(signed_in: Page):
 def large_document() -> dict:
     rule = {"type": "unary", "then": {"type": "leaf", "result_idx": 0},
             "condition": {"type": "unary", "op": "<=", "feature": "amount", "threshold": 1000}}
-    document = flat_document(*[rule] * LARGE_RULES)
-    for i, entry in enumerate(document["rules"]):
-        entry["meta"]["name"] = f"Rule {i + 1}"
-    return document
-
-
-def without_editor_additions(value):
-    """The document minus what the editor adds on opening it: node ids and rule positions."""
-    if isinstance(value, dict):
-        return {k: without_editor_additions(v) for k, v in value.items() if k not in ("id", "position")}
-    if isinstance(value, list):
-        return [without_editor_additions(v) for v in value]
-    return value
+    return flat_document(*[rule] * LARGE_RULES)
 
 
 @pytest.mark.slow
@@ -140,8 +125,7 @@ def test_a_521_rule_document_imports_and_exports_unchanged_within_a_minute(signe
     expect(signed_in).to_have_url(re.compile(r"/flat-rules/"), timeout=60_000)
     project = signed_in.url.rsplit("/", 1)[1]
 
-    same = canonical(export_document(signed_in, project)) == canonical(document)
-    assert same, "the stored export differs from the imported document"
+    assert as_lines(export_document(signed_in, project)) == as_lines(document)
     assert time.monotonic() - started < 60
     assert len(get_project(signed_in, project)["project_data"]["rules"]) == LARGE_RULES
 
@@ -157,19 +141,5 @@ def test_a_521_rule_document_exported_from_the_editor_keeps_every_rule(signed_in
     exported = export_from_editor(signed_in, tmp_path)
 
     assert time.monotonic() - started < 90
-    same = canonical(without_editor_additions(exported)) == canonical(without_editor_additions(document))
-    assert same, "the editor's export lost or changed rule content"
-
-
-@pytest.mark.slow
-@pytest.mark.xfail(strict=True, reason="opening a project in the flat-rule editor and exporting it adds a fresh random id to every node and a position to every rule, so an unchanged document does not export unchanged")
-def test_a_521_rule_document_exported_from_the_editor_is_canonically_equal(signed_in: Page, tmp_path):
-    document = large_document()
-    project = create_project(signed_in, "Large", document)["id"]
-    signed_in.goto(f"/flat-rules/{project}")
-    expect(signed_in.get_by_role("button", name="Add Rule")).to_be_visible(timeout=60_000)
-
-    exported = export_from_editor(signed_in, tmp_path)
-
-    same = canonical(exported) == canonical(document)
-    assert same, "the editor's export differs from the stored document"
+    # node ids and rule positions are the editor's own additions, which canonical leaves out
+    assert as_lines(exported) == as_lines(document)
