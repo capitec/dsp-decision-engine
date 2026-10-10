@@ -1,9 +1,10 @@
 """Node-editor conditions: every node kind and operator the sidebar offers saves a document decikit runs."""
 
 import operator
+import re
 
 import pytest
-from playwright.sync_api import Page
+from playwright.sync_api import Page, expect
 
 from node_ui import (
     choose_feature,
@@ -173,14 +174,13 @@ def test_boolean_check_saves_and_decides(signed_in: Page, label, op, truth):
     assert run(export_document(signed_in, project), flag=[True, False]) == outcome(truth)
 
 
-@pytest.mark.xfail(strict=True, reason="Is Null / Is Not Null are offered but decikit has no null operators: the saved tree is invalid")
-@pytest.mark.parametrize("label", ["Is Null", "Is Not Null"])
-def test_null_check_the_editor_offers_saves_a_valid_document(signed_in: Page, label):
+def test_no_null_check_is_offered_since_decikit_has_no_null_operators(signed_in: Page):
     open_tree(signed_in, two_leaves(unary("root")))
     select_node(signed_in, "root")
-    set_operator(signed_in, label)
+    sidebar(signed_in).get_by_role("combobox").nth(1).click()
 
-    assert save(signed_in)["validation_errors"] == []
+    expect(signed_in.get_by_role("option", name="Between", exact=True)).to_be_visible()
+    expect(signed_in.get_by_role("option", name=re.compile("Null"))).to_have_count(0)
 
 
 def test_computed_feature_is_saved_as_an_expression_and_evaluated(signed_in: Page):
