@@ -604,7 +604,7 @@
   ]
  },
  {
-  "name": "a keyed list with a duplicate key is a plain list (same length)",
+  "name": "a keyed list with a duplicate key is replaced whole, never addressed by index",
   "kind": "diff",
   "old": {
    "rules": [
@@ -649,10 +649,72 @@
   "ops": [
    {
     "op": "replace",
-    "path": "/rules/1/meta/name",
-    "value": "Second"
+    "path": "/rules",
+    "value": [
+     {
+      "meta": {
+       "name": "A"
+      },
+      "rule": {
+       "id": "a"
+      }
+     },
+     {
+      "meta": {
+       "name": "Second"
+      },
+      "rule": {
+       "id": "a"
+      }
+     }
+    ]
    }
   ]
+ },
+ {
+  "name": "an unchanged keyed list with a duplicate key gives no op",
+  "kind": "diff",
+  "old": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    }
+   ]
+  },
+  "new": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    }
+   ]
+  },
+  "ops": []
  },
  {
   "name": "a keyed list with a duplicate key is a plain list (length changed)",
@@ -739,7 +801,7 @@
   ]
  },
  {
-  "name": "one side with a duplicate key makes the list plain",
+  "name": "one side with a duplicate key replaces the whole list",
   "kind": "diff",
   "old": {
    "rules": [
@@ -784,18 +846,98 @@
   "ops": [
    {
     "op": "replace",
-    "path": "/rules/1/meta/name",
-    "value": "A"
-   },
-   {
-    "op": "replace",
-    "path": "/rules/1/rule/id",
-    "value": "a"
+    "path": "/rules",
+    "value": [
+     {
+      "meta": {
+       "name": "A"
+      },
+      "rule": {
+       "id": "a"
+      }
+     },
+     {
+      "meta": {
+       "name": "A"
+      },
+      "rule": {
+       "id": "a"
+      }
+     }
+    ]
    }
   ]
  },
  {
-  "name": "rules without ids are a plain list",
+  "name": "the other side with a duplicate key replaces the whole list",
+  "kind": "diff",
+  "old": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    }
+   ]
+  },
+  "new": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "B"
+     },
+     "rule": {
+      "id": "b"
+     }
+    }
+   ]
+  },
+  "ops": [
+   {
+    "op": "replace",
+    "path": "/rules",
+    "value": [
+     {
+      "meta": {
+       "name": "A"
+      },
+      "rule": {
+       "id": "a"
+      }
+     },
+     {
+      "meta": {
+       "name": "B"
+      },
+      "rule": {
+       "id": "b"
+      }
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "name": "rules without ids are replaced whole",
   "kind": "diff",
   "old": {
    "rules": [
@@ -820,8 +962,50 @@
   "ops": [
    {
     "op": "replace",
-    "path": "/rules/0/meta/name",
-    "value": "y"
+    "path": "/rules",
+    "value": [
+     {
+      "meta": {
+       "name": "y"
+      },
+      "rule": {}
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "name": "nodes with numeric ids are keyed, not indexed",
+  "kind": "diff",
+  "old": {
+   "nodes": [
+    {
+     "id": "1",
+     "v": 0
+    },
+    {
+     "id": "0",
+     "v": 0
+    }
+   ]
+  },
+  "new": {
+   "nodes": [
+    {
+     "id": "1",
+     "v": 0
+    },
+    {
+     "id": "0",
+     "v": 5
+    }
+   ]
+  },
+  "ops": [
+   {
+    "op": "replace",
+    "path": "/nodes/0/v",
+    "value": 5
    }
   ]
  },
@@ -1777,7 +1961,7 @@
   ]
  },
  {
-  "name": "a plain list keyed by index when the keyed list has duplicates",
+  "name": "nothing inside a keyed list with a duplicate key is addressable",
   "kind": "apply",
   "doc": {
    "rules": [
@@ -1809,6 +1993,18 @@
     "op": "replace",
     "path": "/rules/a/meta/name",
     "value": "Y"
+   },
+   {
+    "op": "add",
+    "path": "/rules/b",
+    "value": {
+     "meta": {
+      "name": "B"
+     },
+     "rule": {
+      "id": "b"
+     }
+    }
    }
   ],
   "expected": {
@@ -1823,7 +2019,7 @@
     },
     {
      "meta": {
-      "name": "X"
+      "name": "A"
      },
      "rule": {
       "id": "a"
@@ -1834,10 +2030,121 @@
   "dropped": [
    {
     "op": "replace",
+    "path": "/rules/1/meta/name",
+    "value": "X"
+   },
+   {
+    "op": "replace",
     "path": "/rules/a/meta/name",
     "value": "Y"
+   },
+   {
+    "op": "add",
+    "path": "/rules/b",
+    "value": {
+     "meta": {
+      "name": "B"
+     },
+     "rule": {
+      "id": "b"
+     }
+    }
    }
   ]
+ },
+ {
+  "name": "a numeric segment in a keyed list is a key, not an index",
+  "kind": "apply",
+  "doc": {
+   "nodes": [
+    {
+     "id": "x"
+    },
+    {
+     "id": "0"
+    }
+   ]
+  },
+  "ops": [
+   {
+    "op": "add",
+    "path": "/nodes/0/v",
+    "value": 1
+   }
+  ],
+  "expected": {
+   "nodes": [
+    {
+     "id": "x"
+    },
+    {
+     "id": "0",
+     "v": 1
+    }
+   ]
+  },
+  "dropped": []
+ },
+ {
+  "name": "a replace of a whole keyed list with duplicates applies",
+  "kind": "apply",
+  "doc": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    }
+   ]
+  },
+  "ops": [
+   {
+    "op": "replace",
+    "path": "/rules",
+    "value": [
+     {
+      "meta": {
+       "name": "A"
+      },
+      "rule": {
+       "id": "a"
+      }
+     },
+     {
+      "meta": {
+       "name": "A"
+      },
+      "rule": {
+       "id": "a"
+      }
+     }
+    ]
+   }
+  ],
+  "expected": {
+   "rules": [
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    },
+    {
+     "meta": {
+      "name": "A"
+     },
+     "rule": {
+      "id": "a"
+     }
+    }
+   ]
+  },
+  "dropped": []
  },
  {
   "name": "keys containing / and ~ resolve unescaped",
