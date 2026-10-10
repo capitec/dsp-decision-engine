@@ -3,7 +3,7 @@ import copy
 from dataclasses import asdict
 
 import pytest
-from decikit import Engine, flow
+from decikit import InterpretedEngine, flow
 
 from loan_granting.offers import BEST_EXPECTED_VALUE, LARGEST_AMOUNT, LOWEST_TOTAL_COST, build_offer_set, expected_value, steps
 from loan_granting.pricing import PricingResult
@@ -93,7 +93,7 @@ def test_no_surviving_offer_is_an_empty_set_not_an_error():
 @pytest.fixture(scope="module")
 def validator(rate_card):
     *_, final_validation = steps(rate_card)
-    return Engine().bind(flow(final_validation, name="check"), mode="interpreted")
+    return InterpretedEngine().bind(flow(final_validation, name="check"))
 
 
 VALIDATION_INPUTS = (

@@ -1,7 +1,7 @@
 import polars as pl
 
 from decikit import branch, dag, each, flow, frame_step, loop, optimise, step
-from decikit._engine import Engine, step_map, to_ir
+from decikit._engine import FusedEngine, step_map, to_ir
 from decikit._engine.compile import fingerprint
 from decikit.steps import ConfigurableStep
 from decikit.lab.testing import no_recompile
@@ -109,10 +109,10 @@ def test_suppressions_stay_out_of_compile_keys_and_never_recompile():
                  suppress_checks=["DCD101"])
     assert [fingerprint(n.fn) for n in to_ir(plain).children_] == [fingerprint(n.fn) for n in to_ir(quiet).children_]
     row = {"x": 3.0}
-    exe = Engine().bind(plain, "fused")
+    exe = FusedEngine().bind(plain)
     exe.run(pl.DataFrame({"x": [1.0, 2.0]}))
     exe.run(row)
     with no_recompile():
-        other = Engine().bind(quiet, "fused")
+        other = FusedEngine().bind(quiet)
         other.run(pl.DataFrame({"x": [1.0, 2.0]}))
         assert other.run(row) == exe.run(row)

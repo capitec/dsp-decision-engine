@@ -3,7 +3,7 @@ import polars as pl
 import pytest
 
 from decikit import flow
-from decikit._engine import Engine
+from decikit._engine import Engine, InterpretedEngine
 from decikit.exceptions import ParamsError
 from decikit.steps.tables import DecisionTableConfig
 from decikit.lab.testing import no_recompile
@@ -43,7 +43,7 @@ def test_rows_come_from_the_params_document(run):
 
 @pytest.mark.parametrize("mode", ["stepped", "fused"])
 def test_retuning_rows_and_their_count_never_recompiles(mode):
-    exe = Engine().bind(table(), mode=mode)
+    exe = Engine.resolve(mode)().bind(table())
     exe.run(FRAME, params=rows(THREE))
     exe.run({"score": 5.0, "channel": "web"}, params=rows(THREE))
     with no_recompile():
@@ -62,9 +62,9 @@ def test_editing_inline_rows_rebuilds_the_node_but_never_recompiles(mode):
 
     # A null among inline outputs would make the output `int | None`, a new type; these rows have none.
     five = [{**r, "band": r["band"] or "low", "pts": r["pts"] or 6} for r in FIVE]
-    Engine().bind(inline(THREE), mode=mode).run(FRAME)
+    Engine.resolve(mode)().bind(inline(THREE)).run(FRAME)
     with no_recompile():
-        assert Engine().bind(inline(five), mode=mode).run(FRAME)["pts"].to_list() == [9, 7, 6, 5, 0]
+        assert Engine.resolve(mode)().bind(inline(five)).run(FRAME)["pts"].to_list() == [9, 7, 6, 5, 0]
 
 
 @pytest.mark.parametrize("data, message", [
@@ -76,7 +76,7 @@ def test_editing_inline_rows_rebuilds_the_node_but_never_recompiles(mode):
 ])
 def test_rows_that_break_the_declared_columns_are_invalid_params(data, message):
     with pytest.raises(ParamsError, match=message):
-        Engine().bind(table()).run(FRAME, params=rows(data))
+        InterpretedEngine().bind(table()).run(FRAME, params=rows(data))
 
 
 SHAPE = ('expected a list of rows like [{"lo": Float64, "hi": Float64, '
@@ -92,18 +92,18 @@ SHAPE = ('expected a list of rows like [{"lo": Float64, "hi": Float64, '
 ])
 def test_bad_param_rows_name_the_table_row_and_column_and_show_the_expected_shape(data, message):
     with pytest.raises(ParamsError, match=message) as err:
-        Engine().bind(table()).run(FRAME, params=rows(data))
+        InterpretedEngine().bind(table()).run(FRAME, params=rows(data))
     assert SHAPE in str(err.value)
 
 
 def test_missing_rows_are_invalid_params():
     with pytest.raises(ParamsError, match="required"):
-        Engine().bind(table()).run(FRAME)
+        InterpretedEngine().bind(table()).run(FRAME)
 
 
 def test_a_string_output_of_param_rows_must_declare_its_values():
     with pytest.raises(ValueError, match="Enum"):
-        Engine().bind(table(columns={**COLUMNS, "band": "String"}))
+        InterpretedEngine().bind(table(columns={**COLUMNS, "band": "String"}))
 
 
 def test_the_param_carries_its_schema():

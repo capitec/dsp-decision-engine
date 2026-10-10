@@ -5,7 +5,7 @@ import polars as pl
 import pytest
 
 from decikit import branch, param, step
-from decikit._engine import Engine
+from decikit._engine import FusedEngine
 from decikit._engine.params import ParamsError
 
 
@@ -129,4 +129,4 @@ def test_a_params_document_that_is_not_a_mapping_is_an_error(bind):
 
 def test_an_unknown_params_validation_mode_is_an_error(bind):
     with pytest.raises(ValueError, match="'eager' or 'lazy'"):
-        Engine(params_validation="sometimes")
+        FusedEngine(params_validation="sometimes")

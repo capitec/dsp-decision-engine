@@ -94,7 +94,7 @@ def main() -> None:
     )
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        exes = [Engine().bind(flow(fn, name="p"), mode=mode) for _, fn, _, _, mode in variants]
+        exes = [Engine.resolve(mode)().bind(flow(fn, name="p")) for _, fn, _, _, mode in variants]
         latencies = latency([(exe, record) for exe, (*_, record, _) in zip(exes, variants)])
         rows = [(label, batch(exe, df), prepare_ms(exe, df), *lat)
                 for (label, _, df, _, _), exe, lat in zip(variants, exes, latencies)]

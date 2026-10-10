@@ -58,7 +58,7 @@ def test_replacing_a_step_changes_downstream_values_and_runs_nothing_upstream_ag
 
 @pytest.mark.parametrize("mode", MODES)
 def test_replace_mid_session_gives_the_edited_pipelines_output_in_every_mode(mode):
-    s = pipeline.session(FRAME, mode=mode)
+    s = pipeline.session(FRAME, engine=mode)
     s.break_at("headroom")
     s.resume()
     s.replace("affordability_ratio", halved_ratio)
@@ -69,7 +69,7 @@ def test_replace_mid_session_gives_the_edited_pipelines_output_in_every_mode(mod
 
 @pytest.mark.parametrize("mode", MODES)
 def test_an_edit_downstream_of_the_pause_keeps_the_session_where_it_was(mode):
-    s = pipeline.session(FRAME, mode=mode)
+    s = pipeline.session(FRAME, engine=mode)
     s.break_at("disposable_income")
     s.resume()
     s.set("net_income", 5000.0)
@@ -120,7 +120,7 @@ TERMS = pl.DataFrame({"requested_term": [72.0, 50.0, 84.0]})
 
 @pytest.mark.parametrize("mode", MODES)
 def test_deleting_a_waterfall_layer_leaves_the_layer_before_it(mode):
-    s = waterfall.session(TERMS, mode=mode)
+    s = waterfall.session(TERMS, engine=mode)
     s.resume()
     assert s.output()["instalment_months"].to_list() == [48.0, 48.0, 48.0]
     s.delete("cap_at_48")
@@ -158,7 +158,7 @@ nested = flow(disposable_income, flow(affordability_ratio, headroom, name="inner
 
 @pytest.mark.parametrize("mode", MODES)
 def test_replace_inside_a_nested_named_flow(mode):
-    s = nested.session(FRAME, mode=mode)
+    s = nested.session(FRAME, engine=mode)
     s.resume()
     s.replace("inner/affordability_ratio", halved_ratio)
     s.resume()
@@ -176,7 +176,7 @@ by_length = flow(term_cap, branch(is_long, cap_at_54, cap_at_48, modifies=["term
 
 @pytest.mark.parametrize("mode", MODES)
 def test_replace_a_branch_arm(mode):
-    s = by_length.session(TERMS, mode=mode)
+    s = by_length.session(TERMS, engine=mode)
     s.resume()
     s.replace("by_length/cap_at_48", step(term_cap, name="cap_at_48", output="term_cap"))
     s.resume()
@@ -211,7 +211,7 @@ def less_two(affordability_ratio: float) -> float:
 # Fused runs this pipeline as one kernel, whose inner values can't be set.
 @pytest.mark.parametrize("mode", ["interpreted", "stepped"])
 def test_overrides_upstream_of_the_edit_survive(mode):
-    s = pipeline.session(FRAME, mode=mode)
+    s = pipeline.session(FRAME, engine=mode)
     s.break_at("headroom")
     s.resume()
     s.set("affordability_ratio", 3.0)
@@ -223,8 +223,8 @@ def test_overrides_upstream_of_the_edit_survive(mode):
 
 
 def test_an_edit_recompiles_only_what_changed():
-    edited.session(FRAME, mode="stepped").resume()        # compiles halved_ratio's kernel
-    s = pipeline.session(FRAME, mode="stepped")
+    edited.session(FRAME, engine="stepped").resume()        # compiles halved_ratio's kernel
+    s = pipeline.session(FRAME, engine="stepped")
     s.resume()
     with no_recompile():
         s.replace("affordability_ratio", halved_ratio)

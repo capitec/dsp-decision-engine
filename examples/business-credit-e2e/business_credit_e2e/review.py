@@ -10,7 +10,7 @@ import calendar
 from datetime import date
 from functools import cache
 
-from decikit import Engine, Executable
+from decikit import Executable, InterpretedEngine
 
 from business_credit_e2e import history, vocab
 
@@ -65,7 +65,7 @@ def _limit_executable() -> tuple[Executable, dict]:
     from limit_mgmt.pipeline import build
 
     pipeline = build(build_matrix_table())
-    return Engine().bind(pipeline, mode="interpreted"), pipeline.parameters().defaults()
+    return InterpretedEngine().bind(pipeline), pipeline.parameters().defaults()
 
 
 def limit_decision(limit_account: dict, decision_date: date, current_limit: float) -> dict:
