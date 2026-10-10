@@ -5,6 +5,7 @@ DSP_DB__PORT pointing at it: the row lock and the log they check are Postgres be
 """
 
 import asyncio
+import json
 import os
 import uuid
 
@@ -263,3 +264,40 @@ async def test_two_writers_on_one_project_are_serialised_by_the_row_lock(project
     data = (await stored()).project_data
     assert [r["meta"]["name"] for r in data["rules"]] == ["One", "Two"]
     assert [v for v, *_ in await log(project_id)] == [2, 3]
+
+
+# ---- fan-out ---------------------------------------------------------------------------------------------------
+
+class Socket:
+    """A websocket that records what the hub sends; `on_send` runs before each send."""
+
+    def __init__(self, on_send=None):
+        self.sent, self.on_send = [], on_send
+
+    async def send_text(self, text):
+        if self.on_send:
+            self.on_send()
+        self.sent.append(json.loads(text))
+
+    def versions(self):
+        return [m["version"] for m in self.sent if m["type"] == "applied"]
+
+
+@db
+@pytest.mark.asyncio
+async def test_a_client_joining_while_the_last_other_client_leaves_still_gets_new_versions(project):
+    from dsp_decikit.services.live_hub import Client, Hub
+    from dsp_decikit.services.live_sync import apply_message
+    project_id, _ = project
+    hub = Hub()
+    first = Client(Socket(), "c1")
+    await hub.join(project_id, first, 1)
+    # The other client leaves while the joiner is being brought up to date (here: while it gets its snapshot).
+    second = Client(Socket(on_send=lambda: hub.leave(project_id, first)), "c2")
+
+    await hub.join(project_id, second, 0)
+    await apply_message(project_id, "c3", "m1", 1, [name("a", "After the join")])
+    hub.pump_soon(project_id)
+    await asyncio.gather(*[r.pumping for r in hub.rooms.values() if r.pumping])
+
+    assert second.ws.versions() == [2]
