@@ -42,6 +42,10 @@ def leaf_node(idx=0):
 
 flat_docs = {
     "valid": flat(unary_rule(UNARY)),
+    "ui_only_node_fields": flat(
+        unary_rule(UNARY, editMode=False, isCollapsed=True, then={**LEAF, "editMode": False}),
+        unary_rule({**UNARY, "threshold": {"param": "hi", "editMode": True}}),
+    ),
     "empty_composite": flat(unary_rule(UNARY), {"type": "composite", "op": "and", "conditions": [], "then": LEAF}),
     "not_with_two_conditions": flat(
         {"type": "composite", "op": "not", "conditions": [UNARY, UNARY], "then": LEAF, "otherwise": None}

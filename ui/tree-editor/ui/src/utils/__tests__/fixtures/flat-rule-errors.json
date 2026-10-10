@@ -1,5 +1,62 @@
 {
  "valid": [],
+ "ui_only_node_fields": [
+  {
+   "type": "int_type",
+   "loc": [
+    "prioritized_flat_rule",
+    "rules",
+    1,
+    "rule",
+    "unary",
+    "condition",
+    ">",
+    "threshold",
+    "int"
+   ],
+   "msg": "Input should be a valid integer",
+   "input": {
+    "param": "hi",
+    "editMode": true
+   }
+  },
+  {
+   "type": "float_type",
+   "loc": [
+    "prioritized_flat_rule",
+    "rules",
+    1,
+    "rule",
+    "unary",
+    "condition",
+    ">",
+    "threshold",
+    "float"
+   ],
+   "msg": "Input should be a valid number",
+   "input": {
+    "param": "hi",
+    "editMode": true
+   }
+  },
+  {
+   "type": "extra_forbidden",
+   "loc": [
+    "prioritized_flat_rule",
+    "rules",
+    1,
+    "rule",
+    "unary",
+    "condition",
+    ">",
+    "threshold",
+    "ParamRef",
+    "editMode"
+   ],
+   "msg": "Extra inputs are not permitted",
+   "input": true
+  }
+ ],
  "empty_composite": [
   {
    "type": "value_error",
