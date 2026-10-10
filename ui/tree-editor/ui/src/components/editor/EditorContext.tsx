@@ -37,7 +37,8 @@ export const XYFlowContext = createContext<XYFlowContextState>({
   handleRearrange: () => {},
 });
 
-const ChangeTypeIgnoreList = new Set(["select"]);
+// Selecting and measuring change nothing that is saved
+const ChangeTypeIgnoreList = new Set(["select", "dimensions"]);
 
 interface EditorProviderProps {
   children: React.ReactNode;
@@ -59,7 +60,6 @@ export const EditorProvider: React.FC<EditorProviderProps> = ({
   const setNodes = useEditorStore((state) => state.setNodes);
   const setEdges = useEditorStore((state) => state.setEdges);
   const setSubtrees = useEditorStore((state) => state.setSubtrees);
-  const setIsDirty = useEditorStore((state) => state.setIsDirty);
   const loadProject = useEditorStore((state) => state.loadProject);
   const addNode = useEditorStore((state) => state.addNode);
   const addEdge = useEditorStore((state) => state.addEdge);
@@ -76,9 +76,6 @@ export const EditorProvider: React.FC<EditorProviderProps> = ({
   const onNodesChange: OnNodesChange<Node> = useCallback(
     (changes) => {
       const hasDirtyChanges = changes.some(change => !ChangeTypeIgnoreList.has(change.type));
-      if (hasDirtyChanges) {
-        setIsDirty(true);
-      }
 
       // Apply changes to nodes
       setNodes((currentNodes) => {
@@ -103,17 +100,14 @@ export const EditorProvider: React.FC<EditorProviderProps> = ({
         }
 
         return updatedNodes;
-      });
+      }, hasDirtyChanges);
     },
-    [setNodes, setIsDirty]
+    [setNodes]
   );
 
   const onEdgesChange: OnEdgesChange<Edge> = useCallback(
     (changes) => {
       const hasDirtyChanges = changes.some(change => !ChangeTypeIgnoreList.has(change.type));
-      if (hasDirtyChanges) {
-        setIsDirty(true);
-      }
 
       // Apply changes to edges
       setEdges((currentEdges) => {
@@ -130,9 +124,9 @@ export const EditorProvider: React.FC<EditorProviderProps> = ({
         }
 
         return updatedEdges;
-      });
+      }, hasDirtyChanges);
     },
-    [setEdges, setIsDirty]
+    [setEdges]
   );
 
   // Connection handler
