@@ -79,7 +79,7 @@ dispatch to queues, outcome feedback, languages, the runners-up record, and the 
 | `frame_step` for work as wide as the rule set (635 columns read by name) | [firing.py](fraud_interdiction/firing.py) |
 | Computed features that read a column an earlier step wrote (`amount - 8000 * mule_scam_amount_multiplier`) | [`rule_set.json`](configs/0.1.0/rule_set.json), [overlays.py](fraud_interdiction/overlays.py) |
 | Steps that compile: `param`, `missing_as`, `IntEnum` constants, bitsets, multi-output `step(outputs=)` | [enrichment.py](fraud_interdiction/enrichment.py), [hard_blocks.py](fraud_interdiction/hard_blocks.py) |
-| `@allow_fallback` for steps that are Python on purpose (dates, lists, strings), checked with `Engine(strict_compile=True)` | [action.py](fraud_interdiction/action.py), [overlays.py](fraud_interdiction/overlays.py), [tests/test_serving.py](tests/test_serving.py) |
+| `@allow_fallback` for steps that are Python on purpose (dates, lists, strings), checked with `FusedEngine(strict_compile=True)` | [action.py](fraud_interdiction/action.py), [overlays.py](fraud_interdiction/overlays.py), [tests/test_serving.py](tests/test_serving.py) |
 | `DecisionTableConfig` in a config document, then `flow` so a later step may overwrite what the table wrote | [`client_wording.json`](configs/0.1.0/client_wording.json), [pipeline.py](fraud_interdiction/pipeline.py), [wording.py](fraud_interdiction/wording.py) |
 | `dag` (dependency order) for the pipeline, `flow` (written order) for one value written twice | [pipeline.py](fraud_interdiction/pipeline.py) |
 | `ConfigurableStep` types whose fields are the data, compared by `decikit.lab.diff`: overlays, reason codes and rule-set versions from `credit_core`, and this package's `AmountOverlays` and `ActionResolver`, which hold an `AdjustmentStack` as a field | [overlays.py](fraud_interdiction/overlays.py), [action.py](fraud_interdiction/action.py), [tests/test_release_checks.py](tests/test_release_checks.py) |
@@ -102,7 +102,7 @@ a fresh checkout takes about a minute and a half while numba compiles the rule t
 
 ```bash
 uv run decikit build
-# built config version 0.1.0 (pipeline fraud_interdiction.pipeline:build, mode fused)
+# built config version 0.1.0 (pipeline fraud_interdiction.pipeline:build, engine fused)
 ```
 
 Serve, and assess the sample payment. Its date is a plain JSON string:

@@ -43,7 +43,7 @@ assert_equivalent(step, frame, params=None, modes=MODES, script=None) -> pl.Data
 
 For each mode in `modes`, in order, it:
 
-1. binds the step with `Engine().bind(step, mode=mode)`;
+1. binds the step with `Engine.resolve(mode)().bind(step)`;
 2. runs `exe.run(frame, params)`. The first mode's output becomes `expected`, and every later mode's output must
    equal it;
 3. calls `exe.run(record, params)` for every row of `frame` and compares the dict with the same row of this mode's
@@ -57,7 +57,7 @@ It returns `expected`.
 
 ```mermaid
 flowchart TD
-  A["for mode in modes"]:::engine --> B["exe = Engine().bind(step, mode)"]:::engine
+  A["for mode in modes"]:::engine --> B["exe = Engine.resolve(mode)().bind(step)"]:::engine
   B --> C{"exe.run(frame, params) raises?"}:::neutral
   C -- "yes, first mode" --> E1["re-raise the error as is"]:::error
   C -- "yes, later mode" --> E2["AssertionError: run() raised ...<br/>in X mode but not in Y"]:::error
@@ -164,7 +164,7 @@ only the kernel's boundary values, so setting a value computed inside the kernel
 debugger's own error:
 
 ```text
-KeyError: "'affordability' is computed inside the fused kernel ['loan/affordability', 'loan/approved'] and never stored; open the session with mode='stepped' to inspect or set it"
+KeyError: "'affordability' is computed inside the fused kernel ['loan/affordability', 'loan/approved'] and never stored; open the session with engine='stepped' to inspect or set it"
 ```
 
 A breakpoint on a later step of a fused kernel, followed by `set` on that step's input, also differs by design: the
@@ -289,7 +289,7 @@ docstring states that a load from numba's disk cache doesn't count either.
 The passing case retunes a param on a fused executable:
 
 ```python
-exe = Engine().bind(pipeline, mode="fused")
+exe = FusedEngine().bind(pipeline)
 exe.run(df)
 with no_recompile():
     exe.run(df, params={"loan": {"approved": {"limit": 0.5}}})
@@ -306,7 +306,7 @@ def make():
     return shifted
 
 with no_recompile():
-    Engine().bind(flow(make(), name="shift"), mode="stepped").run(pl.DataFrame({"x": [1.0]}))
+    SteppedEngine().bind(flow(make(), name="shift")).run(pl.DataFrame({"x": [1.0]}))
 ```
 
 ```text

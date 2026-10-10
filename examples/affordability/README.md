@@ -74,7 +74,7 @@ The arithmetic, in the order a regulator reads it:
 | `param` for policy (staleness windows, minimum tier per mode, marginal band), a generated params document | [modes.py](assessment/modes.py), [verdict.py](assessment/verdict.py), [`configs/0.1.0/params.json`](configs/0.1.0/params.json) |
 | `missing_as` for an absent second applicant, `NaN` for "not supplied" which is not a zero | [household.py](assessment/household.py), [verdict.py](assessment/verdict.py) |
 | `TypedDict` account lists: JSON date strings arrive as `date`s | [debts.py](assessment/debts.py) |
-| `@allow_fallback` for steps that are Python on purpose (dicts, lists of accounts, dates), checked by `Engine(strict_compile=True)` | [tests/test_serving.py](tests/test_serving.py) |
+| `@allow_fallback` for steps that are Python on purpose (dicts, lists of accounts, dates), checked by `FusedEngine(strict_compile=True)` | [tests/test_serving.py](tests/test_serving.py) |
 | Warm-up from `sample_request.json`, and serving the raw request bytes | [tests/test_serving.py](tests/test_serving.py) |
 
 ## Run it
@@ -92,7 +92,7 @@ in a fresh checkout takes a minute while numba compiles):
 
 ```bash
 uv run decikit build
-# built config version 0.1.0 (pipeline assessment.pipeline:build, mode fused)
+# built config version 0.1.0 (pipeline assessment.pipeline:build, engine fused)
 ```
 
 Serve, and assess the sample application. Its dates are plain JSON strings:

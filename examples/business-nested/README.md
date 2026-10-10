@@ -92,7 +92,7 @@ The rules, in the order the pipeline applies them:
 | An example embedded whole and run for some rows only: `branch` around the affordability example, its columns relabelled | [sole_proprietor.py](business_nested/sole_proprietor.py) |
 | `param` for every policy number, nested under the `each` that runs the step; a generated params document | [rollup.py](business_nested/rollup.py), [blend.py](business_nested/blend.py), [`configs/0.2.0/params.json`](configs/0.2.0/params.json) |
 | `flow` for a value written twice (reasons fired, then ranked; the instalment, then rounded) | [outcome.py](business_nested/outcome.py), [pricing.py](business_nested/pricing.py) |
-| `@allow_fallback` for steps that are Python on purpose (lists of dicts, dates, library calls), checked by `Engine(strict_compile=True)` | [tests/test_serving.py](tests/test_serving.py) |
+| `@allow_fallback` for steps that are Python on purpose (lists of dicts, dates, library calls), checked by `FusedEngine(strict_compile=True)` | [tests/test_serving.py](tests/test_serving.py) |
 | `assert_equivalent`: every mode and a single record agree; warm-up from `sample_request.json` and raw request bytes | [tests/test_serving.py](tests/test_serving.py) |
 
 ## Run it
@@ -110,7 +110,7 @@ fresh checkout takes a minute while numba compiles):
 
 ```bash
 uv run decikit build
-# built config version 0.2.0 (pipeline business_nested.pipeline:build, mode fused)
+# built config version 0.2.0 (pipeline business_nested.pipeline:build, engine fused)
 ```
 
 Serve, and decide the sample application. Its dates are plain JSON strings, inside the nested lists too:

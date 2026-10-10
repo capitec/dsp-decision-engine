@@ -9,7 +9,7 @@ import time
 import warnings
 
 import polars as pl
-from decikit import Engine, flow, param
+from decikit import FusedEngine, flow, param
 
 def disposable(income: float, expenses: float) -> float:
     return income - expenses
@@ -24,7 +24,7 @@ pipeline = flow(disposable, ratio, affordable, name="afford")
 record = {"income": 1000.0, "expenses": 300.0, "debt": 200.0}
 
 for mode in ("interpreted", "stepped", "fused"):
-    exe = pipeline.compile(mode)          # same as Engine().bind(pipeline, mode)
+    exe = pipeline.compile(mode)          # same as Engine.resolve(mode)().bind(pipeline)
     print(mode, exe.run(record))
 ```
 
@@ -34,17 +34,17 @@ stepped {'income': 1000.0, 'expenses': 300.0, 'debt': 200.0, 'affordable': True}
 fused {'income': 1000.0, 'expenses': 300.0, 'debt': 200.0, 'affordable': True}
 ```
 
-| Mode | What runs | A session pauses at | Use it for |
+| Engine | What runs | A session pauses at | Use it for |
 |---|---|---|---|
 | `"interpreted"` | each step as a Python function, row by row | every step, and inside trees | debugging, the reference answer, pipelines that barely run |
 | `"stepped"` | each step as its own numba kernel over all rows, with a Python driver between steps | every step | debugging compiled behaviour, finding which step of a kernel raised |
 | `"fused"` | one kernel per run of consecutive compilable steps; branches and loops of plain scalar steps packed into one kernel | kernel boundaries only | serving (`decikit serve`'s default), batch runs |
 
-`pipeline.run(df)` is interpreted. `Engine(...).bind(pipeline, mode)` does what `compile` does and takes the engine options (`strict_compile=`, `params_validation=`). An unknown mode is refused: `EngineError: unknown mode 'jit'; expected one of ['fused', 'interpreted', 'stepped']`.
+`pipeline.run(df)` is interpreted. An engine is a settings document named by its tag: `pipeline.compile(FusedEngine(strict_compile=True))` takes the engine options (`strict_compile=`, `params_validation=`), and `Engine.registered()` lists the tags. An unknown tag is refused: `RegistryError: 'fsued' is not a registered Engine type. Did you mean 'fused'?`.
 
 Measured on a flagship pipeline at 1M rows through `run` and 20k single-record `run` calls (CPython 3.14, dev box):
 
-| Mode | Batch rows/s | record p50 | record p99 |
+| Engine | Batch rows/s | record p50 | record p99 |
 |---|---|---|---|
 | interpreted | 0.25M | 59.1 µs | 84.5 µs |
 | stepped | 12.9M | 37.1 µs | 47.6 µs |
@@ -241,15 +241,15 @@ except TypeError as e:
 
 ### Strict compile
 
-`Engine(strict_compile=True)` raises at the first run instead of warning, for any step that would run in Python without `@allow_fallback`. Use it in CI or at service start-up to keep a fallback from slipping in:
+`FusedEngine(strict_compile=True)` raises at the first run instead of warning, for any step that would run in Python without `@allow_fallback`. Use it in CI or at service start-up to keep a fallback from slipping in:
 
 ```python
 try:
-    Engine(strict_compile=True).bind(mixed, mode="fused").run(data)
+    FusedEngine(strict_compile=True).bind(mixed).run(data)
 except ValueError as e:
     print(e)
 
-accepted = Engine(strict_compile=True).bind(flow(legacy_score, name="q"), mode="fused")
+accepted = FusedEngine(strict_compile=True).bind(flow(legacy_score, name="q"))
 print(accepted.run({"code": 4}))
 ```
 
