@@ -164,7 +164,11 @@ It answers in this order, cheapest first, and stops at the first reason:
    semantic `str`, or a function step writing a `Literal`.
 5. The signature is probed: each input, param and const is typed as the value the kernel will
    pass (`_probe_signature`), and `dispatcher.compile(sig)` runs. Its failure, if any, is cached
-   per `(key, sig)`.
+   per `(key, sig)`. A function step whose body compiles but which writes anything but a
+   number, a `Struct` or a `Columnar` (a `dict`, a TypedDict, a `list[...]`) is then refused
+   with `writes '<output>' as <type>, which no kernel stores`: it compiles alone, but no kernel
+   column stores its value, so in a kernel it would fail at launch and take the other steps of
+   the kernel into Python with it. An unannotated output (`Any`) is left to numba.
 6. Output checks that need the compiled return type: a `Struct[...] | None` output, a `Struct`
    returned as a dict, a `Columnar[...]` returned as a list of dicts, or one declared `| None`.
 7. A `Columnar[...]` input that is OPTIONAL, or read by a row node, runs as a per-row
@@ -507,9 +511,7 @@ the kernel switches to one `Fallback` per call for the rest of its life, each wi
 `split at launch: <numba error>` and the call's `@allow_fallback` flag (`Kernel.declared`). Before
 it switches it calls `on_split` with those fallbacks; the runner installs one that lists them in
 `fallbacks()`, warns in fused mode and raises under `strict_compile`, and a raise leaves the kernel
-whole, so its next launch is refused too. A step returning a `dict` or a `list` compiles alone but
-always makes its kernel split, so the runner launches such a kernel once on zero rows while it
-builds and the split is reported before any row runs ([runners](runners.md)). A runtime error inside a
+whole, so its next launch is refused too ([runners](runners.md)). A runtime error inside a
 kernel propagates; the runner adds a note naming the step, or listing every step of a fused kernel
 because a kernel cannot tell which of its steps raised:
 

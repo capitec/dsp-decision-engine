@@ -293,9 +293,9 @@ a value numba only meets then (a param it cannot type, for instance) makes the k
 compile fail. `Kernel.run` catches `FALLBACK_ERRORS` on that launch, replaces itself with one
 `Fallback` per call for the rest of its life, and reruns. The split is reported like a build-time
 fallback, through the `on_split` callback the runner installs: listed in `fallbacks()` as
-`split at launch: <error>`, warned about in fused mode, refused under `strict_compile`. A kernel
-holding a step that returns a `dict` or a `list` always splits, so the build launches it once on
-zero rows and the split happens there. A `Packed` branch or loop does not split;
+`split at launch: <error>`, warned about in fused mode, refused under `strict_compile`. A step
+returning a `dict` or a `list` never reaches a kernel: `compile_call` refuses it, so it falls back
+alone at build. A `Packed` branch or loop does not split;
 it raises, and the [fused runner](runners.md) drops the packing for that path and runs the branch
 or loop unpacked from then on.
 
