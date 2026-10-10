@@ -101,3 +101,12 @@ describe('removeStructRecordReferences', () => {
     }
   });
 });
+
+// The default row holds references like any record, but only the data rows are searched and cleaned.
+it.fails('deleting a category or a struct record clears it from the default row too', () => {
+  const cfg = { ...config(), default: { Tier: 'gold', Owner: { $key: 'ann' } } };
+  expect([
+    removeCategoryReferences('gold', 'tier', cfg).default.Tier,
+    removeStructRecordReferences('ann', 'person', cfg).default.Owner,
+  ]).toEqual(['', null]);
+});
