@@ -111,15 +111,15 @@ export const UnifiedOutputTable: React.FC<UnifiedOutputTableProps> = ({
   }, []);
 
 
-  // Ensure we always have at least a default record
+  // The output's default row is its own row (`default`), not data[0]; a struct type shows one empty record to start
   const records = useMemo(() => {
-    if (outputConfig.output.length === 0) {
+    if (isStructMode && outputConfig.output.length === 0) {
       // Create initial default record with all fields
       const defaultRecord: Record<string, any> = { ...outputConfig.default };
       return [defaultRecord];
     }
     return outputConfig.output;
-  }, [outputConfig.output, outputConfig.default]);
+  }, [outputConfig.output, outputConfig.default, isStructMode]);
 
   // Column order for drag and drop
   const columnOrder = useMemo(() =>
@@ -292,10 +292,10 @@ export const UnifiedOutputTable: React.FC<UnifiedOutputTableProps> = ({
     const newDefault = { ...outputConfig.default };
     newDefault[columnName] = defaultValue;
 
-    // Update all records
+    // Records keep their values where they convert to the new type
     const newRecords = records.map(record => ({
       ...record,
-      [columnName]: defaultValue
+      [columnName]: typeof newType === 'string' ? convertValue(record[columnName], oldTypeStr, newType) : defaultValue
     }));
 
     onConfigChange({
@@ -368,22 +368,17 @@ export const UnifiedOutputTable: React.FC<UnifiedOutputTableProps> = ({
       }
     }
 
+    if (recordIndex === -1) {
+      onConfigChange({ default: { ...outputConfig.default, [columnName]: value } });
+      return;
+    }
     const newRecords = [...records];
     newRecords[recordIndex] = {
       ...newRecords[recordIndex],
       [columnName]: value
     };
-
-    // In output mode, if it's the first record (default), also update the default
-    if (!isStructMode && recordIndex === 0) {
-      onConfigChange({
-        output: newRecords,
-        default: { ...outputConfig.default, [columnName]: value }
-      });
-    } else {
-      onConfigChange({ output: newRecords });
-    }
-  }, [records, outputConfig.default, onConfigChange, onValidateCell, isStructMode]);
+    onConfigChange({ output: newRecords });
+  }, [records, outputConfig.default, onConfigChange, onValidateCell]);
 
   // Add new data record
   const handleAddRecord = useCallback(() => {
@@ -417,17 +412,11 @@ export const UnifiedOutputTable: React.FC<UnifiedOutputTableProps> = ({
 
   // Remove data record
   const handleRemoveRecord = useCallback((index: number) => {
-    // In output mode, cannot remove the default record (index 0)
-    if (!isStructMode && index === 0) {
-      alert('Cannot remove the default record');
-      return;
-    }
-
     // Allow deletion immediately - impact analysis will happen at save time
     const newRecords = records.filter((_, i) => i !== index);
     onConfigChange({ output: newRecords });
     onRecordRemoved?.(index);
-  }, [records, onConfigChange, onRecordRemoved, isStructMode]);
+  }, [records, onConfigChange, onRecordRemoved]);
 
   // Handle display format change
   const handleDisplayFormatChange = useCallback((value: string) => {
@@ -543,15 +532,19 @@ export const UnifiedOutputTable: React.FC<UnifiedOutputTableProps> = ({
                   </SortableContext>
                 </thead>
                 <tbody>
-                  {records.map((record, recordIndex) => (
-                    <tr key={recordIndex} className={`border-b ${!isStructMode && recordIndex === 0 ? 'bg-blue-50' : 'hover:bg-gray-50'}`}>
+                  {(isStructMode
+                    ? records.map((record, recordIndex) => [record, recordIndex] as const)
+                    : [[outputConfig.default ?? {}, -1] as const, ...records.map((record, recordIndex) => [record, recordIndex] as const)]
+                  ).map(([record, recordIndex]) => (
+                    <tr key={recordIndex} data-testid={recordIndex === -1 ? 'output-default-row' : undefined}
+                        className={`border-b ${recordIndex === -1 ? 'bg-blue-50' : 'hover:bg-gray-50'}`}>
                       {outputConfig.dtypes.map(([columnName, columnType]) => {
                         const errorKey = `${recordIndex}-${columnName}`;
                         const validationError = validationErrors[errorKey];
                         return (
                           <td key={columnName} className="p-2 border-r last:border-r-0">
                             <CellEditor
-                              value={record[columnName]}
+                              value={(record as Record<string, any>)[columnName]}
                               columnName={columnName}
                               columnType={columnType}
                               outputConfig={outputConfig}
@@ -562,7 +555,7 @@ export const UnifiedOutputTable: React.FC<UnifiedOutputTableProps> = ({
                         );
                       })}
                       <td className="p-2 text-center">
-                        {!isStructMode && recordIndex === 0 ? (
+                        {recordIndex === -1 ? (
                           <Badge variant="outline" className="text-xs">Default</Badge>
                         ) : (
                           <Button

@@ -5,7 +5,7 @@ import re
 import polars as pl
 import pytest
 from decikit import TreeConfig
-from playwright.sync_api import Page, expect
+from playwright.sync_api import Locator, Page, expect
 
 from flat_rules_ui import add_parameter
 from node_ui import (
@@ -41,6 +41,11 @@ def open_output_editor(page: Page):
     return page.get_by_role("dialog")
 
 
+def output_record(dialog: Locator, index: int) -> Locator:
+    """The Edit Output row of record `index` (a leaf's result_idx); the default row comes first, on its own."""
+    return dialog.locator("tbody tr:not([data-testid='output-default-row'])").nth(index)
+
+
 def close_dialog(page: Page) -> None:
     page.get_by_role("button", name="Close").click()
     expect(page.get_by_role("dialog")).to_be_hidden()
@@ -55,7 +60,7 @@ def test_record_added_in_edit_output_is_saved_last_and_can_be_picked_by_a_leaf(s
     project = open_tree(signed_in, banded(output_table("approve", "review"), indices=(-1, -1, -1)))
     dialog = open_output_editor(signed_in)
     dialog.get_by_role("button", name="Add Record").click()
-    dialog.locator("tbody tr").nth(2).locator("input").fill("refer")
+    output_record(dialog, 2).locator("input").fill("refer")
     close_dialog(signed_in)
     select_node(signed_in, "low")
     signed_in.get_by_role("combobox").nth(1).click()
@@ -71,18 +76,17 @@ def test_record_added_in_edit_output_is_saved_last_and_can_be_picked_by_a_leaf(s
 def test_editing_a_record_changes_what_its_leaves_return(signed_in: Page):
     project = open_tree(signed_in, banded(output_table("approve", "review", "refer")))
     dialog = open_output_editor(signed_in)
-    dialog.locator("tbody tr").nth(1).locator("input").fill("reviewed")
+    output_record(dialog, 1).locator("input").fill("reviewed")
     close_dialog(signed_in)
     assert save(signed_in)["validation_errors"] == []
 
     assert run(export_document(signed_in, project), amount=[50.0, 500.0, 5000.0]) == ["approve", "reviewed", "refer"]
 
 
-@pytest.mark.xfail(strict=True, reason="editing records through Edit Output saves an extra `output` key that duplicates `data`")
 def test_saved_output_has_only_the_documented_keys(signed_in: Page):
     project = open_tree(signed_in, banded(output_table("approve", "review", "refer")))
     dialog = open_output_editor(signed_in)
-    dialog.locator("tbody tr").nth(1).locator("input").fill("reviewed")
+    output_record(dialog, 1).locator("input").fill("reviewed")
     close_dialog(signed_in)
     save(signed_in)
 
@@ -90,20 +94,18 @@ def test_saved_output_has_only_the_documented_keys(signed_in: Page):
     assert set(output) == {"data", "default", "dtypes", "type_defs"}
 
 
-@pytest.mark.xfail(strict=True, reason="the row labelled Default in Edit Output is the first record, not the output default")
 def test_default_row_of_the_dialog_shows_the_output_default(signed_in: Page):
     open_tree(signed_in, banded(output_table("approve", "review", "refer"), indices=(0, 1, -1)))
     dialog = open_output_editor(signed_in)
 
-    expect(dialog.locator("tbody tr").filter(has_text="Default").locator("input")).to_have_value("decline")
+    expect(dialog.get_by_test_id("output-default-row").locator("input")).to_have_value("decline")
 
 
-@pytest.mark.xfail(strict=True, reason="the first record is shown as the Default row and editing it overwrites the output default as well")
 def test_editing_the_first_record_leaves_the_output_default_alone(signed_in: Page):
     doc = document([unary("root"), leaf("a", 0, 100, 250)], [edge("root", "a", 0)], output=output_table("approve"))
     project = open_tree(signed_in, doc)
     dialog = open_output_editor(signed_in)
-    dialog.locator("tbody tr").nth(0).locator("input").fill("escalate")
+    output_record(dialog, 0).locator("input").fill("escalate")
     close_dialog(signed_in)
     save(signed_in)
 
@@ -114,7 +116,7 @@ def test_editing_the_first_record_leaves_the_output_default_alone(signed_in: Pag
 def test_deleting_a_record_above_a_leaf_keeps_the_leaf_on_the_same_record(signed_in: Page):
     project = open_tree(signed_in, banded(output_table("approve", "review", "refer")))
     dialog = open_output_editor(signed_in)
-    dialog.locator("tbody tr").nth(1).get_by_role("button").click()  # the "review" record
+    output_record(dialog, 1).get_by_role("button").click()  # the "review" record
     close_dialog(signed_in)
     assert save(signed_in)["validation_errors"] == []
 
@@ -125,18 +127,17 @@ def test_deleting_a_record_above_a_leaf_keeps_the_leaf_on_the_same_record(signed
 def test_deleting_the_record_a_leaf_points_at_sends_it_to_the_default(signed_in: Page):
     project = open_tree(signed_in, banded(output_table("approve", "review", "refer")))
     dialog = open_output_editor(signed_in)
-    dialog.locator("tbody tr").nth(2).get_by_role("button").click()  # the last record
+    output_record(dialog, 2).get_by_role("button").click()  # the last record
     close_dialog(signed_in)
     save(signed_in)
 
     assert result_indices(signed_in, project) == {"low": 0, "mid": 1, "high": -1}
 
 
-@pytest.mark.xfail(strict=True, reason="the first record is shown as the Default row and has no delete button")
 def test_the_first_record_can_be_deleted_like_any_other(signed_in: Page):
     project = open_tree(signed_in, banded(output_table("approve", "review", "refer")))
     dialog = open_output_editor(signed_in)
-    delete_first = dialog.locator("tbody tr").nth(0).get_by_role("button")
+    delete_first = output_record(dialog, 0).get_by_role("button")
     expect(delete_first).to_have_count(1)
     delete_first.click()
     close_dialog(signed_in)
@@ -197,7 +198,7 @@ def test_new_output_column_is_added_with_a_type_and_its_values_are_exported(sign
     signed_in.get_by_role("option", name="Int64", exact=True).click()
     dialog.get_by_role("button", name="Add", exact=True).click()
     for row, value in enumerate(("10", "20", "30")):
-        dialog.locator("tbody tr").nth(row).locator("input").nth(1).fill(value)
+        output_record(dialog, row).locator("input").nth(1).fill(value)
     close_dialog(signed_in)
     assert save(signed_in)["validation_errors"] == []
 
