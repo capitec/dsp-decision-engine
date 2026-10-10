@@ -55,7 +55,7 @@ describe('updateStructReferencesWithMapping', () => {
     expect(updatedOutputConfig!.output[0].Owner).toEqual({ $key: 'anna' });
   });
 
-  // The mapping is by value only, so a same-named record of another struct type is rewritten as well.
+  // The mapping carries no type, so the custom type editors rewrite a same-named record of every other struct type too.
   it.fails('renaming a record of one struct type leaves references to a same-named record of another type', () => {
     const cfg: any = {
       dtypes: [['Owner', { type: 'Custom', type_id: 'person' }], ['Pet', { type: 'Custom', type_id: 'pet' }]],
