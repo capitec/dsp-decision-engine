@@ -10,7 +10,6 @@ from numba.core import event
 from decikit import flow, step
 from decikit._engine.debug import Edited, Paused, ReloadFailed
 from decikit._engine.debug.hot import ModuleWatcher
-from decikit.lab.testing import MODES
 
 FRAME = pl.DataFrame({"net_income": [9200.0, 4100.0], "expenses": [3100.0, 1500.0], "instalment": [1200.0, 800.0]})
 
@@ -39,7 +38,7 @@ def buffer(headroom: float) -> float:
     return headroom * 0.5
 
 
-@pytest.mark.parametrize("mode", MODES)
+@pytest.mark.parametrize("mode", ("interpreted", "stepped", "fused"))
 def test_reload_reruns_from_the_first_changed_step_in_every_mode(mode):
     s = flow(disposable_income, ratio, headroom).session(FRAME, engine=mode)
     s.resume()
