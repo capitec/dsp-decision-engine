@@ -207,7 +207,7 @@ params document: no step with params at 'credit/base_limt'. Did you mean 'credit
 
 A misspelt step path gets a suggestion and the list of steps that do have params. A document is validated once and then cached by identity, so treat it as immutable: to change a value, pass a new dict, not the same one edited in place.
 
-`Engine(params_validation="lazy")` validates a node's params the first time a row reaches that node, so an invalid param in a branch arm no row takes never fails a run. The default, `"eager"`, validates everything up front.
+`FusedEngine(params_validation="lazy")` validates a node's params the first time a row reaches that node, so an invalid param in a branch arm no row takes never fails a run. The default, `"eager"`, validates everything up front.
 
 ### Required, shared and lenient params
 

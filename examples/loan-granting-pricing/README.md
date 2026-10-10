@@ -88,7 +88,7 @@ The stages, in the order the decision takes them:
 | `DecisionTableConfig` tables from `credit_core` (appetite, grade boundaries, calibration, fee caps) renamed with `.relabel` | [pipeline.py](loan_granting/pipeline.py), [scoring.py](loan_granting/scoring.py) |
 | `dag` of units with `.emit`, and `flow` for a value written twice (reasons fired, then ranked) | [pipeline.py](loan_granting/pipeline.py), [outcome.py](loan_granting/outcome.py) |
 | `Text` inputs that stay in the kernel; `list[dict]` outputs (the offers) from steps that are Python on purpose | [bureau.py](loan_granting/bureau.py), [offers.py](loan_granting/offers.py) |
-| `@allow_fallback` for those steps, checked by `Engine(strict_compile=True)` | [tests/test_serving.py](tests/test_serving.py) |
+| `@allow_fallback` for those steps, checked by `FusedEngine(strict_compile=True)` | [tests/test_serving.py](tests/test_serving.py) |
 | Warm-up from `sample_request.json`; JSON date strings arrive as `date`s | [tests/test_serving.py](tests/test_serving.py) |
 
 ## Run it
@@ -106,7 +106,7 @@ checkout takes a minute while numba compiles):
 
 ```bash
 uv run decikit build
-# built config version 0.1.0 (pipeline loan_granting.pipeline:build, mode fused)
+# built config version 0.1.0 (pipeline loan_granting.pipeline:build, engine fused)
 ```
 
 Serve, and decide the sample application: a client asking for R120 000 over 60 months. Its dates are plain JSON strings:

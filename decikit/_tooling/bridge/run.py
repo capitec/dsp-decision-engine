@@ -7,7 +7,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from decikit import Engine
+from decikit import InterpretedEngine
 from decikit._engine.run.runners import interpreted
 
 from .bridge import Bridge
@@ -49,7 +49,7 @@ def main(argv=None):
         if not 0 <= a.row < rows.height:
             p.error(f"--row {a.row} is out of range: the data has {rows.height} rows")
         rows = rows.slice(a.row, 1)
-    out = Engine().bind(b.step).run(rows, params=base_params(b.mod, None, b._build_params))
+    out = InterpretedEngine().bind(b.step).run(rows, params=base_params(b.mod, None, b._build_params))
     print(out)
 
 

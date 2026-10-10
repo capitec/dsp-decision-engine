@@ -2,7 +2,7 @@
 import polars as pl
 
 from decikit import branch, flow, optimise, step
-from decikit._engine import Engine
+from decikit._engine import FusedEngine
 from decikit.lab.testing import assert_equivalent
 from decikit.steps.tables import DecisionTableConfig
 from decikit.steps.trees import TreeConfig
@@ -33,7 +33,7 @@ def table(output: str = "pts", default=0, rows=None) -> DecisionTableConfig:
 
 
 def packed(pipeline) -> list[str]:
-    exe = Engine().bind(pipeline, "fused")
+    exe = FusedEngine().bind(pipeline)
     exe.run(FRAME)
     return sorted(exe.runner.packed)
 

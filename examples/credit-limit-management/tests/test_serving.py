@@ -2,7 +2,7 @@
 import json
 
 import pytest
-from decikit import Engine
+from decikit import FusedEngine
 from decikit.config import JsonFileStore
 from decikit.serving import RequestHandler
 
@@ -49,6 +49,6 @@ def test_the_served_pipeline_reads_the_zero_utilisation_cell(handler, sample):
 
 
 def test_every_step_that_runs_in_python_says_so_on_purpose():
-    executable = Engine(strict_compile=True).bind(build(build_matrix_table()), mode="fused")  # raises on an unannounced fallback
+    executable = FusedEngine(strict_compile=True).bind(build(build_matrix_table()))  # raises on an unannounced fallback
     assert executable.fallbacks()
     assert all(reason.startswith("@allow_fallback") for reason in executable.fallbacks().values())

@@ -55,7 +55,7 @@ def test_the_trace_is_the_ordered_path_through_a_shared_node(run):
 
 @pytest.mark.parametrize("mode", ["interpreted", "stepped", "fused"])
 def test_a_record_run_carries_its_path(mode):
-    record = Engine().bind(CAMPAIGN, mode=mode).run(CLIENT)
+    record = Engine.resolve(mode)().bind(CAMPAIGN).run(CLIENT)
     assert (record["offer"], record["leaf"], record["path"]) == (20800, "912", "1>2>4>6>8>10>912")
 
 

@@ -29,7 +29,7 @@ def test_annotated_steps_run_like_plain_ones_in_every_mode():
     p = flow(instalment, name="f")
     assert p.run(pl.DataFrame({"loan": [1200.0]}))["instalment"].to_list() == [12.0]
     for mode in ("fused", "stepped"):
-        exe = Engine().bind(p, mode=mode)
+        exe = Engine.resolve(mode)().bind(p)
         assert exe.run({"loan": 1200.0})["instalment"] == 12.0
         assert exe.fallbacks() == {}          # the kernel reads the plain type, not one call per row
     assert p.parameters().defaults() == {"f": {"instalment": {"rate": 0.12}}}
@@ -53,7 +53,7 @@ def test_a_declaration_keeps_its_metadata_and_the_engine_reads_through_it():
     p = flow(doubled, name="f")
     df = pl.DataFrame({"loan": [1200.0, None]})
     for mode in ("interpreted", "stepped", "fused"):
-        exe = Engine().bind(p, mode=mode)
+        exe = Engine.resolve(mode)().bind(p)
         assert exe.run(df)["doubled"].to_list() == [2400.0, 0.0]
         assert exe.run({"loan": 1200.0})["doubled"] == 2400.0
         assert exe.fallbacks() == {}
@@ -73,5 +73,5 @@ def test_an_optional_around_annotated_is_canonicalised_so_both_readers_look_in_o
     assert params[0].annotation == Optional[Annotated[float, {"unit": "kg"}]]
     df = pl.DataFrame({"loan": [12.0, None]})
     for mode in ("interpreted", "stepped", "fused"):
-        assert Engine().bind(flow(optional_outside, name="f"), mode=mode).run(df)["optional_outside"] \
+        assert Engine.resolve(mode)().bind(flow(optional_outside, name="f")).run(df)["optional_outside"] \
             .to_list() == [9.0, 0.0]

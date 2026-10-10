@@ -26,7 +26,7 @@
 
   <rect x="35" y="230" width="250" height="110" rx="9" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
   <text x="160" y="254" font-size="14" fill="#134e4a" text-anchor="middle" font-weight="600">_Local (per scenario)</text>
-  <text x="160" y="276" font-size="13" fill="#134e4a" text-anchor="middle">Engine().bind(step, mode=...)</text>
+  <text x="160" y="276" font-size="13" fill="#134e4a" text-anchor="middle">Engine.resolve(...)().bind(step)</text>
   <text x="160" y="296" font-size="13" fill="#134e4a" text-anchor="middle">fused, or stepped when nodes</text>
   <text x="160" y="314" font-size="13" fill="#134e4a" text-anchor="middle">are selected or an override</text>
   <text x="160" y="332" font-size="13" fill="#134e4a" text-anchor="middle">has at=</text>

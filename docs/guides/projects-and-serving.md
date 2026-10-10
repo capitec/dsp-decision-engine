@@ -89,7 +89,7 @@ The warning is a `FallbackWarning`: `month_end` reads a `date`, which no numba k
 $ decikit build
 decikit: pipeline credit_risk.pipeline:build from /…/credit_risk/pipeline.py
 decikit: handler credit_risk.inference:Handler from /…/credit_risk/inference.py
-built config version 0.0.0 (pipeline credit_risk.pipeline:build, mode fused)
+built config version 0.0.0 (pipeline credit_risk.pipeline:build, engine fused)
 ```
 
 The first two lines say which files were imported, so a pipeline picked up from the wrong project shows before it serves wrong answers. A version that fails stops the build with exit code 1 and `config version 0.1.0 failed to build: ParamsError: ...`. Run `decikit build` in CI and on the image the server runs on; `decikit serve` warns when it starts on a CPU other than the one recorded, because numba's cache then misses and every worker compiles at startup.
@@ -127,7 +127,7 @@ Each worker process imports the pipeline and the handler, then stages and activa
 | `--host` | `DECIKIT_SERVE__HOST` | `0.0.0.0` |
 | `--port` | `DECIKIT_SERVE__PORT` | `8080` |
 | `--workers` | `DECIKIT_SERVE__WORKERS` | 2 × CPUs + 1 |
-| `--mode` | `DECIKIT_API__MODE` | `fused` (also `stepped`, `interpreted`) |
+| `--engine` | `DECIKIT_API__ENGINE__TYPE` | `fused` (also `stepped`, `interpreted`, or an installed engine's tag) |
 | `--server` | `DECIKIT_SERVE__SERVER` | `starlette` (uvicorn); `sanic` needs `decikit[serve-sanic]` |
 
 The starlette server needs `pip install 'decikit[serve-starlette]'`.
@@ -171,7 +171,8 @@ Settings are `DECIKIT_*` environment variables, with `__` between nested names. 
 | `DECIKIT_API__CODE_PATH` | the project directory; it and its parent go first on `sys.path` | `.` |
 | `DECIKIT_API__PIPELINE` | `package.module:function` returning the pipeline, or a `.yaml`/`.yml`/`.json` [flow file](flow-files.md) | `pipeline:build` |
 | `DECIKIT_API__HANDLER` | `package.module:Class` of the handler; if the module does not exist, plain `RequestHandler` is used | `inference:Handler` |
-| `DECIKIT_API__MODE` | `interpreted`, `stepped` or `fused` | `fused` |
+| `DECIKIT_API__ENGINE__TYPE` | the engine's tag: `interpreted`, `stepped`, `fused` or an installed engine's | `fused` |
+| `DECIKIT_API__ENGINE__STRICT_COMPILE`, `DECIKIT_API__ENGINE__PARAMS_VALIDATION` | the chosen engine's own settings: a step that would run in Python raises at `stage()` instead of warning; `eager` or `lazy` params validation | `false`, `eager` |
 | `DECIKIT_CONFIG__TYPE` | the config store type | `file:json` |
 | `DECIKIT_CONFIG__BASEPATH` | the `JsonFileStore` folder | `configs` |
 | `DECIKIT_BUILD__WARN_SHADOWED_TABLES` | `false` stops the `ShadowedTableWarning` that staging a version (`decikit build`, a server's start) gives when its params document sets a `param_table(..., seeded_from=...)` | `true` |

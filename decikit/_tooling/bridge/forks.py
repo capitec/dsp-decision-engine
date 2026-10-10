@@ -8,7 +8,7 @@ replay reaches the same state.
 """
 from __future__ import annotations
 
-from decikit import Engine
+from decikit import InterpretedEngine
 from decikit._engine.params import document_key, merge
 from decikit._tooling.bridge.replay import collect, steer
 
@@ -33,7 +33,7 @@ def fork(step, frame, params, history, target, scenario, ir=None, forces=()):
             merge over the run's document and apply only to nodes that run after `target`.
             Its `forces` replace the run's `forces` on the same branch or loop and record.
     """
-    s = Engine().bind(step).session(frame, params)
+    s = InterpretedEngine().bind(step).session(frame, params)
     both = {(f["path"], f.get("row")): f for f in [*forces, *(scenario.get("forces") or ())]}
     if both:
         steer(s, ir, list(both.values()))

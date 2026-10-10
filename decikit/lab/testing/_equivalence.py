@@ -48,7 +48,7 @@ def assert_equivalent(
         raise TypeError(f"assert_equivalent needs a polars DataFrame, not {type(frame).__name__}")
     expected = scripted = None
     for mode in modes:
-        exe = Engine().bind(step, mode=mode)
+        exe = Engine.resolve(mode)().bind(step)
         try:
             out = exe.run(frame, params)
         except Exception as e:

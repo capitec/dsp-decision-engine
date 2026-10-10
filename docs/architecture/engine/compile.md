@@ -519,7 +519,7 @@ because a kernel cannot tell which of its steps raised:
 ```text
 ZeroDivisionError: division by zero
   in one of the steps ['two/fee', 'two/instalment'], fused into one kernel;
-  run in mode='stepped' to see which
+  run in engine='stepped' to see which
 ```
 
 With a trace sink, `Kernel.run` launches a second variant of the same kernel that also writes one
@@ -535,7 +535,7 @@ envelope.
   grouping; `exe.runner.packed` lists packed branches and loops by path.
 - `unit.fn.signatures`, `unit.fn.inspect_llvm(sig)` and `unit.fn.inspect_asm(sig)` show the
   compiled code.
-- `mode="stepped"` gives one kernel per call, so an error names one step and a [debug
+- `engine="stepped"` gives one kernel per call, so an error names one step and a [debug
   session](debug.md) can pause between steps.
 
 ## Extending

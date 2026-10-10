@@ -6,7 +6,7 @@ import pytest
 
 import decikit
 from decikit import branch, dag, flow, param, step
-from decikit._engine import Engine, to_ir
+from decikit._engine import Engine, FusedEngine, to_ir
 from decikit._engine.boundary._arrow.plan import ArrowKindError as ArrowKindFromPlan
 from decikit._engine.boundary.dtypes import NeedsKernelSplit as NeedsKernelSplitFromDtypes
 from decikit._engine.boundary.nulls import MissingInputError as MissingFromNulls
@@ -73,10 +73,10 @@ def test_the_package_docstring_is_a_quickstart():
 
 
 def test_engine_registry_and_expression_failures_are_caught_by_decikit_error():
-    with pytest.raises(EngineError, match="unknown mode 'jit'"):
-        Engine().bind(flow(ratio), mode="jit")
-    with pytest.raises(EngineError, match="params_validation"):
-        Engine(params_validation="sometimes")
+    with pytest.raises(RegistryError, match="Did you mean 'fused'"):
+        Engine.resolve("fsued")
+    with pytest.raises(ValueError, match="params_validation"):
+        FusedEngine(params_validation="sometimes")
     with pytest.raises(EngineError, match="'ratio' is produced by this pipeline"):
         flow(ratio).run(pl.DataFrame({"income": [1.0], "debt": [1.0], "ratio": [0.0]}))
     with pytest.raises(RegistryError, match="not a registered"):

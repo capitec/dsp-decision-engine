@@ -4,7 +4,7 @@ import warnings
 import polars as pl
 import pytest
 
-from decikit import Engine, HiddenStateWarning, allow_fallback, flow, step
+from decikit import Engine, HiddenStateWarning, InterpretedEngine, allow_fallback, flow, step
 from decikit._engine.run.hidden import warn_hidden_state
 from decikit.exceptions import EngineError
 
@@ -32,7 +32,7 @@ def plain(x: float) -> float:
 def bind(*steps, mode="interpreted"):
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        exe = Engine().bind(flow(*steps, name="p"), mode=mode)
+        exe = Engine.resolve(mode)().bind(flow(*steps, name="p"))
     return exe, [w for w in caught if issubclass(w.category, HiddenStateWarning)]
 
 
@@ -78,8 +78,8 @@ def test_strict_turns_the_warning_into_an_error():
 @pytest.mark.parametrize("mode", ["interpreted", "stepped", "fused"])
 def test_binding_with_strict_compile_raises_on_a_hidden_object(mode):
     with pytest.raises(EngineError, match="p/capped reads Limits `LIMITS`"):
-        Engine(strict_compile=True).bind(flow(capped, name="p"), mode=mode)
+        Engine.resolve(mode)(strict_compile=True).bind(flow(capped, name="p"))
 
 
 def test_binding_with_strict_compile_accepts_a_clean_pipeline():
-    Engine(strict_compile=True).bind(flow(plain, name="p"), mode="interpreted")
+    InterpretedEngine(strict_compile=True).bind(flow(plain, name="p"))

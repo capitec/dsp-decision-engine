@@ -128,11 +128,11 @@ def frame(shape: str, rows: int):
 
 def one(shape: str, n: int, part: str, rows: int, calls: int) -> dict:
     from decikit import flow
-    from decikit._engine import Engine
+    from decikit._engine import FusedEngine
 
     warnings.simplefilter("ignore")
     start = time.perf_counter()
-    exe = Engine().bind(flow(tree(shape, n, part), name="p"), mode="fused")
+    exe = FusedEngine().bind(flow(tree(shape, n, part), name="p"))
     rng = random.Random(3)
     exe.run(record(shape, rng))
     bind = time.perf_counter() - start

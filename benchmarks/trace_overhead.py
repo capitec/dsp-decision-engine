@@ -10,7 +10,7 @@ import time
 import polars as pl
 
 from decikit import flow, param
-from decikit._engine import Engine
+from decikit._engine import FusedEngine
 from decikit._engine.trace import TraceSink
 
 
@@ -38,7 +38,7 @@ def timed(fn):
 
 
 def main():
-    exe = Engine().bind(PIPELINE, mode="fused")
+    exe = FusedEngine().bind(PIPELINE)
     exe.run(pl.DataFrame({"income": [1000.0], "debt": [200.0]}))  # warm the kernel
 
     _, _ = timed(lambda: exe.run(df))

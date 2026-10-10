@@ -12,7 +12,7 @@ from numba.core.serialize import dumps, loads
 import decikit._engine.params.bundles as bundles
 import decikit._engine.params.validate as validate
 from decikit import flow, param
-from decikit._engine import Engine
+from decikit._engine import FusedEngine, InterpretedEngine, SteppedEngine
 from decikit._engine.params import ParamsError, bundle_class
 from decikit._engine.params.bundles import _decode, _encode
 from decikit.lab.testing import assert_equivalent
@@ -75,7 +75,7 @@ FRAME = pl.DataFrame({"x": [1.0, 2.0, 3.0]})
 
 
 def _bundle_type(pipeline, path):
-    (node,) = [n for n in Engine().bind(pipeline).nodes.values() if n.path == path]
+    (node,) = [n for n in InterpretedEngine().bind(pipeline).nodes.values() if n.path == path]
     return node.bundle_type
 
 
@@ -87,7 +87,7 @@ def test_a_nodes_bundle_holds_only_its_own_fields_whatever_it_is_composed_with()
 
 
 def test_a_shared_value_is_validated_against_each_nodes_own_bounds():
-    exe = Engine().bind(flow(low_cap, high_cap))
+    exe = InterpretedEngine().bind(flow(low_cap, high_cap))
     out = exe.run(FRAME, params={"shared": {"rate": 1.0}})
     assert out["high_cap"].to_list() == [2.0, 3.0, 4.0]
     with pytest.raises(ParamsError, match="low_cap: shared param 'rate'") as e:
@@ -99,7 +99,7 @@ def test_a_bundle_is_converted_once_per_document_and_node(monkeypatch):
     seen = []
     original = validate.validate_node
     monkeypatch.setattr(validate, "validate_node", lambda node, doc: seen.append(node.path) or original(node, doc))
-    exe = Engine().bind(flow(low_cap, high_cap), mode="fused")
+    exe = FusedEngine().bind(flow(low_cap, high_cap))
     doc = {"shared": {"rate": 0.25}}
     exe.run(FRAME, params=doc)
     exe.run({"x": 1.0}, params={"shared": {"rate": 0.25}})
@@ -113,7 +113,7 @@ def test_a_reused_document_object_is_hashed_once(monkeypatch):
     hashed = []
     original = validate.document_key
     monkeypatch.setattr(validate, "document_key", lambda doc: hashed.append(1) or original(doc))
-    exe = Engine().bind(flow(low_cap, high_cap), mode="fused")
+    exe = FusedEngine().bind(flow(low_cap, high_cap))
     doc = {"shared": {"rate": 0.25}}
     for _ in range(3):
         assert exe.run({"x": 2.0}, doc)["low_cap"] == 0.5
@@ -135,7 +135,7 @@ def test_two_nodes_sharing_a_key_agree_across_modes():
 _CHILD = textwrap.dedent("""
     import contextlib, io, json
     import polars as pl
-    from decikit._engine import Engine
+    from decikit._engine import FusedEngine, InterpretedEngine, SteppedEngine
     from decikit._engine.ir.decls import Input, Output, ParamDecl
     from decikit._engine.ir.nodes import CallNode
     from decikit._engine.ir.origin import Origin
@@ -147,7 +147,7 @@ _CHILD = textwrap.dedent("""
                     (Output("band", int),), (ParamDecl("cut", float, 50.0),))
     log = io.StringIO()
     with contextlib.redirect_stdout(log):  # NUMBA_DEBUG_CACHE prints to stdout
-        out = Engine().bind(node, mode="stepped").run(pl.DataFrame({"score": [10.0, 90.0]}))
+        out = SteppedEngine().bind(node).run(pl.DataFrame({"score": [10.0, 90.0]}))
     lines = [l for l in log.getvalue().splitlines() if "band" in l]
     print(json.dumps({"band": out["band"].to_list(),
                       "saved": sum("data saved" in l for l in lines),
