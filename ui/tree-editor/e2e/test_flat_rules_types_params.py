@@ -106,7 +106,7 @@ def test_unused_type_can_be_deleted(signed_in: Page):
     assert type_defs(save(signed_in)) == {}
 
 
-@pytest.mark.xfail(strict=True, reason="a type that a column uses is deleted without any warning, leaving the column pointing at nothing")
+@pytest.mark.xfail(strict=True, reason="deleting a type a column uses asks only a generic confirm, then leaves the column on a deleted type")
 def test_deleting_a_type_a_column_uses_is_blocked_or_warned(signed_in: Page):
     open_doc(signed_in, APPROVE)
     open_tab(signed_in, "Configure Outputs")
