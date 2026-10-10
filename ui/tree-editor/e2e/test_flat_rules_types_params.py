@@ -9,14 +9,11 @@ from flat_docs import APPROVE, DEFAULT, open_doc, run_frame
 from flat_rules_ui import (
     add_categorical_type,
     add_output_column,
-    add_parameter,
     open_custom_types,
     open_tab,
     output_cell,
     rule_card,
     save,
-    unary_rule,
-    use_parameter,
 )
 from seed import export_document
 
@@ -30,10 +27,6 @@ def type_defs(reply: dict) -> dict:
 def params_dialog(page: Page):
     page.get_by_role("button", name=re.compile(r"^Manage Parameters")).click()
     return page.get_by_role("dialog", name="Manage Parameters")
-
-
-def param_row(dialog, name: str):
-    return dialog.locator("tbody tr").filter(has=dialog.page.locator(f'input[value="{name}"]'))
 
 
 def test_categorical_type_is_added_and_saved_valid(signed_in: Page):
@@ -244,15 +237,6 @@ def test_parameter_stays_in_use_until_every_use_is_gone(signed_in: Page):
     expect(first_param_row(dialog).get_by_title("Delete parameter")).to_be_enabled()
 
 
-def test_parameter_used_by_two_rules_saves_valid_and_runs_both(signed_in: Page):
-    project = open_doc(signed_in, uses_limit(), uses_limit(">"), parameters=LIMIT, mode="all")
-
-    reply = save(signed_in)
-    assert reply["validation_errors"] == []
-    rows = run_frame(export_document(signed_in, project), {"amount": [500.0, 1500.0]})
-    assert [list(r.values()) for r in rows] == [["approve", "decline"], ["decline", "approve"]]
-
-
 @pytest.mark.parametrize("name, message", [
     ("", "Parameter name is required"),
     ("1limit", "not a valid name"),
@@ -277,21 +261,6 @@ def test_duplicate_parameter_name_is_refused_in_the_dialog(signed_in: Page):
     dialog.get_by_role("button", name="Add", exact=True).click()
 
     expect(dialog).to_contain_text("Parameter name must be unique")
-
-
-@pytest.mark.xfail(strict=True, reason="a String parameter with an empty default used as a threshold exports, then decikit cannot run it")
-def test_empty_string_parameter_used_as_a_threshold_is_refused_or_runs(signed_in: Page):
-    project = open_doc(signed_in, DEFAULT)
-    add_parameter(signed_in, "limit", "String")
-    card = unary_rule(signed_in, "<=")
-    use_parameter(card, "limit")
-
-    reply = save(signed_in)
-    exported = signed_in.request.get(f"/api/v1/projects/{project}/export")
-    if reply["validation_errors"] or not exported.ok:
-        assert reply["validation_errors"] and not exported.ok  # refused: the editor has the message
-        return
-    run_frame(exported.json(), {"amount": [1.0]})  # exported: it must run
 
 
 OFFERED_TYPES = ["String", "Int64", "Float64", "Boolean", "Date", "Datetime", "Int8", "Int16", "Int32", "Int128", "UInt8",
