@@ -7,7 +7,7 @@ import {
 } from '@/api';
 import type { ProjectDetailResponse } from '@/api/types.gen';
 import { ValidationResult } from '../validation/ValidationResultsDialog';
-import { extractFeatures, renameFeature } from './FeatureActions';
+import { withNodeFeatures, renameFeature } from './FeatureActions';
 import { detectSubtrees, generateDefaultNodeName } from './util';
 import { ParameterMap, TreeEdge, V2Subtree, PolarsSchema } from '@/types/tree-types';
 import { normalizeTreeOutput } from '@/utils/normalize-dtypes';
@@ -58,36 +58,6 @@ const normalizeEdge = (edge: any): Edge => ({
   id: edge.id ?? `${edge.source}:${edge.target}`,
   data: { ...edge.data, sourceIndex: [edge.data?.sourceIndex ?? 0].flat() },
 });
-
-// Helper function to extract feature name from v3 Feature type
-const getFeatureName = (feature: string | { type?: 'computed'; expression: string } | undefined): string | null => {
-  if (typeof feature === 'string') return feature;
-  if (feature && typeof feature === 'object' && 'expression' in feature) {
-    return feature.expression;
-  }
-  return null;
-};
-
-// Helper function to get node type string from v3 nodes
-const getNodeTypeString = (node: Node): string => {
-  return node.data.type;
-};
-
-// Helper function to infer Polars type from node type (v3)
-const inferPolarsTypeFromNode = (nodeType: string, op?: string): 'String' | 'Float64' | 'Int64' => {
-  switch (nodeType) {
-    case 'unary':
-      return 'Float64';
-    case 'cases':
-      // Need to check op to determine type
-      if (op === 'ranges') return 'Float64';
-      if (op === 'isin') return 'Int64';
-      if (op === 'string_match') return 'String';
-      return 'String'; // default
-    default:
-      return 'String';
-  }
-};
 
 // Map decikit's validation_errors onto node highlighting and section flags
 const applyValidationErrors = (errors: ValidationError[], nodes: Array<{ id: string }>) => {
@@ -211,34 +181,7 @@ const editorStore = create<EditorStoreState>()(
 
     setNodes: (nodes, dirty = true) => set((state) => {
       const updatedNodes = typeof nodes === 'function' ? nodes(state.nodes) : nodes;
-      const extractedFeatures = extractFeatures(updatedNodes);
-
-      // Auto-sync new features to input_schema with inferred types
-      const updatedInputSchema = [...state.input_schema];
-      const existingFeatureNames = new Set(updatedInputSchema.map(([name]) => name));
-
-      // Build a map of feature name to node type for type inference
-      const featureToNodeType = new Map<string, string>();
-      updatedNodes.forEach(node => {
-        if ('feature' in node.data) {
-          const featureName = getFeatureName(node.data.feature);
-          if (featureName) {
-            featureToNodeType.set(featureName, getNodeTypeString(node));
-          }
-        }
-      });
-
-      extractedFeatures.forEach(featureName => {
-        if (!existingFeatureNames.has(featureName)) {
-          const nodeType = featureToNodeType.get(featureName) || 'cases:string_match';
-          const inferredType = inferPolarsTypeFromNode(
-            nodeType.startsWith('cases:') ? 'cases' : nodeType,
-            nodeType.split(':')[1]
-          );
-          updatedInputSchema.push([featureName, inferredType]);
-          existingFeatureNames.add(featureName);
-        }
-      });
+      const updatedInputSchema = withNodeFeatures(state.input_schema, updatedNodes);
 
       return {
         nodes: updatedNodes,
@@ -300,34 +243,7 @@ const editorStore = create<EditorStoreState>()(
           };
         });
 
-        const extractedFeatures = extractFeatures(updatedNodes);
-
-        // Auto-sync new features to input_schema with inferred types
-        const updatedInputSchema = [...state.input_schema];
-        const existingFeatureNames = new Set(updatedInputSchema.map(([name]) => name));
-
-        // Build a map of feature name to node type for type inference
-        const featureToNodeType = new Map<string, string>();
-        updatedNodes.forEach(n => {
-          if ('feature' in n.data) {
-            const featureName = getFeatureName(n.data.feature);
-            if (featureName) {
-              featureToNodeType.set(featureName, getNodeTypeString(n));
-            }
-          }
-        });
-
-        extractedFeatures.forEach(featureName => {
-          if (!existingFeatureNames.has(featureName)) {
-            const nodeType = featureToNodeType.get(featureName) || 'cases:string_match';
-            const inferredType = inferPolarsTypeFromNode(
-              nodeType.startsWith('cases:') ? 'cases' : nodeType,
-              nodeType.split(':')[1]
-            );
-            updatedInputSchema.push([featureName, inferredType]);
-            existingFeatureNames.add(featureName);
-          }
-        });
+        const updatedInputSchema = withNodeFeatures(state.input_schema, updatedNodes);
 
         // Clear validation error for this specific node since it's being edited
         const newInvalidNodeIds = new Set(state.invalidNodeIds);
@@ -345,31 +261,7 @@ const editorStore = create<EditorStoreState>()(
     addNode: (node) => {
       set((state) => {
         const updatedNodes = [...state.nodes, node];
-        const extractedFeatures = extractFeatures(updatedNodes);
-
-        // Auto-sync new features to input_schema with inferred types
-        const updatedInputSchema = [...state.input_schema];
-        const existingFeatureNames = new Set(updatedInputSchema.map(([name]) => name));
-
-        // Build a map of feature name to node type for type inference
-        const featureToNodeType = new Map<string, string>();
-        updatedNodes.forEach(n => {
-          if ('feature' in n.data) {
-            const featureName = getFeatureName(n.data.feature);
-            if (featureName) {
-              featureToNodeType.set(featureName, getNodeTypeString(n));
-            }
-          }
-        });
-
-        extractedFeatures.forEach(featureName => {
-          if (!existingFeatureNames.has(featureName)) {
-            const nodeType = featureToNodeType.get(featureName) || 'string_match_node';
-            const inferredType = inferPolarsTypeFromNode(nodeType);
-            updatedInputSchema.push([featureName, inferredType]);
-            existingFeatureNames.add(featureName);
-          }
-        });
+        const updatedInputSchema = withNodeFeatures(state.input_schema, updatedNodes);
 
         return {
           nodes: updatedNodes,
@@ -382,31 +274,7 @@ const editorStore = create<EditorStoreState>()(
     removeNode: (nodeId) => {
       set((state) => {
         const updatedNodes = state.nodes.filter(n => n.id !== nodeId);
-        const extractedFeatures = extractFeatures(updatedNodes);
-
-        // Auto-sync new features to input_schema with inferred types
-        const updatedInputSchema = [...state.input_schema];
-        const existingFeatureNames = new Set(updatedInputSchema.map(([name]) => name));
-
-        // Build a map of feature name to node type for type inference
-        const featureToNodeType = new Map<string, string>();
-        updatedNodes.forEach(n => {
-          if ('feature' in n.data) {
-            const featureName = getFeatureName(n.data.feature);
-            if (featureName) {
-              featureToNodeType.set(featureName, getNodeTypeString(n));
-            }
-          }
-        });
-
-        extractedFeatures.forEach(featureName => {
-          if (!existingFeatureNames.has(featureName)) {
-            const nodeType = featureToNodeType.get(featureName) || 'string_match_node';
-            const inferredType = inferPolarsTypeFromNode(nodeType);
-            updatedInputSchema.push([featureName, inferredType]);
-            existingFeatureNames.add(featureName);
-          }
-        });
+        const updatedInputSchema = withNodeFeatures(state.input_schema, updatedNodes);
 
         return {
           nodes: updatedNodes,
@@ -445,35 +313,10 @@ const editorStore = create<EditorStoreState>()(
     renameFeature: (oldName, newName) => {
       set((state) => {
         const updatedNodes = renameFeature(state.nodes, oldName, newName);
-        const extractedFeatures = extractFeatures(updatedNodes);
-
-        // Update input_schema - rename the feature but keep the type
-        const updatedInputSchema = state.input_schema.map(([name, type]) =>
+        const renamedSchema = state.input_schema.map(([name, type]) =>
           name === oldName ? [newName, type] : [name, type]
         ) as PolarsSchema;
-
-        // Add new features if any with inferred types
-        const existingFeatureNames = new Set(updatedInputSchema.map(([name]) => name));
-
-        // Build a map of feature name to node type for type inference
-        const featureToNodeType = new Map<string, string>();
-        updatedNodes.forEach(n => {
-          if ('feature' in n.data) {
-            const featureName = getFeatureName(n.data.feature);
-            if (featureName) {
-              featureToNodeType.set(featureName, getNodeTypeString(n));
-            }
-          }
-        });
-
-        extractedFeatures.forEach(featureName => {
-          if (!existingFeatureNames.has(featureName)) {
-            const nodeType = featureToNodeType.get(featureName) || 'string_match_node';
-            const inferredType = inferPolarsTypeFromNode(nodeType);
-            updatedInputSchema.push([featureName, inferredType]);
-            existingFeatureNames.add(featureName);
-          }
-        });
+        const updatedInputSchema = withNodeFeatures(renamedSchema, updatedNodes);
 
         return {
           nodes: updatedNodes,
@@ -615,29 +458,7 @@ const editorStore = create<EditorStoreState>()(
                    name: st.name || generateDefaultNodeName(nodeById.get(rootNodeId)!) };
         });
 
-      // Get input_schema from project data
-      let inputSchema: PolarsSchema = projectData.input_schema || [];
-
-      // Auto-sync any features from nodes that aren't in schema with inferred types
-      const extractedFeatures = extractFeatures(normalizedNodes);
-      const existingFeatureNames = new Set(inputSchema.map(([name]) => name));
-
-      // Build a map of feature name to node type for type inference
-      const featureToNodeType = new Map<string, string>();
-      normalizedNodes.forEach((n: any) => {
-        if ('feature' in n.data && n.data.feature) {
-          featureToNodeType.set(n.data.feature, n.data.node_type);
-        }
-      });
-
-      extractedFeatures.forEach(featureName => {
-        if (!existingFeatureNames.has(featureName)) {
-          const nodeType = featureToNodeType.get(featureName) || 'string_match_node';
-          const inferredType = inferPolarsTypeFromNode(nodeType);
-          inputSchema.push([featureName, inferredType]);
-          existingFeatureNames.add(featureName);
-        }
-      });
+      const inputSchema: PolarsSchema = withNodeFeatures(projectData.input_schema || [], normalizedNodes);
 
       // Normalize output dtypes to handle both array and object formats from backend
       const normalizedOutput = projectData.output
