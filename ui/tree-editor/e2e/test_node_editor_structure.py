@@ -103,7 +103,7 @@ def chain_with_refused_cycle(page: Page) -> str:
 
 def test_a_connection_that_would_make_a_cycle_is_not_saved(signed_in: Page):
     project = chain_with_refused_cycle(signed_in)
-    nudge(signed_in, "a")
+    nudge(signed_in, "root")  # the refused connections alone leave nothing to save
     assert save(signed_in)["validation_errors"] == []
 
     assert saved_edges(signed_in, project) == {"root:mid": [0], "mid:low": [0]}
@@ -188,8 +188,8 @@ def test_removing_the_last_branch_of_an_edge_keeps_one_branch_assigned(signed_in
     project = open_tree(signed_in, loan_document())
     click_edge(signed_in, "root", "yes")
     signed_in.get_by_test_id("remove-branch").last.click()
-    save(signed_in)
 
+    expect(signed_in.get_by_role("button", name="Save", exact=True)).to_be_disabled()  # the removal is refused
     assert saved_edges(signed_in, project)["root:yes"] == [0]
 
 
