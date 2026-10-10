@@ -74,6 +74,22 @@ def test_sink_parquet_round_trip_equals_fused(tmp_path):
     assert_frame_equal(pl.read_parquet(tmp_path / "out.parquet"), fused(PIPE))
 
 
+def test_a_filter_or_slice_on_the_plan_never_moves_below_a_frame_step(monkeypatch):
+    # polars before 1.3x let predicates, projections and slices pass a map_batches node unless told not to.
+    passing = pl.LazyFrame.map_batches
+
+    def old_defaults(self, function, **kwargs):
+        for k in ("predicate_pushdown", "projection_pushdown", "slice_pushdown"):
+            kwargs.setdefault(k, True)
+        return passing(self, function, **kwargs)
+
+    monkeypatch.setattr(pl.LazyFrame, "map_batches", old_defaults)
+    lf, want = PolarsEngine().bind(PIPE).run(DF.lazy()), fused(PIPE)
+    assert_frame_equal(lf.filter(pl.col("income") > 50_000).collect(), want.filter(pl.col("income") > 50_000))
+    assert_frame_equal(lf.slice(40, 20).collect(), want.slice(40, 20))
+    assert_frame_equal(lf.select("flag").collect(), want.select("flag"))
+
+
 def test_intermediate_columns_are_dropped_as_fused_drops_them():
     lf = PolarsEngine().bind(PIPE).run(DF.lazy())
     assert lf.collect_schema().names() == ["income", "debt", "flag"] == fused(PIPE).columns
