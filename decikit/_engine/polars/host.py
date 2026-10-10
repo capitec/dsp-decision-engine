@@ -7,7 +7,7 @@ from typing import Any, Callable, Mapping
 import polars as pl
 
 from decikit._engine.ir.context import to_ir
-from decikit._engine.ir.nodes import CallNode, IRNode, SequenceNode, iter_nodes
+from decikit._engine.ir.nodes import CallNode, IRNode, ScatterGatherNode, SequenceNode, iter_nodes
 from decikit._engine.run.engine import Executable
 from decikit._engine.run.state import declared_dtype
 from decikit._engine.wiring import interface
@@ -211,6 +211,11 @@ def _declared(seg: _Segment, name: str) -> Any:
         return dtype
     # A column no version names came out of a frame step of unknown outputs.
     writer = v.producer if v is not None else ", ".join(seg.paths)
+    # An each gathers dicts of whatever fields its items hold, so no annotation can name the list's dtype.
+    if any(isinstance(n, ScatterGatherNode) and n.origin.path == writer for n in iter_nodes(seg.executable.step)):
+        raise EngineError(
+            f"the polars engine needs every column's dtype before any row arrives, and '{name}', the list {writer} "
+            f"gathers with each, has no dtype until it holds items. Run the pipeline on the numba engine.")
     raise EngineError(
         f"the polars engine needs every column's dtype before any row arrives, and '{name}', written by {writer} "
         f"as {getattr(annotation, '__name__', annotation)}, has none until it holds values. Annotate the step "
