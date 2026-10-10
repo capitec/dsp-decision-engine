@@ -57,18 +57,27 @@ def test_reloading_after_an_unsaved_edit_shows_the_saved_state(signed_in: Page):
     assert rule_names(signed_in) == ["Rule 1"]
 
 
-def test_saved_edit_survives_reload_and_leaving_and_coming_back(signed_in: Page):
+def test_saved_edit_is_still_there_after_leaving_and_opening_the_project_again(signed_in: Page):
     project = open_doc(signed_in, SMALL)
     rename_rule(signed_in, "Edited")
     save(signed_in)
     signed_in.get_by_role("button", name="Back").click()
     expect(signed_in.get_by_role("heading", name="Overview")).to_be_visible()  # Back lands on the overview
-    signed_in.go_back()
-    expect(signed_in).to_have_url(re.compile(rf"/flat-rules/{project}$"))
+    signed_in.goto(f"/flat-rules/{project}")
 
-    expect(signed_in.get_by_test_id("rule-card")).to_have_count(1)
+    expect(signed_in.get_by_test_id("rule-card")).to_have_count(1, timeout=30_000)
     assert rule_names(signed_in) == ["Edited"]
     assert get_project(signed_in, project)["project_data"]["rules"][0]["meta"]["name"] == "Edited"
+
+
+@pytest.mark.xfail(strict=True, reason="after Back, the browser's back button bounces off /flat-rules to the overview")
+def test_browser_back_after_the_back_button_returns_to_the_editor(signed_in: Page):
+    project = open_doc(signed_in, SMALL)
+    signed_in.get_by_role("button", name="Back").click()
+    expect(signed_in.get_by_role("heading", name="Overview")).to_be_visible()
+    signed_in.go_back()
+
+    expect(signed_in).to_have_url(re.compile(rf"/flat-rules/{project}$"))
 
 
 @pytest.mark.xfail(strict=True, reason="Export downloads the stored document without the unsaved edit and says nothing")

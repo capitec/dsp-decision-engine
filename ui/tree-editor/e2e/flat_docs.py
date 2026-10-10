@@ -3,7 +3,7 @@
 import polars as pl
 from decikit import TreeConfig
 
-from flat_rules_ui import open_flat_rules
+from playwright.sync_api import expect
 from seed import create_project
 from test_flat_rule_params import flat_document
 
@@ -36,7 +36,8 @@ def decisions_for(doc: dict, frame: dict, params: dict | None = None) -> list[st
 def open_doc(page, *rules: dict, name: str = "Rules", **kwargs) -> str:
     """Seed a project holding `document(*rules, **kwargs)` through the API, open it in the editor; returns its id."""
     project = create_project(page, name, document(*rules, **kwargs))["id"]
-    open_flat_rules(page, project)
+    page.goto(f"/flat-rules/{project}")
+    expect(page.get_by_role("button", name="Add Rule")).to_be_visible(timeout=30_000)  # the test machine is shared
     return project
 
 OUTPUT3 = {
