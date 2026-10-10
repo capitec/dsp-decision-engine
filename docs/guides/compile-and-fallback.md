@@ -10,6 +10,7 @@ import warnings
 
 import polars as pl
 from decikit import FusedEngine, flow, param
+from decikit.exceptions import EngineError
 
 def disposable(income: float, expenses: float) -> float:
     return income - expenses
@@ -211,7 +212,7 @@ for mode in ("interpreted", "stepped", "fused"):
 ```text
 interpreted division by zero ['in step z/per_income, row 1']
 stepped division by zero ['in step z/per_income']
-fused division by zero ["in one of the steps ['z/disposable', 'z/per_income'], fused into one kernel; run in mode='stepped' to see which"]
+fused division by zero ["in one of the steps ['z/disposable', 'z/per_income'], fused into one kernel; run in engine='stepped' to see which"]
 ```
 
 Division by zero raises in every mode, as it does in Python. A fused kernel cannot tell which of its steps raised, so its note lists them all and suggests stepped mode. The notes need Python 3.11 or newer.
@@ -246,7 +247,7 @@ except TypeError as e:
 ```python
 try:
     FusedEngine(strict_compile=True).bind(mixed).run(data)
-except ValueError as e:
+except EngineError as e:
     print(e)
 
 accepted = FusedEngine(strict_compile=True).bind(flow(legacy_score, name="q"))
@@ -254,13 +255,13 @@ print(accepted.run({"code": 4}))
 ```
 
 ```text
-mixed/applied_month runs in Python, row by row: reads 'applied_on' as <class 'datetime.date'>, which no kernel takes; accept it with @allow_fallback, or run mode='interpreted'
+mixed/applied_month runs in Python, row by row: reads 'applied_on' as <class 'datetime.date'>, which no kernel takes; accept it with @allow_fallback, or run engine='interpreted'
 {'code': 4, 'legacy_score': 8.0}
 ```
 
-The strict error is a plain `ValueError`, not a `DecikitError`.
+The strict error is an `EngineError` (a `DecikitError` and a `ValueError`).
 
-`strict_compile=True` also refuses hidden state, in every mode: a step that reads a module-level object (a `HiddenStateWarning` otherwise) makes `bind` raise `EngineError`, so a CI build with one fails.
+`strict_compile=True` also refuses hidden state, in every engine: a step that reads a module-level object (a `HiddenStateWarning` otherwise) makes `bind` raise `EngineError`, so a CI build with one fails.
 
 ## The first call and the numba cache
 

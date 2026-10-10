@@ -202,7 +202,7 @@ ZeroDivisionError: division by zero
   in step loan/instalment
 ZeroDivisionError: division by zero
   in one of the steps ['two/fee', 'two/instalment'], fused into one kernel;
-  run in mode='stepped' to see which
+  run in engine='stepped' to see which
 ```
 
 The scope is this narrow for measured reasons. Catching every `Exception`
@@ -276,13 +276,13 @@ outside the shared kernel: ...`. `exe.fallbacks()` reports both kinds by step pa
   tables, scorecards, branches and loops fall back as a whole, so the decorator on one raises
   `TypeError`; filter the warning category for those.
 - `FusedEngine(strict_compile=True)` turns an unaccepted Python fallback into an error at the first
-  run. It raises a plain `ValueError` (not a `DecikitError`):
+  run. It raises `EngineError`:
 
 ```text
-ValueError : loan/uses_regex runs in Python, row by row:
+EngineError : loan/uses_regex runs in Python, row by row:
   UnsupportedBytecodeError: Use of unsupported opcode (IMPORT_NAME) found.
   Raised from .../c4_cache.py (46); accept it with @allow_fallback,
-  or run mode='interpreted'
+  or run engine='interpreted'
 ```
 
   A step that runs compiled one call per row only warns, even under `strict_compile`.
@@ -330,7 +330,7 @@ sequenceDiagram
 | a step is recompiled after a harmless rename | the file moved: numba's disk cache is keyed by file path and line | expected once; the in-process cache still shares it |
 | a step never hits the disk cache | it has a closure, or it was defined without a file | move it to module level in a `.py` file |
 | a `FallbackWarning` names numba's long candidate listing | a typing error, for example a `Decimal` mixed with a float | read the decider toolkit line in the middle of the listing ([kernel semantics](kernels.md)) |
-| a `ZeroDivisionError` with a note listing several steps | a runtime error in a fused kernel | rerun in `mode="stepped"` to see which step |
+| a `ZeroDivisionError` with a note listing several steps | a runtime error in a fused kernel | rerun in `engine="stepped"` to see which step |
 
 `dispatcher.stats.cache_hits` and `cache_misses` (the dispatcher from `jit(fn)`) show whether a
 step came from disk. Old shim builds and old cache index entries are never evicted; both are small
