@@ -194,7 +194,7 @@ The `ClickException` message ends with the remediation the `IdError` carries (he
 
 ### `mcp [--raw]`
 
-Calls `run_stdio(raw=raw)`, which builds the server with `Policy(raw=raw)` and an `EditorBridge()` and runs it on stdio until the host closes the pipe. The rest of this page is about that server.
+`--raw` has the environment variable `DECIDER_MCP_RAW=1`, so a plugin's MCP config can turn raw data on without changing the arguments. It calls `run_stdio(raw=raw)`, which builds the server with `Policy(raw=raw)` and an `EditorBridge()` and runs it on stdio until the host closes the pipe. The rest of this page is about that server.
 
 ## The MCP server
 
@@ -205,12 +205,12 @@ An agent working on a decider project needs the same facts a person gets from th
 ### Tool map
 
 <div class="diagram" markdown>
-![The MCP tools in four groups: ten headless read tools, two raw-data tools gated by the policy, four destructive actions the client confirms, and three editor-bound tools forwarded over a socket to a VS Code window](../assets/diagrams/tooling-mcp-tools.svg)
+![The MCP tools in five groups: ten headless read tools, two raw-data tools gated by the policy, four destructive actions the client confirms, twenty-three validated config-editing tools, and eight editor and debug tools forwarded over a socket to a VS Code window](../assets/diagrams/tooling-mcp-tools.svg)
 
 *Each tool names the library call it makes. Flows are named by import path, `module:qualname`.*
 </div>
 
-`build_server` registers each tool with `@mcp.tool` as a two-line wrapper that calls the function of the same name in `_tools.py`. The tool's docstring becomes its description for the agent. Listing the tools of a server built in-process gives the four groups and their annotations:
+`build_server` registers each tool with `@mcp.tool` as a two-line wrapper that calls the function of the same name in `_tools.py`. The tool's docstring becomes its description for the agent. Listing the tools of a server built in-process with an `EditorBridge` gives the groups and their annotations (47 tools):
 
 ```text
 discover_flows         destructive=None
@@ -229,17 +229,32 @@ run_flow               destructive=True
 run_experiment         destructive=True
 start_debug            destructive=True
 generate_ids           destructive=True
+tree_view              destructive=None    (+ tree_add_node, tree_set_node, tree_remove_node,
+                                            tree_set_output, tree_add_rule, tree_remove_rule)
+list_configs           destructive=None    (+ read_config, validate_config, write_config,
+                                            patch_config, try_config)
+table_view             destructive=None    (+ table_add_rows, table_update_rows, table_delete_rows,
+                                            table_add_column, table_drop_column)
+scorecard_view         destructive=None    (+ scorecard_set_bins)
+params_view            destructive=None    (+ params_set)
+editor_selection       destructive=None
 highlight              destructive=None
 reveal_source          destructive=None
-editor_selection       destructive=None
+show_flow              destructive=None
+set_breakpoints        destructive=None
+debug_flow             destructive=True
+debug_control          destructive=True
+debug_evaluate         destructive=True
 ```
+
+The config-editing tools (`_configs.py`, `_trees.py`, `_tables.py`, `_scorecards.py`, `_params.py`) edit tree, decision table, scorecard and params documents. Each write builds the document first and is refused, file untouched, when it would not build, so they carry no `destructiveHint`; `try_config` runs a document's step on sample rows to check an edit. `debug_evaluate` is also raw-gated: it returns the redaction notice unless the policy allows raw data.
 
 ### Data classes and the policy
 
 The module docstrings describe a capability policy with three classes of data:
 
 1. Structural data (flow, step and edge identity, paths, sources) and summarised data (run tallies, check reports) are always available.
-2. Raw record and trace data is off by default. `raw_record` and `raw_trace` check `policy.raw` first and return ``{"redacted": "raw data disabled: enable `decider._tooling.mcp.rawData` to return it"}`` when it is off. They never return a made-up value in place of the real one.
+2. Raw record and trace data is off by default. `raw_record` and `raw_trace` check `policy.raw` first and return ``{"redacted": "raw data disabled: start `decider mcp` with --raw (or DECIDER_MCP_RAW=1) to return it"}`` when it is off. They never return a made-up value in place of the real one.
 3. Actions that run code or write files carry the MCP annotation `destructiveHint: True`. Confirmation is the client's job: the host asks the user before calling the tool, and the server does not ask again.
 
 `run_summary` runs the flow but is ungated because it returns only per-output value counts, never a record:
@@ -266,7 +281,7 @@ With `Policy(raw=True)`, `raw_record` returns what every step wrote for one reco
 
 (cut after 400 characters)
 
-The only way to turn raw data on is `decider mcp --raw`. The redaction notice names a setting, `decider._tooling.mcp.rawData`, that nothing in the package reads; it describes the switch an editor host would map to `--raw`.
+The only ways to turn raw data on are `decider mcp --raw` and `DECIDER_MCP_RAW=1` in the server's environment; there is no settings key. The redaction notice names both.
 
 ### Structural tools, traced
 
@@ -303,7 +318,7 @@ sequenceDiagram
     participant W as VS Code window
     H->>B: highlight(workspace, ...)
     B->>B: hash the workspace path
-    alt no .sock or .token
+    alt no live .sock or no .token
         B-->>H: ok false, no editor window
     else window found
         B->>W: token + action, one line
@@ -312,11 +327,11 @@ sequenceDiagram
     end
 ```
 
-`highlight`, `reveal_source` and `editor_selection` are registered only when `build_server` receives an `EditorBridge` (`run_stdio` always passes one; `test_editor_tools_are_registered_only_with_a_bridge`). They are not answered by the MCP process. They forward a small action dict to the editor window that owns the workspace.
+`editor_selection`, `highlight`, `reveal_source`, `show_flow`, `set_breakpoints`, `debug_flow`, `debug_control` and `debug_evaluate` are registered only when `build_server` receives an `EditorBridge` (`run_stdio` always passes one; `test_editor_tools_are_registered_only_with_a_bridge`). They are not answered by the MCP process. They forward a small action dict to the editor window that owns the workspace.
 
-The channel is authenticated because it joins a broad read scope to a live editor. Each window is expected to own a Unix-domain socket and a token file in `~/.decider/editor/` (created with mode `0700`), both named by a 16-hex hash of the workspace's resolved path, so a symlinked path finds the same window. The socket's permissions keep out other users and the token keeps out other local processes of the same user. On Windows the same path names a named pipe; that branch carries a `ponytail:` comment saying it is untested. Every failure (no window, wrong token, dead socket, bad JSON) comes back as `{"ok": false, "error": ...}` so the agent sees a plain answer instead of a tool exception.
+The channel is authenticated because it joins a broad read scope to a live editor. Each window owns a Unix-domain socket, a token file and a `.folder` file in `~/.decider/editor/` (created with mode `0700`), all named by a 16-hex hash of the workspace's resolved path, so a symlinked path finds the same window. The bridge uses the window whose folder is the workspace or its nearest ancestor, else the one live window open on a folder below it. The socket's permissions keep out other users and the token keeps out other local processes of the same user. On Windows the same path names a named pipe; that branch carries a `ponytail:` comment saying it is untested. Every failure (no window, wrong token, dead socket, bad JSON) comes back as `{"ok": false, "error": ...}` so the agent sees a plain answer instead of a tool exception.
 
-The VS Code extension in `ui/vscode` does not open that socket today: nothing in its source writes to `~/.decider/editor/`. The editor tools therefore answer `{"ok": false, "error": "no editor window for workspace '...'"}` against the shipped extension. The tests in `tests/mcp/test_editor.py` run the protocol against a socket server they start themselves.
+The VS Code extension in `ui/vscode` opens that socket: `agentSocket.ts` binds `<hash>.sock` for each workspace folder, writes a fresh `.token` (mode `0600`) and the `.folder` file, replaces a socket left by a crashed window and leaves one a live window owns alone. `agentBridge.ts` answers the actions. With no window open the tools answer `{"ok": false, "error": "no editor window for workspace '...'"}`. The tests in `tests/mcp/test_editor.py` run the protocol against a socket server they start themselves.
 
 ## Why the tooling is shaped this way
 

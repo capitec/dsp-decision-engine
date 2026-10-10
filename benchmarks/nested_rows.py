@@ -127,7 +127,7 @@ def end_to_end():
     for name, step, frame, record in (
         ("numeric kernel (the ceiling)", numeric_total, NUMERIC, NUMERIC_RECORD),
         ("list[dict], Python per row", list_total, FRAME, RECORD),
-        ("Columnar[Item], compiled per row", rows_total, FRAME, RECORD),
+        ("Columnar[Item], compiled kernel", rows_total, FRAME, RECORD),
     ):
         exe = Engine().bind(flow(step, name="p"), mode="stepped")
         p50, p99 = latency(exe, record)

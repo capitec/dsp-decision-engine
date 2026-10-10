@@ -272,12 +272,12 @@ Declare it as a stdio server in the host's MCP configuration, run from the proje
 }
 ```
 
-Add `"--raw"` to `args` to allow the per-record tools. Tell the agent to run `decider guide` (or read it with the shell) before it writes pipeline code; the guide is written for that reader.
+Add `"--raw"` to `args` to allow the per-record tools, or set `DECIDER_MCP_RAW=1` in the server's environment. Tell the agent to run `decider guide` (or read it with the shell) before it writes pipeline code; the guide is written for that reader.
 
 ### Tools
 
 <div class="diagram" markdown>
-![The decider MCP server's tools in five classes: structural reads and summarised reads always on, raw data tools off unless --raw, run and write tools marked destructive so the host asks the user, and editor tools forwarded to the VS Code window over an authenticated socket](../assets/diagrams/guide-mcp-tools.svg)
+![The decider MCP server's tools in six classes: structural reads and summarised reads always on, raw data tools off unless --raw, run tools marked destructive so the host asks the user, validated config-editing tools, and editor and debug tools forwarded to the VS Code window over an authenticated socket](../assets/diagrams/guide-mcp-tools.svg)
 
 *What an agent can call, and what stands between it and your data or source.*
 </div>
@@ -302,9 +302,36 @@ Flows are named by import path, `module:attr`, the same `ENTRY` the CLI takes. E
 | `run_experiment` | `definition`, `data` | runs an experiment over the file `data`; the result as JSON (gated) |
 | `start_debug` | `entry`, `data` | opens a debug session paused before anything runs and returns its structure (gated) |
 | `generate_ids` | `path="."`, `check=True` | `decider ids` on `path`; with `check=False` it writes source (gated) |
-| `highlight` | `workspace`, `flow`, `nodes` | focuses those nodes in the VS Code flow view (editor) |
-| `reveal_source` | `workspace`, `path`, `line` | opens a file at a line in VS Code (editor) |
-| `editor_selection` | `workspace` | the current editor selection |
+| `highlight` | `nodes`, `flow=None`, `workspace="."` | selects and reveals a node in the VS Code flow view (editor) |
+| `reveal_source` | `path`, `line`, `workspace="."` | opens a file at a line in VS Code (editor) |
+| `editor_selection` | `workspace="."` | what the user is looking at: file, selection, shown flow, selected nodes, debugger pause (editor) |
+| `show_flow` | `file`, `pipeline=None`, `workspace="."` | shows a flow in the Structure view and graph; whether it described cleanly (editor) |
+| `set_breakpoints` | `nodes`, `workspace="."` | makes the breakpoints exactly these flow nodes; reports those that could not take one (editor) |
+| `debug_flow` | `file`, `pipeline=None`, `dataset=None`, `workspace="."` | runs a flow under the VS Code debugger and waits for the first pause (editor, gated) |
+| `debug_control` | `action`, `workspace="."` | `continue`, `step_over`, `step_in`, `step_out` or `stop`; waits for the next pause (editor, gated) |
+| `debug_evaluate` | `expression`, `workspace="."` | evaluates a Python expression in the paused frame (editor, gated, raw) |
+
+The config-editing tools change tree, decision table, scorecard and params documents. Each write builds the document first and is refused, file untouched, if it would not build.
+
+| Tool | Arguments | Returns |
+|---|---|---|
+| `list_configs` | `root="."` | config documents under `root`: path, kind, name, version directory |
+| `read_config` | `path` | a document and its `problems` (why it would not build; empty when it does) |
+| `validate_config` | `path` or `doc` | `problems` for a file or an unsaved document |
+| `write_config` | `path`, `doc`, `overwrite=False` | creates a document; an existing file is replaced only with `overwrite` |
+| `patch_config` | `path`, `ops`, `dry_run=False` | applies RFC 6902 JSON Patch `ops`, saved if it still builds |
+| `try_config` | `path`, `rows`, `params=None` | runs the document's step on `rows` and returns the output rows |
+| `tree_view` | `path`, `node=None` | a text outline of a tree plus its nodes as data |
+| `tree_add_node`, `tree_set_node`, `tree_remove_node` | `path`, `parent`/`node_id`, `data` | edits a v3 tree node |
+| `tree_set_output` | `path`, `values`, `index=None`, `dtypes=None` | appends or replaces a result row |
+| `tree_add_rule`, `tree_remove_rule` | `path`, `rule`/`name` | edits a flat rule list |
+| `table_view` | `path`, `offset=0`, `limit=200` | columns, outputs, default and rows of a decision table |
+| `table_add_rows`, `table_update_rows`, `table_delete_rows` | `path`, `rows`/`updates`/`indexes` | edits table rows |
+| `table_add_column`, `table_drop_column` | `path`, `name`, ... | adds or drops a column |
+| `scorecard_view` | `path` | each variable's bins, the default and the params the card declares |
+| `scorecard_set_bins` | `path`, `variable`, `bins` | replaces one variable's bins |
+| `params_view` | `path`, `entry=None` | a params document; with `entry`, its problems and the schema it must meet |
+| `params_set` | `path`, `changes`, `entry=None` | sets params by slash path; refused if it adds a problem for `entry` |
 
 `data` arguments are file paths (`.parquet`, `.csv`, `.json`, `.jsonl`), read with [`decider.lab.data.read`](data-and-datasets.md). A tool that raises comes back to the agent as a tool error with the message, for example `Error calling tool 'describe_flow': No module named 'lending.nope'`.
 
@@ -320,7 +347,7 @@ rows 2000, approved [{'value': False, 'count': 1433}, {'value': True, 'count': 5
 params {'validated': ['lending/approved', 'lending/credit_limit'], 'invalid': [], 'warnings': []}
 
 raw_record(..., record=0)          # without --raw
-{'redacted': 'raw data disabled: enable `decider._tooling.mcp.rawData` to return it'}
+{'redacted': 'raw data disabled: start `decider mcp` with --raw (or DECIDER_MCP_RAW=1) to return it'}
 
 raw_record(..., record=0)          # with --raw
 {"entry": "lending.pipeline:build", "record": 0, "values": {"lending/disposable_income": {"disposable_income": 7757.009999999999},
@@ -336,20 +363,20 @@ The server sorts what it can return into three classes, and the `Policy` decides
 |---|---|---|
 | structural | on | flow, step and edge identity, paths, sources, reads and writes, lineage, check catalogue, experiment definitions |
 | summarised | on | run tallies, check reports, experiment results |
-| raw | off | per-record values and trace events: `raw_record`, `raw_trace` |
+| raw | off | per-record values and trace events: `raw_record`, `raw_trace`, `debug_evaluate` |
 
-With raw data off, a raw tool returns the redaction notice above, never a made-up value. `decider mcp --raw` turns it on for the session. Summaries can still reveal something about the data (a value count over a small file is close to the data itself), so point the server at data the agent may see.
+With raw data off, a raw tool returns the redaction notice above, never a made-up value. `decider mcp --raw` (or `DECIDER_MCP_RAW=1` in the server's environment) turns it on for the session; there is no settings key. Summaries can still reveal something about the data (a value count over a small file is close to the data itself), so point the server at data the agent may see.
 
-Tools that run code or write files (`run_flow`, `run_experiment`, `start_debug`, `generate_ids`) carry the MCP `destructiveHint` annotation. The host asks the user to confirm before calling them; the server does not ask again. `generate_ids` defaults to `check=True`, which only reports.
+Tools that run code or write source (`run_flow`, `run_experiment`, `start_debug`, `generate_ids`, `debug_flow`, `debug_control`, `debug_evaluate`) carry the MCP `destructiveHint` annotation. The host asks the user to confirm before calling them; the server does not ask again. `generate_ids` defaults to `check=True`, which only reports.
 
 ### Editor tools
 
-`decider mcp` also registers `highlight`, `reveal_source` and `editor_selection`. They are not answered by the server: each is forwarded to the VS Code window whose workspace matches, over a per-window Unix socket (a named pipe on Windows) in `~/.decider/editor/`, a directory only you can read. The window's secret token sits beside the socket, so other local processes cannot drive your editor. With no matching window open, the tool returns `{"ok": false, "error": "no editor window for workspace '...'"}` rather than failing. The bridge is described in [Editor bridge](../architecture/editor-bridge.md).
+`decider mcp` also registers the editor and debug tools (`editor_selection`, `highlight`, `reveal_source`, `show_flow`, `set_breakpoints`, `debug_flow`, `debug_control`, `debug_evaluate`). They are not answered by the server: each is forwarded to the VS Code window whose workspace matches, over a per-window Unix socket (a named pipe on Windows) in `~/.decider/editor/`, a directory only you can read. The window's secret token sits beside the socket, so other local processes cannot drive your editor. The decider VS Code extension opens the socket for each folder it has open. With no matching window open, the tool returns `{"ok": false, "error": "no editor window for workspace '...'"}` rather than failing. The bridge is described in [Editor bridge](../architecture/editor-bridge.md).
 
 ### Limits worth knowing
 
 - `discover_flows` skips every path that has a part starting with `.`, and it checks the absolute path, so a workspace under a dot-directory (for example `~/.work/project`) finds no flows. Pass `entry` directly to the other tools in that case.
 - For a step written as a `@step`-decorated function, `inspect_step` and `source_context` currently return `file` and `line` as `None`; plain function steps resolve.
-- `start_debug` opens and describes a paused session; stepping it is an editor interaction, not an MCP tool.
+- `start_debug` opens and describes a paused headless session; to step a flow in the VS Code debugger use `debug_flow` and `debug_control`.
 
 How the commands and the server are built is in [CLI and MCP internals](../architecture/tooling.md).

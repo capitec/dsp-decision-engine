@@ -1,6 +1,6 @@
 # Editor bridge
 
-An editor that shows a decider flow needs facts only Python can produce: which pipelines a file defines, the IR with a source location for every node, the params each step declares, and, while debugging, what each record looks like at each checkpoint. The editor runs in Node (VS Code) or a browser (JupyterLab, the tree editor), so something has to stand between it and the library. That is the editor bridge, `decider/_tooling/bridge/`: a JSON-lines protocol over a child process's pipes, plus the adapters that turn a `decider.debug.Session` into the views an editor draws.
+An editor that shows a decider flow needs facts only Python can produce: which pipelines a file defines, the IR with a source location for every node, the params each step declares, and, while debugging, what each record looks like at each checkpoint. The editor runs in Node (VS Code) or a browser (the tree editor), so something has to stand between it and the library. That is the editor bridge, `decider/_tooling/bridge/`: a JSON-lines protocol over a child process's pipes, plus the adapters that turn a `decider.debug.Session` into the views an editor draws.
 
 The bridge does not implement a second debugger. Running one checkpoint at a time, rewinding, overriding values and swapping steps are `Session` features, documented in [Debug sessions](engine/debug.md). The bridge adds what an editor needs on top: source locations, per-record history, lineage per record, forced branches, value breakpoints, scenario forks and comparisons, all as JSON.
 
@@ -317,9 +317,9 @@ The host seam is one component:
 <App send={(m: FromUI) => void} listen={(on: (m: ToUI) => void) => unsubscribe} can={Set<EditorMessage>} />
 ```
 
-`send` delivers UI messages to the host, the first being `{type: "ready"}`. `listen` subscribes to host messages (`describe`, `status`, `state`, `lineage`, `compare`, `sweep`, `select`, `controls`, ...). `can` lists the editor-only messages the host handles (`reveal`, `maximise`, `openDiff`, `debugStep`, `runTo`, `step`, `compareRevision`), and the UI hides the controls whose message is missing. A host that gains a capability handles the message and adds its name to `can`, so one message channel covers every feature.
+`send` delivers UI messages to the host, the first being `{type: "ready"}`. `listen` subscribes to host messages (`describe`, `status`, `state`, `lineage`, `compare`, `sweep`, `select`, `controls`, ...). `can` lists the editor-only messages the host handles (`reveal`, `run`, `runTo`, `step`, `debugStep`, `rewind`), and the UI hides the controls whose message is missing. A host that gains a capability handles the message and adds its name to `can`, so one message channel covers every feature.
 
-Styling reads only `--decider-*` CSS variables, every rule is nested under `.decider`, and `.decider` is a size container so the narrow and wide layouts follow the panel, not the window. Each host maps its own theme onto the variables (48 colours for VS Code).
+Styling reads only `--decider-*` CSS variables, every rule is nested under `.decider`, and `.decider` is a size container so the narrow and wide layouts follow the panel, not the window. Each host maps its own theme onto the variables (45 variables for VS Code: 42 colours plus the font family, font size and monospace font).
 
 The graph layout in `layout.ts` is dependency-free and replaced dagre. It was timed on generated nested flows (Apple M2 Pro, Node 23): 0.8 ms for 1,000 calls and 8.8 ms for 10,000 calls fully unfolded, where dagre took 1.2 s at 1,000 and overflowed the stack at 2,000, and ELK took 0.46 s and 4.65 s. The remaining superlinear pass is `dataEdges`, 53 ms at 10,000 calls, marked in the code with a `ponytail:` comment naming the fix (an index of last writer per column).
 
