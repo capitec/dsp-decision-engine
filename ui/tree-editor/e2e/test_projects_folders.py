@@ -10,6 +10,7 @@ from flat_rules_ui import open_flat_rules
 from platform_ui import (
     create_folder as create_folder_ui,
     delete_project,
+    first_held,
     folder_row,
     open_project,
     open_projects,
@@ -268,12 +269,14 @@ def test_a_slow_older_list_response_does_not_replace_the_newer_search_result(sig
     signed_in.get_by_role("button", name="Next").click()
     expect(signed_in.get_by_text("Showing 13-15 of 15 projects")).to_be_visible()
     held = []
-    signed_in.route(re.compile(r"/api/v1/projects\?page=2&size=12&search=Needle"), lambda route: held.append(route))
+    late = re.compile(r"/api/v1/projects\?page=2&size=12&search=Needle")
+    signed_in.route(late, lambda route: held.append(route))
 
     signed_in.get_by_placeholder("Search projects...").fill("Needle")
     expect(project_card(signed_in, "Needle")).to_be_visible()
-    with signed_in.expect_response(re.compile(r"page=2&size=12&search=Needle")):
-        held[0].continue_()
+    with signed_in.expect_response(late):
+        first_held(signed_in, held).continue_()
+        signed_in.unroute(late)
     for _ in range(2):  # let the page render what the late response carried
         signed_in.evaluate("new Promise(resolve => requestAnimationFrame(resolve))")
 
