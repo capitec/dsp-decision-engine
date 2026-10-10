@@ -4,7 +4,7 @@ import json
 import threading
 import warnings
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import polars as pl
@@ -12,79 +12,27 @@ import polars as pl
 from decikit._engine.concurrency import Cache, once
 from decikit._engine.params import NodeParams, ParamsCache
 from decikit._engine.params.shadow import warn_shadowed_tables
-from decikit._engine.run.hidden import warn_hidden_state
 from decikit._engine.run.params import RunParams, RunReport, check_namespaces
 from decikit._engine.run.representations import despan
 from decikit._engine.run.runners.base import CompiledRunner, Runner
-from decikit._engine.run.runners.fused import FusedRunner
 from decikit._engine.run.runners.interpreted import InterpretedRunner
 from decikit._engine.run.runners.stepped import SteppedRunner
 from decikit._engine.ir.decls import ParamDecl, base_annotation
 from decikit._engine.run.state import State, declared_dtype, dtype_of, load_record, record_value
 from decikit._engine.trace.envelope import StepTable
 from decikit._engine.types import decimal_boxer, decimal_info
-from decikit._engine.wiring import Plan, resolve
+from decikit._engine.wiring import Plan
 from decikit._engine.wiring.plan import Branch, Call, Loop, ScatterGather, Sequence, NodeVersion
 from decikit.exceptions import EngineError
 from decikit.ops.nested import struct_item
 
 if TYPE_CHECKING:
     from decikit._engine.debug import Session
+    from decikit._engine.run.engines import Engine
 
-Mode = Literal["interpreted", "stepped", "fused"]
-
-# Mode name -> runner class; a new mode is one entry here.
-RUNNERS: dict[str, type] = {"interpreted": InterpretedRunner, "stepped": SteppedRunner, "fused": FusedRunner}
 _QUIET = (InterpretedRunner.iterate, SteppedRunner.iterate)
 
 _NO_FRAME = pl.DataFrame()
-
-
-class Engine:
-    """Turns a step (or its IR) into something that runs.
-
-    Args:
-        params_validation: `"eager"` validates every node's params when a
-            params document is first seen and raises on any invalid one;
-            `"lazy"` validates a node the first time it runs, so an invalid
-            param in a node no row reaches never fails a run.
-        strict_compile: in `"stepped"` and `"fused"` modes, a step that would
-            run in Python raises at the first run instead of warning. Mark the
-            ones you accept `@allow_fallback`.
-
-    Example::
-
-        exe = Engine(params_validation="lazy").bind(pipeline)
-        out = exe.run(df, params={"term": {"cap_by_income": {"cap": 36.0}}})
-    """
-
-    def __init__(self, params_validation: Literal["eager", "lazy"] = "eager", strict_compile: bool = False):
-        if params_validation not in ("eager", "lazy"):
-            raise EngineError(f"params_validation must be 'eager' or 'lazy', not {params_validation!r}")
-        self.params_validation = params_validation
-        self.strict_compile = strict_compile
-
-    def bind(self, step_or_ir: Any, mode: Mode = "interpreted") -> Executable:
-        """An `Executable` running `step_or_ir` in `mode`.
-
-        Args:
-            mode: `"interpreted"` (plain Python, pauses at every node and
-                inside trees), `"stepped"` (one numba kernel per node, pauses
-                at every node) or `"fused"` (one kernel per innermost sequence
-                of scalar steps, pauses at kernel boundaries). All three give
-                the same answers.
-
-        Example::
-
-            exe = Engine().bind(pipeline, mode="fused")
-        """
-        runner = RUNNERS.get(mode)
-        if runner is None:
-            raise EngineError(f"unknown mode {mode!r}; expected one of {sorted(RUNNERS)}")
-        runner = runner() if runner is InterpretedRunner else runner(strict=self.strict_compile)
-        exe = Executable(resolve(step_or_ir), runner, self.params_validation == "lazy", step_or_ir)
-        warn_hidden_state(exe.plan, strict=self.strict_compile)
-        return exe
 
 
 class Executable:
@@ -92,18 +40,20 @@ class Executable:
 
     `report` describes the params validation of the latest call on the
     calling thread; `step` is what it was bound from (a step, a function or
-    an IR). Safe to call from many threads at once.
+    an IR) and `engine` the engine document that bound it. Safe to call from
+    many threads at once.
 
     Example::
 
-        exe = Engine().bind(pipeline)
+        exe = pipeline.compile("fused")
         exe.run(df)                       # a polars DataFrame
         exe.run({"net_income": 4100.0, ...})   # a dict
     """
 
-    def __init__(self, plan: Plan, runner: Runner, lazy: bool, step: Any = None):
+    def __init__(self, plan: Plan, runner: Runner, lazy: bool, step: Any = None, engine: Engine | None = None):
         self.plan = plan
         self.step = step
+        self.engine = engine
         self.runner = runner
         self.lazy = lazy
         self.nodes = {c.id: NodeParams(c.node.origin.path, c.node.params) for c in plan.calls if c.node.params}
