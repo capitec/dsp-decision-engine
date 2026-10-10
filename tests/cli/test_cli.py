@@ -153,6 +153,15 @@ def test_serve_starts_the_starlette_factory_with_the_given_settings(project, uvi
     assert os.environ["DECIKIT_API__ENGINE__TYPE"] == "stepped"
 
 
+def test_serve_refuses_an_unknown_engine_before_starting_any_worker(project, uvicorn_calls, monkeypatch):
+    result = CliRunner().invoke(cli, ["serve", "--engine", "fsued"])
+    assert result.exit_code == 1 and "Did you mean 'fused'" in result.output
+    monkeypatch.setitem(os.environ, "DECIKIT_API__ENGINE__STRICT", "true")
+    result = CliRunner().invoke(cli, ["serve", "--engine", "fused"])
+    assert result.exit_code == 1 and "strict" in result.output and "Extra inputs" in result.output
+    assert uvicorn_calls == []
+
+
 def test_serve_warns_when_the_build_ran_on_another_cpu(project, uvicorn_calls):
     triple, _, features = cpu_target()
     (project / CPU_TARGET_FILE).write_text(json.dumps([triple, "some-other-cpu", features]))

@@ -118,10 +118,16 @@ def serve(host, port, workers, engine, server) -> None:
     engine's own settings come from DECIKIT_API__ENGINE__*, e.g.
     DECIKIT_API__ENGINE__STRICT_COMPILE=true.
     """
+    from decikit import Engine
     from decikit._engine.compile import cpu_target
 
     s = _settings(serve__host=host, serve__port=port, serve__workers=workers, api__engine__type=engine,
                   serve__server=server)
+    try:
+        # Checked here too: a worker that cannot build its engine dies, and uvicorn restarts it forever.
+        Engine.resolve(s.api.engine.type).model_validate(s.api.engine.model_dump())
+    except (LookupError, ValueError) as e:
+        raise click.ClickException(f"engine settings: {e}") from e
     recorded = _cpu_target_path(s)
     built = tuple(json.loads(recorded.read_text())) if recorded.exists() else cpu_target()
     if built != cpu_target():
