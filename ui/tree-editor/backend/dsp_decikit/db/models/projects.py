@@ -9,6 +9,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     CheckConstraint,
+    Integer,
     Text,
     Enum as SQLEnum,
 )
@@ -84,6 +85,11 @@ class Project(SQLModel, table=True):
     updated_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
         sa_column=Column(TIMESTAMP(timezone=True)),
+    )
+    version: int = Field(
+        default=1,
+        sa_column=Column(Integer, nullable=False, server_default="1"),
+        description="Bumped by every save of project_data; a save naming an older base_version is refused",
     )
 
     # Relationships
