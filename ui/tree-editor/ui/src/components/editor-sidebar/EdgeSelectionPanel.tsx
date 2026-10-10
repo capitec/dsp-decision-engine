@@ -129,6 +129,7 @@ export const EdgeSelectionPanel: React.FC<EdgeSelectionPanelProps> = ({ edge }) 
                           >
                             {option?.label || `Branch ${assignment}`}
                             <X
+                              data-testid="remove-branch"
                               className="h-3 w-3 cursor-pointer hover:text-destructive"
                               onClick={(e) => {
                                 e.stopPropagation();
