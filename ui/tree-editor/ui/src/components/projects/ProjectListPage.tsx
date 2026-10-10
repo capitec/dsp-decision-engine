@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -72,7 +72,13 @@ export const ProjectListPage: React.FC = () => {
   const [shareFolderDialog, setShareFolderDialog] = useState<{ open: boolean; folder: Folder | null }>({ open: false, folder: null });
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
+  const [reloads, setReloads] = useState(0);
+  // Refetches through the effect below, so the list always uses the current folder, search and page.
+  const refresh = () => setReloads((n) => n + 1);
+  const latestFetch = useRef(0);
+
   const fetchProjects = useCallback(async (page: number, size: number, search = '', folderId: string | null = null) => {
+    const fetchId = ++latestFetch.current;
     try {
       setLoading(true);
       setError(null);
@@ -87,6 +93,8 @@ export const ProjectListPage: React.FC = () => {
         }
       });
 
+      // A slower, older request must not replace what a newer one showed.
+      if (fetchId !== latestFetch.current) return;
       if (response.data) {
         setProjects(response.data.items || []);
         setTotalProjects(response.data.total || 0);
@@ -94,10 +102,11 @@ export const ProjectListPage: React.FC = () => {
         setCurrentPage(response.data.page || 1);
       }
     } catch (error) {
+      if (fetchId !== latestFetch.current) return;
       console.error('Failed to fetch projects:', error);
       setError('Failed to load projects');
     } finally {
-      setLoading(false);
+      if (fetchId === latestFetch.current) setLoading(false);
     }
   }, []);
 
@@ -118,14 +127,14 @@ export const ProjectListPage: React.FC = () => {
   // Fetch projects when page, size, search, or folder changes
   useEffect(() => {
     fetchProjects(currentPage, itemsPerPage, debouncedSearchTerm, currentFolder?.id || null);
-  }, [currentPage, itemsPerPage, debouncedSearchTerm, currentFolder]);
+  }, [currentPage, itemsPerPage, debouncedSearchTerm, currentFolder, reloads]);
 
   const handleCreateProject = () => {
     setCreateDialogOpen(true);
   };
 
   const handleProjectCreated = (projectId: string) => {
-    fetchProjects(1, itemsPerPage, debouncedSearchTerm); // Refresh the project list
+    refresh();
     // Navigate to the correct editor based on project type
     if (newProjectType === 'flat_rule') {
       navigate(`/flat-rules/${projectId}`);
@@ -135,7 +144,7 @@ export const ProjectListPage: React.FC = () => {
   };
 
   const handleProjectImported = (projectId: string, projectType: 'tree' | 'flat_rule') => {
-    fetchProjects(1, itemsPerPage, debouncedSearchTerm); // Refresh the project list
+    refresh();
     // Navigate to the correct editor based on project type
     if (projectType === 'flat_rule') {
       navigate(`/flat-rules/${projectId}`);
@@ -197,7 +206,7 @@ export const ProjectListPage: React.FC = () => {
       });
 
       setMoveDialog({ open: false, project: null });
-      await fetchProjects(currentPage, itemsPerPage, debouncedSearchTerm, currentFolder?.id ?? null);
+      refresh();
     } catch (error) {
       console.error('Failed to move project:', error);
       setError('Failed to move project');
@@ -224,7 +233,7 @@ export const ProjectListPage: React.FC = () => {
       });
 
       setRenameDialog({ open: false, project: null });
-      fetchProjects(currentPage, itemsPerPage, debouncedSearchTerm); // Refresh the list
+      refresh();
     } catch (error) {
       console.error('Failed to rename project:', error);
       setError('Failed to rename project');
@@ -247,7 +256,8 @@ export const ProjectListPage: React.FC = () => {
       });
 
       setDeleteDialog({ open: false, project: null });
-      fetchProjects(1, itemsPerPage, debouncedSearchTerm); // Refresh from first page after delete
+      setCurrentPage(1);
+      refresh();
     } catch (error) {
       console.error('Failed to delete project:', error);
       setError('Failed to delete project');
@@ -272,10 +282,7 @@ export const ProjectListPage: React.FC = () => {
     setCreateFolderOpen(true);
   };
 
-  const handleFolderCreated = () => {
-    // Refresh projects in case any were affected
-    fetchProjects(currentPage, itemsPerPage, debouncedSearchTerm, currentFolder?.id || null);
-  };
+  const handleFolderCreated = refresh;
 
   const handleRenameFolder = (folder: Folder) => {
     setRenameFolderDialog({ open: true, folder });
@@ -465,7 +472,7 @@ export const ProjectListPage: React.FC = () => {
           <Card>
             <CardContent className="pt-12 pb-12 text-center">
               <div className="text-red-600 mb-4">{error}</div>
-              <Button onClick={() => fetchProjects(currentPage, itemsPerPage, debouncedSearchTerm, currentFolder?.id || null)}>
+              <Button onClick={refresh}>
                 Retry
               </Button>
             </CardContent>
@@ -725,8 +732,7 @@ export const ProjectListPage: React.FC = () => {
           onOpenChange={(open) => setShareDialog({ open, project: shareDialog.project })}
           project={shareDialog.project}
           onShareAdded={() => {
-            // Refresh project list to potentially update shared indicators
-            fetchProjects(currentPage, itemsPerPage, debouncedSearchTerm);
+            refresh();
           }}
         />
 

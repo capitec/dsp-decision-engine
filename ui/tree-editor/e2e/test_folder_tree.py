@@ -230,7 +230,6 @@ def test_delete_all_contents_removes_the_subfolders_it_promised_to(signed_in: Pa
     assert [f["name"] for f in list_folders(signed_in)] == []
 
 
-@pytest.mark.xfail(strict=True, reason="after deleting the open folder the heading says All Projects but the list shows none (it is still filtered by the deleted folder)")
 def test_deleting_the_open_folder_returns_to_all_projects(signed_in: Page):
     create_folder(signed_in, "Open one")
     create_project(signed_in, "Root project", flat_document())
