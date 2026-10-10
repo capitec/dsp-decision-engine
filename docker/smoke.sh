@@ -2,13 +2,13 @@
 # Build the project image of each example, run it, POST its sample_request.json and check HTTP 200 and the
 # figures the example's README shows. Podman by default (CONTAINER_CLI=docker also works).
 #
-#   docker/smoke.sh [--prune] [--cpu generic] [example ...]      (no example: all of them)
+#   docker/smoke.sh [--prune] [--cpu host] [example ...]      (no example: all of them)
 #
 # Env: RUN_WRAP prefixes each example's build and run (for example a lock and a memory-capped scope), MEMORY
 #      (container limit, default 2g), WORKERS (default 1), PORT (default 18080).
 cd "$(dirname "$0")/.." || exit 1
 cli=${CONTAINER_CLI:-podman}
-prune=0 cpu=host one=0
+prune=0 cpu=generic one=0
 while [[ $1 == --* ]]; do
     case $1 in --prune) prune=1 ;; --one) one=1 ;; --cpu) cpu=$2; shift ;; *) echo "unknown option $1"; exit 2 ;; esac
     shift

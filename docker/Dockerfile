@@ -41,7 +41,7 @@
 #   PY            Python minor version of the base images, default 3.14
 #   PROJECT       examples/<name> to bake in (target project)
 #   PIPELINE      pipeline entry string of the baked project, default pipeline:build
-#   CPU_TARGET    host (default) or generic: see the CPU caveat
+#   CPU_TARGET    generic (default) or host: see the CPU caveat
 #
 # Environment variables (all optional; override with -e, or ENV in your own Dockerfile):
 #   DECIDER_SERVE__HOST        bind address      (default 0.0.0.0)
@@ -59,16 +59,18 @@
 # never cached on disk, so /ping answers 503 until each worker has done that (measured: about 15 s and 40 s
 # for two examples with the cache, 35 s and 120 s without). Wait for /ping before sending traffic.
 #
-# CPU caveat: the baked cache is valid on the CPU that built the image. On another CPU numba misses it,
-# `decider serve` warns "ran for CPU ... but this host is ...", and every worker compiles at start (slower,
-# still correct). --build-arg CPU_TARGET=generic builds and serves with NUMBA_CPU_NAME=generic, so the cache
-# hits anywhere on x86-64, with generic code (no AVX); no slowdown showed on the two pipelines measured.
+# CPU caveat: numba's cache is keyed by CPU. The default CPU_TARGET=generic builds and serves with
+# NUMBA_CPU_NAME=generic (baseline x86-64, no AVX), so the baked cache hits on any x86-64 host; per record it
+# measured the same as code for the build machine's CPU. CPU_TARGET=host compiles for the build machine: on
+# another CPU model numba misses the cache, `decider serve` warns "ran for CPU ... but this host is ...", and
+# every worker compiles at start (2 to 3 times slower to /ping, still correct). Both the runtime and the
+# project images follow CPU_TARGET.
 #
 # Readiness: HEALTHCHECK exists only in the docker image format, so build with `podman build --format docker`
 # for `podman healthcheck run` to see it; otherwise poll GET /ping.
 
 ARG PY=3.14
-ARG CPU_TARGET=host
+ARG CPU_TARGET=generic
 
 # Wheel, dependencies, and the Arrow shim (a C file compiled on first import) built where a compiler exists.
 FROM docker.io/library/python:${PY}-bookworm AS builder
@@ -133,5 +135,5 @@ RUN --mount=type=bind,from=examples,target=/examples \
 ENV DECIDER_API__PIPELINE=${PIPELINE:-pipeline:build}
 RUN bake
 
-# Last stage, so a build without --target gives the runtime image.
-FROM runtime AS default
+# Last stage, so a build without --target gives the runtime image (for CPU_TARGET).
+FROM cpu-${CPU_TARGET} AS default
