@@ -124,9 +124,12 @@ def test_double_clicking_export_downloads_the_same_file_once_or_twice(signed_in:
     downloads = []
     signed_in.on("download", lambda download: downloads.append(download))
 
-    signed_in.get_by_role("button", name="Export").dblclick()
-    signed_in.get_by_role("button", name="Save", exact=True).click()  # a later action: the page is still responsive
-    expect(toast(signed_in, "Project Saved").last).to_be_visible()
+    with signed_in.expect_download():
+        signed_in.get_by_role("button", name="Export").dblclick()
+    # a later save still goes through: the page is responsive and the export left no save running
+    with signed_in.expect_response(lambda r: r.request.method == "PUT" and SAVE_URL.search(r.url)) as reply:
+        press_save(signed_in)
+    assert reply.value.ok
 
     contents = []
     for i, download in enumerate(downloads):
