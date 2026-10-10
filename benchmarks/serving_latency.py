@@ -142,7 +142,7 @@ def terms(pipeline, row):
     one = pl.read_ipc_stream(ipc)
     rows = [
         ("json.loads(body)", lambda: json.loads(body)),
-        ("from_json(body)  [not used today]", lambda: from_json(body)),
+        ("from_json(body)", lambda: from_json(body)),
         ("input_fn body (sync part)", lambda: parse_application_json(body)),
         ("coerce_record", lambda: coerce_record(row, dates)),
         ("module_fn", handler.module_fn),

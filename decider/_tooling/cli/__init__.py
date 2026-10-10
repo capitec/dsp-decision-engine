@@ -161,7 +161,7 @@ def _serve_sanic(host: str, port: int, workers: int) -> None:
 
 @cli.command()
 @click.option("--raw", is_flag=True, envvar="DECIDER_MCP_RAW",
-              help="Enable the raw record/trace/evaluate tools (decider._tooling.mcp.rawData). Also set by DECIDER_MCP_RAW=1.")
+              help="Enable the raw record/trace/evaluate tools. Also set by DECIDER_MCP_RAW=1.")
 def mcp(raw: bool) -> None:
     """Serve the FastMCP server over stdio for an MCP host (e.g. an agent).
 

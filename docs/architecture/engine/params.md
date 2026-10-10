@@ -294,7 +294,7 @@ check passes.
 
 ### Lazy validation in compiled modes
 
-IR.md asked for a fused kernel that suspends at the first unvalidated node and resumes after validation. It was not built: a fused kernel is one innermost sequence of scalar
+A fused kernel could suspend at the first unvalidated node and resume after validation, but that is not built: a fused kernel is one innermost sequence of scalar
 steps with no control flow inside, so every node in it runs on every row the kernel runs on. Suspending would
 always stop at row 0 of each node, which is the same set of validations as validating all the kernel's nodes before
 launching it. `SteppedRunner._run` does exactly that.

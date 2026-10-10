@@ -56,11 +56,17 @@ Workaround: round in a step (`int(x)`, `round(x)`), or declare the column `float
 **Frame-step `writes` dtypes are not verified or cast.** A declared dtype is kept when the step returns it, but a different dtype is accepted as-is (only missing columns and row-count changes raise).
 Impact: a wrong dtype surfaces later, at the reader; declare `writes={"col": pl.Float64}` and return exactly that.
 
+**A `param_table` value is a numpy scalar in interpreted mode.** Arithmetic on it follows numpy, so `x / t.d[0]` with a zero gives `inf` and a warning where fused raises `ZeroDivisionError`.
+Workaround: convert with `float(t.d[0])` in the step, or guard the divisor.
+
 **Flow files cannot express everything.** `optimise(record=...)` takes a `TypedDict` class, so it is Python only; `each(execution_mode=...)` is accepted in Python but has no flow-file key (both modes run the same scatter and gather).
 Workaround: write those steps in Python.
 
 **A debug `Session` is a replay, not a live run.** Frame steps read inputs from the frame so they miss an input override, and an edit inside a loop reruns the loop from its first iteration (`_engine/debug/session.py`, `edit.py`).
 Impact: stepping through frame steps after an override can show the original input.
+
+**`run()` scores the whole frame as one batch.** Nothing splits it (only the experiment runner slices, at 100,000 rows), so memory grows with rows × (inputs + outputs): about 11.7 KB a row at 400 inputs and 633 outputs.
+Workaround: split very large frames and concatenate the results.
 
 ## Checks and diff
 
@@ -89,3 +95,6 @@ Workaround: run several worker processes; moving scoring to a thread pool is unt
 
 **`decider serve` fails when `os.cpu_count()` is `None`** and no worker count is set (`_settings.py` computes `os.cpu_count() * 2 + 1`).
 Workaround: set `serve.workers` explicitly in restricted containers.
+
+**Arrow request bodies reach the kernels without a full validation pass.** `serving/_parse.py` reads Arrow IPC with polars, and the boundary shim reads string views with nanoarrow's unchecked accessor, so a malformed view that polars accepts could crash the worker. Whether polars rejects such views was not tested.
+Workaround: accept Arrow bodies only from trusted callers, or serve JSON.

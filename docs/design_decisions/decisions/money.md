@@ -6,6 +6,7 @@ Read this before changing `Decimal`, `Currency`, rounding or overflow behaviour:
 
 - `Decimal[p, s]` is an int64 `raw` count of `10**-s` units; `Currency` is scale 4 (to 922,337,203,685,477.5807).
 - Why: floats drift; an `int`-subclass `Cents` leaked (`1.5 + Cents(3)` answered a float), so `Decimal` is a plain class.
+- Not: a rate held as scaled int (`round(rate * 1e9)`): +5 cents of total interest on R250,000 over 60 months, where float64 matched a 60-digit `Decimal` on all 20,000 instalments tested. Money that is split must allocate by largest remainder (11 float64 parts of R1,207.99 summed to R1,208.02).
 - See: [experiment](../experiments/money-types-and-rounding.md), `decider/ops/decimal.py`, [kernels](../../architecture/engine/kernels.md)
 
 ## A kernel types the int64 at its edge

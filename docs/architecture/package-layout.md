@@ -93,7 +93,7 @@ The edges that break the rules are accepted exceptions, each with a reason in `t
 - `_engine <-> steps` is a cycle inside L1. The IR context reaches `steps` lazily for `as_step` and `ParamRef`, and
   the compiler reads `@helper` and `@allow_fallback` marks from `steps/_helpers.py`. Both entries are marked for removal
   once that goes through the IR.
-- 46 private imports cross package lines, most of them `lab` and `_tooling` reading `_engine` internals that have no
+- 45 private imports cross package lines, most of them `lab` and `_tooling` reading `_engine` internals that have no
   public home yet (the resolved plan, param merging, `import_flow`). The redesign's goal is an empty list.
 
 The `CLAUDE.md` engine rule is narrower than the layer map: `_engine/` imports nothing from `steps/trees`,
@@ -300,7 +300,7 @@ package except the salt test.
 | `test_no_references_to_docs_or_experiments` | no `doc 03`, `§` or `EXPERIMENTS` in code | none |
 | `test_public_modules_define_all` | every module with no `_` segment has `__all__` | `NO_ALL` (empty) |
 | `test_public_packages_stay_within_all_budget` | a public package's `__all__` has at most 25 names | `BIG_ALL` (2) |
-| `test_no_private_imports_across_packages` | `decider.<a>._x` imported only inside `decider/<a>/`; `_engine` only from the core | `PRIVATE_IMPORT` (46) |
+| `test_no_private_imports_across_packages` | `decider.<a>._x` imported only inside `decider/<a>/`; `_engine` only from the core | `PRIVATE_IMPORT` (45) |
 | `test_every_top_level_package_has_a_layer` | every top-level unit is in `LAYERS` | none |
 | `test_imports_only_go_down_the_layer_map` | no import from a lower layer into a higher one | `UPWARD_IMPORT` (2) |
 | `test_no_import_cycles_between_packages_in_a_layer` | no cycle between units of one layer | `LAYER_CYCLE` (2) |
@@ -336,11 +336,11 @@ flowchart TB
 The walker resolves relative imports, counts imports nested inside functions, and treats `from decider.x import y` as
 an import of the module `decider.x.y` when that file exists, so an allowlist key names a module, never a class.
 
-!!! warning "A failing entry in today's tree"
-    `test_no_private_imports_across_packages` fails on the current branch. `decider/lab/_describe.py` imports
-    `from decider._engine.wiring import Plan, resolve`, which the walker records as `lab._describe -> _engine.wiring`
-    and `lab._describe -> _engine.wiring.resolve`. The allowlist has `lab._describe -> _engine.wiring.Plan`, a key the
-    walker never produces.
+!!! note "Allowlist keys must be what the walker records"
+    `decider/lab/_describe.py` imports `from decider._engine.wiring import Plan, resolve`, which the walker records as
+    `lab._describe -> _engine.wiring` and `lab._describe -> _engine.wiring.resolve`; those are the two keys in
+    `PRIVATE_IMPORT`. A key naming a class (`..._engine.wiring.Plan`) matches nothing, so the import fails the test and
+    the key is reported as stale.
 
 ## Extension points and entry-point groups
 

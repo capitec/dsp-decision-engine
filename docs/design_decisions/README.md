@@ -3,9 +3,10 @@
 Why decider is built the way it is, for maintainers: read the decision file for an area before changing it, and the experiment behind a rule before arguing with its numbers. Not published on the docs site; how things work is in `docs/architecture/`.
 
 - `decisions/`: the rules each area holds, each with its reason, in a few bullets.
-- `experiments/`: one question per file: purpose, method, result, decision. Most name the `benchmarks/` script that reproduces them (`uv run python benchmarks/<name>.py`).
-- [`spec-amendments.md`](spec-amendments.md): changes to `IR.md`; where they disagree, this file wins.
+- `experiments/`: one question per file: purpose, method, result, decision. Most name the `benchmarks/` script that reproduces them (`uv run python benchmarks/<name>.py`); "spike" means the code lives outside the repo in `../decider-experimentation/`.
 - [`known-limitations.md`](known-limitations.md): open gaps in the current code, with workarounds.
+- Proposals for work not yet built live in [`docs/design_specs/`](../design_specs/README.md), one folder per
+  rework; when one lands, its rationale moves here.
 
 New rationale goes into the decision file for its area; a new measurement becomes an experiment linked from there.
 
@@ -28,6 +29,8 @@ New rationale goes into the decision file for its area; a new measurement become
 | Question | Script |
 |---|---|
 | **Engine** | |
+| [What do params bundles cost a kernel; are same-named bundle classes a trap?](experiments/params-bundle-dispatch-cost.md) | spike |
+| [What drives the tail of single-record latency?](experiments/single-record-tail-latency.md) | spike |
 | [When to fuse, release the GIL, use fastmath, fall back or cache?](experiments/kernel-compilation-choices.md) | spike |
 | [How should `score` take a record, and what should it cache?](experiments/single-record-calling-convention.md) | spike |
 | [Where does a one-record run spend its time outside the steps?](experiments/per-step-overhead.md) | spike |
@@ -35,18 +38,24 @@ New rationale goes into the decision file for its area; a new measurement become
 | [Does a loop over candidate bundles pack?](experiments/packed-loop-over-bundles.md) | `bundle_search.py`, `fan_out_reduce.py` |
 | [How did decider compare with decider2?](experiments/decider-vs-decider2.md) | `modes.py`, `control_flow.py` |
 | **Types** | |
+| [Can a kernel match prefix, suffix, contains and regex, and in which language?](experiments/string-matching-beyond-equality.md) | spike |
 | [What does a fixed-point money type cost; where does rounding disagree?](experiments/money-types-and-rounding.md) | `decimal_steps.py` |
 | [How should a compiled step hold a string?](experiments/string-representations.md) | `span_operations.py` |
 | [What does a `str` item field cost; should an item be a record?](experiments/item-str-fields-and-record-shape.md) | `nested_item_fields.py` |
 | [Can `Columnar[Item]` read Arrow directly and share a kernel?](experiments/columnar-arrow-read-and-shared-kernel.md) | `nested_rows.py` |
 | [How should a struct column reach a kernel?](experiments/struct-input-as-record-array.md) | `structs.py` |
 | **Configurable steps** | |
+| [Should trees run in Rust, a polars plugin, ZEN or generated code?](experiments/alternatives-to-a-numba-tree-walker.md) | spike |
 | [Tree and table data: generated literals or runtime arrays?](experiments/runtime-arrays-vs-generated-code.md) | spike |
 | [What does the shared tree walker cost to call and compile?](experiments/tree-walker-costs.md) | `tree_walk.py` |
 | [Why does a tree of hundreds of rules take minutes to compile?](experiments/wide-output-compile.md) | `tree_wide_outputs.py` |
 | [How wide should the parts of a split tree be?](experiments/tree-split-part-size.md) | `tree_split_sweep.py` |
 | [Do the shared walker and matcher keep up with generated kernels?](experiments/trees-tables-vs-decider2.md) | `tree_walk.py`, `table_match.py` |
 | **Serving** | |
+| [How should a kernel read a polars frame?](experiments/reading-a-polars-frame-in-a-kernel.md) | spike |
+| [How should outputs reach polars; how big can one batch be?](experiments/output-writeback-and-batch-size.md) | spike |
+| [How should the compiled Arrow shim ship?](experiments/shipping-the-arrow-shim.md) | spike |
+| [Can a new version compile while the old one serves?](experiments/stage-a-version-while-serving.md) | spike |
 | [Where do one request's microseconds go?](experiments/serving-latency-budget.md) | `serving_latency.py` |
 | [Would Arrow or a specialised server make requests faster?](experiments/arrow-codec-and-transports.md) | `arrow_codec.py`, `serving_transports.py` |
 | [Can kernels read Arrow columns in place?](experiments/zero-copy-arrow-gather-spike.md) | spike |

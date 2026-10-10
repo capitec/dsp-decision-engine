@@ -6,7 +6,11 @@ Read this before changing how tree or table documents become kernels, or what a 
 
 - `to_ir` emits one `row` node whose `fn` (`walker.walk`, `matcher.match`) is the same for every tree and table; the document becomes int64/float64/byte arrays.
 - Why: editing a threshold, row or shape never recompiles, and there is no line cap or per-shape compile (codegen was unpredictable at depth 10 and hit the 100-level indent limit).
-- See: [runtime arrays vs generated code](../experiments/runtime-arrays-vs-generated-code.md), `decider/steps/trees/_walker.py`, `decider/steps/tables/_matcher.py`
+- Not: Rust (PyO3 or C ABI), a polars plugin, ZEN/JDM or a `@cfunc` pointer table. Rust is 12-35% faster per row but is a second toolchain, loses the numba disk cache unless addresses are arguments and aborts on a panic; the plugin costs 236 µs for one record and 252 crates; ZEN `evaluate_batch` is 1.55x slower; a cfunc interpreter is 8.8x generated code on nested loops.
+- Not: polars `when/then` chains for scoring (one record costs 419 µs to 7.8 ms, because building the physical plan rather than the optimizer is the cost, so plan caching cannot close it) or a table of njit callables (28-41x per row).
+- The walker's helpers are `inline="always"`: a real call per row between the kernel and the walker doubled the tree's cost (247-262 against 125-133 ns/row); see [tree walker costs](../experiments/tree-walker-costs.md).
+- Not built, from ZEN: a per-column bitset index for tables of 8+ rows and a `collect` hit policy (every matching row, not the first).
+- See: [runtime arrays vs generated code](../experiments/runtime-arrays-vs-generated-code.md), [alternatives to a numba tree walker](../experiments/alternatives-to-a-numba-tree-walker.md), `decider/steps/trees/_walker.py`, `decider/steps/tables/_matcher.py`
 
 ## Consts reach the kernel as addresses, not arrays
 
@@ -55,7 +59,8 @@ Measured by the part-size sweep, median over ten rule shapes (`score()` against 
 
 - A string feature is a `bytes | None` span input; string outputs are `Literal` indices decoded after the kernel; nothing is dictionary-encoded.
 - Why: numba has no regex engine or Unicode folding tables, so those trees fall back per step (`strict_compile=True` raises).
-- See: `docs/architecture/configurable-steps/trees.md`, `docs/architecture/engine/boundary.md`
+- Not: a C (PCRE2) or Rust regex called from the kernel. It saves 20-40 ns/row at most (lazy at the node against a column pass), PCRE2 backtracks (`^(a+)+$` is 211 µs/row), and an unprotected Rust panic aborts the process.
+- See: [string matching beyond equality](../experiments/string-matching-beyond-equality.md), See: `docs/architecture/configurable-steps/trees.md`, `docs/architecture/engine/boundary.md`
 
 ## `trace_output` is a Ball-Larus path number
 

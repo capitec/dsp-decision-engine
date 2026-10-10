@@ -38,16 +38,15 @@ condition then its body.
 | `ScatterGatherNode` | `each` | its child on every element of a list column, gathering the results back |
 | `FiniteStateMachineNode` | nothing yet | declared only; see below |
 
-IR.md, the specification, names four node types. `ScatterGatherNode` came later, for `each`, and
-`FiniteStateMachineNode` is declared in `nodes.py` and exported from `decider.ir` without anything building or
+The set started as `CallNode`, `SequenceNode`, `BranchNode` and `LoopNode`. `ScatterGatherNode` came later, for
+`each`, and `FiniteStateMachineNode` is declared in `nodes.py` and exported from `decider.ir` without anything building or
 running it: `resolve` raises `TypeError: can't resolve FiniteStateMachineNode`, the [wiring](wiring.md) `Plan`
 has a `FiniteStateMachine` class documented as "not yet wired", and relabelling raises for it. Only the checks in
 `decider/lab/checks/_builtin/ids.py` walk into it.
 
 ### CallNode and its three kinds
 
-`kind` decides how a runner calls `fn`. The conventions come from the spec amendments, which replace the table in
-IR.md:
+`kind` decides how a runner calls `fn`:
 
 | `kind` | Call | Inputs and outputs |
 |---|---|---|
@@ -389,11 +388,11 @@ The IR has no hash of its own. Identity and content are kept apart deliberately:
 
 ## Why a closed, small set of node types
 
-IR.md fixes the node set so that the engine implements each execution mode, the debugger and the compiler once per
+The node set is fixed so that the engine implements each execution mode, the debugger and the compiler once per
 node type, and a new step type, written by anyone, only implements `to_ir()` and needs no engine change. A tree
 and a decision table are `row` CallNodes, a scorecard is a sequence of scalar and row calls, and `optimise` is a
 `SequenceNode` of ordinary calls.
-The two node types added since (`ScatterGatherNode` for `each`, and the unwired `FiniteStateMachineNode`) are the
+The two node types added after the first four (`ScatterGatherNode` for `each`, and the unwired `FiniteStateMachineNode`) are the
 cost of that rule: every runner, the resolver and `parameters()` had to learn `ScatterGatherNode`, and the
 compiled runners scatter and gather in the interpreted runner's Python code (only the calls inside run compiled).
 
