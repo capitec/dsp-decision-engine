@@ -115,38 +115,48 @@ class Step(ABC):
         """
         return _walk(self, "")
 
-    def compile(self, engine: str | Engine = "interpreted") -> Executable:
+    def compile(self, engine: str | Engine | None = None) -> Executable:
         """Compile the pipeline once; call the returned `Executable` many times.
 
         `engine` is an engine's tag (`"interpreted"`, `"stepped"`, `"fused"`,
         or an installed engine's) or an `Engine` instance, e.g.
         `FusedEngine(strict_compile=True)`, which raises instead of falling back.
+        `None` takes the default engine: fused, unless a `decikit.engine(...)`
+        block sets another.
 
         Example::
 
-            exe = pipeline.compile("fused")
+            exe = pipeline.compile()
             exe.run({"income": 1000.0, "debt": 200.0})
+            with decikit.engine("interpreted"):
+                pipeline.compile()        # interpreted
         """
         return _as_engine(engine).bind(self)
 
-    def run(self, data: Any, params: Any = None, trace: Any = None) -> Any:
-        """Run the step, interpreted, over a polars frame or one record (a dict); `trace` is an optional `TraceSink`.
+    def run(self, data: Any, params: Any = None, trace: Any = None, *, engine: str | Engine | None = None) -> Any:
+        """Run the step over a polars frame or one record (a dict); `trace` is an optional `TraceSink`.
 
-        A frame returns a frame and a dict returns a dict, as `Executable.run`.
-        For repeated runs, `compile` once instead.
+        A frame returns a frame and a dict returns a dict, as `Executable.run`;
+        a `LazyFrame` is collected first. `engine` is a tag or an `Engine`
+        instance, as for `compile`; `None` takes the default engine: fused,
+        unless a `decikit.engine(...)` block sets another. Each call binds the
+        pipeline again; for repeated runs, `compile` once instead.
 
         Example::
 
-            out = pipeline.run(df, params={"term": {"cap_by_income": {"cap": 36.0}}})
+            out = pipeline.run(df, params={"term": {"cap_by_income": {"cap": 36.0}}})   # fused
+            with decikit.engine("interpreted"):                                        # instant while editing
+                out = pipeline.run(df)
+            pipeline.run(df, engine="stepped")
         """
-        from decikit._engine import InterpretedEngine
-
-        return InterpretedEngine().bind(self).run(data, params, trace)
+        return _as_engine(engine).bind(self).run(data, params, trace)
 
     def session(self, data: Any, params: Any = None, engine: str | Engine = "interpreted") -> Session:
         """Open a debug `Session` over a polars frame.
 
-        `engine` is a tag or an `Engine` instance, as for `compile`; `"fused"`
+        `engine` is a tag or an `Engine` instance, as for `compile`, but it
+        does not follow the default engine: a session opens interpreted, which
+        pauses at every node and inside trees, unless given another. `"fused"`
         pauses at kernel boundaries only. Pass an instance for its settings,
         e.g. `InterpretedEngine(params_validation="lazy")`.
 
@@ -162,10 +172,10 @@ class Step(ABC):
         return _as_engine(engine).bind(self).session(data, params)
 
 
-def _as_engine(engine: str | Engine) -> Engine:
-    from decikit._engine import Engine
+def _as_engine(engine: str | Engine | None) -> Engine:
+    from decikit._engine.run.engines import as_engine
 
-    return Engine.resolve(engine)() if isinstance(engine, str) else engine
+    return as_engine(engine)
 
 
 def _walk(step: Step, parent: str) -> Iterator[tuple[str, Step]]:

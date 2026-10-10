@@ -9,10 +9,10 @@ import polars as pl
 import pytest
 from typing_extensions import TypedDict
 
-from decikit import InterpretedEngine, flow, frame_step
+from decikit import FusedEngine, InterpretedEngine, flow, frame_step
 from decikit.ops import Struct
 from decikit.config import JsonFileStore
-from decikit.exceptions import DecikitError, ParamsError
+from decikit.exceptions import DecikitError, EngineError, ParamsError
 from decikit.serving import RequestHandler
 from decikit.serving._handler import _dates, construct_handler_from_settings
 from decikit.serving._parse import coerce_record, dummy, has_date
@@ -166,6 +166,25 @@ def test_a_failing_sample_request_is_named_in_the_error(tmp_path):
     sample.write_text('{"history": []}')
     with pytest.raises(DecikitError, match="Fix .*sample_request.json"):
         _handler(tmp_path, flow(second, name="g"), sample_request=str(sample)).stage()
+
+
+def test_a_sample_carrying_a_pipeline_output_is_blamed_on_the_sample(tmp_path):
+    sample = tmp_path / "sample_request.json"
+    sample.write_text('{"history": [1.0, 2.0], "second": 2.0}')
+    with pytest.raises(DecikitError, match="warm-up failed with EngineError: 'second' is produced.*Fix .*sample_request"
+                       ) as blamed:
+        _handler(tmp_path, flow(second, name="g"), sample_request=str(sample)).stage()
+    assert type(blamed.value) is DecikitError
+
+
+def test_a_strict_refusal_raises_before_warm_up_and_is_not_blamed_on_the_sample(tmp_path):
+    sample = tmp_path / "sample_request.json"
+    sample.write_text('{"history": [1.0, 2.0], "second": 2.0}')   # warming with it would fail
+    handler = _handler(tmp_path, flow(second, name="g"), engine=FusedEngine(strict_compile=True),
+                       sample_request=str(sample))
+    with pytest.raises(EngineError, match="g/second runs in Python") as refused:
+        handler.stage()
+    assert "warm-up failed" not in str(refused.value) and "sample_request" not in str(refused.value)
 
 
 def test_a_sample_request_is_coerced_like_a_request(tmp_path):
