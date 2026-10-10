@@ -258,16 +258,7 @@ def configs(pipe: str) -> list[str]:
 
 
 def bind(step, engine: str):
-    """Fused or host executable of a step, by feature: today's API or whatever replaces it."""
-    kind = "fused" if engine == "fused" else "polars"
-    try:
-        return step.compile(kind)
-    except Exception:
-        if kind == "fused":
-            from decikit._engine import Engine
-            return Engine().bind(step, mode="fused")
-        from decikit._engine.polars.engine import PolarsEngine
-        return PolarsEngine().bind(step)
+    return step.compile("fused" if engine == "fused" else "polars")
 
 
 def runner(pipe: str, engine: str):
