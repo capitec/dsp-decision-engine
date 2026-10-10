@@ -150,19 +150,25 @@ def test_a_tuple_returning_columnar_output_fuses_into_the_shared_kernel():
     assert exe.fallbacks() == {}
 
 
-@pytest.mark.parametrize("mode", ("fused", "stepped"))
-def test_a_columnar_output_a_later_step_reads_it_and_the_kernel_splits(mode):
-    # Not `assert_equivalent`'s full mode list: a step-produced (not frame-sourced) `Columnar[...]`
-    # value has no per-row representation in `mode="interpreted"`, a pre-existing limitation this
-    # feature doesn't touch.
-    exe = Engine().bind(flow(ladder_tuple, reads_offers, name="order").emit("offers"), mode=mode)
-    out = exe.run(pl.DataFrame({"code": [1, 5]}))
+@pytest.mark.parametrize("fn", (ladder, ladder_tuple), ids=("dicts", "tuples"))
+def test_a_columnar_output_comes_back_the_same_in_every_mode(fn):
+    out = assert_equivalent(flow(fn, name="order"), pl.DataFrame({"code": [1, 5]}))
+    assert out["offers"].to_list() == [
+        [{"rate": 0.1, "code": 1}, {"rate": 0.2, "code": 2}],
+        [{"rate": 0.1, "code": 5}, {"rate": 0.2, "code": 6}],
+    ]
+
+
+def test_a_columnar_output_a_later_step_reads_it_and_the_kernel_splits():
+    pipeline = flow(ladder_tuple, reads_offers, name="order").emit("offers")
+    out = assert_equivalent(pipeline, pl.DataFrame({"code": [1, 5]}))
     assert out["reads_offers"].to_list() == [pytest.approx(0.3), pytest.approx(0.3)]
     assert out["offers"].to_list() == [
         [{"rate": 0.1, "code": 1}, {"rate": 0.2, "code": 2}],
         [{"rate": 0.1, "code": 5}, {"rate": 0.2, "code": 6}],
     ]
-    assert exe.fallbacks() == {}
+    assert Engine().bind(pipeline, mode="fused").fallbacks() == {}
+    assert Engine().bind(pipeline, mode="stepped").fallbacks() == {}
 
 
 def test_a_columnar_output_grows_correctly_past_its_initial_capacity():
