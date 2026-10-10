@@ -61,7 +61,7 @@ def harvest(
             # A param's annotation goes to pydantic untouched: its metadata may be a validator,
             # and where that validator sits relative to `| None` changes what it checks.
             params.append(ParamDecl(name, ann, d.default, d.field_info, d.required, d.shared_key, d.on_invalid,
-                                    schema=d.schema))
+                                    schema=d.schema, seeded_from=d.seeded_from, allow_override=d.allow_override))
             continue
         ann = hoist_metadata(ann)
         if isinstance(d, MissingAs):

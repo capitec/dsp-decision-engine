@@ -10,6 +10,7 @@ import polars as pl
 
 from decider._engine.concurrency import Cache, once
 from decider._engine.params import NodeParams, ParamsCache
+from decider._engine.params.shadow import warn_shadowed_tables
 from decider._engine.run.hidden import warn_hidden_state
 from decider._engine.run.params import RunParams, RunReport, check_namespaces
 from decider._engine.run.representations import despan
@@ -80,8 +81,7 @@ class Engine:
             raise EngineError(f"unknown mode {mode!r}; expected one of {sorted(RUNNERS)}")
         runner = runner() if runner is InterpretedRunner else runner(strict=self.strict_compile)
         exe = Executable(resolve(step_or_ir), runner, self.params_validation == "lazy", step_or_ir)
-        # ponytail: pass `strict=self.strict_compile` to raise instead of warning once the examples are clean.
-        warn_hidden_state(exe.plan)
+        warn_hidden_state(exe.plan, strict=self.strict_compile)
         return exe
 
 
@@ -275,6 +275,17 @@ class Executable:
         if self.runner._plan is not self.plan:
             self.runner._compile(self.plan, self.lazy)
         return self.runner.fallbacks()
+
+    def warn_shadowed_tables(self, params: Mapping[str, Any] | None) -> None:
+        """Warn with `ShadowedTableWarning` for each `seeded_from` table that the params document `params` sets.
+
+        `RequestHandler.stage()` calls this for the version it stages.
+
+        Example::
+
+            exe.warn_shadowed_tables({"pricing": {"priced": {"ladder": [{"floor": 0, "rate": 0.3}]}}})
+        """
+        warn_shadowed_tables(self.nodes.values(), params)
 
     def session(self, df: pl.DataFrame, params: Mapping[str, Any] | None = None) -> Session:
         """A debug `Session` over `df`, paused before anything runs.

@@ -133,7 +133,7 @@ def steps(rate_card: DecisionTableConfig):
     grade, amount band and term band, as `rate_card_rows` returns them.
     """
     rows, version = rate_card_rows(rate_card)
-    card_param = param_table(RATE_CARD_COLUMNS, shared_key="rate_card", default=rows)
+    card_param = param_table(RATE_CARD_COLUMNS, shared_key="rate_card", default=rows, seeded_from="rate_card_flex_loan")
     card_version_param = param(version, shared_key="rate_card_version")
 
     @allow_fallback

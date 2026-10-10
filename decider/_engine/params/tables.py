@@ -23,6 +23,8 @@ def param_table(
     *,
     required: bool = False,
     shared_key: str | None = None,
+    seeded_from: str | None = None,
+    allow_override: bool = False,
 ) -> Any:
     """Declare a table-valued param as a function argument's default: rows from the params document.
 
@@ -41,6 +43,10 @@ def param_table(
             doesn't set it is invalid.
         shared_key: read the rows from the document's top-level `"shared"`
             entry under this key, so several steps use one table.
+        seeded_from: the config document the default rows were read from. Staging a config version
+            whose params document sets this table warns with `ShadowedTableWarning`, because the
+            params rows silently replace the document's.
+        allow_override: the params document is meant to replace the seeded rows; no warning for this table.
 
     Example::
 
@@ -54,6 +60,8 @@ def param_table(
 
         # params document: {"rate": {"rates": [{"floor": 0, "rate": 0.2}, {"floor": 600, "rate": 0.1}]}}
     """
+    if allow_override and seeded_from is None:
+        raise TypeError("param_table: allow_override only applies with seeded_from")
     schema = []
     for column, kind in columns.items():
         if not column.isidentifier() or keyword.iskeyword(column) or column.startswith("_"):
@@ -69,7 +77,8 @@ def param_table(
     if required == (default is not _NO_DEFAULT):
         raise TypeError("param_table() takes either default rows or required=True, not both or neither")
     schema = tuple(schema)
-    attrs = dict(required=required, shared_key=shared_key, on_invalid="error", schema=schema)
+    attrs = dict(required=required, shared_key=shared_key, on_invalid="error", schema=schema,
+                 seeded_from=seeded_from, allow_override=allow_override)
     if required:
         return _mark(ParamSpec, None, default=None, field_info=Field(), **attrs)
     rows = list(default)
