@@ -112,6 +112,11 @@ class Tree(SchemaModel):
 
     @model_validator(mode="after")
     def _structure(self) -> Tree:
+        if self.mode == "all":
+            names = [rule.name or f"rule_{k}" for k, rule in enumerate(self.rules)]
+            if dupes := sorted({n for n in names if names.count(n) > 1}):
+                raise ValueError(f"rules {dupes} share a name; in mode 'all' each rule's output columns are "
+                                 "prefixed with its name, so give every rule its own")
         for rule in self.rules:
             if rule.root not in self.nodes:
                 raise ValueError(f"rule root {rule.root!r} is not a node")
