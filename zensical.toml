@@ -16,6 +16,7 @@ nav = [
       "guides/branches-loops-frames.md",
       "guides/types-and-money.md",
       "guides/compile-and-fallback.md",
+      "guides/polars-engine.md",
       "guides/trees-tables-scorecards.md",
       "guides/parameter-tables.md",
       "guides/flow-files.md",
@@ -52,6 +53,7 @@ nav = [
           "architecture/engine/debug.md",
           "architecture/engine/trace.md",
           "architecture/engine/concurrency.md",
+          "architecture/engine/polars.md",
         ] },
       { "Configurable steps" = [
           "architecture/configurable-steps/index.md",

@@ -4,6 +4,8 @@ import dataclasses
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, ClassVar, Iterator
 
+import polars as pl
+
 from decikit._engine.ir.origin import check_name
 
 if TYPE_CHECKING:
@@ -136,11 +138,13 @@ class Step(ABC):
     def run(self, data: Any, params: Any = None, trace: Any = None, *, engine: str | Engine | None = None) -> Any:
         """Run the step over a polars frame or one record (a dict); `trace` is an optional `TraceSink`.
 
-        A frame returns a frame and a dict returns a dict, as `Executable.run`;
-        a `LazyFrame` is collected first. `engine` is a tag or an `Engine`
-        instance, as for `compile`; `None` takes the default engine: fused,
-        unless a `decikit.engine(...)` block sets another. Each call binds the
-        pipeline again; for repeated runs, `compile` once instead.
+        A frame returns a frame and a dict returns a dict, as `Executable.run`.
+        `engine` is a tag or an `Engine` instance, as for `compile`; `None`
+        takes the default engine: fused, unless a `decikit.engine(...)` block
+        sets another. A `LazyFrame` with `engine=None` runs on the polars engine
+        whatever the default, and returns a `LazyFrame` to collect, stream or
+        sink; a numba engine named explicitly collects it first. Each call binds
+        the pipeline again; for repeated runs, `compile` once instead.
 
         Example::
 
@@ -148,7 +152,10 @@ class Step(ABC):
             with decikit.engine("interpreted"):                                        # instant while editing
                 out = pipeline.run(df)
             pipeline.run(df, engine="stepped")
+            pipeline.run(pl.scan_parquet("in.parquet")).sink_parquet("out.parquet")   # polars
         """
+        if engine is None and isinstance(data, pl.LazyFrame):
+            engine = "polars"
         return _as_engine(engine).bind(self).run(data, params, trace)
 
     def session(self, data: Any, params: Any = None, engine: str | Engine = "interpreted") -> Session:

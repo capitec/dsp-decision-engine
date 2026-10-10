@@ -26,13 +26,16 @@ and serves over HTTP with `decikit serve`.
 - **Engines**: `p.compile(engine)` takes a tag or an instance:
   `InterpretedEngine` (`"interpreted"`, plain Python), `SteppedEngine`
   (`"stepped"`) or `FusedEngine` (`"fused"`, numba; `decikit serve`'s default).
-  Settings ride on the instance: `FusedEngine(strict_compile=True)`. All engines
-  give the same answers. `p.run` and `p.compile()` follow the default engine,
-  fused when unset; `with decikit.engine("interpreted"):` switches both for a
-  block (instant runs while you edit: a fused `run` binds and builds on every
-  call, so repeat it on a small frame and it is slower than interpreted), or
-  pass `engine=` to one call. `p.session` opens interpreted, and `decikit serve`
-  takes its engine from its own document, not from this default.
+  Settings ride on the instance: `FusedEngine(strict_compile=True)`. `"polars"`
+  (`PolarsEngine`) runs the fused kernels inside a polars `LazyFrame` plan, for
+  batches to stream or sink. All engines give the same answers. `p.run` and
+  `p.compile()` follow the default engine, fused when unset, except that
+  `p.run(lazy_frame)` runs on polars; `with decikit.engine("interpreted"):`
+  switches both for a block (instant runs while you edit: a fused `run` binds
+  and builds on every call, so repeat it on a small frame and it is slower than
+  interpreted), or pass `engine=` to one call. `p.session` opens interpreted,
+  and `decikit serve` takes its engine from its own document, not from this
+  default.
 
 ## Which construct for which need
 
@@ -62,7 +65,8 @@ and serves over HTTP with `decikit serve`.
 | structure in a YAML/JSON file, steps in Python | `load_flow`, `DECIKIT_API__PIPELINE=flow.yaml` |
 | immutable config versions | `decikit.config.JsonFileStore` (`ConfigStore`) |
 | why a record got its answer; what-if | `pipeline.session(df)` |
-| modes, batch and single record agree | `decikit.lab.testing.assert_equivalent` |
+| a batch larger than memory, streamed or sunk to parquet | `pipeline.run(pl.scan_parquet(...))`: the polars engine |
+| engines, batch and single record agree | `decikit.lab.testing.assert_equivalent` |
 
 ## Steps, params and run
 
@@ -970,6 +974,80 @@ To get the winner's other fields back (the product, the rate), pass `record=Item
 and have `evaluate` also write `record` as a `Struct[Item]`; or recompute them
 on the winner with `evaluate.relabel(reads={"index": "best_index"})`.
 
+## Large batches: the polars engine
+
+`pipeline.run(lazy_frame)` runs a pipeline as a polars `LazyFrame` plan on the polars engine, whatever the
+default engine is; `pipeline.compile("polars")` (or `PolarsEngine()`) binds it once. Every step still runs on
+the fused engine's kernels, on each batch polars hands it; polars decides the batches and the threads. Collect
+the result, stream it, or sink it to a file larger than memory. A numba engine named explicitly
+(`pipeline.run(lazy_frame, engine="fused")`) collects the frame first and returns a `DataFrame`.
+
+```python
+import polars as pl
+from decikit import FusedEngine, PolarsEngine, flow, frame_step, param
+from decikit.exceptions import EngineError
+
+def ratio(income: float, debt: float) -> float:
+    return debt / income
+
+def approved(ratio: float, limit: float = param(0.4)) -> bool:
+    return ratio <= limit
+
+@frame_step(reads=["income"], writes=["income_rank"])
+def rank_income(df: pl.DataFrame) -> pl.DataFrame:        # cross-row: it needs the whole frame
+    return df.with_columns(pl.col("income").rank().alias("income_rank"))
+
+def tier(income_rank: float, approved: bool) -> int:
+    return 2 if approved and income_rank > 2 else 1
+
+pipeline = flow(ratio, approved, rank_income, tier, name="credit")
+pl.DataFrame({"income": [1000.0, 800.0, 4000.0, 2500.0],
+              "debt": [500.0, 100.0, 400.0, 200.0]}).write_parquet("applications.parquet")
+
+plan = pipeline.run(pl.scan_parquet("applications.parquet"))   # a LazyFrame: nothing has run yet
+plan.sink_parquet("decisions.parquet")                     # streamed, batch by batch
+out = pl.read_parquet("decisions.parquet")
+assert out["tier"].to_list() == [1, 1, 2, 2]
+assert out.equals(pipeline.compile("fused").run(pl.read_parquet("applications.parquet")))
+assert plan.collect(engine="streaming").equals(out)
+
+assert pipeline.run(pl.scan_parquet("applications.parquet"), engine="fused").equals(out)   # collected first
+exe = pipeline.compile("polars")                            # bind once, run many plans
+
+# Where the stream breaks: each frame step sees the whole frame, everything else streams.
+assert exe.segments == ((("credit/ratio", "credit/approved"), True), (("credit/rank_income",), False),
+                        (("credit/tier",), True))
+assert exe.fallbacks() == {}                                # every step here runs in a kernel
+
+assert exe.run(pl.read_parquet("applications.parquet")).equals(out)   # a DataFrame in, a DataFrame out
+assert exe.run({"income": 1000.0, "debt": 500.0})["tier"] == 1        # a record runs on the fused engine
+strict = PolarsEngine(segments=FusedEngine(strict_compile=True))      # settings for the fused segments
+
+def details(ratio: float) -> dict:                          # no shape to know before a row arrives
+    return {"ratio": ratio}
+
+try:
+    flow(ratio, details, name="d").compile("polars").run(pl.scan_parquet("applications.parquet"))
+except EngineError as e:
+    assert "TypedDict" in str(e)                            # annotate it, then it runs
+```
+
+- **The answers are fused's.** Columns, dtypes and values equal `pipeline.compile("fused").run(df)`; a step's
+  error surfaces at `collect()` or the sink with its own type and its `in step <path>` note. The params
+  document is validated against the whole pipeline when `run` builds the plan.
+- **A frame step is a pipeline breaker.** It runs once on the whole frame (it may rank, join or group by), so
+  the frame materialises there; the steps before and after it stream. A branch or loop holding a frame step
+  runs whole too. Larger than memory works when the frame steps' outputs fit in memory.
+- **Refused, with an `EngineError` saying what to do:** `trace=` and `session()` (debug and trace on the
+  numba engine: the same pipeline gives the same answers there); a qualified emit (`.emit("x@path")`; relabel
+  the step so the version has its own name); an output polars has no dtype for until it holds values (a plain
+  `dict`, a bare `list`, `Any`: annotate a TypedDict or `list[float]`; an `each`'s gathered list, which only the
+  numba engine runs); a frame step that fails on an empty
+  frame (the engine runs each frame step once on zero rows to learn its columns), or one that leaves a column
+  empty there (declare it: `writes={"band": pl.String}`).
+- `assert_equivalent` checks the polars engine with the others; an engine that refuses a pipeline is skipped
+  with a warning.
+
 ## Debugging, testing and introspection
 
 ```python
@@ -995,7 +1073,7 @@ s.set("ratio", 0.1)                      # what-if
 s.resume()
 assert s.output()["approved"].to_list() == [True, True]
 
-out = assert_equivalent(pipeline, df)    # every mode; a frame run == a record run per row == a session
+out = assert_equivalent(pipeline, df)    # every engine; a frame run == a record run per row == a session
 assert out["approved"].to_list() == [False, True]
 for frame in corpus(pipeline).values():  # zeros, negatives, empty and chunked frames
     assert_equivalent(pipeline, frame)

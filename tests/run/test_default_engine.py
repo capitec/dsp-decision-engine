@@ -78,10 +78,12 @@ def test_a_str_step_warns_once_under_the_default():
     assert len(_fallback_warnings(lambda: (exe.run(FRAME), exe.run(FRAME)))) == 1
 
 
-def test_a_lazy_frame_is_collected_and_run_on_the_default_engine():
-    with decikit.engine(FusedEngine(strict_compile=True)):
+def test_a_lazy_frame_runs_on_polars_whatever_the_default_and_a_named_engine_collects_it():
+    strict = FusedEngine(strict_compile=True)
+    with decikit.engine(strict):
+        assert isinstance(pipeline.run(FRAME.lazy()), pl.LazyFrame)
         with pytest.raises(EngineError, match="labels/label runs in Python"):
-            pipeline.run(FRAME.lazy())
+            pipeline.run(FRAME.lazy(), engine=strict)
     out = pipeline.run(FRAME.lazy(), engine="interpreted")
     assert isinstance(out, pl.DataFrame) and out["label"].to_list() == [True, False]
 

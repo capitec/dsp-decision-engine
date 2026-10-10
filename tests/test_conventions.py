@@ -215,7 +215,9 @@ def test_no_import_cycles_between_packages_in_a_layer():
 
 def _runner_files():
     d = DECIKIT / ENGINE / "run"
-    return [p for p in [d / "engine.py", d / "engines.py", *sorted((d / "runners").glob("*.py"))] if p.exists()]
+    polars = sorted((DECIKIT / ENGINE / "polars").glob("*.py"))
+    return [p for p in [d / "engine.py", d / "engines.py", *sorted((d / "runners").glob("*.py")), *polars]
+            if p.exists()]
 
 
 def _self_rooted(node):
