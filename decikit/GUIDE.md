@@ -1032,7 +1032,8 @@ except EngineError as e:
     assert "TypedDict" in str(e)                            # annotate it, then it runs
 ```
 
-- **The answers are fused's.** Columns, dtypes and values equal `pipeline.compile("fused").run(df)`; a step's
+- **The answers are fused's.** Columns, dtypes and values equal `pipeline.compile("fused").run(df)`, except
+  that a column or `each` field fused leaves `Null` for want of a value has its declared dtype; a step's
   error surfaces at `collect()` or the sink with its own type and its `in step <path>` note. The params
   document is validated against the whole pipeline when `run` builds the plan.
 - **A frame step is a pipeline breaker.** It runs once on the whole frame (it may rank, join or group by), so
@@ -1041,8 +1042,10 @@ except EngineError as e:
 - **Refused, with an `EngineError` saying what to do:** `trace=` and `session()` (debug and trace on the
   numba engine: the same pipeline gives the same answers there); a qualified emit (`.emit("x@path")`; relabel
   the step so the version has its own name); an output polars has no dtype for until it holds values (a plain
-  `dict`, a bare `list`, `Any`: annotate a TypedDict or `list[float]`; an `each`'s gathered list, which only the
-  numba engine runs); a frame step that fails on an empty
+  `dict`, a bare `list`, `Any`: annotate a TypedDict or `list[float]`; an `each`'s gathered list needs its
+  items' type and its body's outputs declared); at `collect()`, a batch its declared type cannot hold
+  unchanged (a fraction in an `int` column, a record whose keys differ from its TypedDict's, or come in
+  another order); a frame step that fails on an empty
   frame (the engine runs each frame step once on zero rows to learn its columns), or one that leaves a column
   empty there (declare it: `writes={"band": pl.String}`).
 - `assert_equivalent` checks the polars engine with the others; an engine that refuses a pipeline is skipped
