@@ -234,6 +234,21 @@ def test_a_save_with_a_stale_base_version_is_refused_with_the_current_version(si
     assert (stored["name"], stored["version"]) == ("Renamed once", 2)
 
 
+def test_concurrent_saves_of_one_base_version_let_exactly_one_through(signed_in: Page):
+    project = create_project(signed_in, "Raced", flat_document())["id"]
+
+    statuses = signed_in.evaluate(
+        """project => Promise.all([...Array(6).keys()].map(i => fetch(`/api/v1/projects/${project}`, {
+            method: 'PUT', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({name: `Racer ${i}`, base_version: 1}),
+        }).then(r => r.status)))""",
+        project,
+    )
+
+    assert sorted(statuses) == [200] + [409] * 5
+    assert get_project(signed_in, project)["version"] == 2
+
+
 def test_a_save_without_a_base_version_still_overwrites_and_bumps_the_version(signed_in: Page):
     project = create_project(signed_in, "Unversioned", flat_document())["id"]
 
