@@ -380,7 +380,7 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
 
                   // Clear operator-specific fields when changing operators
                   if (['<=', '<', '==', '>', '>=', '!='].includes(newOp)) {
-                    newCondition = { type: 'unary', op: newOp, feature: currentFeature, threshold: 0 };
+                    newCondition = { type: 'unary', op: newOp, feature: currentFeature, threshold: (node.condition as any).threshold ?? 0 };
                   } else if (newOp === 'between') {
                     newCondition = { type: 'unary', op: newOp, feature: currentFeature, min: null, max: null };
                   } else if (newOp === 'isin') {
