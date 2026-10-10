@@ -32,6 +32,7 @@ from dsp_decikit.services.documents import (
     check_document,
     default_project_data,
     detect_project_type,
+    imported_document,
     validation_errors,
 )
 
@@ -766,6 +767,7 @@ async def import_project(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to read file: {str(e)}")
 
+    project_data_dict = imported_document(project_data_dict)
     try:
         detected_type = detect_project_type(project_data_dict)
     except ValueError as e:
