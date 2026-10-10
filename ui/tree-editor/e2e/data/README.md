@@ -31,6 +31,8 @@ not something an export loses: the tests put them back around the export before 
 | `docs-trees-tables-scorecards-fraud` | same page | prioritized, `mode: all` | 3 rules | big_amount | `path_output` |
 | `docs-trees-tables-scorecards-fraud-2` | same page | prioritized | 3 rules | big_amount | `path_output` |
 | `docs-trees-tables-scorecards-afford` | same page | flat_rule | 1 rule | min_surplus | - |
+| `docs-expr-and-flowfile-output` | docs/architecture/configurable-steps/expr-and-flowfile.md (a bare tree document) | flat_rule | 1 rule | - | - |
+| `campaign-scale` | examples/campaign-trees/tests/test_scale.py `random_tree(150, seed=7)` | v3, composites, no positions | 627 nodes | - | `path_output`, `trace_output` |
 | `fraud-live` | examples/transaction-fraud via `fraud_interdiction/rules.py` | prioritized, `mode: all` | 521 rules | - | - |
 | `fraud-shadow` | same | prioritized, `mode: all` | 114 rules | - | - |
 | `fraud-overlay-base` | same | prioritized, `mode: all` | 19 rules | - | - |
@@ -42,11 +44,12 @@ How each kind is found:
   (`test_every_tree_json_file_in_the_repo_is_in_the_list` keeps the list complete). The step document files are
   imported as their `tree` (the round trip) and as the file a user would pick
   (`test_step_document_file_imports_its_tree`).
-- **Docs samples**: what the guide's and the docs' examples pass to `TreeConfig.load`: JSON blocks as written, and
-  Python blocks that call it, run at collection with `TreeConfig` and `pl` in scope (stdout silenced); a block that
-  fails keeps what it loaded first.
+- **Docs samples**: what the guide's and the docs' examples pass to `TreeConfig.load`: JSON blocks as written (a
+  bare tree document wrapped in a step document), and Python blocks that call it, run at collection with
+  `TreeConfig` and `pl` in scope (stdout silenced); a block that fails keeps what it loaded first.
 - **Inline Python**: the transaction-fraud example builds its live, shadow and overlay trees in Python from its
-  `rule_set` document; they are captured from `TreeConfig.load` while the example builds its pipeline.
+  `rule_set` document; they are captured from `TreeConfig.load` while the example builds its pipeline. The
+  campaign example's scale test builds a tree the size its analysts publish; `campaign-scale` is that tree.
 - **Generated**: rule `R0` is `f0 > r0_limit` (a `parameters` block param, the editor's own form); the others cycle
   through the `fraud`, `isin_num`, `or`, `between` and `threshold` shapes of benchmarks/tree_split_sweep.py, so
   they mix `>`, `>=`, `<`, `between`, `isin`, `is_true`, a computed feature and nested `and`/`or`. The 65- and
@@ -61,6 +64,7 @@ How each kind is found:
 | decikit/GUIDE.md `band` (two versions) | only loaded when z3 (the `prove` extra) is installed, so the e2e environment never has it; `docs-guide-risk` is the same one-node v3 shape |
 | examples/transaction-fraud/configs/0.1.0/rule_set.json | a `rule_set` step type, not a tree; its trees are `fraud-*` above, and importing the file is its own test (`test_fraud_rule_set_is_refused_with_a_clear_message`) |
 | docs/architecture/configurable-steps/trees.md first block, docs/architecture/lab/diff.md | they build trees from names defined outside the block (`OUT`, `leaf`, `diff`), so nothing loads |
+| docs/architecture/configurable-steps/expr-and-flowfile.md `RISK` | passed to `load_flow` with a flow project the page does not include; the same two-node v3 shape as `docs-guide-risk` |
 
 ## What a comparison ignores
 

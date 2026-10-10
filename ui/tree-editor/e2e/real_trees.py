@@ -1,7 +1,7 @@
 """Every tree document in the repo, plus generated flat-rule sets: the one list the real-tree tests run over.
 
 Each `RealTree` holds its `TreeConfig` step document (`{"type": "tree", "name": ..., <step settings>, "tree": doc}`);
-`document` is the tree document the editor imports. data/README.md says why each is in the list.
+`document` is the tree document the editor imports.
 """
 
 import contextlib
@@ -99,8 +99,9 @@ def _loads():
 
 
 def _docs() -> list[RealTree]:
-    # A sample is the step document a published example passes to `TreeConfig.load`: JSON blocks as written,
-    # Python blocks run with the names the docs leave implied. A block that fails keeps what it loaded first.
+    # A sample is the step document a published example passes to `TreeConfig.load`: JSON blocks as written (a bare
+    # tree document wrapped), Python blocks run with the names the docs leave implied. A block that fails keeps what
+    # it loaded first.
     pages = [REPO / "decikit/GUIDE.md", *sorted((REPO / "docs").rglob("*.md"))]
     found: dict[str, tuple[str, dict]] = {}
     for page in pages:
@@ -108,6 +109,7 @@ def _docs() -> list[RealTree]:
         for block in re.findall(r"```json\n(.*?)```", text, re.S):
             with contextlib.suppress(Exception):
                 doc = json.loads(block)
+                doc = doc if doc.get("type") == "tree" else _wrapped(doc.get("name") or "tree", doc)
                 TreeConfig.load(doc)
                 found.setdefault(json.dumps(doc, sort_keys=True), (where, doc))
         for block in (b for b in re.findall(r"```python\n(.*?)```", text, re.S) if "TreeConfig.load(" in b):
@@ -121,6 +123,21 @@ def _docs() -> list[RealTree]:
         seen_ids[base] = seen_ids.get(base, 0) + 1
         trees.append(RealTree(base if seen_ids[base] == 1 else f"{base}-{seen_ids[base]}", where, doc))
     return trees
+
+
+def _module(name: str, path: str):
+    spec = importlib.util.spec_from_file_location(name, REPO / path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _campaign_scale() -> list[RealTree]:
+    # The campaign example's scale test builds a tree the size its analysts publish (hundreds of nodes) in Python.
+    sys.path.insert(0, str(REPO / "examples/campaign-trees"))
+    source = "examples/campaign-trees/tests/test_scale.py"
+    return [RealTree("campaign-scale", f"{source} random_tree(150, seed=7)",
+                     _module("campaign_scale", source).random_tree(150, seed=7))]
 
 
 def _fraud_example() -> list[RealTree]:
@@ -142,10 +159,7 @@ SPLIT_SIZES = (65, 521)
 
 @functools.cache
 def _sweep():
-    spec = importlib.util.spec_from_file_location("tree_split_sweep", REPO / "benchmarks/tree_split_sweep.py")
-    sweep = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(sweep)
-    return sweep
+    return _module("tree_split_sweep", "benchmarks/tree_split_sweep.py")
 
 
 def generated(n: int) -> dict:
@@ -179,6 +193,7 @@ EXCLUDED = {
     "docs-guide-band": "only loaded when z3 (the `prove` extra) is installed, so the e2e environment never has it",
     "docs-guide-band-2": "as docs-guide-band",
 }
-TREES: list[RealTree] = [t for t in (*_files(), *_docs(), *_fraud_example(), *_generated()) if t.id not in EXCLUDED]
+TREES: list[RealTree] = [t for t in (*_files(), *_docs(), *_campaign_scale(), *_fraud_example(), *_generated())
+                         if t.id not in EXCLUDED]
 BY_ID = {tree.id: tree for tree in TREES}
 assert len(BY_ID) == len(TREES), "tree ids must be unique"
