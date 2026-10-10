@@ -29,11 +29,13 @@ and serves over HTTP with `decikit serve`.
   Settings ride on the instance: `FusedEngine(strict_compile=True)`. `"polars"`
   (`PolarsEngine`) runs the fused kernels inside a polars `LazyFrame` plan, for
   batches to stream or sink. All engines give the same answers. `p.run` and
-  `p.compile()` follow the default engine, fused when unset;
-  `with decikit.engine("interpreted"):` switches both for a block (instant runs while you edit: a fused `run` binds and builds on every
-  call, so repeat it on a small frame and it is slower than interpreted), or
-  pass `engine=` to one call. `p.session` opens interpreted, and `decikit serve`
-  takes its engine from its own document, not from this default.
+  `p.compile()` follow the default engine, fused when unset, except that
+  `p.run(lazy_frame)` runs on polars; `with decikit.engine("interpreted"):`
+  switches both for a block (instant runs while you edit: a fused `run` binds
+  and builds on every call, so repeat it on a small frame and it is slower than
+  interpreted), or pass `engine=` to one call. `p.session` opens interpreted,
+  and `decikit serve` takes its engine from its own document, not from this
+  default.
 
 ## Which construct for which need
 
@@ -63,7 +65,7 @@ and serves over HTTP with `decikit serve`.
 | structure in a YAML/JSON file, steps in Python | `load_flow`, `DECIKIT_API__PIPELINE=flow.yaml` |
 | immutable config versions | `decikit.config.JsonFileStore` (`ConfigStore`) |
 | why a record got its answer; what-if | `pipeline.session(df)` |
-| a batch larger than memory, streamed or sunk to parquet | `pipeline.compile("polars").run(pl.scan_parquet(...))` |
+| a batch larger than memory, streamed or sunk to parquet | `pipeline.run(pl.scan_parquet(...))`: the polars engine |
 | engines, batch and single record agree | `decikit.lab.testing.assert_equivalent` |
 
 ## Steps, params and run
@@ -974,9 +976,11 @@ on the winner with `evaluate.relabel(reads={"index": "best_index"})`.
 
 ## Large batches: the polars engine
 
-`pipeline.compile("polars")` (or `PolarsEngine()`) runs a pipeline as a polars `LazyFrame` plan. Every
-step still runs on the fused engine's kernels, on each batch polars hands it; polars decides the batches and
-the threads. Collect the result, stream it, or sink it to a file larger than memory.
+`pipeline.run(lazy_frame)` runs a pipeline as a polars `LazyFrame` plan on the polars engine, whatever the
+default engine is; `pipeline.compile("polars")` (or `PolarsEngine()`) binds it once. Every step still runs on
+the fused engine's kernels, on each batch polars hands it; polars decides the batches and the threads. Collect
+the result, stream it, or sink it to a file larger than memory. A numba engine named explicitly
+(`pipeline.run(lazy_frame, engine="fused")`) collects the frame first and returns a `DataFrame`.
 
 ```python
 import polars as pl
@@ -1000,13 +1004,15 @@ pipeline = flow(ratio, approved, rank_income, tier, name="credit")
 pl.DataFrame({"income": [1000.0, 800.0, 4000.0, 2500.0],
               "debt": [500.0, 100.0, 400.0, 200.0]}).write_parquet("applications.parquet")
 
-exe = pipeline.compile("polars")
-plan = exe.run(pl.scan_parquet("applications.parquet"))   # a LazyFrame: nothing has run yet
+plan = pipeline.run(pl.scan_parquet("applications.parquet"))   # a LazyFrame: nothing has run yet
 plan.sink_parquet("decisions.parquet")                     # streamed, batch by batch
 out = pl.read_parquet("decisions.parquet")
 assert out["tier"].to_list() == [1, 1, 2, 2]
 assert out.equals(pipeline.compile("fused").run(pl.read_parquet("applications.parquet")))
 assert plan.collect(engine="streaming").equals(out)
+
+assert pipeline.run(pl.scan_parquet("applications.parquet"), engine="fused").equals(out)   # collected first
+exe = pipeline.compile("polars")                            # bind once, run many plans
 
 # Where the stream breaks: each frame step sees the whole frame, everything else streams.
 assert exe.segments == ((("credit/ratio", "credit/approved"), True), (("credit/rank_income",), False),
