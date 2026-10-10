@@ -6,7 +6,8 @@ nodes). Configurations: `fused-mem`, `fused-io` (eager, the io one reads and wri
 `native-mem`, `native-stream` (hand-written polars) and, for `fallback`,
 `frames-*` (ten frame steps with polars bodies) and `frame1-*` (one frame step); `flagship` also has `copy-stream`, a
 plain scan to sink. Every run is a child process. `E2_ROWGROUP` sets the input parquet row-group size (a separate
-data folder), `E2_CHUNK` the streaming chunk size.
+data folder), `E2_CHUNK` the streaming chunk size,
+`E2_SINGLE=1` reads one merged file instead of a folder of parts.
 
     uv run python benchmarks/polars_engine.py check                       # outputs equal fused, 10k rows
     uv run python benchmarks/polars_engine.py run --sizes 10k 1m --out r.jsonl
@@ -283,6 +284,8 @@ def runner(pipe: str, engine: str):
 def data_path(pipe: str, size: str) -> str:
     # A size above one chunk is a folder of parquet parts read as a glob: merging them needs more memory than the cap.
     tag = "" if ROWGROUP == 1_000_000 else f"-rg{ROWGROUP}"
+    if os.environ.get("E2_SINGLE"):
+        return str(DATA / f"{pipe}-{size}{tag}-single.parquet")
     return (str(DATA / f"{pipe}-{size}{tag}" / "*.parquet") if SIZES[size] > CHUNK
             else str(DATA / f"{pipe}-{size}{tag}.parquet"))
 
@@ -290,6 +293,11 @@ def data_path(pipe: str, size: str) -> str:
 def ensure_data(pipe: str, size: str) -> str:
     path = data_path(pipe, size)
     if glob.glob(path):
+        return path
+    if os.environ.get("E2_SINGLE"):  # the parts merged into one file (the merge needs memory: flagship only)
+        del os.environ["E2_SINGLE"]
+        pl.scan_parquet(ensure_data(pipe, size)).sink_parquet(path, row_group_size=ROWGROUP)
+        os.environ["E2_SINGLE"] = "1"
         return path
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     n = SIZES[size]
