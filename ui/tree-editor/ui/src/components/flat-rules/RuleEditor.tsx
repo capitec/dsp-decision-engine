@@ -30,6 +30,7 @@ import {
   useFlatRuleFocusedNode,
   useFlatRuleRuleErrors,
   useFlatRuleValidationErrors,
+  useFlatRuleSectionErrors,
   useFlatRuleSetTrees,
   useFlatRuleSetExpandedTrees,
   useFlatRuleSetEditingTreeName,
@@ -104,6 +105,7 @@ export const RuleEditor: React.FC<RuleEditorProps> = () => {
   const focusedNode = useFlatRuleFocusedNode();
   const ruleErrors = useFlatRuleRuleErrors();
   const validationErrors = useFlatRuleValidationErrors();
+  const parameterErrors = useFlatRuleSectionErrors().filter(e => e.section === 'parameters');
   const setExpandedTrees = useFlatRuleSetExpandedTrees();
   const setEditingTreeName = useFlatRuleSetEditingTreeName();
   const setFocusedNode = useFlatRuleSetFocusedNode();
@@ -590,6 +592,11 @@ export const RuleEditor: React.FC<RuleEditorProps> = () => {
           </Button>
         </div>
       </div>
+      {parameterErrors.length > 0 && (
+        <div className="text-sm text-red-600" data-testid="parameter-errors">
+          {parameterErrors.map(e => <div key={e.path}>{e.message}</div>)}
+        </div>
+      )}
 
       {/* Search Bar */}
       {trees.length > 0 && (
