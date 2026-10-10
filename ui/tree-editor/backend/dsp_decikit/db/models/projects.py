@@ -108,7 +108,11 @@ class ProjectOp(SQLModel, table=True):
     """One project version: the ops that made it from the one before, and who sent them."""
 
     __tablename__ = "project_ops"
-    __table_args__ = {"schema": "app_schema"}
+    __table_args__ = (
+        # A message resent by a client that never saw its ack is logged once.
+        Index("uq_project_ops_message", "project_id", "client_id", "msg_id", unique=True),
+        {"schema": "app_schema"},
+    )
 
     project_id: uuid.UUID = Field(
         sa_column=Column(UUID, ForeignKey("app_schema.projects.id", ondelete="CASCADE"), primary_key=True)
