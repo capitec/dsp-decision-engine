@@ -22,8 +22,8 @@ def _clean(value):
 def canonical(document: dict) -> dict:
     """`document` without the editor's own additions, numbers as floats; compare with `as_lines`."""
     doc = _clean(document)
-    # The export stamps its own metadata, with the project's name over the document's `name`, which
-    # test_real_tree_export_keeps_the_documents_own_name checks on its own.
+    # The export stamps its own metadata and fills in `name` with the project's when the document has none; a
+    # document's own name is test_real_tree_export_keeps_the_documents_own_name's to check.
     metadata = {k: v for k, v in doc.pop("metadata", {}).items() if k not in EXPORT_STAMP}
     if metadata:
         doc["metadata"] = metadata

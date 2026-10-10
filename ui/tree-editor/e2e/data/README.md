@@ -73,7 +73,7 @@ rest exactly (as sorted-key JSON lines, so a failure shows the differing lines):
 
 | normalised | why |
 |---|---|
-| `metadata.project_id`, `name`, `project_type`, `exported_at`, `decikit_version` | the export stamps them, writing the project's name over the document's own `metadata.name`; `test_real_tree_export_keeps_the_documents_own_name` checks that name on its own (a known failure) |
+| `metadata.project_id`, `name`, `project_type`, `exported_at`, `decikit_version` | the export stamps them, and fills in `name` with the project's name when the document has none; `test_real_tree_export_keeps_the_documents_own_name` checks a document's own name on its own |
 | `id` values that are UUIDs | the flat-rule editor gives every node without an id a random one. decikit names unnamed nodes by path (`"0.1"`), so a `path_output`/`trace_output` over unnamed flat-rule nodes would change; no document here relies on that |
 | keys whose value is `null` | decikit reads `null` and absent alike |
 | numbers as floats | the browser writes `720.0` as `720`; the param schemas (`parameters()`) are compared separately in the run test |
