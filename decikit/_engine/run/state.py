@@ -102,7 +102,12 @@ class State:
             target = self.values[vid] = np.full(self.n, None, object) if values.dtype == object else np.zeros(self.n, values.dtype)
             self.valid[vid] = np.zeros(self.n, bool)
         elif values.dtype == object and target.dtype != object:
-            target = self.values[vid] = target.astype(object)
+            if valid is not None and not valid.any():
+                # Only nulls (an arm that left the name unwritten): keep the typed storage, since as
+                # objects a struct's records turn into tuples, which no reader takes for a struct.
+                values = target[rows]
+            else:
+                target = self.values[vid] = target.astype(object)
         elif values.dtype != object and target.dtype == object and values.dtype.names is not None:
             # A struct carry seeded null (object) is later written as a record; rows still null stay zero records.
             target = self.values[vid] = np.zeros(self.n, values.dtype)
