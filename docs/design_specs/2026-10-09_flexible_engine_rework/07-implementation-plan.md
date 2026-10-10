@@ -274,8 +274,10 @@ without impls on the example flows.
 3. Does a zero-row launch trigger the typing failure that splits a dict-returning kernel? Expected yes;
    decided by the first test in `tests/compile/test_launch_time_split.py` (P2). Closed 2026-10-10: yes, for a
    `TypedDict`, a `dict` and a `list[TypedDict]` return (`NumbaNotImplementedError: Cannot cast DictType...` in
-   native lowering). Built differently from "every `Kernel`": only kernels holding a step whose output no
-   kernel column holds are probed, because probing the others compiled signatures no launch used; see
+   native lowering). Then decided (2026-10-10, pending the owner): a function step that writes a `dict`, a
+   TypedDict or a `list` is a build-time `Fallback` instead, so its neighbours stay compiled and no launch is
+   needed to find it; with that rule a probe found nothing in the 12 examples and was removed, and `on_split`
+   reports the launch-time splits that remain (a `dict` param, a float for a `Decimal`). See
    `docs/design_decisions/decisions/engine.md`, "Fall back to Python only on compile failure".
 
 Settled on 2026-10-09 and recorded in [03-design-choices.md](03-design-choices.md): `stepped` stays
