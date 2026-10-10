@@ -258,7 +258,7 @@ const FieldRow: React.FC<FieldRowProps> = ({
   onRemove
 }) => {
   return (
-    <div className="flex items-center gap-2 p-2 border rounded-lg">
+    <div className="flex items-center gap-2 p-2 border rounded-lg" data-testid="schema-field-row">
       {/* Reorder buttons */}
       {allowReorder && (
         <div className="flex flex-col gap-0.5">
@@ -315,6 +315,7 @@ const FieldRow: React.FC<FieldRowProps> = ({
           variant="ghost"
           size="sm"
           onClick={() => onRemove(index)}
+          data-testid="schema-field-remove"
           className="h-9"
         >
           <Trash2 className="h-4 w-4 text-red-600" />

@@ -49,7 +49,7 @@ const RuleErrorDisplay: React.FC<{ errorMessage: string }> = ({ errorMessage }) 
   const hasMore = errorLines.length > maxVisible;
 
   return (
-    <div className="mt-1 space-y-1">
+    <div className="mt-1 space-y-1" data-testid="rule-errors">
       <div className="flex items-start gap-1.5 text-red-600 text-sm">
         <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
         <div className="flex-1">
@@ -641,6 +641,7 @@ export const RuleEditor: React.FC<RuleEditorProps> = () => {
                   variant="ghost"
                   size="sm"
                   onClick={() => toggleTreeExpansion(tree.id)}
+                  data-testid="rule-toggle"
                   className="h-7 px-2"
                 >
                   {expandedTrees.has(tree.id) ? (
@@ -666,6 +667,7 @@ export const RuleEditor: React.FC<RuleEditorProps> = () => {
                       variant="ghost"
                       size="sm"
                       onClick={() => setEditingTreeName(null)}
+                      data-testid="rule-rename-done"
                       className="h-7 px-2"
                     >
                       <Check className="w-3.5 h-3.5 text-green-600" />
@@ -685,11 +687,12 @@ export const RuleEditor: React.FC<RuleEditorProps> = () => {
                 ) : (
                   <div className="flex flex-col gap-0.5">
                     <div className="flex items-center gap-1.5">
-                      <h3 className="text-base font-semibold">{tree.name}</h3>
+                      <h3 className="text-base font-semibold" data-testid="rule-name">{tree.name}</h3>
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => setEditingTreeName(tree.id)}
+                        data-testid="rule-rename"
                         className="h-6 px-1.5"
                       >
                         <Edit2 className="w-3 h-3" />
@@ -745,6 +748,7 @@ export const RuleEditor: React.FC<RuleEditorProps> = () => {
                   size="sm"
                   onClick={() => moveTree(tree.id, 'up')}
                   disabled={index === 0}
+                  data-testid="rule-move-up"
                   className="h-7 px-2"
                 >
                   <MoveUp className="w-3.5 h-3.5" />
@@ -754,6 +758,7 @@ export const RuleEditor: React.FC<RuleEditorProps> = () => {
                   size="sm"
                   onClick={() => moveTree(tree.id, 'down')}
                   disabled={index === trees.length - 1}
+                  data-testid="rule-move-down"
                   className="h-7 px-2"
                 >
                   <MoveDown className="w-3.5 h-3.5" />
@@ -772,6 +777,7 @@ export const RuleEditor: React.FC<RuleEditorProps> = () => {
                   size="sm"
                   onClick={() => deleteTree(tree.id, tree.name)}
                   disabled={trees.length === 1}
+                  data-testid="rule-delete"
                   className="text-red-600 hover:text-red-700 h-7 px-2"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
