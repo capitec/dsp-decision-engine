@@ -464,5 +464,169 @@
     ]
    ]
   }
+ ],
+ "empty_feature_name": [
+  {
+   "type": "model_type",
+   "loc": [
+    "prioritized_flat_rule",
+    "rules",
+    0,
+    "rule",
+    "unary",
+    "condition",
+    ">",
+    "feature",
+    "function-after[_parse(), ComputedFeature]"
+   ],
+   "msg": "Input should be a valid dictionary or instance of ComputedFeature",
+   "input": "",
+   "ctx": {
+    "class_name": "ComputedFeature"
+   }
+  },
+  {
+   "type": "string_too_short",
+   "loc": [
+    "prioritized_flat_rule",
+    "rules",
+    0,
+    "rule",
+    "unary",
+    "condition",
+    ">",
+    "feature",
+    "constrained-str"
+   ],
+   "msg": "String should have at least 1 character",
+   "input": "",
+   "ctx": {
+    "min_length": 1
+   }
+  }
+ ],
+ "rules_sharing_a_name_in_all_mode": [
+  {
+   "type": "value_error",
+   "loc": [
+    "prioritized_flat_rule"
+   ],
+   "msg": "Value error, rules ['Same'] share a name; in mode 'all' each rule's output columns are prefixed with its name, so give every rule its own",
+   "input": {
+    "name": "output",
+    "mode": "all",
+    "rules": [
+     {
+      "root": "0",
+      "name": "Same"
+     },
+     {
+      "root": "1",
+      "name": "Same"
+     }
+    ],
+    "nodes": {
+     "0.0": {
+      "data": {
+       "type": "leaf",
+       "id": null,
+       "result_idx": 0
+      },
+      "children": []
+     },
+     "0": {
+      "data": {
+       "type": "unary",
+       "id": null,
+       "condition": {
+        "type": "unary",
+        "feature": "x",
+        "threshold": 1,
+        "op": ">"
+       }
+      },
+      "children": [
+       "0.0",
+       null
+      ]
+     },
+     "1.0": {
+      "data": {
+       "type": "leaf",
+       "id": null,
+       "result_idx": 0
+      },
+      "children": []
+     },
+     "1": {
+      "data": {
+       "type": "unary",
+       "id": null,
+       "condition": {
+        "type": "unary",
+        "feature": "x",
+        "threshold": 1,
+        "op": ">"
+       }
+      },
+      "children": [
+       "1.0",
+       null
+      ]
+     }
+    },
+    "output": {
+     "data": [
+      {
+       "Action": "Alert",
+       "Severity": 1,
+       "Tier": "gold"
+      },
+      {
+       "Action": "Block",
+       "Severity": 2,
+       "Tier": "silver"
+      }
+     ],
+     "default": {
+      "Action": "Allow",
+      "Severity": 0,
+      "Tier": "silver"
+     },
+     "dtypes": [
+      [
+       "Action",
+       "string"
+      ],
+      [
+       "Severity",
+       "Int64"
+      ],
+      [
+       "Tier",
+       {
+        "type": "Custom",
+        "type_id": "tier"
+       }
+      ]
+     ],
+     "type_defs": {
+      "tier": {
+       "name": "tier",
+       "type": "categorical",
+       "definition": {
+        "categories": [
+         "gold",
+         "silver"
+        ]
+       }
+      }
+     }
+    }
+   },
+   "ctx": {
+    "error": "rules ['Same'] share a name; in mode 'all' each rule's output columns are prefixed with its name, so give every rule its own"
+   }
+  }
  ]
 }

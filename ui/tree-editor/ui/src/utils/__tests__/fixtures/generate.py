@@ -80,6 +80,10 @@ flat_docs = {
         "output": {"dtypes": "A", "type_defs": {}, "data": [], "default": None},
     },
     "input_schema_entry_malformed": {**flat(unary_rule(UNARY)), "input_schema": [["x"]]},
+    "empty_feature_name": flat(unary_rule({**UNARY, "feature": ""})),
+    "rules_sharing_a_name_in_all_mode": {
+        **flat(), "mode": "all", "rules": [{"meta": {"name": "Same"}, "rule": unary_rule(UNARY)}] * 2
+    },
 }
 cmp_node = unary_node(UNARY)
 tree_docs = {
@@ -109,6 +113,10 @@ tree_docs = {
         [("a", "b", [0]), ("b", "a", [0]), ("a", "l0", [1]), ("b", "l0", [1])],
     ),
     "unknown_child_id": tree({"a": cmp_node, "l0": leaf_node()}, [("a", "l0", [0]), ("a", "ghost", [1])]),
+    "empty_feature_name": tree(
+        {"a": unary_node({**UNARY, "feature": ""}), "l0": leaf_node(), "l1": leaf_node(1)},
+        [("a", "l0", [0]), ("a", "l1", [1])],
+    ),
 }
 
 for name, docs in (("flat-rule-errors", flat_docs), ("tree-errors", tree_docs)):
