@@ -231,8 +231,8 @@ sequenceDiagram
 
 `run` dispatches on its input: a `dict` takes the record path at once, a `pl.LazyFrame` is collected and run as a
 frame, a `pl.DataFrame` takes the frame path, any other `Mapping` takes the record path, and anything else raises
-`TypeError`. The `dict` check comes first because the record path is the serving hot path and the frame and
-`Mapping` checks cost it 4 to 6%.
+`TypeError`. The `dict` check comes first because the record path is the serving hot path: it costs about
+0.06 µs, where the frame and `Mapping` checks would cost about 0.5 µs a record.
 
 `run(record, params=None, trace=None)` takes a dict and returns a dict. When the plan has no frame steps
 (`_record_path`), it never builds a polars frame:
