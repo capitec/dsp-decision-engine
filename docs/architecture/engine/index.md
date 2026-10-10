@@ -36,6 +36,7 @@ builds, and what happens on each call.
 | `boundary/` | `extract.py`, `dtypes.py`, `nulls.py`, `_arrow/` | reading polars columns into typed arrays through Arrow, `MissingInputError` | [Boundary](boundary.md) |
 | `debug/` | `session.py`, `edit.py`, `hot.py`, ... | `Session`, which drives a runner one checkpoint at a time | [Debug](debug.md) |
 | `trace/` | `envelope.py`, `sink.py` | `TraceSink` and the per-record events runners emit | [Trace](trace.md) |
+| `polars/` | `engine.py`, `host.py` | `PolarsEngine`: the fused segments of a pipeline run inside a polars `LazyFrame` plan | [Polars engine](polars.md) |
 | `concurrency.py` | | `Cache` and `once()`, the build-once caches shared by threads | [Concurrency](concurrency.md) |
 | `types.py` | | annotation helpers every layer shares (below) | this page |
 
@@ -52,8 +53,10 @@ page has the full map.
 
 An engine is a settings document in the registry, named by its `type` tag. `Engine` is the abstract root;
 `InterpretedEngine`, `SteppedEngine` and `FusedEngine` (tags `"interpreted"`, `"stepped"`, `"fused"`) are the built-in
-ones, under `NumbaEngine`. `Engine.registered()` gives `{tag: class}` and `Engine.resolve(tag)` the class. `compile` and
-`session` take a tag or an instance (`engine="fused"`, `FusedEngine(strict_compile=True)`).
+ones, under `NumbaEngine`. `PolarsEngine` (`"polars"`) is the other built-in: it runs fused segments inside a polars
+plan and has no session ([Polars engine](polars.md)). `Engine.registered()` gives `{tag: class}` and
+`Engine.resolve(tag)` the class. `compile` and `session` take a tag or an instance (`engine="fused"`,
+`FusedEngine(strict_compile=True)`).
 
 | Setting | Default | Effect |
 |---|---|---|
