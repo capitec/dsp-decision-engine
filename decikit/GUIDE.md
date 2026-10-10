@@ -23,9 +23,11 @@ and serves over HTTP with `decikit serve`.
   a `param()`**: a param ignores the request.
 - **Outputs**: `run` returns the input columns plus every value nothing reads;
   intermediates are dropped unless kept with `.emit("name")`.
-- **Modes**: `p.compile(mode)`: `"interpreted"` (plain Python; what
-  `p.run` uses), `"stepped"` or `"fused"` (numba; `decikit serve`'s default).
-  All modes give the same answers.
+- **Engines**: `p.compile(engine)` takes a tag or an instance:
+  `InterpretedEngine` (`"interpreted"`, plain Python; what `p.run` uses),
+  `SteppedEngine` (`"stepped"`) or `FusedEngine` (`"fused"`, numba;
+  `decikit serve`'s default). Settings ride on the instance:
+  `FusedEngine(strict_compile=True)`. All engines give the same answers.
 
 ## Which construct for which need
 
@@ -468,7 +470,7 @@ store = JsonFileStore(basepath="shadow_configs")
 store.create_version({"params": {"pricing": {"priced": {"ladder": [{"floor": 0, "rate": 0.3}]}}}})
 with warnings.catch_warnings(record=True) as caught:
     warnings.simplefilter("always")
-    RequestHandler(store, flow(priced, name="pricing"), mode="interpreted").stage()
+    RequestHandler(store, flow(priced, name="pricing"), engine="interpreted").stage()
 [shadowed] = [w for w in caught if issubclass(w.category, ShadowedTableWarning)]
 assert "table `ladder` of pricing/priced" in str(shadowed.message) and "`rate_card`" in str(shadowed.message)
 ```
@@ -698,7 +700,7 @@ JSON, CSV or Arrow response can carry it. Declare a TypedDict to have the fields
 step instead.
 
 `@allow_fallback` says you accept that: the warning stops, and
-`Engine(strict_compile=True)` — which otherwise raises on a step that runs in
+`FusedEngine(strict_compile=True)` — which otherwise raises on a step that runs in
 Python — allows it. `fallbacks()` still reports it, marked `@allow_fallback`,
 so it stays visible when you are chasing latency. Put it on a function a step
 *calls* and the step falls back rather than compiling it: an intentional
@@ -708,7 +710,7 @@ Python boundary.
 import warnings
 
 import polars as pl
-from decikit import Engine, FallbackWarning, allow_fallback, flow
+from decikit import FallbackWarning, FusedEngine, allow_fallback, flow
 
 def is_private(sector: str) -> float:        # a str never enters a kernel, so this runs in Python
     return 1.0 if sector == "private" else 0.0
@@ -732,7 +734,7 @@ assert exe.fallbacks() == {
     "p/order_total": "@allow_fallback: reads 'items' as list[dict], which no kernel takes",
 }
 
-strict = Engine(strict_compile=True).bind(flow(order_total, name="q"), mode="fused")
+strict = FusedEngine(strict_compile=True).bind(flow(order_total, name="q"))
 assert strict.run({"items": [{"price": 2.0}]})["order_total"] == 2.0
 ```
 
@@ -746,7 +748,7 @@ tuples and frozensets of those, arrays and frames are data and are fine, as
 are functions and classes. `@allow_fallback` does not silence this warning.
 Put the data in a config document, a `ConfigurableStep` or `CustomFunction`
 field, a `param()` or a `param_table()`, and call a plain function. With
-`Engine(strict_compile=True)` (use it in CI) the warning is an `EngineError`
+`FusedEngine(strict_compile=True)` (use it in CI) the warning is an `EngineError`
 instead, so a build with hidden state fails.
 
 ```python
@@ -769,11 +771,11 @@ with warnings.catch_warnings(record=True) as caught:
 assert [w.category for w in caught] == [HiddenStateWarning]
 assert "q/capped reads Limits `LIMITS` (module global in " in str(caught[0].message)
 
-from decikit import Engine
+from decikit import FusedEngine
 from decikit.exceptions import EngineError
 
 try:
-    Engine(strict_compile=True).bind(flow(capped, name="q"))
+    FusedEngine(strict_compile=True).bind(flow(capped, name="q"))
 except EngineError as e:
     assert "q/capped reads Limits `LIMITS`" in str(e)
 else:
@@ -960,7 +962,7 @@ on the winner with `evaluate.relabel(reads={"index": "best_index"})`.
 
 ```python
 import polars as pl
-from decikit import Engine, describe, flow, param
+from decikit import describe, flow, param
 from decikit.ir import step_map, to_ir
 from decikit.lab.testing import assert_equivalent, corpus, no_recompile
 
@@ -992,7 +994,7 @@ with no_recompile():                     # retuning a param never compiles
     exe.run(df, params={"credit": {"approved": {"limit": 0.9}}})
 
 assert list(step_map(pipeline)) == ["credit/ratio", "credit/approved", "credit"]
-ir = to_ir(pipeline)                     # the checked IR that Engine().bind runs
+ir = to_ir(pipeline)                     # the checked IR that an engine runs
 assert {n.path for n in describe(pipeline).nodes} >= {"credit/ratio", "credit/approved"}   # nodes, edges, value slots
 ```
 
@@ -1019,7 +1021,7 @@ Sessions also `step()`, `step_into()` (branches, loops), `rewind(path)` and
 break on a tree node (`"risk#high"`) or table row (`"band#2"`); see
 `help(decikit.debug.Session)`. `s.events` holds the `decikit.debug` events
 (`Paused`, `NodeFinished`, ...). Test through the decider toolkit
-(`Engine().bind(build())` or the handler), not by calling the functions: only
+(`FusedEngine().bind(build())` or the handler), not by calling the functions: only
 that proves the pipeline wires, builds and serves.
 
 ## Durable ids, tracing, checks, experiments and MCP
