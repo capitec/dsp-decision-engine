@@ -19,7 +19,10 @@ function setup() {
   const sockets: FakeSocket[] = []
   let editor: Json = doc('A')
   const shown: Json[] = []
-  const hooks = { read: () => editor, show: vi.fn((d: Json) => { editor = d; shown.push(d) }), rejected: vi.fn(), settled: vi.fn() }
+  const hooks = {
+    read: () => editor, show: vi.fn((d: Json) => { editor = d; shown.push(d) }), rejected: vi.fn(), settled: vi.fn(),
+    merged: vi.fn(), offlineRejected: vi.fn(),
+  }
   const sync = new LiveSync('ws://x', doc('A'), 1, hooks, 150, () => { const s = new FakeSocket(); sockets.push(s); return s as any })
   const socket = () => sockets[sockets.length - 1]
   socket().onopen()
@@ -88,7 +91,7 @@ describe('LiveSync', () => {
     expect(socket().sent[socket().sent.length - 1]).toMatchObject({ type: 'hello', since: 1 })
   })
 
-  it('after a reconnect resends only the messages the catch-up did not acknowledge, after it is ready', () => {
+  it('after a reconnect sends the messages the catch-up did not acknowledge as one offline batch, after it is ready', () => {
     const { sync, socket, sockets, type } = setup()
     type(doc('First'))
     vi.advanceTimersByTime(150)
@@ -104,7 +107,85 @@ describe('LiveSync', () => {
     expect(socket().ops()).toEqual([])
     socket().receive({ type: 'ready', version: 2 })
 
-    expect(socket().ops().map((m) => m.id)).toEqual([second.id])
-    expect(socket().ops()[0].base).toBe(1)
+    expect(socket().ops()).toEqual([expect.objectContaining({ base: 1, ops: second.ops, offline: true })])
+  })
+
+  function offline(edit: Json) {
+    const s = setup()
+    s.socket().close()
+    s.type(edit)
+    vi.advanceTimersByTime(250)
+    s.socket().onopen()
+    return s
+  }
+
+  it('sends the edits made while disconnected as one offline batch based on the version at the drop', () => {
+    const { sync, socket, type } = offline(doc('Offline'))
+    type(doc('Offline', 'Also offline'))
+    vi.advanceTimersByTime(150)
+    expect(socket().ops()).toEqual([])
+
+    socket().receive({ type: 'applied', version: 2, client_id: 'other', msg_id: 'm', ops: [{ op: 'add', path: '/mode', value: 'all' }] })
+    socket().receive({ type: 'ready', version: 2 })
+
+    const batch = socket().ops()
+    expect(batch).toHaveLength(1)
+    expect(batch[0]).toMatchObject({ base: 1, offline: true, ops: [
+      { op: 'replace', path: '/rules/a/meta/name', value: 'Offline' },
+      { op: 'replace', path: '/rules/b/meta/name', value: 'Also offline' },
+    ] })
+    expect(sync.pending).toHaveLength(1)
+  })
+
+  it('says so when the offline batch is merged', () => {
+    const { sync, hooks, socket } = offline(doc('Offline'))
+    socket().receive({ type: 'ready', version: 1 })
+    const [batch] = socket().ops()
+
+    socket().receive({ type: 'applied', version: 2, client_id: sync.clientId, msg_id: batch.id, ops: batch.ops })
+
+    expect(hooks.merged).toHaveBeenCalled()
+    expect(sync.idle()).toBe(true)
+  })
+
+  it('on a rejected offline batch shows the server document and hands over my version and the conflicts', () => {
+    const { hooks, socket, shown } = offline(doc('Offline'))
+    const theirs = { type: 'applied', version: 2, client_id: 'other', msg_id: 'm', ops: [{ op: 'replace', path: '/rules/a/meta/name', value: 'Theirs' }] }
+    socket().receive(theirs)
+    socket().receive({ type: 'ready', version: 2 })
+    const [batch] = socket().ops()
+
+    socket().receive({ type: 'rejected', msg_id: batch.id, reason: 'overlap', conflicts: ['/rules/a/meta/name'] })
+
+    expect(shown[shown.length - 1]).toEqual(doc('Theirs'))
+    expect(hooks.rejected).not.toHaveBeenCalled()
+    expect(hooks.offlineRejected).toHaveBeenCalledWith({ reason: 'overlap', conflicts: ['/rules/a/meta/name'], doc: doc('Offline') })
+  })
+
+  it('resends an offline batch whose answer was lost under the same id', () => {
+    const { socket } = offline(doc('Offline'))
+    socket().receive({ type: 'ready', version: 1 })
+    const [batch] = socket().ops()
+
+    socket().close()
+    vi.advanceTimersByTime(500)
+    socket().onopen()
+    socket().receive({ type: 'ready', version: 1 })
+
+    expect(socket().ops()).toEqual([batch])
+  })
+
+  it('treats a connection that answers no ping as lost and connects again', () => {
+    const { socket, sockets } = setup()
+    vi.advanceTimersByTime(10000)
+    expect(socket().sent[socket().sent.length - 1]).toEqual({ type: 'ping' })
+    socket().receive({ type: 'pong' })
+    vi.advanceTimersByTime(10000)
+    expect(sockets).toHaveLength(1)
+
+    vi.advanceTimersByTime(10000)
+    vi.advanceTimersByTime(250)
+
+    expect(sockets).toHaveLength(2)
   })
 })
