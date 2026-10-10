@@ -164,11 +164,12 @@ It answers in this order, cheapest first, and stops at the first reason:
    semantic `str`, or a function step writing a `Literal`.
 5. The signature is probed: each input, param and const is typed as the value the kernel will
    pass (`_probe_signature`), and `dispatcher.compile(sig)` runs. Its failure, if any, is cached
-   per `(key, sig)`. A function step whose body compiles but which writes anything but a
-   number, a `Struct` or a `Columnar` (a `dict`, a TypedDict, a `list[...]`) is then refused
-   with `writes '<output>' as <type>, which no kernel stores`: it compiles alone, but no kernel
-   column stores its value, so in a kernel it would fail at launch and take the other steps of
-   the kernel into Python with it. An unannotated output (`Any`) is left to numba.
+   per `(key, sig)`. A function step whose body compiles but which writes a container (a `dict`, a
+   TypedDict, a `list`, a `tuple`, a `set` or a numpy array) is then refused with `writes
+   '<output>' as <type>, which no kernel stores`: it compiles alone, but no kernel column stores
+   its value, so in a kernel it would fail at launch and take the other steps of the kernel into
+   Python with it (an array would be cut to its first element). Any other output (`Any`, a numpy
+   number, a `NewType` of `float`) is left to numba.
 6. Output checks that need the compiled return type: a `Struct[...] | None` output, a `Struct`
    returned as a dict, a `Columnar[...]` returned as a list of dicts, or one declared `| None`.
 7. A `Columnar[...]` input that is OPTIONAL, or read by a row node, runs as a per-row

@@ -141,8 +141,8 @@ which holds the plan, one runner for the mode and the params caches. The three r
   branch or loop of plain scalar steps into one packed kernel when it can. It pauses at kernel boundaries only.
 
 All three give the same answers, and `decikit.lab.testing.assert_equivalent` checks it. A step a kernel can't hold (one reading or
-writing a plain `str`, a `date` or a `list`, or a body numba can't type) runs in Python for that step only and says so
-with a `FallbackWarning`. [Runners](engine/runners.md) traces the driver; [Compilation](engine/compile.md) and
+writing a plain `str`, a `date` or a `list`, or a body numba can't type) runs in Python for that step only, and fused mode
+says so with a `FallbackWarning`. [Runners](engine/runners.md) traces the driver; [Compilation](engine/compile.md) and
 [Kernels](engine/kernels.md) cover what compiling means.
 
 ```python
