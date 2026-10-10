@@ -26,14 +26,9 @@ class RoundTrip:
 SLOW = {"fraud-shadow", "generated-200"}
 # Trees that cannot make the trip at all, so every check of them fails for this reason.
 SINGLE_FLAT_RULE = "the editor refuses a one-rule `flat_rule` document decikit runs (400: project_type is 'tree' ...)"
-NO_POSITION = "a v3 node without `position` (optional in decikit) crashes the tree editor: reading 'x' of undefined"
 CANNOT_TRIP = {
     "docs-trees-tables-scorecards-risk-2": SINGLE_FLAT_RULE,
     "docs-trees-tables-scorecards-afford": SINGLE_FLAT_RULE,
-    "campaign-23": f"{NO_POSITION}; with positions its composite root crashes it too: reading 'logic_op' of undefined",
-    **dict.fromkeys(("bank-bureau-grade", "bank-collections-risk", "bank-fraud-screen", "docs-guide-risk",
-                     "docs-trees-loan-tree", "docs-trees-tables-scorecards-risk",
-                     "docs-debugging-and-testing-risk-tree"), NO_POSITION),
 }
 # Not run: opening them takes the browser past the 3 GB the e2e runs are capped at, which kills the whole run.
 TOO_BIG = {tree_id: "the flat-rule editor renders all 521 rules at once and runs out of memory (3 GB) opening them"

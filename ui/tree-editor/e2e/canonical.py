@@ -45,6 +45,7 @@ def canonical(document: dict) -> dict:
         for node in doc["nodes"]:
             node.pop("position", None)
         for edge in doc.get("edges", []):
+            edge.pop("id", None)
             if not isinstance(edge["data"]["sourceIndex"], list):
                 edge["data"]["sourceIndex"] = [edge["data"]["sourceIndex"]]
     return doc

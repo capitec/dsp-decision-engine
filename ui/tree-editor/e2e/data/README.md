@@ -5,8 +5,9 @@ take through the editor: every tree document in the repo plus generated flat-rul
 one place, `real_trees.py` (`TREES`, `EXCLUDED`); this file says why each is there and what a comparison ignores.
 
 Each tree is a `TreeConfig` step document (`{"type": "tree", "name": ..., <step settings>, "tree": document}`). The
-editor imports and exports `document`; the step settings (`path_output`, `trace_output`, `feature_types`,
-`null_handling`) stay outside it and are put back around the export before it runs.
+editor imports and exports `document` only; the step settings (`path_output`, `trace_output`, `feature_types`,
+`null_handling`) live outside the editor, in the step document around it (`campaign_23.json` is one), so they are
+not something an export loses: the tests put them back around the export before it runs.
 
 ## Inventory
 
@@ -37,9 +38,10 @@ editor imports and exports `document`; the step settings (`path_output`, `trace_
 
 How each kind is found:
 
-- **JSON files**: every tracked `*.json` that `TreeConfig.load` accepts as it is or wrapped, found by scanning the
-  repo. The step document files are imported as their `tree` (the round trip) and as they are
-  (`test_step_document_file_imports_whole_or_is_refused_clearly`).
+- **JSON files**: every `*.json` in the repo that `TreeConfig.load` accepts as it is or wrapped
+  (`test_every_tree_json_file_in_the_repo_is_in_the_list` keeps the list complete). The step document files are
+  imported as their `tree` (the round trip) and as the file a user would pick
+  (`test_step_document_file_imports_its_tree_or_is_refused_clearly`).
 - **Docs samples**: what the guide's and the docs' examples pass to `TreeConfig.load`: JSON blocks as written, and
   Python blocks that call it, run at collection with `TreeConfig` and `pl` in scope (stdout silenced); a block that
   fails keeps what it loaded first.
@@ -74,8 +76,9 @@ rest exactly (as sorted-key JSON lines, so a failure shows the differing lines):
 | `rules[].meta.position` | the flat-rule editor adds `{x: 0, y: 0}` |
 | `parameters: {}`, `output.type_defs: {}` | added empty |
 | v3 `type: ui-tree` / `v3-tree`, `formatVersion: 3` | the tree editor saves every tree as `ui-tree` version 3, which decikit reads as v3 |
-| v3 `nodes[].position` | layout only |
+| v3 `nodes[].position` | layout only; the tree editor lays out nodes that have none |
 | v3 `edges[].data.sourceIndex` as a list | decikit reads `0` as `[0]` |
+| v3 `edges[].id` | decikit never reads it; the tree editor fills in missing ones |
 | `input_schema`, `subtrees` when the source has none | the editor fills them in (decikit never reads `input_schema`; one subtree naming the only root changes nothing). When the source has them they must come back as they were (`own_parts`), and features the editor adds must carry the type decikit reads them as |
 | `parameters_col` | a field decikit never reads; the tree editor drops it |
 
