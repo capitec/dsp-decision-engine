@@ -8,23 +8,23 @@ the reasons are in `docs/design_decisions/decisions/engine.md`.
 
 | Call | Does | Where |
 |---|---|---|
-| `Step.run(df, params, trace)` | `Engine().bind(self).run(...)`, always interpreted | `decider/steps/_base.py:132` |
-| `Step.compile(mode)` | `Engine().bind(self, mode)` | `decider/steps/_base.py:118` |
-| `Step.session(df, params, mode, **engine_kwargs)` | a debug `Session` in `mode` | `decider/steps/_base.py:145` |
-| `Engine(params_validation, strict_compile)` | two settings and nothing else | `decider/_engine/run/engine.py:56` |
-| `Engine.bind(step_or_ir, mode)` | looks `mode` up in `RUNNERS`, resolves the plan, returns an `Executable` | `decider/_engine/run/engine.py:62` |
-| `RUNNERS` | `{"interpreted", "stepped", "fused"}` to runner class; documented as a closed set | `decider/_engine/run/engine.py:33` |
-| `Executable.run(df, params, trace)` | frame in, frame out | `decider/_engine/run/engine.py:194` |
-| `Executable.score(record, params, trace)` | dict in, dict out; builds no polars frame when the plan has no frame steps (`_record_path`, `:131`) | `decider/_engine/run/engine.py:210` |
-| `Executable.fallbacks()` | step path to reason, for steps outside a shared kernel | `decider/_engine/run/engine.py:251` |
-| `Executable.session(df, params)` | a `Session` over the same runner | `decider/_engine/run/engine.py:267` |
+| `Step.run(df, params, trace)` | `Engine().bind(self).run(...)`, always interpreted | `decikit/steps/_base.py:132` |
+| `Step.compile(mode)` | `Engine().bind(self, mode)` | `decikit/steps/_base.py:118` |
+| `Step.session(df, params, mode, **engine_kwargs)` | a debug `Session` in `mode` | `decikit/steps/_base.py:145` |
+| `Engine(params_validation, strict_compile)` | two settings and nothing else | `decikit/_engine/run/engine.py:56` |
+| `Engine.bind(step_or_ir, mode)` | looks `mode` up in `RUNNERS`, resolves the plan, returns an `Executable` | `decikit/_engine/run/engine.py:62` |
+| `RUNNERS` | `{"interpreted", "stepped", "fused"}` to runner class; documented as a closed set | `decikit/_engine/run/engine.py:33` |
+| `Executable.run(df, params, trace)` | frame in, frame out | `decikit/_engine/run/engine.py:194` |
+| `Executable.score(record, params, trace)` | dict in, dict out; builds no polars frame when the plan has no frame steps (`_record_path`, `:131`) | `decikit/_engine/run/engine.py:210` |
+| `Executable.fallbacks()` | step path to reason, for steps outside a shared kernel | `decikit/_engine/run/engine.py:251` |
+| `Executable.session(df, params)` | a `Session` over the same runner | `decikit/_engine/run/engine.py:267` |
 
-`import decider` must not import numba: `Engine` and `Executable` load through `decider/__init__.py`'s
+`import decikit` must not import numba: `Engine` and `Executable` load through `decikit/__init__.py`'s
 module `__getattr__` (`tests/test_imports.py` checks it in a subprocess).
 
 ## One driver, three runners
 
-Every mode is the interpreted driver with compiled calls. `InterpretedRunner` (`decider/_engine/run/runners/interpreted.py`)
+Every mode is the interpreted driver with compiled calls. `InterpretedRunner` (`decikit/_engine/run/runners/interpreted.py`)
 walks the resolved plan: `_node` (`:100`) yields a `before` checkpoint, dispatches on the node class, yields
 `after`; `_call` (`:122`) runs a scalar step row by row in Python; `_frame` (`:433`) hands a frame step the
 frame with every computed name overlaid; `_branch` (`:191`), `_loop` (`:218`) and `_scatter_gather` (`:243`)
@@ -46,7 +46,7 @@ one `Executable` safe from many threads.
 
 ## State
 
-`State` (`decider/_engine/run/state.py`) holds one numpy array per `NodeVersion` plus a validity mask for
+`State` (`decikit/_engine/run/state.py`) holds one numpy array per `NodeVersion` plus a validity mask for
 versions that have nulls. `write(version, values, rows, valid)` (`:72`) scatters into a full-length array;
 `read(version, rows)` (`:109`) returns values and mask on a row subset; `frame_of(base, names, rows)` (`:207`)
 builds the frame a frame step sees; `from_series(s)` (`:297`) turns a polars `Series` into `(values, valid)`.
@@ -54,18 +54,18 @@ builds the frame a frame step sees; `from_series(s)` (`:297`) turns a polars `Se
 
 ## IR calls
 
-`CallNode` (`decider/_engine/ir/nodes.py:25`) has `kind` in `scalar | row | frame`, one `fn`, `inputs`, `outputs`,
+`CallNode` (`decikit/_engine/ir/nodes.py:25`) has `kind` in `scalar | row | frame`, one `fn`, `inputs`, `outputs`,
 `params`, `consts`, and `reference`: the plain-Python twin of a compiled row node. Trees, tables and scorecards
 lower to row nodes whose `fn` is the shared compiled walker and whose `reference` is the Python walker
-(`decider/steps/trees/__init__.py:119-124`). So "one node, two bodies kept equal by tests" already exists; the
+(`decikit/steps/trees/__init__.py:119-124`). So "one node, two bodies kept equal by tests" already exists; the
 rework generalises it.
 
 ## Compile units
 
-`compile_plan(plan, fuse, python)` (`decider/_engine/compile/units.py:214`) returns call id to unit. `Kernel`
+`compile_plan(plan, fuse, python)` (`decikit/_engine/compile/units.py:214`) returns call id to unit. `Kernel`
 (`:22`) and `Fallback` (`:120`) share one contract, `run(values, valid, bundles, n)`. `Fallback.run` (`:147`)
 loops the rows in Python, boxing Decimals and applying `OPTIONAL` masks per row. `compile_call(node)`
-(`decider/_engine/compile/njit.py:121`) returns `(key, callable, reason, declared)`; a non-`None` reason makes
+(`decikit/_engine/compile/njit.py:121`) returns `(key, callable, reason, declared)`; a non-`None` reason makes
 the call a `Fallback` and splits its kernel. Reasons include reading or writing a semantic `str`, a `date`, a
 `list` or `dict`, calling a function without `@helper`, or a body numba refuses.
 
@@ -78,19 +78,19 @@ so it runs in Python under every compiled mode without a word; verified 2026-10-
 `examples/final`, write-up pending in `known-limitations.md` on branch `r2/output-types`. A `Struct[Item]` or
 `Columnar[Item]` return of a tuple compiles. The rework closes this gap (choice 20, P2).
 
-`@allow_fallback` (`decider/steps/_helpers.py`) sets a marker attribute on the function object; the compiler
+`@allow_fallback` (`decikit/steps/_helpers.py`) sets a marker attribute on the function object; the compiler
 reads it through `allows_fallback` (an allowlisted private import, `_engine.compile.njit -> steps._helpers`).
 This marker-on-the-function pattern is what polars bodies reuse.
 
 ## Steps
 
-`FunctionStep` (`decider/steps/_function.py:18`) is a frozen, slotted dataclass: `name`, `fn`, `outputs`,
+`FunctionStep` (`decikit/steps/_function.py:18`) is a frozen, slotted dataclass: `name`, `fn`, `outputs`,
 `nogil`, `reads`, `writes`, `bound`, `id`, `suppress_checks`. `__call__` (`:43`) runs the plain function with
 param defaults; `to_ir` (`:59`) harvests the signature and builds a scalar `CallNode`; `step()` (`:71`) is the
-constructor and decorator. `FrameStep` (`decider/steps/_frame.py:16`) wraps `fn(df, **params) -> df` and is
+constructor and decorator. `FrameStep` (`decikit/steps/_frame.py:16`) wraps `fn(df, **params) -> df` and is
 already polars-native; `inputs`/`outputs` of `None` mean unknown lineage, a wiring barrier.
 
-`harvest(fn, outputs)` (`decider/_engine/params/harvest.py:28`) reads inputs, params and outputs from a
+`harvest(fn, outputs)` (`decikit/_engine/params/harvest.py:28`) reads inputs, params and outputs from a
 signature: `x: float` required, `x: float | None` optional, `x: float = missing_as(0.0)` filled,
 `x: float = param(...)` a param.
 
@@ -106,30 +106,30 @@ Two places show the Series-to-State conversions and the whole-frame handling the
 
 ## Registry
 
-`BaseRegistryModule` (`decider/_registry.py`): `class Root(BaseRegistryModule, root=True, group="x")` opens a
+`BaseRegistryModule` (`decikit/_registry.py`): `class Root(BaseRegistryModule, root=True, group="x")` opens a
 registry; every concrete subclass registers under its import path and its `type: Literal["alias"]`;
-`Root.resolve(tag)` imports lazy aliases and `decider.<group>` entry points on a miss and returns only
+`Root.resolve(tag)` imports lazy aliases and `decikit.<group>` entry points on a miss and returns only
 classes registered under that root; `ref(Root)` is a pydantic field type that dispatches on `type`. Seven roots
 exist (`ConfigurableStep`, `ConfigStore`, `DatasetProvider`, `Check`, `Metric`, `Plot`, `Block`).
 
-`DeciderConfigSettings.get()` (`decider/_settings.py`) builds a `ConfigStore` from a settings document's `type`
+`DecikitConfigSettings.get()` (`decikit/_settings.py`) builds a `ConfigStore` from a settings document's `type`
 plus its extra fields: `ConfigStore.resolve(self.type).model_validate(self.model_dump())`. The engine registry
 copies this.
 
 ## Serving
 
-`RequestHandler.mode: str = "fused"` (`decider/serving/_handler.py:95`); `stage()` binds
+`RequestHandler.mode: str = "fused"` (`decikit/serving/_handler.py:95`); `stage()` binds
 `Engine().bind(self.pipeline_fn(config), mode=self.mode)` (`:128`) and `score`s at `:218` and `:238`. The mode
-comes from `APISettings.mode` (`decider/_settings.py`, env `DECIDER_API__MODE`, CLI `decider serve --mode`).
+comes from `APISettings.mode` (`decikit/_settings.py`, env `DECIKIT_API__MODE`, CLI `decikit serve --mode`).
 `strict_compile` and `params_validation` cannot be set from settings at all.
 
 ## Lab and tooling
 
-- `assert_equivalent(step, frame, params, modes=MODES, script)` (`decider/lab/testing/_equivalence.py:15`)
+- `assert_equivalent(step, frame, params, modes=MODES, script)` (`decikit/lab/testing/_equivalence.py:15`)
   with `MODES = ("interpreted", "stepped", "fused")` hard-coded (`:12`). Per mode: `run(frame)` equals the
   first mode's; `score(record)` per row equals that row of `run`; a session resumed to the end equals `run`;
   a scripted session equals across modes.
-- `capabilities().modes` lists `RUNNERS` for the editor bridge (`decider/_tooling/bridge/protocol.py:69`,
+- `capabilities().modes` lists `RUNNERS` for the editor bridge (`decikit/_tooling/bridge/protocol.py:69`,
   allowlisted private import).
 - `docs/architecture/package-layout.md:381`: "Execution modes are a closed set (`RUNNERS`), and so are the IR
   node types."

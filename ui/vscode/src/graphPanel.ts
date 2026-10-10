@@ -1,9 +1,9 @@
 import * as vscode from "vscode";
-import type { FromUI, ToUI } from "@decider/ui";
+import type { FromUI, ToUI } from "@decikit/ui";
 
 export type FromPanel = FromUI | { type: "selected"; path: string | undefined };
 
-/** The flow panel: @decider/ui's graph in a webview. Messages wait until it is ready. */
+/** The flow panel: @decikit/ui's graph in a webview. Messages wait until it is ready. */
 export class GraphPanel {
   private static current: GraphPanel | undefined;
   private panel: vscode.WebviewPanel;
@@ -24,7 +24,7 @@ export class GraphPanel {
 
   private constructor(ctx: vscode.ExtensionContext, onMessage: (m: FromPanel) => void) {
     const dist = vscode.Uri.joinPath(ctx.extensionUri, "dist", "webview");
-    this.panel = vscode.window.createWebviewPanel("decider.graph", "decider: flow", { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true }, {
+    this.panel = vscode.window.createWebviewPanel("decikit.graph", "decikit: flow", { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true }, {
       enableScripts: true,
       retainContextWhenHidden: true,
       localResourceRoots: [dist],

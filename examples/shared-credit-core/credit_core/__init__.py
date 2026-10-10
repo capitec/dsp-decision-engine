@@ -1,6 +1,6 @@
 """credit_core: the shared credit decision library.
 
-Each capability is a module of decider steps and plain functions; import the module you need
+Each capability is a module of decikit steps and plain functions; import the module you need
 (`from credit_core import rate_card`). The pipeline in `credit_core.pipeline` composes them into a Flex Loan quote.
 
 Capability                  Module

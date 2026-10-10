@@ -4,13 +4,13 @@ import warnings
 
 import pytest
 
-from decider import branch, dag, flow, param, step
-from decider.lab import (CONTRACT_VERSION, describe, EdgeRef, FlowDescription, FlowRef, RecordRef, resolve_step,
+from decikit import branch, dag, flow, param, step
+from decikit.lab import (CONTRACT_VERSION, describe, EdgeRef, FlowDescription, FlowRef, RecordRef, resolve_step,
                          StepRef, ValueSlotRef)
-from decider._tooling.bridge.protocol import capabilities
-from decider._tooling.bridge.schema import json_schema, typescript
-from decider.lab._refs import check_version
-from decider.exceptions import DeciderError
+from decikit._tooling.bridge.protocol import capabilities
+from decikit._tooling.bridge.schema import json_schema, typescript
+from decikit.lab._refs import check_version
+from decikit.exceptions import DecikitError
 
 
 def ratio(disposable_income: float, instalment: float) -> float:
@@ -100,7 +100,7 @@ def test_unresolved_durable_reference_warns_and_keeps_metadata():
 def test_check_version_rejects_a_newer_contract():
     check_version(None)
     check_version(CONTRACT_VERSION)
-    with pytest.raises(DeciderError):
+    with pytest.raises(DecikitError):
         check_version(str(int(CONTRACT_VERSION) + 1))
 
 
@@ -108,7 +108,7 @@ def test_json_schema_is_versioned_and_self_contained():
     schema = json_schema()
     assert schema["contract_version"] == CONTRACT_VERSION
     assert "StepRef" in schema["$defs"]
-    assert "FlowDescription" in schema["$defs"] or schema["title"] == "decider static-flow contract"
+    assert "FlowDescription" in schema["$defs"] or schema["title"] == "decikit static-flow contract"
 
 
 def test_typescript_generates_every_reference_type():

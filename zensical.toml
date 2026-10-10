@@ -1,5 +1,5 @@
 [project]
-site_name = "Decider"
+site_name = "Decider toolkit"
 site_description = "Build, serve and inspect decision pipelines"
 site_url = "https://capitec.github.io/dsp-decision-engine/"
 repo_url = "https://github.com/capitec/dsp-decision-engine"
@@ -86,8 +86,8 @@ extra_javascript = [
 ]
 
 [project.theme]
-logo = "assets/decider-icon.png"
-favicon = "assets/decider-icon.png"
+logo = "assets/decikit-icon.png"
+favicon = "assets/decikit-icon.png"
 features = [
   "content.code.copy",
   "content.tooltips",

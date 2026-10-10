@@ -1,6 +1,6 @@
 """Personal loan: unsecured, 6 to 84 months. Pricing: the base rate by term, a loading by risk grade, fees by amount, capped by regulation."""
-from decider import dag, flow, param, step
-from decider.steps.tables import DecisionTableConfig
+from decikit import dag, flow, param, step
+from decikit.steps.tables import DecisionTableConfig
 
 pl_base_rates = DecisionTableConfig(
     name="pl_base_rates",

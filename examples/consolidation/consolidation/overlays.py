@@ -9,8 +9,8 @@ from datetime import date
 from typing import Any, Literal, Mapping
 
 from credit_core.adjustments import Overlay, evaluate
-from decider import ConfigurableStep
-from decider.exceptions import IRError
+from decikit import ConfigurableStep
+from decikit.exceptions import IRError
 from pydantic import model_validator
 
 

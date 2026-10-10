@@ -2,7 +2,7 @@
 import json
 from pathlib import Path
 
-from decider import ConfigurableStep
+from decikit import ConfigurableStep
 
 CONFIGS = Path(__file__).resolve().parents[1] / "configs"
 

@@ -1,9 +1,9 @@
 """prove: identical only from equal IR content hashes; everything else is "can't tell"."""
 import numpy as np
 
-from decider import ConfigurableStep, ParamTable, Value, flow, param_table
-from decider.lab import diff
-from decider.steps.trees import TreeConfig
+from decikit import ConfigurableStep, ParamTable, Value, flow, param_table
+from decikit.lab import diff
+from decikit.steps.trees import TreeConfig
 
 
 def net(a: float, b: float) -> float:
@@ -126,6 +126,6 @@ def _uses_thing(x: float) -> float:
 
 
 def test_a_hash_never_reads_an_identity_keyed_global_as_equal():
-    from decider.lab.diff._hash import snapshot
+    from decikit.lab.diff._hash import snapshot
 
     assert snapshot(flow(_uses_thing, name="g")).hash != snapshot(flow(_uses_thing, name="g")).hash

@@ -1,19 +1,19 @@
 # Data
 
-`decider.lab.data` gets data into the lab and the editors. It reads one file into a polars frame, finds a
+`decikit.lab.data` gets data into the lab and the editors. It reads one file into a polars frame, finds a
 project's named datasets and the provider behind each one, checks record keys, and wraps a loaded frame with
 the schema, row count and content fingerprint that a run records. The user-level walkthrough is in the
 [data and datasets guide](../../guides/data-and-datasets.md); this page covers how it works.
 
 | File | What it holds |
 |---|---|
-| `decider/lab/data/__init__.py` | The public names: `read`, `scan`, `datasets`, `dataset`, `DatasetProvider`, `FileProvider`, `FolderProvider`, `LoadedData`, `InputFingerprint` and the error classes |
-| `decider/lab/data/_formats.py` | `format_of` (suffix to format) and `scan` (format to polars reader): the one table every reader uses |
-| `decider/lab/data/_load.py` | `read`, `LoadedData`, `InputFingerprint`, `LoadError` and the frame fingerprint |
-| `decider/lab/data/_keys.py` | `suggest_key`, `check_key` and the `RecordKeyError` family |
-| `decider/lab/data/_providers/base.py` | `DatasetProvider`, the registry root for one dataset, and `DatasetError` |
-| `decider/lab/data/_providers/files.py` | The two built-in providers, `FileProvider` (`type: file`) and `FolderProvider` (`type: folder`) |
-| `decider/lab/data/_providers/catalog.py` | `project_root`, `datasets_folder`, `dataset_documents`, `datasets`, `dataset`: finding and validating the catalogue |
+| `decikit/lab/data/__init__.py` | The public names: `read`, `scan`, `datasets`, `dataset`, `DatasetProvider`, `FileProvider`, `FolderProvider`, `LoadedData`, `InputFingerprint` and the error classes |
+| `decikit/lab/data/_formats.py` | `format_of` (suffix to format) and `scan` (format to polars reader): the one table every reader uses |
+| `decikit/lab/data/_load.py` | `read`, `LoadedData`, `InputFingerprint`, `LoadError` and the frame fingerprint |
+| `decikit/lab/data/_keys.py` | `suggest_key`, `check_key` and the `RecordKeyError` family |
+| `decikit/lab/data/_providers/base.py` | `DatasetProvider`, the registry root for one dataset, and `DatasetError` |
+| `decikit/lab/data/_providers/files.py` | The two built-in providers, `FileProvider` (`type: file`) and `FolderProvider` (`type: folder`) |
+| `decikit/lab/data/_providers/catalog.py` | `project_root`, `datasets_folder`, `dataset_documents`, `datasets`, `dataset`: finding and validating the catalogue |
 
 `data` imports nothing else from the lab, so `checks`, `diff` and `experiments` can all build on it (see
 [the lab overview](index.md)).
@@ -65,7 +65,7 @@ Every exception on the way, including the reader's own, is caught and re-raised 
 empty. These are the real messages:
 
 ```python
-from decider.lab.data import LoadError, read
+from decikit.lab.data import LoadError, read
 
 print(read(b'{"income": 1000.0}\n{"income": 500.0}\n', format="json").height)   # 2
 read("missing.parquet")
@@ -84,7 +84,7 @@ LoadError: could not load '': no data format given; pass format='json'|'csv'|'pa
 ## Named datasets
 
 A project keeps its named datasets in one folder. Every client of the catalogue (the editor's Datasets view, the
-`--data` option of `decider check` and `decider diff`, an experiment's `input.dataset`) resolves names the same way.
+`--data` option of `decikit check` and `decikit diff`, an experiment's `input.dataset`) resolves names the same way.
 
 ```mermaid
 flowchart TD
@@ -108,15 +108,15 @@ flowchart TD
 
 ### Where the folder is
 
-`DeciderSettings.datasets_path` defaults to `"${PROJECT_ROOT}/datasets"`. The settings class reads environment
-variables with the prefix `Decider_`, case-insensitively, so `DECIDER_DATASETS_PATH` overrides it.
+`DecikitSettings.datasets_path` defaults to `"${PROJECT_ROOT}/datasets"`. The settings class reads environment
+variables with the prefix `Decikit_`, case-insensitively, so `DECIKIT_DATASETS_PATH` overrides it.
 `${PROJECT_ROOT}` is the only placeholder, and `datasets_folder(start, path)` expands it with
 `project_root(start)`: the nearest ancestor of `start` (a file or a directory, default the cwd) that holds a
-`configs/` directory, the same rule `decider serve` uses to find a project. With no such ancestor it falls back to
+`configs/` directory, the same rule `decikit serve` uses to find a project. With no such ancestor it falls back to
 the cwd. Any other relative path is relative to the cwd.
 
 The default goes through the project root because the VS Code extension launches Python with the cwd set to the
-flow file's directory, which may be deep inside the project. One trap: `decider serve`
+flow file's directory, which may be deep inside the project. One trap: `decikit serve`
 loads `.env` with python-dotenv, which expands `${...}` even inside single quotes, so writing `${PROJECT_ROOT}`
 in a `.env` turns into an empty string (`/datasets`). Use an absolute or cwd-relative path there.
 
@@ -234,9 +234,9 @@ classDiagram
 
 `DatasetProvider` is a `BaseRegistryModule` root (the same registry machinery behind checks, configurable steps, config stores and experiment metrics; see
 [Foundation](../foundation.md)) with `extra="forbid"`. Subclasses are named by a `type` alias or by import path.
-The two built-ins are registered lazily: `file` and `folder` map to `decider.lab.data._providers.files`, which is
+The two built-ins are registered lazily: `file` and `folder` map to `decikit.lab.data._providers.files`, which is
 imported only when one of them is resolved. A client class such as a Redshift or Athena table is named in
-`config.json` by `"package.module:Class"` and imported on demand; it reads its own credentials. Decider does no
+`config.json` by `"package.module:Class"` and imported on demand; it reads its own credentials. The decider toolkit does no
 `${VAR}` substitution for it.
 
 Only `scan()` is abstract. The rest have defaults built on it:
@@ -253,7 +253,7 @@ A subclass that overrides `fingerprint` changes what a run manifest binds:
 ```python
 import typing as t
 import polars as pl
-from decider.lab.data import DatasetProvider
+from decikit.lab.data import DatasetProvider
 
 class Bureau(DatasetProvider):
     type: t.Literal["bureau"] = "bureau"
@@ -333,7 +333,7 @@ ending in `_id`, else the first starting with `id_`, else `None`. It never check
 | `MissingRecordKeyError` | any key value is null | `2 record(s) have a null value in the key columns ['client_id']` |
 | `DuplicateRecordKeyError` | two rows share a key | `the key columns ['application_id'] do not uniquely identify every record` |
 
-All three subclass `RecordKeyError`, which is both a `DeciderError` and a `ValueError` and maps to HTTP 400. An
+All three subclass `RecordKeyError`, which is both a `DecikitError` and a `ValueError` and maps to HTTP 400. An
 empty key passes. A provider's `key` replaces the suggestion and is checked on every `load()`:
 
 ```text
@@ -360,7 +360,7 @@ pydantic private attribute so `model_dump()` never includes data. `frame`, `colu
 `fingerprint` are read-only properties. `LoadedData.from_frame(frame, dataset="", suggested_key=None,
 fingerprint=None)` builds one from any frame, computing the fingerprint when none is passed.
 
-The default fingerprint is a SHA-256 over the bytes `decider-frame-v1\n`, then `str(frame.schema)`, then
+The default fingerprint is a SHA-256 over the bytes `decikit-frame-v1\n`, then `str(frame.schema)`, then
 `frame.hash_rows()` as raw bytes. Consequences:
 
 - It is sensitive to column names, dtypes, column order and row order. The same rows in a different order are a
@@ -374,7 +374,7 @@ Who builds them:
 | Caller | How |
 |---|---|
 | `DatasetProvider.load()` | `from_frame` with the provider's name, key and `fingerprint()` |
-| `decider/_tooling/bridge/rows.py` (`load_rows`) | A path goes through `read`, named after the file, with `suggest_key`; inline rows are wrapped with no name and no key |
+| `decikit/_tooling/bridge/rows.py` (`load_rows`) | A path goes through `read`, named after the file, with `suggest_key`; inline rows are wrapped with no name and no key |
 | Experiment manifests | An eager frame gets `from_frame(...).summary`; a lazy input gets an `InputFingerprint` with the schema and row count but no content fingerprint |
 | The bridge `Status` reply | Carries the `InputFingerprint` of the data a debug session started on |
 
@@ -382,18 +382,18 @@ Who builds them:
 
 | Class | Bases | Raised by |
 |---|---|---|
-| `LoadError` | `DeciderError` (HTTP 400) | `read`, for every failure |
-| `DatasetError` | `DeciderError`, `ValueError` (HTTP 400) | the catalogue and the built-in providers |
-| `RecordKeyError` and its three subclasses | `DeciderError`, `ValueError` (HTTP 400) | `check_key`, through `load()` |
+| `LoadError` | `DecikitError` (HTTP 400) | `read`, for every failure |
+| `DatasetError` | `DecikitError`, `ValueError` (HTTP 400) | the catalogue and the built-in providers |
+| `RecordKeyError` and its three subclasses | `DecikitError`, `ValueError` (HTTP 400) | `check_key`, through `load()` |
 | `ValueError` | | `scan(path)` with no known format |
 
 ## Who uses it
 
-- The editor bridge's dataset commands in `decider/_tooling/bridge/datasets.py`: `datasets(file)` lists names,
+- The editor bridge's dataset commands in `decikit/_tooling/bridge/datasets.py`: `datasets(file)` lists names,
   types, keys and local paths, and calls `dataset(name)` per entry only to read its key, catching the error so one
   bad entry shows its message without hiding the rest; `dataset_schema` returns columns and, for Parquet only, a
   row count; `dataset_head` returns the first rows.
-- `decider check --data` and `decider diff --data` take a path or a dataset name: an existing path goes through
+- `decikit check --data` and `decikit diff --data` take a path or a dataset name: an existing path goes through
   `read`, anything else through `dataset(name).load().frame`.
 - The MCP `check_report` tool takes `data` as a path and reads it with `read`; it does not resolve dataset names.
 - Experiments read `input.dataset` through `dataset(name, start=definition_file).scan()` (see

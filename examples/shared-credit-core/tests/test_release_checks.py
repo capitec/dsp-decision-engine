@@ -2,8 +2,8 @@
 import json
 import warnings
 
-from decider import ConfigurableStep, Engine, HiddenStateWarning
-from decider.lab import diff
+from decikit import ConfigurableStep, Engine, HiddenStateWarning
+from decikit.lab import diff
 
 from credit_core.pipeline import build
 

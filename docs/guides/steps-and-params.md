@@ -8,7 +8,7 @@ A function becomes a step the moment you put it in a `flow`. Its arguments are t
 
 ```python
 import polars as pl
-from decider import flow, missing_as, param, step
+from decikit import flow, missing_as, param, step
 
 def disposable(income: float, expenses: float = missing_as(0.0)) -> float:
     return income - expenses
@@ -120,16 +120,16 @@ A step can return `None` when its output is declared `T | None`; the output colu
 A required input that is null, or a column that is not there at all, raises `MissingInputError`. The message names the input, the step and how many rows are affected:
 
 ```python
-from decider import DeciderError
+from decikit import DecikitError
 
 try:
     credit.run(pl.DataFrame({"income": [1000.0, None], "debt": [1.0, 2.0]}))
-except DeciderError as e:
+except DecikitError as e:
     print(type(e).__name__, e)
 
 try:
     credit.compile().score({"income": 1000.0})
-except DeciderError as e:
+except DecikitError as e:
     print(type(e).__name__, e)
 ```
 
@@ -182,7 +182,7 @@ print(credit.run(df, params=params)["limit"].to_list())
 Validation happens once per document, before any row runs. `validate` returns a `Validation`; `.errors` lists the problems and `.check()` raises `ParamsError`:
 
 ```python
-from decider.exceptions import ParamsError
+from decikit.exceptions import ParamsError
 
 bad = {"credit": {"base_limit": {"multiple": -1}}}
 print(credit.parameters().validate(bad).errors)
@@ -265,7 +265,7 @@ A parameter whose value is a table of rows (a rate ladder, fee caps) is a `param
 
 ### Request data is never a param
 
-A param holds policy that is the same for every record. A value that arrives with the request is a plain argument. If a record or frame carries a column named like a param, decider ignores it and warns once:
+A param holds policy that is the same for every record. A value that arrives with the request is a plain argument. If a record or frame carries a column named like a param, the decider toolkit ignores it and warns once:
 
 ```python
 import warnings
@@ -330,8 +330,8 @@ flowchart LR
 Written order is execution order. A flow that reads a name before the step that writes it raises a `WiringError` when it is wired, before any data is read:
 
 ```python
-from decider import dag
-from decider.exceptions import WiringError
+from decikit import dag
+from decikit.exceptions import WiringError
 
 def affordable(ratio: float, max_ratio: float = param(0.4)) -> bool:
     return ratio <= max_ratio
@@ -353,7 +353,7 @@ w/affordable reads 'ratio' as an input column, but w/ratio, which runs later, wr
 `dag` sorts its members by dependency instead, so the order you write them in does not matter. Each name has exactly one writer in a dag, and two writers is an error whose fix depends on whether one refines the other:
 
 ```python
-from decider.ir import to_ir
+from decikit.ir import to_ir
 
 d = dag(affordable, ratio, name="d")
 print([node.origin.path for node in to_ir(d).children_])
@@ -419,7 +419,7 @@ print(credit.drop("expenses").run(df).columns)
 ['income', 'debt', 'band', 'band_score', 'limit']
 ```
 
-`score(record)` takes one dict and returns one dict: the record's own keys plus the outputs. Values come back as Python objects: `float`, `int`, `bool`, and decider's `Decimal` or `Currency` for money.
+`score(record)` takes one dict and returns one dict: the record's own keys plus the outputs. Values come back as Python objects: `float`, `int`, `bool`, and the decider toolkit's `Decimal` or `Currency` for money.
 
 ```python
 exe = credit.compile("fused")
@@ -438,13 +438,13 @@ print(exe.score({"income": 1000.0, "debt": 600.0}, params))
 |---|---|---|
 | takes | a polars `DataFrame` | a `dict` |
 | returns | a `DataFrame` | a `dict` |
-| used by | analysis, back-tests, experiments, `assert_equivalent` | `decider serve`, the request handler |
+| used by | analysis, back-tests, experiments, `assert_equivalent` | `decikit serve`, the request handler |
 | params | `run(df, params=doc)` | `score(record, doc)` |
 
 A column in the input that the pipeline itself produces is refused, so neither value silently hides the other:
 
 ```python
-from decider.exceptions import EngineError
+from decikit.exceptions import EngineError
 
 try:
     credit.run(df.with_columns(dti=pl.lit(0.1)))
@@ -488,7 +488,7 @@ A misspelt relabel key is caught when you call `relabel`, with a suggestion: `Wi
 A step may call other functions. In a compiled mode numba has to compile those too, so mark each one with `@helper` and the input and output types it is called with. The step then stays in the kernel:
 
 ```python
-from decider import helper
+from decikit import helper
 
 @helper(signatures=[((float,), float)])
 def discounted(price: float) -> float:
@@ -509,11 +509,11 @@ Without `@helper`, numba may still compile the call (an `@overload` or a support
 
 ## Rounding
 
-`round(x, 2)` inside a step rounds the exact value of the double, half to even, exactly as CPython does, in every mode. `2.675` is stored as 2.67499999..., so it rounds to `2.67`. For any other rounding rule call `decimal.round` from `decider.ops`. Its `mode` is `Rounding.HALF_UP` (the default, ties away from zero), `Rounding.HALF_EVEN` or `Rounding.DOWN` (toward zero), and it runs the same in Python and inside a kernel.
+`round(x, 2)` inside a step rounds the exact value of the double, half to even, exactly as CPython does, in every mode. `2.675` is stored as 2.67499999..., so it rounds to `2.67`. For any other rounding rule call `decimal.round` from `decikit.ops`. Its `mode` is `Rounding.HALF_UP` (the default, ties away from zero), `Rounding.HALF_EVEN` or `Rounding.DOWN` (toward zero), and it runs the same in Python and inside a kernel.
 
 ```python
-from decider.ops import decimal
-from decider.ops.decimal import Rounding
+from decikit.ops import decimal
+from decikit.ops.decimal import Rounding
 
 def inst(amount: float) -> float:
     return round(amount / 3, 2)
@@ -567,7 +567,7 @@ True
 | `TypeError: unsupported operand type(s) for |: 'function' and 'function'` | `f | g` on two plain functions | `step(f) | g` or `flow(f, g)` |
 | warning: `'multiple' is a param, not an input, so its value in the record or frame is ignored` | request data carries a param's name | pass it in the params document, or make it a plain argument if it really is request data |
 
-The first eight rows are subclasses of `DeciderError`, so `except DeciderError` catches all of them in one place.
+The first eight rows are subclasses of `DecikitError`, so `except DecikitError` catches all of them in one place.
 
 ## Where to go next
 

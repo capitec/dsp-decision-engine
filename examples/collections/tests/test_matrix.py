@@ -2,7 +2,7 @@ import copy
 from datetime import date
 
 import pytest
-from decider import Engine, dag
+from decikit import Engine, dag
 
 from collections_treatment import matrix, vocab as v
 from collections_treatment.overlays import in_dag

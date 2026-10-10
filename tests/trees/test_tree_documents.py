@@ -2,9 +2,9 @@ import polars as pl
 import pydantic
 import pytest
 
-from decider.steps.trees import TreeConfig
+from decikit.steps.trees import TreeConfig
 
-from decider.steps.trees.schema import (
+from decikit.steps.trees.schema import (
     CasesRanges,
     FlatRuleDocument,
     LeafNode,
@@ -21,7 +21,7 @@ from decider.steps.trees.schema import (
     detect_format,
     load_document,
 )
-from decider.steps._values import ParamRef
+from decikit.steps._values import ParamRef
 
 OUTPUT = {
     "data": [{"r": "low"}, {"r": "mid"}, {"r": "high"}, {"r": "adult"}],

@@ -13,7 +13,7 @@ which a session pauses inside trees. Under the new default:
   executable. Interpreted ran them without a word. Pipelines with many such steps get noisy until the author
   adds `@allow_fallback` or switches engine.
 - `GUIDE.md` examples and tests that rely on interpreted behaviour (tree `visit` in a session, instant runs)
-  must say `engine="interpreted"` or run inside `with decider.engine("interpreted")`.
+  must say `engine="interpreted"` or run inside `with decikit.engine("interpreted")`.
 
 Mitigation: the context manager is one line; the guide shows it first. `assert_equivalent` is unaffected
 (explicit engines). The warnings stay on by decision (2026-10-09): they are true, once per step per
@@ -24,7 +24,7 @@ the default.
 ## A launch-time kernel split is silent today
 
 `Kernel.run` catches `FALLBACK_ERRORS` at the first launch and runs the kernel's calls one by one in Python
-from then on (`decider/_engine/compile/units.py:102-109`). Nothing warns, `fallbacks()` does not list it and
+from then on (`decikit/_engine/compile/units.py:102-109`). Nothing warns, `fallbacks()` does not list it and
 `strict_compile` does not raise, so a step returning a `dict`, a `TypedDict` or `list[TypedDict]` runs in
 Python under the fused engine without anyone knowing: 0.4 to 2.9 s per 100k rows against 0.10 s for a
 `Struct[Item]` return that compiles (measured 2026-10-09 on branch `examples/final`; the write-up is pending in
@@ -107,7 +107,7 @@ the context manager is the documented form. Serving must not read it.
 ## Spark
 
 Numba's cold compile is paid once per executor process per pipeline unless the salted disk cache is shipped
-with the job and the CPU target matches (`decider build` records it). `mapInArrow` batch size
+with the job and the CPU target matches (`decikit build` records it). `mapInArrow` batch size
 (`spark.sql.execution.arrow.maxRecordsPerBatch`, default 10k) sets the per-batch overhead. Any `panic`-class
 failure inside a UDF kills the executor, not the driver. All of this is the price of "it also runs on Spark",
 and none of it may leak into the numba engine or the segmenter.

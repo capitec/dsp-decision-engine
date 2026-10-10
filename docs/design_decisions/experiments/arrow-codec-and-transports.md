@@ -27,7 +27,7 @@ Raw-socket clients with keep-alive (no client library); `echo` rows score nothin
 
 - Writing the reply: `write_ipc_stream` 40.2 us against `to_json` 1.16 us. Caching the schema message made no difference in polars (17.20 against 17.13 us); it re-parses every call.
 - Arrow makes every transport slower, by +180 us (unix) to +676 us (HTTP). Once a schema is agreed, a record batch and a fixed binary frame are the same bytes with a different header.
-- The caller's buffer is dead before decider sees it: `pl.read_ipc_stream` copies, so a no-copy Arrow request is impossible through polars.
+- The caller's buffer is dead before the decider toolkit sees it: `pl.read_ipc_stream` copies, so a no-copy Arrow request is impossible through polars.
 
 ## Decision
 No Arrow-native or Flight server and no pyarrow; Arrow IPC stays a batch content type; faster transports mean dropping HTTP, not adding Arrow. See [serving](../decisions/serving.md).

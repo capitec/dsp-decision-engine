@@ -10,7 +10,7 @@ from credit_core.rate_card import generate_flex_loan_card
 from loan_granting.pipeline import build
 from loan_granting import reasons
 
-from decider import ConfigurableStep, DecisionTableConfig
+from decikit import ConfigurableStep, DecisionTableConfig
 
 BUREAU_STALENESS_DAYS = 45  # Flex Loan's tolerance; the assessment's own default is a week
 

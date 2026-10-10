@@ -6,11 +6,11 @@ The code lives in a handful of files:
 
 | File | What it holds |
 |---|---|
-| `decider/steps/_configurable.py` | `ConfigurableStep`, `StepRef`, and the lazy aliases for the built-in types |
-| `decider/_registry.py` | `BaseRegistryModule` (tag registration and lookup) and `ref()` |
-| `decider/steps/_values.py` | `Value[T]`, `ParamRef`, `TableRef`, `TableValue` |
-| `decider/_engine/ir/context.py` | `IRContext`: `call`, `expand`, `value`, `table`, `origin` |
-| `decider/steps/trees/`, `tables/`, `scorecard/` | The three built-in types, one page each: [trees](trees.md), [tables](tables.md), [scorecards](scorecards.md) |
+| `decikit/steps/_configurable.py` | `ConfigurableStep`, `StepRef`, and the lazy aliases for the built-in types |
+| `decikit/_registry.py` | `BaseRegistryModule` (tag registration and lookup) and `ref()` |
+| `decikit/steps/_values.py` | `Value[T]`, `ParamRef`, `TableRef`, `TableValue` |
+| `decikit/_engine/ir/context.py` | `IRContext`: `call`, `expand`, `value`, `table`, `origin` |
+| `decikit/steps/trees/`, `tables/`, `scorecard/` | The three built-in types, one page each: [trees](trees.md), [tables](tables.md), [scorecards](scorecards.md) |
 
 How to author and run these steps is in the [trees, tables and scorecards guide](../../guides/trees-tables-scorecards.md); this page and the four after it cover how they work inside.
 
@@ -35,8 +35,8 @@ import typing as t
 
 import polars as pl
 
-from decider import ConfigurableStep, Value
-from decider.ir import to_ir
+from decikit import ConfigurableStep, Value
+from decikit.ir import to_ir
 
 
 def cap(amount: float, limit: float) -> float:
@@ -109,7 +109,7 @@ Written as a literal (`limit=45000.0`), the same field lands in the node's `cons
 
 ## The `ConfigurableStep` base class
 
-`ConfigurableStep` derives from both `Step` (so it composes with `flow`, `branch` and `|`) and `BaseRegistryModule` (so it has a `type` tag and a registry). Its class line is `class ConfigurableStep(Step, BaseRegistryModule, root=True, group="steps")`: it opens its own registry, and installed packages extend it through the `decider.steps` entry-point group.
+`ConfigurableStep` derives from both `Step` (so it composes with `flow`, `branch` and `|`) and `BaseRegistryModule` (so it has a `type` tag and a registry). Its class line is `class ConfigurableStep(Step, BaseRegistryModule, root=True, group="steps")`: it opens its own registry, and installed packages extend it through the `decikit.steps` entry-point group.
 
 What every subclass inherits:
 
@@ -122,7 +122,7 @@ What every subclass inherits:
 | `suppress_checks: list[str]` | Check aliases or codes silenced for this step; the [checks package](../lab/checks.md) reads them from the node's origin |
 | `reads`, `writes` | Relabels set from Python with `.relabel()`; excluded from the dump and from the JSON schema, because placement is code |
 | `load(source)` | Reads a file path, JSON text or a dict, looks at `type`, resolves the class, and validates |
-| `check(ctx)` | A hook for findings about the document itself; `decider.lab.checks` calls it once per configurable step in the pipeline |
+| `check(ctx)` | A hook for findings about the document itself; `decikit.lab.checks` calls it once per configurable step in the pipeline |
 | `_replace(**changes)` | `model_copy(update=...)`, which `named()` and `relabel()` use to return a changed copy |
 
 Because the model is frozen, the IR cache in `IRContext.build` can key built IR on the step object: an unchanged step returns the same IR, and a changed document is a new object whose IR is built afresh. The cache is keyed by `id()` and cleared by a `weakref.finalize`, since pydantic models compare by value.
@@ -167,10 +167,10 @@ The rules at registration time:
 ```mermaid
 flowchart TD
     load["ConfigurableStep.load(doc)<br/>reads doc['type']"] --> hit["tag in<br/>root._registry?"]
-    hit -- "no, built-in alias" --> imp1["import decider.steps.trees<br/>(from root._lazy)"]
+    hit -- "no, built-in alias" --> imp1["import decikit.steps.trees<br/>(from root._lazy)"]
     hit -- "no, has ':'" --> imp2["import the module part<br/>(ImportError ignored)"]
     hit -- "no, other" --> eps
-    imp1 --> eps["still missing: entry_points<br/>group decider.steps"]
+    imp1 --> eps["still missing: entry_points<br/>group decikit.steps"]
     imp2 --> eps
     hit -- yes --> sub["subclass of<br/>the receiver?"]
     eps --> sub
@@ -196,11 +196,11 @@ RegistryError 'os:system' is not a registered ConfigurableStep type. Import the 
 The three built-in types load lazily. The last statement in `_configurable.py` is
 
 ```python
-ConfigurableStep.lazy({"tree": "decider.steps.trees", "decision_table": "decider.steps.tables",
-                       "scorecard": "decider.steps.scorecard"})
+ConfigurableStep.lazy({"tree": "decikit.steps.trees", "decision_table": "decikit.steps.tables",
+                       "scorecard": "decikit.steps.scorecard"})
 ```
 
-so `import decider` does not pull in numba-heavy modules, and a document with `"type": "tree"` still loads without the user importing anything. `decider/__init__.py` does the same for the names `TreeConfig`, `DecisionTableConfig` and `ScorecardConfig` through a module `__getattr__`.
+so `import decikit` does not pull in numba-heavy modules, and a document with `"type": "tree"` still loads without the user importing anything. `decikit/__init__.py` does the same for the names `TreeConfig`, `DecisionTableConfig` and `ScorecardConfig` through a module `__getattr__`.
 
 `ConfigurableStep.json_schema()` imports every lazy module first, then returns `{tag: JSON schema}` for every registered subclass, with `type` pinned to a `const`. The tree editor and other form-based tools use it. In the session that ran the `Capped` example it returned the keys `['capped', 'decision_table', 'scorecard', 'tree']`.
 
@@ -261,7 +261,7 @@ Run against the `Capped` step from above, the two field types behave like this:
 
 ```python
 from pydantic import BaseModel
-from decider import ConfigurableStep, StepRef
+from decikit import ConfigurableStep, StepRef
 
 
 class Plain(BaseModel):
@@ -311,18 +311,18 @@ decider_old also accepted `output_fn` as a `{module_name, function_name}` pointe
 
 Several places turn stored documents into steps, all through `ConfigurableStep.load`:
 
-- `ConfigStore` subclasses (`decider/config/_store.py`) store a version as a dict of named documents plus a `params` document; the [config store page](../config-store.md) covers versions.
-- `RequestHandler.pipeline_fn` (`decider/serving/_handler.py`) loads the document named by each argument of the pipeline builder function (`def build(tree: ConfigurableStep) -> Step`), or passes the whole version to `load_flow(..., documents=config)` when the pipeline is a flow file. See the [serving page](../serving.md).
+- `ConfigStore` subclasses (`decikit/config/_store.py`) store a version as a dict of named documents plus a `params` document; the [config store page](../config-store.md) covers versions.
+- `RequestHandler.pipeline_fn` (`decikit/serving/_handler.py`) loads the document named by each argument of the pipeline builder function (`def build(tree: ConfigurableStep) -> Step`), or passes the whole version to `load_flow(..., documents=config)` when the pipeline is a flow file. See the [serving page](../serving.md).
 - `load_flow` resolves a `step: name` node to a document of that name when one is passed in `documents` ([expressions and flow files](expr-and-flowfile.md)).
 - The editor bridge loads a user module into `sys.modules` under its own name, so classes defined in it resolve by import path ([editor bridge](../editor-bridge.md)).
-- `decider.lab.checks` walks the step map and calls `check(ctx)` on every configurable step whose path has a node, after the registered checks have run ([checks](../lab/checks.md)).
+- `decikit.lab.checks` walks the step map and calls `check(ctx)` on every configurable step whose path has a node, after the registered checks have run ([checks](../lab/checks.md)).
 
 ## Extending: a new configurable step
 
 A new type needs the subclass, its alias, and a `to_ir`. If its module is not imported by the pipeline code, register it for lookup one of two ways: name it by import path in documents (`"type": "credit_risk.steps:Capped"`), or declare an entry point in the package's `pyproject.toml`:
 
 ```toml
-[project.entry-points."decider.steps"]
+[project.entry-points."decikit.steps"]
 capped = "credit_risk.steps:Capped"
 ```
 
@@ -332,13 +332,13 @@ Things a new type has to get right, each learnt from the built-in ones:
 - Fields that point at code (functions, classes) are `SkipJsonSchema` and `exclude=True`, as `TreeConfig.path_columns` is. A document never holds code.
 - A nested polymorphic field uses `StepRef` or `ref(...)`.
 - Array consts passed by address are kept alive by the node's `reference`.
-- Findings about the document itself (an empty range, an unreachable branch) go in `check(ctx)`, so they show up in `decider check` with the step's path.
+- Findings about the document itself (an empty range, an unreachable branch) go in `check(ctx)`, so they show up in `decikit check` with the step's path.
 
 The [extending guide](../../guides/extending.md) walks through a complete example from the user's side.
 
 ## Debugging a configurable step
 
 - A document that does not load raises a pydantic `ValidationError` whose location names the field (`variables.0.scored`), or a `RegistryError` for an unknown tag.
-- `to_ir(step)` (from `decider.ir`) shows the node it lowers to, with its inputs, outputs, params and consts. For a tree or table, the consts are addresses; the reference's `arrays` attribute holds the arrays they point at.
+- `to_ir(step)` (from `decikit.ir`) shows the node it lowers to, with its inputs, outputs, params and consts. For a tree or table, the consts are addresses; the reference's `arrays` attribute holds the arrays they point at.
 - Interpreted mode runs the Python reference with a `visit` callback, so `session.break_at("loan_tree#surplus")` stops on a tree node and `"pricing#2"` on a table row. The [debug page](../engine/debug.md) explains sessions and locators.
 - `Engine(strict_compile=True)` turns a silent fallback to Python into an error, which shows when a tree needs Python (regex) or a scorecard has string bins. The [compile and fallback guide](../../guides/compile-and-fallback.md) has the details.

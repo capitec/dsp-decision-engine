@@ -1,7 +1,7 @@
 """The business's own financial strength: three ratios, a scorecard, a probability of default and a grade."""
 from __future__ import annotations
 
-from decider import ScorecardConfig, flow, missing_as, step
+from decikit import ScorecardConfig, flow, missing_as, step
 
 from credit_core import calibration
 from credit_core.vocab import SEGMENT_SME_ENTITY

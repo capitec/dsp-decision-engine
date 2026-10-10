@@ -1,7 +1,7 @@
 """The outcome: approve, refer or decline, every reason that applies, and which entity and events a decline rests on."""
 from __future__ import annotations
 
-from decider import allow_fallback, flow, param, step
+from decikit import allow_fallback, flow, param, step
 
 from assessment.verdict import FAIL, INDETERMINATE, MARGINAL
 from credit_core.reason_codes import ReasonCodes

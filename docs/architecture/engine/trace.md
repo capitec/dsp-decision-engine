@@ -8,19 +8,19 @@ How to turn tracing on and read the result is in [Tracing](../../guides/tracing.
 
 | File | What it holds |
 |---|---|
-| `decider/_engine/trace/envelope.py` | `Kind`, `pack`/`unpack`, the bit layout, `TraceEvent`, `StepTable`, `decode`, `bitcast`, `SCHEMA_VERSION` |
-| `decider/_engine/trace/sink.py` | `TraceSink`, `Adapter`, `PassThroughAdapter`, `TraceLossError` |
-| `decider/trace.py` | the public facade: `TraceSink`, `Kind`, `TraceEvent`, `Adapter`, `PassThroughAdapter`, `TraceLossError` |
-| `decider/_engine/compile/kernel.py` | the traced variant of a fused kernel: writes one envelope per call into a header buffer |
-| `decider/_engine/compile/units.py` | `Kernel.run` with a sink: allocates the buffers, runs the traced kernel, calls `drain_kernel` |
-| `decider/_engine/compile/packed.py` | `_trace_factor`: the buffer capacity of a packed branch or loop |
-| `decider/_engine/run/runners/interpreted.py` | `_emit_rows` and the driver-side events: `STEP`, `BRANCH_ARM`, `LOOP_ITERATION`, `FRAME` |
-| `decider/_engine/run/runners/stepped.py` | picks between the in-kernel capture and driver-side events per unit |
-| `decider/_engine/run/engine.py` | `Executable._trace_table` and `_iterate`, which pass the sink and table to the runner |
+| `decikit/_engine/trace/envelope.py` | `Kind`, `pack`/`unpack`, the bit layout, `TraceEvent`, `StepTable`, `decode`, `bitcast`, `SCHEMA_VERSION` |
+| `decikit/_engine/trace/sink.py` | `TraceSink`, `Adapter`, `PassThroughAdapter`, `TraceLossError` |
+| `decikit/trace.py` | the public facade: `TraceSink`, `Kind`, `TraceEvent`, `Adapter`, `PassThroughAdapter`, `TraceLossError` |
+| `decikit/_engine/compile/kernel.py` | the traced variant of a fused kernel: writes one envelope per call into a header buffer |
+| `decikit/_engine/compile/units.py` | `Kernel.run` with a sink: allocates the buffers, runs the traced kernel, calls `drain_kernel` |
+| `decikit/_engine/compile/packed.py` | `_trace_factor`: the buffer capacity of a packed branch or loop |
+| `decikit/_engine/run/runners/interpreted.py` | `_emit_rows` and the driver-side events: `STEP`, `BRANCH_ARM`, `LOOP_ITERATION`, `FRAME` |
+| `decikit/_engine/run/runners/stepped.py` | picks between the in-kernel capture and driver-side events per unit |
+| `decikit/_engine/run/engine.py` | `Executable._trace_table` and `_iterate`, which pass the sink and table to the runner |
 
 ## Three records of a run
 
-Decider has three ways to see what a run did. Each answers a different question, and they coexist.
+The decider toolkit has three ways to see what a run did. Each answers a different question, and they coexist.
 
 | | `Session.events` | `TraceSink` | `trace_output` / `path_output` columns |
 |---|---|---|---|
@@ -43,7 +43,7 @@ A compiled kernel can only write fixed-width numbers. So a trace event inside a 
 `pack(kind, step, arm, iteration)` puts the fields together and `unpack` takes them apart:
 
 ```python
-from decider._engine.trace import Kind, pack, unpack
+from decikit._engine.trace import Kind, pack, unpack
 
 print(pack(Kind.STEP, 3, 2, 4), unpack(pack(Kind.STEP, 3, 2, 4)))
 ```
@@ -84,7 +84,7 @@ The step ref is an index into the run's `StepTable`. `Executable.__init__` build
 | `TABLE_ROW`, `TREE_PATH`, `BAND`, `ROUNDING`, `REASON`, `VALUE` | 4 to 9 | nothing yet | reserved for payload events (a matched row, a path number, a band, a rounded value) |
 | `OVERRIDE` | 10 | nothing yet | reserved for a value replaced by a debug session |
 
-The reserved kinds are part of the envelope so that adding an emitter later does not change the bit layout. Nothing in `decider/` writes them, and no event today has a `value`. A debug session has no sink either: the editor bridge reports `{"available": False, "reason": "trace capture is off; showing live state"}` in its status.
+The reserved kinds are part of the envelope so that adding an emitter later does not change the bit layout. Nothing in `decikit/` writes them, and no event today has a `value`. A debug session has no sink either: the editor bridge reports `{"available": False, "reason": "trace capture is off; showing live state"}` in its status.
 
 ## Where events are emitted
 
@@ -127,8 +127,8 @@ The loan pipeline from [Debug sessions](debug.md) (saved as `loan.py`) has a sca
 ```python
 from collections import Counter
 
-from decider import Engine
-from decider.trace import Kind, TraceSink
+from decikit import Engine
+from decikit.trace import Kind, TraceSink
 from loan import pipeline, df
 
 for mode in ("interpreted", "stepped", "fused"):
@@ -203,8 +203,8 @@ Conservation runs before the adapter on purpose. An adapter may redact or drop e
 
 ```python
 import numpy as np
-from decider._engine.ir.origin import Origin
-from decider._engine.trace import Kind, StepTable, TraceSink, pack
+from decikit._engine.ir.origin import Origin
+from decikit._engine.trace import Kind, StepTable, TraceSink, pack
 
 sink = TraceSink()
 try:

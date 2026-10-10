@@ -5,7 +5,7 @@ Cells are ordered by amount band, then term band, then grade, and `card_rate` in
 """
 from __future__ import annotations
 
-from decider import ParamTable, allow_fallback, param, param_table
+from decikit import ParamTable, allow_fallback, param, param_table
 
 from credit_core.evidence import cell_id
 

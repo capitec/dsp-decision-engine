@@ -1,6 +1,6 @@
 # Diff and proof
 
-`decider.lab.diff` answers questions about two versions of one pipeline. What changed in the code, params and wiring? Which rows of a frame come out different, and by how much? What changed between two git commits? Do the two versions provably compute the same thing? Each question has one function, and they share one data structure: a `Snapshot` of a flow's IR with a content hash per node.
+`decikit.lab.diff` answers questions about two versions of one pipeline. What changed in the code, params and wiring? Which rows of a frame come out different, and by how much? What changed between two git commits? Do the two versions provably compute the same thing? Each question has one function, and they share one data structure: a `Snapshot` of a flow's IR with a content hash per node.
 
 The user-facing walkthrough is in [Diff and equivalence](../../guides/diff-and-equivalence.md). This page covers how the package works inside: the snapshot and its hash, how steps are matched across versions, how two git revisions are loaded without mixing their code, and how `prove` decides, including the z3 encoding of trees and decision tables.
 
@@ -8,16 +8,16 @@ The user-facing walkthrough is in [Diff and equivalence](../../guides/diff-and-e
 
 | File | What it holds |
 |---|---|
-| `decider/lab/diff/__init__.py` | The public names: `structure`, `outputs`, `revisions`, `prove` and their result models |
-| `decider/lab/diff/_hash.py` | `Snapshot` and `snapshot(step)`: the IR content hash and the per-node parts |
-| `decider/lab/diff/_structure.py` | `StructureDiff` and its parts, step matching, `compare(a, b)` over two snapshots |
-| `decider/lab/diff/_outputs.py` | `OutputDiff`, `ColumnDiff`, the `changed` primitive and `compare_frames` |
-| `decider/lab/diff/_revisions.py` | `resolve`, `materialise`, `remove`, `compatible` and the `Revisions` class |
-| `decider/lab/diff/_worker.py` | The subprocess that loads one revision and writes its snapshot and output |
-| `decider/lab/diff/_prove.py` | `Proof`, `SmtEvidence` and the tier ladder in `prove` |
-| `decider/lab/diff/_smt.py` | Tree and decision-table steps as z3 terms; also the satisfiability helpers checks use |
+| `decikit/lab/diff/__init__.py` | The public names: `structure`, `outputs`, `revisions`, `prove` and their result models |
+| `decikit/lab/diff/_hash.py` | `Snapshot` and `snapshot(step)`: the IR content hash and the per-node parts |
+| `decikit/lab/diff/_structure.py` | `StructureDiff` and its parts, step matching, `compare(a, b)` over two snapshots |
+| `decikit/lab/diff/_outputs.py` | `OutputDiff`, `ColumnDiff`, the `changed` primitive and `compare_frames` |
+| `decikit/lab/diff/_revisions.py` | `resolve`, `materialise`, `remove`, `compatible` and the `Revisions` class |
+| `decikit/lab/diff/_worker.py` | The subprocess that loads one revision and writes its snapshot and output |
+| `decikit/lab/diff/_prove.py` | `Proof`, `SmtEvidence` and the tier ladder in `prove` |
+| `decikit/lab/diff/_smt.py` | Tree and decision-table steps as z3 terms; also the satisfiability helpers checks use |
 
-Three other packages reach into it. The `decider diff` command (`decider/_tooling/cli/_diff.py`) is a thin wrapper over `revisions`. The structure checks in `decider/lab/checks/_builtin/structure.py` import `_smt` lazily for `unreachable_arms` and `table_structure` (see [Checks internals](checks.md)). [Experiments](experiments.md) use `changed` inside the `Divergence` metric and the git helpers (`resolve`, `materialise`, `remove`, `compatible`) for revision scenarios.
+Three other packages reach into it. The `decikit diff` command (`decikit/_tooling/cli/_diff.py`) is a thin wrapper over `revisions`. The structure checks in `decikit/lab/checks/_builtin/structure.py` import `_smt` lazily for `unreachable_arms` and `table_structure` (see [Checks internals](checks.md)). [Experiments](experiments.md) use `changed` inside the `Divergence` metric and the git helpers (`resolve`, `materialise`, `remove`, `compatible`) for revision scenarios.
 
 <div class="diagram" markdown>
 ![Callers outside the package, the four public functions, and the private modules each one uses](../../assets/diagrams/lab-diff-modules.svg)
@@ -25,7 +25,7 @@ Three other packages reach into it. The `decider diff` command (`decider/_toolin
 
 ## Snapshot and the IR content hash
 
-Every comparison that does not run data starts from `snapshot(step)` in `decider/lab/diff/_hash.py`. It lowers the step with `to_ir`, walks the nodes in pre-order with `iter_nodes`, and builds a frozen dataclass:
+Every comparison that does not run data starts from `snapshot(step)` in `decikit/lab/diff/_hash.py`. It lowers the step with `to_ir`, walks the nodes in pre-order with `iter_nodes`, and builds a frozen dataclass:
 
 ```python
 @dataclass(frozen=True)
@@ -46,7 +46,7 @@ A `Snapshot` holds no live objects: digests, strings and the pydantic `FlowDescr
 
 ### Parts of a call node
 
-A `CallNode` gets five digests. `code` covers the call kind, `nogil` and the content fingerprint of the function, from `decider._engine.compile.fingerprint` (the same function the [numba cache](../engine/cache.md) keys on). That fingerprint covers the bytecode with its constants, the argument layout, closure values and the globals the function reads, and leaves out the function's name, file and line numbers. Two functions with the same body and different names fingerprint the same.
+A `CallNode` gets five digests. `code` covers the call kind, `nogil` and the content fingerprint of the function, from `decikit._engine.compile.fingerprint` (the same function the [numba cache](../engine/cache.md) keys on). That fingerprint covers the bytecode with its constants, the argument layout, closure values and the globals the function reads, and leaves out the function's name, file and line numbers. Two functions with the same body and different names fingerprint the same.
 
 `consts` covers the constant values the call is built with. Trees and decision tables pass their packed arrays as raw memory addresses, which change from one build to the next. The hash replaces each address with the position of its array in the step's reference twin and hashes the arrays' bytes instead, so two builds of one tree hash the same. `inputs`, `outputs` and `params` hash the value names read, the value names written and the `ParamDecl`s.
 
@@ -57,8 +57,8 @@ The whole-flow hash feeds, for every node in pre-order, the string `"<NodeType>/
 Running it on a two-step credit flow:
 
 ```python
-from decider import flow, param
-from decider.lab.diff._hash import snapshot
+from decikit import flow, param
+from decikit.lab.diff._hash import snapshot
 
 def ratio(income: float, debt: float) -> float:
     return debt / income
@@ -99,7 +99,7 @@ A `param_table` default (columns of `int`, `float` or `bool`) is hashed in bulk:
 
 ### Matching steps across versions
 
-Steps are matched before anything is compared. `_match` pairs nodes in two passes. The first pass matches by the durable global reference `(flow_id, step_id)` for every node that has a `step_id`. The second pass matches the rest by path, skipping new nodes already taken. An unmatched old node is `removed`, an unmatched new node is `added`. Durable ids come from `id=` on a step or flow, written into source by `decider ids`.
+Steps are matched before anything is compared. `_match` pairs nodes in two passes. The first pass matches by the durable global reference `(flow_id, step_id)` for every node that has a `step_id`. The second pass matches the rest by path, skipping new nodes already taken. An unmatched old node is `removed`, an unmatched new node is `added`. Durable ids come from `id=` on a step or flow, written into source by `decikit ids`.
 
 ```mermaid
 flowchart TD
@@ -132,8 +132,8 @@ Edges are compared last, and only data edges (the `kind == "data"` edges of the 
 `StructureDiff.identical` is `a.hash == b.hash`. It does not look at the other fields. A pure rename changes `renamed` and leaves `identical` true, because names are not hashed. A value with no content hash makes `identical` false even when every list is empty.
 
 ```python
-from decider import flow, param, step
-from decider.lab import diff
+from decikit import flow, param, step
+from decikit.lab import diff
 
 def approved_v2(ratio: float, limit: float = param(0.35)) -> bool:
     return ratio <= limit
@@ -236,22 +236,22 @@ Both revisions share module names. The caller has almost always imported the liv
 
 `Revisions._load(i, frame, params)` does the following for side `i`:
 
-1. `resolve(authored)` runs `git rev-parse --verify --quiet <authored>^{commit}` in the current working directory and returns the 40-character SHA, or `None`. `None` raises `DeciderError("revision 'nope' did not resolve")`.
-2. `materialise(sha)` makes a temporary directory with the prefix `decider-revision-` and runs `git worktree add --detach <dir> <sha>`. A failed checkout removes the directory and raises `DeciderError("could not check out revision ...")`.
-3. A second temporary directory (`decider-diff-`) gets `input.parquet` when there is a frame to run.
-4. The parent runs `sys.executable -m decider.lab.diff._worker` with one JSON request on stdin: `entry`, `tree`, `params`, `out` and, when there is a frame, `input`.
+1. `resolve(authored)` runs `git rev-parse --verify --quiet <authored>^{commit}` in the current working directory and returns the 40-character SHA, or `None`. `None` raises `DecikitError("revision 'nope' did not resolve")`.
+2. `materialise(sha)` makes a temporary directory with the prefix `decikit-revision-` and runs `git worktree add --detach <dir> <sha>`. A failed checkout removes the directory and raises `DecikitError("could not check out revision ...")`.
+3. A second temporary directory (`decikit-diff-`) gets `input.parquet` when there is a frame to run.
+4. The parent runs `sys.executable -m decikit.lab.diff._worker` with one JSON request on stdin: `entry`, `tree`, `params`, `out` and, when there is a frame, `input`.
 5. The worker calls `import_flow(entry, tree)`, which puts the tree first on `sys.path` for the import, imports the module, walks the qualname and calls it if the result is not already a `Step`. It writes `snapshot.pkl` and, given an input, runs the interpreted step and writes `output.parquet`. Its last stdout line is `{"ok": true}` or `{"ok": false, "error": "Type: message"}`.
-6. The parent reads the last stdout line. A line that is not JSON becomes `subprocess exited <code>: <last 500 characters of stderr>`. An error raises `DeciderError("revision 'HEAD^': <error>")`.
+6. The parent reads the last stdout line. A line that is not JSON becomes `subprocess exited <code>: <last 500 characters of stderr>`. An error raises `DecikitError("revision 'HEAD^': <error>")`.
 7. A `finally` block removes the worktree with `git worktree remove --force` and deletes both temporary directories, whether the load worked or not.
 
-The worker uses the same interpreter, so `decider` resolves from the installed package; it is already imported by the time the tree goes on `sys.path`. Only the entry module and what it imports come from the checkout.
+The worker uses the same interpreter, so `decikit` resolves from the installed package; it is already imported by the time the tree goes on `sys.path`. Only the entry module and what it imports come from the checkout.
 
 The worker can be driven by hand, which is the quickest way to see why a revision fails to load:
 
 ```bash
 cd my-repo
 echo '{"entry": "lending.pipeline:build", "tree": ".", "params": null, "out": "out"}' \
-  | python -m decider.lab.diff._worker
+  | python -m decikit.lab.diff._worker
 ```
 
 ```text
@@ -264,7 +264,7 @@ With a bad qualname it answers `{"ok": false, "error": "AttributeError: module '
 
 `Revisions` keeps the two snapshots. `structure()` loads a side only if it has no snapshot yet. `outputs()` always loads both sides again, because it needs fresh outputs, and stores the new snapshots. Calling `outputs` first and `structure` second costs two loads instead of four; the CLI does it in that order.
 
-Each load costs a checkout plus a fresh interpreter. Measured, a load takes about 0.5 s for the worktree checkout and about 0.8 s for the subprocess spawn and `import decider`.
+Each load costs a checkout plus a fresh interpreter. Measured, a load takes about 0.5 s for the worktree checkout and about 0.8 s for the subprocess spawn and `import decikit`.
 
 ### A worked example
 
@@ -277,7 +277,7 @@ ed6f4f2 limit 0.4
 
 ```python
 import polars as pl
-from decider.lab import diff
+from decikit.lab import diff
 
 r = diff.revisions("HEAD^", "HEAD", entry="lending.pipeline:build")
 s = r.structure()
@@ -294,7 +294,7 @@ print(o.rows_changed, o.columns["approved"].samples)
 The same comparison from the command line:
 
 ```bash
-decider diff HEAD^ HEAD lending.pipeline:build --data loans.parquet --key application_id
+decikit diff HEAD^ HEAD lending.pipeline:build --data loans.parquet --key application_id
 ```
 
 ```text
@@ -305,9 +305,9 @@ outputs: 1 of 3 rows changed
   approved: 1 changed
 ```
 
-The command exits 1 when anything differs and 0 when nothing does (`decider diff HEAD HEAD ...` prints `structure: identical`). With `--data`, "differs" means changed rows or added or removed columns; without it, it means `structure.identical` is false. An unknown revision prints `Error: revision 'nope' did not resolve` and exits 1. `--data` accepts a file path or the name of a project dataset (see [Data loading](data.md)), and `--format json` prints both diffs as one JSON object.
+The command exits 1 when anything differs and 0 when nothing does (`decikit diff HEAD HEAD ...` prints `structure: identical`). With `--data`, "differs" means changed rows or added or removed columns; without it, it means `structure.identical` is false. An unknown revision prints `Error: revision 'nope' did not resolve` and exits 1. `--data` accepts a file path or the name of a project dataset (see [Data loading](data.md)), and `--format json` prints both diffs as one JSON object.
 
-`compatible(spec, installed)` lives in this module but `Revisions` does not call it. An old revision whose code no longer imports under the installed `decider` fails in the worker with the import error. Experiments check `flow.decider` before running (see [Experiments internals](experiments.md)).
+`compatible(spec, installed)` lives in this module but `Revisions` does not call it. An old revision whose code no longer imports under the installed `decikit` fails in the worker with the import error. Experiments check `flow.decikit` before running (see [Experiments internals](experiments.md)).
 
 ## Proof
 
@@ -330,7 +330,7 @@ flowchart TD
     S["structure(old, new)"] --> H{"IR content<br/>hashes equal?"}
     H -- yes --> T1["tier ir_hash<br/>identical=True"]
     H -- no --> Z{"z3 importable?"}
-    Z -- no --> N1["tier none, identical=None<br/>reason: install decider[prove]"]
+    Z -- no --> N1["tier none, identical=None<br/>reason: install decikit[prove]"]
     Z -- yes --> PD{"any ParamChange?"}
     PD -- yes --> N2["tier none<br/>reason: a param declaration differs"]
     PD -- no --> SH{"added, removed, renamed,<br/>moved or edge changes,<br/>or no changed steps?"}
@@ -362,15 +362,15 @@ The z3 tier only runs when the versions differ in nothing but the contents of ma
 
 Inside the loop, the first counterexample ends the proof at once. An unencodable step does not: its reason is kept (only the first one) and the loop moves on, in case a later step yields a counterexample. If every step is proven, the result is `tier="smt", identical=True` with `evidence.steps` listing them.
 
-`prove` imports `z3` and `_smt` inside a `try`, so `z3-solver` is optional. It is the `prove` extra (`pip install 'decider[prove]'`), also included in `all`. It imports `z3` again on every call, even when `_smt` was imported earlier, so a test that hides `z3` sees the fallback.
+`prove` imports `z3` and `_smt` inside a `try`, so `z3-solver` is optional. It is the `prove` extra (`pip install 'decikit[prove]'`), also included in `all`. It imports `z3` again on every call, even when `_smt` was imported earlier, so a test that hides `z3` sees the fallback.
 
 ### Running every tier
 
 ```python
-from decider import flow, param, step
-from decider.lab import diff
-from decider.steps.tables import DecisionTableConfig
-from decider.steps.trees import TreeConfig
+from decikit import flow, param, step
+from decikit.lab import diff
+from decikit.steps.tables import DecisionTableConfig
+from decikit.steps.trees import TreeConfig
 
 print(diff.prove(flow(ratio, approved, name="credit"), flow(ratio, approved, name="lending")))
 ```
@@ -466,7 +466,7 @@ When the tier is `none`, `evidence` is the `StructureDiff`, which tells a review
 
 ### The z3 encoding
 
-`decider/lab/diff/_smt.py` turns one tree or table step into a set of z3 terms, one per output column, over shared input variables. `differ(old, new)` builds both sides in one `Env`, asserts that at least one output column differs, and asks z3 for a model.
+`decikit/lab/diff/_smt.py` turns one tree or table step into a set of z3 terms, one per output column, over shared input variables. `differ(old, new)` builds both sides in one `Env`, asserts that at least one output column differs, and asks z3 for a model.
 
 ```mermaid
 flowchart TD
@@ -525,8 +525,8 @@ The parts of the encoding:
 |---|---|---|
 | `prove` says `tier="none"` for an unchanged step | A constant or global in the step has no content hash, so it hashes to a fresh token | Look at `snapshot(step).parts` for the step; a `consts` or `code` digest that changes between two snapshots of the same object is the culprit |
 | `ValueError: the versions produced N and M rows from one frame` | One version filters or explodes rows | Compare the versions with an experiment metric, or diff a frame step's output yourself |
-| `DeciderError: revision 'x' did not resolve` | The name is not a commit in the repository of the current directory | Run from inside the repository, or pass a SHA |
-| `DeciderError: revision 'HEAD^': ModuleNotFoundError: ...` | The entry's module does not exist at that revision, or its imports fail under the installed decider | Drive the worker by hand (above) at that checkout |
+| `DecikitError: revision 'x' did not resolve` | The name is not a commit in the repository of the current directory | Run from inside the repository, or pass a SHA |
+| `DecikitError: revision 'HEAD^': ModuleNotFoundError: ...` | The entry's module does not exist at that revision, or its imports fail under the installed decider toolkit | Drive the worker by hand (above) at that checkout |
 | `reason: ... z3 could not decide within 10s` | A large tree or table with many float conditions | `TIMEOUT_MS` in `_smt.py` is the knob; the result stays "can't tell" |
 
 ## Why it is shaped this way
@@ -535,4 +535,4 @@ Several tiers were considered. Tier 0 was the old `checks.compare` signature: pa
 
 Tier 2 (normalised config documents) and tier 3 (exhaustive enumeration over threshold-partitioned inputs, `domain="thresholds"`) are not built. Tier 4 (z3) is expected to cover most of tier 2 for trees and tables, and the same encoding pays for itself twice, since checks use it for unreachable arms and table overlaps. The design's `Proof.tier` values `enumeration` and `corpus` do not exist in the code, and `OutputDiff.first_divergent_step` is deferred.
 
-For revisions, two alternatives were rejected. Evicting the entry module from `sys.modules` fixed only that one module name. Running each revision under its own pinned `decider` with `uv run --project <tree>` would compare old code under its own engine, but a cold `uv sync` in a fresh worktree took 23 seconds per revision, and the project had already decided to reject incompatible revisions through the `flow.decider` window instead.
+For revisions, two alternatives were rejected. Evicting the entry module from `sys.modules` fixed only that one module name. Running each revision under its own pinned `decikit` with `uv run --project <tree>` would compare old code under its own engine, but a cold `uv sync` in a fresh worktree took 23 seconds per revision, and the project had already decided to reject incompatible revisions through the `flow.decikit` window instead.

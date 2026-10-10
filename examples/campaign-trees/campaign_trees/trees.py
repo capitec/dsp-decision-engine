@@ -1,7 +1,7 @@
 """Checks on a tree document before it is published, and the diff between two versions of it."""
 from __future__ import annotations
 
-from decider import TreeConfig
+from decikit import TreeConfig
 
 
 def problems(tree: TreeConfig) -> list[str]:

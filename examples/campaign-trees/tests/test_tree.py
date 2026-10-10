@@ -3,7 +3,7 @@ import json
 
 import polars as pl
 import pytest
-from decider import TreeConfig
+from decikit import TreeConfig
 
 from campaign_trees.trees import changed_nodes, problems
 

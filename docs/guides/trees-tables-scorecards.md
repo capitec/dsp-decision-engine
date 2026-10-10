@@ -1,6 +1,6 @@
 # Trees, tables and scorecards
 
-Credit and fraud policy often comes as a document a business user owns: a decision tree drawn in an editor, a list of fraud rules, a rate card in a spreadsheet, a points scorecard signed off by a model team. decider runs each of these as a step. `TreeConfig`, `DecisionTableConfig` and `ScorecardConfig` load from JSON, sit in a `flow` beside your Python functions, compile into the same numba kernels, and expose their thresholds as params, so retuning one never rebuilds or recompiles the pipeline.
+Credit and fraud policy often comes as a document a business user owns: a decision tree drawn in an editor, a list of fraud rules, a rate card in a spreadsheet, a points scorecard signed off by a model team. The decider toolkit runs each of these as a step. `TreeConfig`, `DecisionTableConfig` and `ScorecardConfig` load from JSON, sit in a `flow` beside your Python functions, compile into the same numba kernels, and expose their thresholds as params, so retuning one never rebuilds or recompiles the pipeline.
 
 All three are `ConfigurableStep` subclasses. Each loads from a dict, a JSON string or a JSON file path, and its `type` tag picks the class:
 
@@ -86,7 +86,7 @@ A v3 tree document lists `nodes` (what each node tests) and `edges` (which branc
 
 ```python
 import polars as pl
-from decider import TreeConfig
+from decikit import TreeConfig
 
 risk = TreeConfig.load("risk_tree.json")          # a path, JSON text or a dict
 df = pl.DataFrame({"debt_ratio": [0.62, 0.30, 0.30, 0.20, 0.25],
@@ -127,8 +127,8 @@ A threshold, bound, value or pattern written `{"param": "max_ratio", "default": 
 
 ```python
 import polars as pl
-from decider import TreeConfig
-from decider.lab.testing import no_recompile
+from decikit import TreeConfig
+from decikit.lab.testing import no_recompile
 
 risk = TreeConfig.load("risk_tree.json")
 print(risk.parameters())
@@ -162,7 +162,7 @@ A flat-rule document nests each node's branches inside it instead of listing edg
 
 ```python
 import polars as pl
-from decider import TreeConfig
+from decikit import TreeConfig
 
 risk = TreeConfig.load({
     "type": "tree", "name": "risk", "path_output": "risk_leaf",
@@ -224,7 +224,7 @@ A `prioritized_flat_rule` document holds several rules in priority order. With `
 
 ```python
 import polars as pl
-from decider import TreeConfig
+from decikit import TreeConfig
 
 
 def rule(name, condition):
@@ -298,7 +298,7 @@ A feature is a column name or a computed expression over columns:
 
 ```python
 import polars as pl
-from decider import TreeConfig
+from decikit import TreeConfig
 
 afford = TreeConfig.load({"type": "tree", "name": "afford", "tree": {
     "type": "flat_rule",
@@ -339,8 +339,8 @@ The tree infers each feature's type from how it is used: a `string_match` featur
 
 ```python
 import polars as pl
-from decider import TreeConfig
-from decider.exceptions import MissingInputError
+from decikit import TreeConfig
+from decikit.exceptions import MissingInputError
 
 doc = TreeConfig.load("risk_tree.json").model_dump(mode="json")
 df = pl.DataFrame({"debt_ratio": [None, 0.25], "bureau_score": [710.0, None]})
@@ -381,7 +381,7 @@ A decision table declares its `columns`, holds `rows`, and says with an `express
 
 ```python
 import polars as pl
-from decider import DecisionTableConfig
+from decikit import DecisionTableConfig
 
 rate = DecisionTableConfig.load({
     "type": "decision_table", "name": "rate",
@@ -446,7 +446,7 @@ An `in` condition reads a `List` column:
 
 ```python
 import polars as pl
-from decider import DecisionTableConfig
+from decikit import DecisionTableConfig
 
 fee = DecisionTableConfig.load({
     "type": "decision_table", "name": "channel_fee",
@@ -483,9 +483,9 @@ Inline rows are fixed in the table's document: changing them means a new documen
 
 ```python
 import polars as pl
-from decider import DecisionTableConfig, flow
-from decider.exceptions import ParamsError
-from decider.lab.testing import no_recompile
+from decikit import DecisionTableConfig, flow
+from decikit.exceptions import ParamsError
+from decikit.lab.testing import no_recompile
 
 rate = DecisionTableConfig.load({
     "type": "decision_table", "name": "rate",
@@ -540,7 +540,7 @@ A scorecard bins each variable into points and sums them into `output_name` (def
 
 ```python
 import polars as pl
-from decider import ScorecardConfig
+from decikit import ScorecardConfig
 
 pl.Config.set_tbl_cols(12)
 card = ScorecardConfig.load({
@@ -617,8 +617,8 @@ Every bound and every points value can be a param. A scored variable's params li
 
 ```python
 import polars as pl
-from decider import ScorecardConfig
-from decider.lab.testing import no_recompile
+from decikit import ScorecardConfig
+from decikit.lab.testing import no_recompile
 
 card = ScorecardConfig.load({
     "type": "scorecard", "name": "application", "output_name": "app_score",
@@ -654,7 +654,7 @@ YAML is not read by `load` directly. Parse it and pass the dict:
 
 ```python
 import yaml
-from decider import ConfigurableStep
+from decikit import ConfigurableStep
 
 text = """
 type: decision_table
@@ -684,7 +684,7 @@ Configs are frozen: assigning a field raises. To change one, dump it, edit the d
 
 ```python
 import polars as pl
-from decider import ConfigurableStep, TreeConfig
+from decikit import ConfigurableStep, TreeConfig
 
 risk = TreeConfig.load("risk_tree.json")
 doc = risk.model_dump(mode="json")

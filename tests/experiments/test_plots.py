@@ -7,12 +7,12 @@ import typing as t
 import polars as pl
 import pytest
 
-from decider import branch, flow, param, step
-from decider.exceptions import DeciderError
-from decider.lab.experiments import Experiment, ExperimentResult
-from decider.lab.experiments.metrics import BranchFlows, Counts, Describe, Divergence, Histogram, Stats, ValueCounts
-from decider.lab.experiments.plots import Bars, Changes, Distribution, Figure, Plot, Ranges, Sankey
-from decider.lab.experiments.plots._sankey import TEMPLATE
+from decikit import branch, flow, param, step
+from decikit.exceptions import DecikitError
+from decikit.lab.experiments import Experiment, ExperimentResult
+from decikit.lab.experiments.metrics import BranchFlows, Counts, Describe, Divergence, Histogram, Stats, ValueCounts
+from decikit.lab.experiments.plots import Bars, Changes, Distribution, Figure, Plot, Ranges, Sankey
+from decikit.lab.experiments.plots._sankey import TEMPLATE
 
 LIMIT_03 = {"demo": {"approved": {"limit": 0.3}}}
 
@@ -131,7 +131,7 @@ def test_distribution_overlays_each_scenarios_histogram_with_overflow_at_the_end
 
 
 def _bins_summaries():
-    from decider.lab.experiments.metrics import Bins
+    from decikit.lab.experiments.metrics import Bins
     return {name: Bins(column="rate", edges=[0.0, 0.5, 1.0], counts=counts, below=0, above=0, nulls=0)
             for name, counts in (("baseline", [3, 1]), ("faster", [1, 3]))}
 
@@ -168,7 +168,7 @@ def test_changes_draws_one_horizontal_bar_per_scenario(pipeline, frame):
 def test_every_figure_on_a_page_shares_one_load_of_vega_and_escapes_its_spec():
     html = Figure(grammar="vega", spec={"title": "</script><b>x</b>"}).html()
     assert html.count("</script>") == 1 and "<\\/script>" in html
-    assert "window.deciderVega = window.deciderVega ||" in html
+    assert "window.decikitVega = window.decikitVega ||" in html
 
 
 def test_ranges_draws_min_mean_and_max_per_scenario(pipeline, frame):
@@ -186,13 +186,13 @@ def test_a_result_with_plots_round_trips_through_json(pipeline, frame):
     assert restored.plots == result.plots
 
 
-def test_core_decider_and_the_metrics_never_import_altair():
-    code = ("import sys, decider, decider.lab.experiments, decider._tooling.mcp._tools; "
+def test_core_decikit_and_the_metrics_never_import_altair():
+    code = ("import sys, decikit, decikit.lab.experiments, decikit._tooling.mcp._tools; "
             "assert 'altair' not in sys.modules and 'IPython' not in sys.modules")
     subprocess.run([sys.executable, "-c", code], check=True)
 
 
 def test_a_plot_without_altair_says_how_to_install_it(monkeypatch):
     monkeypatch.setitem(sys.modules, "altair", None)
-    with pytest.raises(DeciderError, match=r"decider\[experiments\]"):
+    with pytest.raises(DecikitError, match=r"decikit\[experiments\]"):
         Changes(metric="divergence").render({})

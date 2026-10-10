@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from decider import allow_fallback, flow, missing_as, param
+from decikit import allow_fallback, flow, missing_as, param
 
 from limit_mgmt.vocab import Exclusion
 

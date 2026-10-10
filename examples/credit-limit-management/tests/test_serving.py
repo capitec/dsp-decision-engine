@@ -1,10 +1,10 @@
-"""The pipeline as served: raw request bytes through the handler `decider serve` uses, in its compiled default mode."""
+"""The pipeline as served: raw request bytes through the handler `decikit serve` uses, in its compiled default mode."""
 import json
 
 import pytest
-from decider import Engine
-from decider.config import JsonFileStore
-from decider.serving import RequestHandler
+from decikit import Engine
+from decikit.config import JsonFileStore
+from decikit.serving import RequestHandler
 
 from limit_mgmt.matrix import build_matrix_table
 from limit_mgmt.pipeline import build

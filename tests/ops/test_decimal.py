@@ -7,10 +7,10 @@ import polars as pl
 import pytest
 from numba import njit
 
-from decider import flow
-from decider.ops import decimal
-from decider.ops.decimal import Rounding
-from decider.lab.testing import assert_equivalent
+from decikit import flow
+from decikit.ops import decimal
+from decikit.ops.decimal import Rounding
+from decikit.lab.testing import assert_equivalent
 
 REFERENCE = {Rounding.HALF_UP: stdlib.ROUND_HALF_UP, Rounding.HALF_EVEN: stdlib.ROUND_HALF_EVEN,
              Rounding.DOWN: stdlib.ROUND_DOWN}

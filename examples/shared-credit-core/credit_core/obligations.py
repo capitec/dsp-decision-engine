@@ -7,7 +7,7 @@ from __future__ import annotations
 from datetime import date
 from typing import NamedTuple, TypedDict
 
-from decider import allow_fallback, missing_as, step
+from decikit import allow_fallback, missing_as, step
 
 # obligation_treatment_code
 USE_STATED_INSTALMENT = 1

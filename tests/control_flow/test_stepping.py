@@ -2,9 +2,9 @@
 import polars as pl
 import pytest
 
-from decider import branch, flow, loop, step
-from decider._engine.debug import EVENT_LOG, NodeStarted, Paused
-from decider.lab.testing import assert_equivalent
+from decikit import branch, flow, loop, step
+from decikit._engine.debug import EVENT_LOG, NodeStarted, Paused
+from decikit.lab.testing import assert_equivalent
 
 
 def is_private(sector_code: int) -> bool:

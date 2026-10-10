@@ -39,7 +39,7 @@ export interface ParsedFlatRuleError {
  * - ["prioritized_flat_rule", "input_schema", 0]
  * - ["prioritized_flat_rule", "output", "dtypes", 0]
  *
- * Decider's union tags are stripped from conditionPath, so it matches the editor's own rule structure
+ * Decikit's union tags are stripped from conditionPath, so it matches the editor's own rule structure
  * (["rule", "conditions", 0, "threshold"]).
  */
 export function parseFlatRuleValidationErrors(

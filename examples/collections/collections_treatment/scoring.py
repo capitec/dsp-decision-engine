@@ -5,7 +5,7 @@ probability and one band edge, and the unadjusted score, probability and band st
 """
 from __future__ import annotations
 
-from decider import DecisionTableConfig, ParamTable, ScorecardConfig, allow_fallback, param, param_table, step
+from decikit import DecisionTableConfig, ParamTable, ScorecardConfig, allow_fallback, param, param_table, step
 
 from credit_core import calibration
 from credit_core.evidence import cell_id

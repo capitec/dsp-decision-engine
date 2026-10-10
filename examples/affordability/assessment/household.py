@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import math
 
-from decider import allow_fallback, flow, missing_as, param, step
+from decikit import allow_fallback, flow, missing_as, param, step
 
 from credit_core import deductions, income
 

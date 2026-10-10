@@ -40,7 +40,7 @@
   <text x="307" y="292" text-anchor="middle" font-size="14" fill="#1f2937">__pycache__/*.nbi, *.nbc</text>
   <text x="307" y="314" text-anchor="middle" font-size="14" fill="#1f2937">next to your step's file;</text>
   <text x="307" y="336" text-anchor="middle" font-size="14" fill="#1f2937">keyed by the function's</text>
-  <text x="307" y="358" text-anchor="middle" font-size="14" fill="#1f2937">content, CPU and decider's</text>
+  <text x="307" y="358" text-anchor="middle" font-size="14" fill="#1f2937">content, CPU and decikit's</text>
   <text x="307" y="380" text-anchor="middle" font-size="14" fill="#1f2937">compile semantics</text>
   <line x1="322" y1="178" x2="310" y2="236" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
 
@@ -55,7 +55,7 @@
 
   <rect x="710" y="240" width="260" height="160" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
   <text x="840" y="266" text-anchor="middle" font-size="15" font-weight="600" fill="#4c1d95">keeping it off requests</text>
-  <text x="840" y="292" text-anchor="middle" font-size="14" fill="#4c1d95">decider build scores</text>
+  <text x="840" y="292" text-anchor="middle" font-size="14" fill="#4c1d95">decikit build scores</text>
   <text x="840" y="314" text-anchor="middle" font-size="14" fill="#4c1d95">sample_request.json, which</text>
   <text x="840" y="336" text-anchor="middle" font-size="14" fill="#4c1d95">fills the disk cache; a server</text>
   <text x="840" y="358" text-anchor="middle" font-size="14" fill="#4c1d95">worker warms its kernels</text>

@@ -1,7 +1,7 @@
 """The four assessment modes. A mode picks evidence rules; it never changes the arithmetic."""
 from __future__ import annotations
 
-from decider import param
+from decikit import param
 
 NEW_APPLICATION = 1
 LIMIT_INCREASE = 2

@@ -1,7 +1,7 @@
 """Features this flow derives itself: the client segment and the evidence tier of the income."""
 from __future__ import annotations
 
-from decider import missing_as, step
+from decikit import missing_as, step
 
 SEGMENT_NEW_THIN = 1
 SEGMENT_NEW_THICK = 2

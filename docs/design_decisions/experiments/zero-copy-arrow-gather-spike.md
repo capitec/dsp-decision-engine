@@ -1,6 +1,6 @@
 # Can kernels read every Arrow column in place, validity bitmaps included?
 
-Date: 2026-09-26 · Script: spike, not kept (it ran behind `DECIDER_ZERO_COPY=1`, since removed)
+Date: 2026-09-26 · Script: spike, not kept (it ran behind `DECIKIT_ZERO_COPY=1`, since removed)
 
 ## Purpose
 Find out whether nullable and bool columns could be read straight from polars' Arrow buffers, and whether `score(dict)` could share one Arrow input path.

@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import pytest
 
-from decider.exceptions import DeciderError
-from decider.lab.experiments import Experiment, ExperimentDef, validate
-from decider.lab.experiments._experiments import check_experiment_version
-from decider.lab.diff._revisions import compatible
-from decider.lab.experiments.metrics import Describe, Divergence, ValueCounts
-from decider.lab.experiments.plots import Bars, Changes
+from decikit.exceptions import DecikitError
+from decikit.lab.experiments import Experiment, ExperimentDef, validate
+from decikit.lab.experiments._experiments import check_experiment_version
+from decikit.lab.diff._revisions import compatible
+from decikit.lab.experiments.metrics import Describe, Divergence, ValueCounts
+from decikit.lab.experiments.plots import Bars, Changes
 
 LIMIT_03 = {"demo": {"approved": {"limit": 0.3}}}
 
@@ -73,7 +73,7 @@ def test_two_unnamed_metrics_of_one_type_need_names(pipeline):
 
 def test_a_newer_experiment_version_is_refused():
     check_experiment_version("2")
-    with pytest.raises(DeciderError, match="newer"):
+    with pytest.raises(DecikitError, match="newer"):
         check_experiment_version("3")
 
 

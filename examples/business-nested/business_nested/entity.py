@@ -5,7 +5,7 @@ or on every entity of an application with `each`. `entities_unit()` is the struc
 """
 from __future__ import annotations
 
-from decider import dag, each, flow
+from decikit import dag, each, flow
 
 from business_nested import events, rollup, scoring, structure
 

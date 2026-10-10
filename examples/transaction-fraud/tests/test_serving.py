@@ -1,11 +1,11 @@
-"""The pipeline as `decider serve` runs it: raw request bytes through the handler, in the default compiled mode."""
+"""The pipeline as `decikit serve` runs it: raw request bytes through the handler, in the default compiled mode."""
 import json
 from pathlib import Path
 
 import polars as pl
 import pytest
-from decider.config import JsonFileStore
-from decider.serving import RequestHandler
+from decikit.config import JsonFileStore
+from decikit.serving import RequestHandler
 
 from fraud_interdiction.backtest import backtest, summarise
 

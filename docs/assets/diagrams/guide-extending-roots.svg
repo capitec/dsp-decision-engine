@@ -8,35 +8,35 @@
   <rect x="10" y="48" width="270" height="44" rx="8" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
   <text x="24" y="76" font-size="15" fill="#7c2d00">ConfigurableStep</text>
   <rect x="290" y="48" width="250" height="44" rx="8" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
-  <text x="304" y="76" font-size="15" fill="#4c1d95">decider.steps</text>
+  <text x="304" y="76" font-size="15" fill="#4c1d95">decikit.steps</text>
   <rect x="550" y="48" width="340" height="44" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
   <text x="564" y="76" font-size="15" fill="#14532d">step documents, flow files, StepRef fields</text>
 
   <rect x="10" y="100" width="270" height="44" rx="8" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
   <text x="24" y="128" font-size="15" fill="#7c2d00">Check</text>
   <rect x="290" y="100" width="250" height="44" rx="8" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
-  <text x="304" y="128" font-size="15" fill="#4c1d95">decider.checks</text>
+  <text x="304" y="128" font-size="15" fill="#4c1d95">decikit.checks</text>
   <rect x="550" y="100" width="340" height="44" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
-  <text x="564" y="128" font-size="15" fill="#14532d">checks.yaml, checks.run lists, decider check</text>
+  <text x="564" y="128" font-size="15" fill="#14532d">checks.yaml, checks.run lists, decikit check</text>
 
   <rect x="10" y="152" width="270" height="44" rx="8" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
   <text x="24" y="180" font-size="15" fill="#7c2d00">DatasetProvider</text>
   <rect x="290" y="152" width="250" height="44" rx="8" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
-  <text x="304" y="180" font-size="15" fill="#4c1d95">decider.datasets</text>
+  <text x="304" y="180" font-size="15" fill="#4c1d95">decikit.datasets</text>
   <rect x="550" y="152" width="340" height="44" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
   <text x="564" y="180" font-size="15" fill="#14532d">datasets/config.json</text>
 
   <rect x="10" y="204" width="270" height="44" rx="8" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
   <text x="24" y="232" font-size="15" fill="#7c2d00">ConfigStore</text>
   <rect x="290" y="204" width="250" height="44" rx="8" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
-  <text x="304" y="232" font-size="15" fill="#4c1d95">decider.config_stores</text>
+  <text x="304" y="232" font-size="15" fill="#4c1d95">decikit.config_stores</text>
   <rect x="550" y="204" width="340" height="44" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
-  <text x="564" y="232" font-size="15" fill="#14532d">DECIDER_CONFIG__TYPE</text>
+  <text x="564" y="232" font-size="15" fill="#14532d">DECIKIT_CONFIG__TYPE</text>
 
   <rect x="10" y="256" width="270" height="44" rx="8" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
   <text x="24" y="284" font-size="15" fill="#7c2d00">Metric, Plot, Block</text>
   <rect x="290" y="256" width="250" height="44" rx="8" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
-  <text x="304" y="284" font-size="14" fill="#4c1d95">decider.metrics, .plots, .blocks</text>
+  <text x="304" y="284" font-size="14" fill="#4c1d95">decikit.metrics, .plots, .blocks</text>
   <rect x="550" y="256" width="340" height="44" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
   <text x="564" y="284" font-size="15" fill="#14532d">experiment.json</text>
 
@@ -44,5 +44,5 @@
   <text x="26" y="346" font-size="15" font-weight="600" fill="#1f2937">Not registries (plain Python hooks)</text>
   <text x="26" y="372" font-size="14" fill="#1f2937">Adapter: any object with accept(events), passed as TraceSink(adapter)</text>
   <text x="26" y="394" font-size="14" fill="#1f2937">Callback (experiments) and RequestHandler (serving): subclass and pass the instance or import path</text>
-  <text x="26" y="416" font-size="14" fill="#1f2937">FieldMetadata (decider.ops): subclass for a display kind the debugger shows</text>
+  <text x="26" y="416" font-size="14" fill="#1f2937">FieldMetadata (decikit.ops): subclass for a display kind the debugger shows</text>
 </svg>

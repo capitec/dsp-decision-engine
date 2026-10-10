@@ -1,13 +1,13 @@
 """A Flex Loan quote: eligibility, income, affordability, score, grade, price and outcome in one pipeline.
 
-`decider build` and `decider serve` use `build`, which receives three documents from `configs/<version>/`: the rate card
+`decikit build` and `decikit serve` use `build`, which receives three documents from `configs/<version>/`: the rate card
 (`rate_card_flex_loan.json`), the score overlays (`score_adjustments.json`) and the reason codes (`reason_codes.json`).
 """
 from __future__ import annotations
 
 from datetime import date
 
-from decider import allow_fallback, dag, flow, step
+from decikit import allow_fallback, dag, flow, step
 
 from credit_core import (
     affordability, calibration, deductions, eligibility, expense_norms, fees, income, instalment, obligations,

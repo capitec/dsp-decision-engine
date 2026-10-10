@@ -4,8 +4,8 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
-from decider import flow, missing_as
-from decider._engine.boundary.nulls import MissingInputError
+from decikit import flow, missing_as
+from decikit._engine.boundary.nulls import MissingInputError
 
 
 def test_score_preserves_int_precision_above_2_53(bind):

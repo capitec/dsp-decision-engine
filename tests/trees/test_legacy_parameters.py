@@ -1,8 +1,8 @@
 """Param references and computed features give decider_old's answers."""
 import polars as pl
 
-from decider.steps.trees import TreeConfig
-from decider.steps.trees.schema import (
+from decikit.steps.trees import TreeConfig
+from decikit.steps.trees.schema import (
     FlatRuleDocument,
     LeafRule,
     ParameterInfo,

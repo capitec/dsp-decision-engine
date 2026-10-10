@@ -2,7 +2,7 @@
 
 Everything needed to implement `PolarsEngine` v1 without having been in the design discussion. Facts marked
 **verified** were checked by a spike on 2026-10-09 against polars 1.41.2 at commit `54ce33f3`; the spike
-code is at the end so the facts can be re-checked when polars or decider moves.
+code is at the end so the facts can be re-checked when polars or the decider toolkit moves.
 
 ## What v1 does
 
@@ -24,7 +24,7 @@ runs anywhere but the numba engine; polars only decides how rows are batched and
    table.
 4. A sub-executable rejects a params document entry for a step outside it:
    `ParamsError: params document: no step with params at 'p'. This pipeline has no params...`
-   (`check_namespaces` in `decider/_engine/params/validate.py:196`). The document must be pruned per
+   (`check_namespaces` in `decikit/_engine/params/validate.py:196`). The document must be pruned per
    segment.
 5. A name written on both sides of a frame step: when the later segment also reads it, the sub-executable
    accepts a batch that already holds the column (a self-read is an input, and `_produced` excludes inputs)
@@ -144,7 +144,7 @@ def run(self, data, params=None, trace=None):
   `PolarsExecutable` to the walk in `test_runners_and_executable_keep_no_per_call_state`.
 - Sub-executables are ordinary `Executable`s and share their thread-safety contract. Two threads can call
   `run` on one `PolarsExecutable` at once.
-- `decider/_engine/polars/engine.py` and `emit.py` are private; no `__all__`. Each under 500 lines.
+- `decikit/_engine/polars/engine.py` and `emit.py` are private; no `__all__`. Each under 500 lines.
 
 ## `fallbacks()` and inspection
 
@@ -188,9 +188,9 @@ Run with `uv run python <file>`; it takes a few seconds for the numba compile.
 
 ```python
 import polars as pl
-from decider import Engine, flow, frame_step, param
-from decider._engine.ir.context import to_ir
-from decider._engine.ir.nodes import SequenceNode
+from decikit import Engine, flow, frame_step, param
+from decikit._engine.ir.context import to_ir
+from decikit._engine.ir.nodes import SequenceNode
 
 def ratio(income: float, debt: float) -> float:
     return debt / income

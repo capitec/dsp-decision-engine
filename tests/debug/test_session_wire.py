@@ -3,8 +3,8 @@ import json
 
 import polars as pl
 
-from decider import flow
-from decider._engine.debug import (COMMAND, EVENT, EVENT_LOG, BreakAt, ClearBreak, Pause, ReloadFailed, Resume, Rewind,
+from decikit import flow
+from decikit._engine.debug import (COMMAND, EVENT, EVENT_LOG, BreakAt, ClearBreak, Pause, ReloadFailed, Resume, Rewind,
                                   SetValue, StepInto, StepOver)
 
 

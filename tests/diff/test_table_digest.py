@@ -3,9 +3,9 @@ import os
 import subprocess
 import sys
 
-from decider import ParamTable, flow, param_table
-from decider.lab import diff
-from decider.lab.diff._hash import _show, snapshot
+from decikit import ParamTable, flow, param_table
+from decikit.lab import diff
+from decikit.lab.diff._hash import _show, snapshot
 
 ROWS = [{"band": i, "rate": i * 0.5, "open": i % 2 == 0} for i in range(2000)]
 COLUMNS = {"band": int, "rate": float, "open": bool}
@@ -79,7 +79,7 @@ def test_a_long_default_is_shown_cut_at_80_characters_without_its_whole_repr():
 
 
 def test_a_table_default_is_hashed_per_column_not_per_cell(monkeypatch):
-    from decider.lab.diff import _hash
+    from decikit.lab.diff import _hash
 
     calls = []
     real = _hash._feed

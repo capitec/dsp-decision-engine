@@ -20,12 +20,12 @@ import numpy as np
 import polars as pl
 from pydantic_core import from_json, to_json
 
-from decider import flow, param
-from decider.config import JsonFileStore
-from decider._engine.run.engine import _NO_FRAME
-from decider._engine.run.state import State, load_record as _load
-from decider.serving._handler import RequestHandler
-from decider.serving._parse import coerce_record, parse_application_json
+from decikit import flow, param
+from decikit.config import JsonFileStore
+from decikit._engine.run.engine import _NO_FRAME
+from decikit._engine.run.state import State, load_record as _load
+from decikit.serving._handler import RequestHandler
+from decikit.serving._parse import coerce_record, parse_application_json
 
 sys.path.insert(0, "benchmarks")
 import tree_walk  # noqa: E402  the tree document the tree benchmark uses
@@ -55,7 +55,7 @@ TREE_ROW = {k: v for k, v in tree_walk.ROW.items() if k != "channel"}
 
 
 def cases():
-    from decider.steps.trees import TreeConfig
+    from decikit.steps.trees import TreeConfig
 
     return {
         "flagship": (flow(disposable_income, affordability_ratio, cap_by_income_band), FLAGSHIP_ROW),

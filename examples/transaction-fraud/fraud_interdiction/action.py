@@ -5,7 +5,7 @@ from bisect import bisect_left
 from datetime import date
 from typing import Any, Literal
 
-from decider import ConfigurableStep, allow_fallback
+from decikit import ConfigurableStep, allow_fallback
 
 from credit_core.adjustments import AdjustmentStack
 from credit_core.reason_codes import ReasonCodes, rank_codes

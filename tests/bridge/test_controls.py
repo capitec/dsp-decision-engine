@@ -5,7 +5,7 @@ import pytest
 HERE = os.path.dirname(__file__)
 EXAMPLES = os.path.join(HERE, "..", "..", "ui", "vscode", "examples")
 LOAN = os.path.join(EXAMPLES, "loan.py")
-from decider._tooling.bridge.bridge import Bridge
+from decikit._tooling.bridge.bridge import Bridge
 
 UNCAPPED = {"term": {"cap_by_income": {"cap": 100.0}}}  # so the sector caps decide term_cap
 

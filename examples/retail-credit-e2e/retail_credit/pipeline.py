@@ -1,13 +1,13 @@
 """The retail credit decision for a new Flex Loan application, from admission to outcome.
 
-`build` is what `decider build` and `decider serve` run. The dag resolves its steps in this order: admission, identity,
+`build` is what `decikit build` and `decikit serve` run. The dag resolves its steps in this order: admission, identity,
 eligibility, bureau state and fraud; income, tax, expenses, obligations and segment; score, probability of default
 and grade; policy caps; affordability; product routing; the consolidation scenario; pricing and the solve; the
 offer; final validation; reasons and outcome.
 """
 from __future__ import annotations
 
-from decider import dag, step
+from decikit import dag, step
 
 from credit_core import deductions, expense_norms, income, instalment, obligations
 from retail_credit import (

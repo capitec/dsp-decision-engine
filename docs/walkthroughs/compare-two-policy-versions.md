@@ -5,18 +5,18 @@ A credit team wants to loosen its affordability rule and change how the credit l
 This tutorial does all of that on one small project, with every command run for real. You will:
 
 1. build a lending pipeline, commit it and give its steps durable ids;
-2. change a param and a step, then see the change with `diff.structure`, `diff.outputs` and `decider diff`;
+2. change a param and a step, then see the change with `diff.structure`, `diff.outputs` and `decikit diff`;
 3. refactor a decision table and prove the refactor changes nothing, after catching a slip in a first attempt;
 4. run an experiment of the new version against the old revision and a param scenario;
 5. check the experiment's result against an independent diff.
 
 <div class="diagram" markdown>
-![The project's git history: lending v1, durable ids tagged v1, the policy change tagged v2, and the table refactor at HEAD; v1 and v2 are compared with diff and decider diff, v2 and HEAD with prove and a data diff, and the experiment runs HEAD as the baseline against v1](../assets/diagrams/tut-compare-timeline.svg)
+![The project's git history: lending v1, durable ids tagged v1, the policy change tagged v2, and the table refactor at HEAD; v1 and v2 are compared with diff and decikit diff, v2 and HEAD with prove and a data diff, and the experiment runs HEAD as the baseline against v1](../assets/diagrams/tut-compare-timeline.svg)
 
 *The history you will build, and which tool compares which commits.*
 </div>
 
-You need decider installed with the `prove` and `experiments` extras (`pip install 'decider[prove,experiments]'`) and git. Run everything from the project directory.
+You need the decider toolkit installed with the `prove` and `experiments` extras (`pip install 'decikit[prove,experiments]'`) and git. Run everything from the project directory.
 
 ## 1. The project
 
@@ -36,8 +36,8 @@ The pipeline takes an application through disposable income, the instalment-to-i
 
 ```python
 # lending/pipeline.py
-from decider import DecisionTableConfig, flow, param, step
-from decider.ops import Text
+from decikit import DecisionTableConfig, flow, param, step
+from decikit.ops import Text
 
 
 @step
@@ -122,14 +122,14 @@ for i in range(1, 2001):
 pl.DataFrame(rows).write_parquet("datasets/applications.parquet")
 ```
 
-decider looks for `datasets/` beside the nearest `configs/` directory above the working directory, and in the working directory when there is none. Here the only `configs/` is inside the package, below the working directory, so `datasets/` resolves to `lending-demo/datasets`.
+The decider toolkit looks for `datasets/` beside the nearest `configs/` directory above the working directory, and in the working directory when there is none. Here the only `configs/` is inside the package, below the working directory, so `datasets/` resolves to `lending-demo/datasets`.
 
 A first look at the current policy, over the dataset:
 
 ```python
 import polars as pl
-from decider.lab import checks
-from decider.lab.data import dataset
+from decikit.lab import checks
+from decikit.lab.data import dataset
 from lending.pipeline import build
 
 pipeline = build()
@@ -165,11 +165,11 @@ shape: (3, 4)
 
 ## 2. Commit and add durable ids
 
-Commit the first version, then let `decider ids` give every step a durable id. Ids let every later comparison match a step by identity instead of by name, so a rename never looks like a delete plus an add.
+Commit the first version, then let `decikit ids` give every step a durable id. Ids let every later comparison match a step by identity instead of by name, so a rename never looks like a delete plus an add.
 
 ```text
 $ git init -b main && git add -A && git commit -m "lending v1"
-$ decider ids lending
+$ decikit ids lending
 added 5 id(s) in 1 file(s)
   lending/pipeline.py:5  disposable_income  ->  id=61960951899c
   lending/pipeline.py:10  instalment_ratio  ->  id=f18ff80f85b3
@@ -178,7 +178,7 @@ added 5 id(s) in 1 file(s)
   lending/pipeline.py:37  lending  ->  id=f58544a1f4bb
 ```
 
-`decider ids` edits Python declarations only, so add the table's id to its document by hand. The whole change is:
+`decikit ids` edits Python declarations only, so add the table's id to its document by hand. The whole change is:
 
 ```diff
 -@step
@@ -226,8 +226,8 @@ Keep the old pipeline object, edit the file, reload the module and compare. Noth
 ```python
 import importlib
 import lending.pipeline
-from decider.lab import diff
-from decider.lab.data import dataset
+from decikit.lab import diff
+from decikit.lab.data import dataset
 
 old = lending.pipeline.build()
 # ... edit lending/pipeline.py as above ...
@@ -250,7 +250,7 @@ changed lending/credit_limit ['code', 'inputs']
 param lending/approved max_ratio default 0.35 -> 0.4
 ```
 
-`approved` changed only in its param declaration, and `credit_limit` in its code and inputs (it now reads `instalment`). `risk_band` is listed although its document did not change: decider currently reports every tree and decision-table step as changed, because part of what it hashes for them differs on every build. Read that line as noise for now; step 4 compares the table properly.
+`approved` changed only in its param declaration, and `credit_limit` in its code and inputs (it now reads `instalment`). `risk_band` is listed although its document did not change: the decider toolkit currently reports every tree and decision-table step as changed, because part of what it hashes for them differs on every build. Read that line as noise for now; step 4 compares the table properly.
 
 Which applications does it affect?
 
@@ -294,7 +294,7 @@ Commit and tag the change, then compare the two revisions from the command line.
 
 ```text
 $ git commit -am "v2: looser ratio, limit net of instalment" && git tag v2
-$ decider diff v1 v2 lending.pipeline:build --data applications --key application_id
+$ decikit diff v1 v2 lending.pipeline:build --data applications --key application_id
 structure: differs
   changed lending/risk_band: code, consts
   changed lending/approved: params
@@ -320,7 +320,7 @@ import importlib
 from pathlib import Path
 
 import lending.pipeline
-from decider.lab import diff
+from decikit.lab import diff
 
 old = lending.pipeline.build()
 src = Path("lending/pipeline.py")
@@ -344,7 +344,7 @@ smt None lending/risk_band {'bureau_score': 696.0000000000002}
 lending/risk_band: z3 found an input on which the step differs; it judges the step alone, so the flow around it may never produce that input
 ```
 
-z3 found a bureau score of about 696 that was band B before and is band A now, and decider re-ran both tables on it to confirm. The intended refactor:
+z3 found a bureau score of about 696 that was band B before and is band A now, and the decider toolkit re-ran both tables on it to confirm. The intended refactor:
 
 ```python
 p = attempt('{"lo": 600.0, "hi": 650.0, "band": "B"},\n             {"lo": 650.0, "hi": 700.0, "band": "B"},', ROW_A)
@@ -369,7 +369,7 @@ Commit it, and confirm on the data as well:
 
 ```text
 $ git commit -am "refactor: split band B at 650"
-$ decider diff v2 HEAD lending.pipeline:build --data applications --key application_id
+$ decikit diff v2 HEAD lending.pipeline:build --data applications --key application_id
 structure: differs
   changed lending/risk_band: code, consts
 outputs: 0 of 2000 rows changed
@@ -387,11 +387,11 @@ With `--data`, the exit status follows the outputs, so it is 0. Without `--data`
 A diff compares two versions. The team also wants to see v2 against v1 and against a looser variant, `max_ratio=0.45`, over the whole book, with charts for the review. That is an experiment: the baseline is the code at HEAD, one scenario runs the `v1` revision and one changes a param.
 
 ```python
-from decider.lab.experiments import Experiment, ExperimentDef
-from decider.lab.experiments.callbacks import Progress
-from decider.lab.experiments.metrics import Describe, Divergence, ValueCounts
-from decider.lab.experiments.plots import Bars, Changes, Ranges
-from decider.lab.experiments.report import Chart, Overview, Section, Table, Text
+from decikit.lab.experiments import Experiment, ExperimentDef
+from decikit.lab.experiments.callbacks import Progress
+from decikit.lab.experiments.metrics import Describe, Divergence, ValueCounts
+from decikit.lab.experiments.plots import Bars, Changes, Ranges
+from decikit.lab.experiments.report import Chart, Overview, Section, Table, Text
 
 definition = ExperimentDef(
     name="policy_v2",
@@ -467,7 +467,7 @@ Reading the result:
 `experiments/policy_v2/experiment.json` is the definition as data. Anyone can rerun it, from CI or a terminal, without the notebook:
 
 ```text
-$ decider experiment run experiments/policy_v2/experiment.json --out results/cli
+$ decikit experiment run experiments/policy_v2/experiment.json --out results/cli
 policy_v2: completed
   baseline: completed
   v1: completed
@@ -483,9 +483,9 @@ An experiment result is data, so check it like test output: assert the status, t
 
 ```python
 import polars as pl
-from decider.lab import diff
-from decider.lab.data import dataset
-from decider.lab.experiments import ExperimentResult, RunStatus
+from decikit.lab import diff
+from decikit.lab.data import dataset
+from decikit.lab.experiments import ExperimentResult, RunStatus
 
 result = ExperimentResult.model_validate_json(open("results/cli/result.json").read())
 assert result.status is RunStatus.COMPLETED and not result.nondeterministic
@@ -541,9 +541,9 @@ The summary loads back as the base `Summary` type, because the JSON does not rec
 | Step | Tool | Guide |
 |---|---|---|
 | Look at the flow, data and findings | `checks.run`, `dataset(...).load()` | [Checks](../guides/checks.md), [Data and datasets](../guides/data-and-datasets.md) |
-| Durable ids | `decider ids` | [Decision tracing](../guides/tracing.md), [CLI and MCP](../guides/cli-and-mcp.md) |
-| What changed, which records | `diff.structure`, `diff.outputs`, `decider diff` | [Comparing versions](../guides/diff-and-equivalence.md) |
+| Durable ids | `decikit ids` | [Decision tracing](../guides/tracing.md), [CLI and MCP](../guides/cli-and-mcp.md) |
+| What changed, which records | `diff.structure`, `diff.outputs`, `decikit diff` | [Comparing versions](../guides/diff-and-equivalence.md) |
 | Prove a refactor | `diff.prove` with z3 | [Comparing versions](../guides/diff-and-equivalence.md) |
-| Population comparison | `Experiment`, `decider experiment run` | [Experiments](../guides/experiments.md) |
+| Population comparison | `Experiment`, `decikit experiment run` | [Experiments](../guides/experiments.md) |
 
 To look at one of the 69 applicants step by step, open a [debug session](../guides/debugging-and-testing.md) on its record and break at `lending/approved`.

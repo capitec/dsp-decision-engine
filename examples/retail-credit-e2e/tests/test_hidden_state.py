@@ -4,9 +4,9 @@ import json
 import math
 import warnings
 
-from decider import ConfigurableStep, Engine, flow, step
-from decider.exceptions import HiddenStateWarning
-from decider.lab import diff
+from decikit import ConfigurableStep, Engine, flow, step
+from decikit.exceptions import HiddenStateWarning
+from decikit.lab import diff
 
 from retail_credit import caps, disclosure, eligibility, routing, validation
 from retail_credit.documents import SHIPPED, shipped

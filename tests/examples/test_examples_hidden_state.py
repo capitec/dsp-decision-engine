@@ -26,9 +26,9 @@ def test_every_example_is_listed():
 # One process per project: the example packages register config types that other tests in this process also claim.
 SCRIPT = """
 import json, sys, warnings
-from decider import Engine, HiddenStateWarning, ShadowedTableWarning
-from decider.config import JsonFileStore
-from decider.serving import RequestHandler
+from decikit import Engine, HiddenStateWarning, ShadowedTableWarning
+from decikit.config import JsonFileStore
+from decikit.serving import RequestHandler
 
 project, package, configs = sys.argv[1:]
 store = JsonFileStore(basepath=configs)

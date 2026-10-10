@@ -8,9 +8,9 @@ import types
 
 import pytest
 
-from decider import flow, step
-from decider._engine.compile import fingerprint
-from decider.lab import diff
+from decikit import flow, step
+from decikit._engine.compile import fingerprint
+from decikit.lab import diff
 
 
 class Tier(enum.Enum):
@@ -60,8 +60,8 @@ def test_a_structure_diff_sees_an_edited_module_constant():
 _CHILD = """
 import json, sys
 import steps
-from decider import flow
-from decider._engine.compile import fingerprint
+from decikit import flow
+from decikit._engine.compile import fingerprint
 
 exe = flow(steps.via_attr, name="p").compile("fused")
 print(json.dumps([fingerprint(steps.via_attr, strict=True), exe.score({"x": 1.0})["via_attr"], exe.fallbacks()]))

@@ -1,5 +1,5 @@
 import pytest
-from decider import DecisionTableConfig
+from decikit import DecisionTableConfig
 
 from credit_core.rate_card import (
     FLEX_LOAN_AMOUNT_BANDS, FLEX_LOAN_GRADES, FLEX_LOAN_TERM_BANDS, diff_cards, generate_flex_loan_card, lookup,

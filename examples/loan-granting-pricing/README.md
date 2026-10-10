@@ -77,7 +77,7 @@ The stages, in the order the decision takes them:
 
 ## Features it shows
 
-| decider feature | Where |
+| Decider toolkit feature | Where |
 |---|---|
 | A search in plain Python, called from a step, with a correctness argument and a test against brute force | [solve.py](loan_granting/solve.py), [tests/test_solve.py](tests/test_solve.py) |
 | A 63 360-row rate card kept as a config document, handed to `build` by name and becoming the default rows of a `param_table` that the search reads with `bisect`, indexing each table once per params bundle | [pipeline.py](loan_granting/pipeline.py), [offers.py](loan_granting/offers.py), [rate_tables.py](loan_granting/rate_tables.py) |
@@ -98,21 +98,21 @@ From the repository root, put every example on the path once (this one imports `
 ```bash
 export PYTHONPATH=$(printf '%s:' "$PWD"/examples/*/)
 cd examples/loan-granting-pricing
-export DECIDER_API__CODE_PATH="$PWD" DECIDER_API__PIPELINE="loan_granting.pipeline:build" DECIDER_CONFIG__BASEPATH="$PWD/configs"
+export DECIKIT_API__CODE_PATH="$PWD" DECIKIT_API__PIPELINE="loan_granting.pipeline:build" DECIKIT_CONFIG__BASEPATH="$PWD/configs"
 ```
 
 Build (validates `configs/0.1.0`, compiles and warms every kernel with `sample_request.json`; the first build in a fresh
 checkout takes a minute while numba compiles):
 
 ```bash
-uv run decider build
+uv run decikit build
 # built config version 0.1.0 (pipeline loan_granting.pipeline:build, mode fused)
 ```
 
 Serve, and decide the sample application: a client asking for R120 000 over 60 months. Its dates are plain JSON strings:
 
 ```bash
-uv run decider serve --workers 1 &
+uv run decikit serve --workers 1 &
 curl -s -d @sample_request.json -H 'content-type: application/json' localhost:8080/invocations |
   jq '{outcome_code, risk_grade, max_affordable_instalment, amount_cap, amount_cap_binding_rule_id,
        recommended: (.recommended_offer | {term_months, offered_amount, nominal_annual_rate, instalment, binding_constraint_code}),

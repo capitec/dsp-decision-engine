@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Callable
 
-from decider import ParamTable, param_table
+from decikit import ParamTable, param_table
 
 from consolidation import vocab
 from consolidation.inventory import num

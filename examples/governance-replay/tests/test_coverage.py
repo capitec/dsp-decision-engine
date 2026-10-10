@@ -27,6 +27,6 @@ def test_fraud_universe_is_the_live_rules_only(evidence):
     assert "MS-0208" in c.hits and c.hits["MS-0021"] > 0
 
 
-def test_static_findings_come_from_deciders_own_checks(evidence):
+def test_static_findings_come_from_the_toolkits_own_checks(evidence):
     c = coverage(FRAUD, responses(evidence, FRAUD))
     assert c.static_findings == ("DCD208 fraud_interdiction/wording/client_wording",)

@@ -11,7 +11,7 @@ hypothetical figure; `limits_unit` is everything that depends only on the grade 
 """
 from __future__ import annotations
 
-from decider import DecisionTableConfig, dag, missing_as, param, step
+from decikit import DecisionTableConfig, dag, missing_as, param, step
 
 from credit_core import affordability
 from credit_core.affordability import FAIL, INDETERMINATE, MARGINAL, PASS

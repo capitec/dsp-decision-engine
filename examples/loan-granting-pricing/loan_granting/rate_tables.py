@@ -9,7 +9,7 @@ from __future__ import annotations
 import bisect
 
 import numpy as np
-from decider import DecisionTableConfig
+from decikit import DecisionTableConfig
 
 from credit_core.credit_life import build_credit_life_table
 from credit_core.evidence import cell_id

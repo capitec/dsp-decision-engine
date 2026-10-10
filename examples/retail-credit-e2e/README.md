@@ -4,7 +4,7 @@ A client applies for a personal loan. Before the Bank says yes it has asked sixt
 the application well formed, who is this, may we lend to them at all, is it fraud, what do they earn and owe, how
 risky are they, what do our own caps allow, what can they afford, what does that buy, and is the offer we are about to
 make one we are willing to be bound by. This example is that whole chain for one product (the Flex Loan, an unsecured
-loan of R2 000 to R500 000) and one way in (a new application), as one decider pipeline you can read from top to
+loan of R2 000 to R500 000) and one way in (a new application), as one decider toolkit pipeline you can read from top to
 bottom.
 
 ## The business problem
@@ -45,7 +45,7 @@ When `has_offer` is false the price fields are zero and `rate_cell_id` is empty.
 
 ## The stages
 
-Each stage reads what earlier stages wrote and decides one thing. `decider` orders them by what they read, so the order
+Each stage reads what earlier stages wrote and decides one thing. `decikit` orders them by what they read, so the order
 below is the order a reader follows, not a call sequence anyone maintains.
 
 | # | Stage | What it decides | Where |
@@ -69,7 +69,7 @@ below is the order a reader follows, not a call sequence anyone maintains.
 
 ## Features it shows
 
-| decider feature | Where |
+| Decider toolkit feature | Where |
 |---|---|
 | Plain functions as steps; `param` for policy, `missing_as` for optional inputs | every module; the policy numbers are in [`configs/0.1.0/params.json`](configs/0.1.0/params.json) |
 | One `dag` of a few dozen steps and units, with `flow` for a value written twice (`amount_cap` overlaid then rounded, the instalment, the reasons fired then ranked) | [pipeline.py](retail_credit/pipeline.py), [caps.py](retail_credit/caps.py), [pricing.py](retail_credit/pricing.py), [disclosure.py](retail_credit/disclosure.py) |
@@ -92,21 +92,21 @@ From the repository root, put every example on the path once (this one imports `
 ```bash
 export PYTHONPATH=$(printf '%s:' "$PWD"/examples/*/)
 cd examples/retail-credit-e2e
-export DECIDER_API__CODE_PATH="$PWD" DECIDER_API__PIPELINE="retail_credit.pipeline:build" DECIDER_CONFIG__BASEPATH="$PWD/configs"
+export DECIKIT_API__CODE_PATH="$PWD" DECIKIT_API__PIPELINE="retail_credit.pipeline:build" DECIKIT_CONFIG__BASEPATH="$PWD/configs"
 ```
 
 Build (validates `configs/0.1.0` and compiles and warms every kernel with `sample_request.json`; the first build in a
 fresh checkout takes a minute or two while numba compiles):
 
 ```bash
-uv run decider build
+uv run decikit build
 # built config version 0.1.0 (pipeline retail_credit.pipeline:build, mode fused)
 ```
 
 Serve, and decide the sample application. Its dates are plain JSON strings. A decision takes a few milliseconds:
 
 ```bash
-uv run decider serve --workers 1 &
+uv run decikit serve --workers 1 &
 curl -s -d @sample_request.json -H 'content-type: application/json' localhost:8080/invocations |
   jq '{outcome_code, offer_amount, offer_binding_constraint, instalment, nominal_annual_rate, risk_grade,
        amount_cap, amount_cap_binding_rule, max_affordable_instalment, rate_cell_id}'

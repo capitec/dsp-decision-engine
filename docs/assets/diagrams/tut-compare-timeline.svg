@@ -33,13 +33,13 @@
   <path d="M340,180 C380,215 540,215 580,180" stroke="#16a34a" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
   <rect x="330" y="215" width="260" height="70" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
   <text x="460" y="240" font-size="14" font-weight="600" fill="#14532d" text-anchor="middle">diff.structure / diff.outputs</text>
-  <text x="460" y="262" font-size="13" fill="#14532d" text-anchor="middle">decider diff v1 v2: 567 rows,</text>
+  <text x="460" y="262" font-size="13" fill="#14532d" text-anchor="middle">decikit diff v1 v2: 567 rows,</text>
   <text x="460" y="278" font-size="13" fill="#14532d" text-anchor="middle">69 decisions change</text>
 
   <path d="M580,180 C620,215 780,215 820,180" stroke="#2563eb" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
   <rect x="610" y="215" width="260" height="70" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
   <text x="740" y="240" font-size="14" font-weight="600" fill="#1e3a8a" text-anchor="middle">diff.prove: tier smt, identical</text>
-  <text x="740" y="262" font-size="13" fill="#1e3a8a" text-anchor="middle">decider diff v2 HEAD --data:</text>
+  <text x="740" y="262" font-size="13" fill="#1e3a8a" text-anchor="middle">decikit diff v2 HEAD --data:</text>
   <text x="740" y="278" font-size="13" fill="#1e3a8a" text-anchor="middle">0 of 2000 rows changed</text>
 
   <path d="M330,353 C200,353 220,124 324,121" stroke="#7c3aed" stroke-width="1.5" fill="none" marker-end="url(#arr)" stroke-dasharray="6 4"/>

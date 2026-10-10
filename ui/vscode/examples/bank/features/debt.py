@@ -1,7 +1,7 @@
 """Debt: repayment load, utilisation and ratios."""
 import math  # noqa: F401
 
-from decider import dag, param, step  # noqa: F401
+from decikit import dag, param, step  # noqa: F401
 
 
 def existing_instalments_band(existing_instalments: float, low: float = param(600.0), mid: float = param(8040.0), high: float = param(9960.0)) -> float:

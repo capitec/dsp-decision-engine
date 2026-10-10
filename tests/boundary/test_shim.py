@@ -19,16 +19,16 @@ import polars as pl
 import pytest
 from numba import njit
 
-pytest.importorskip("decider._engine.boundary._arrow._shim", exc_type=ImportError, reason="the Arrow shim can't be built here (no C compiler)")
+pytest.importorskip("decikit._engine.boundary._arrow._shim", exc_type=ImportError, reason="the Arrow shim can't be built here (no C compiler)")
 
-import decider._engine.boundary._arrow as arrow  # noqa: E402
-from decider._engine.boundary._arrow import _build  # noqa: E402
-from decider._engine.boundary._arrow._shim import GET_STRING_ADDR  # noqa: E402
-from decider._engine.boundary._arrow.intrinsics import load_f64, load_i64, load_u8  # noqa: E402
-from decider._engine.boundary._arrow.kernels import string_lengths  # noqa: E402
-from decider._engine.boundary._arrow.plan import ArrowKindError, ColumnSpec, FramePlan  # noqa: E402
-from decider._engine.boundary._arrow.view import FrameView  # noqa: E402
-from decider._engine.ir.decls import FeatureKind as K  # noqa: E402
+import decikit._engine.boundary._arrow as arrow  # noqa: E402
+from decikit._engine.boundary._arrow import _build  # noqa: E402
+from decikit._engine.boundary._arrow._shim import GET_STRING_ADDR  # noqa: E402
+from decikit._engine.boundary._arrow.intrinsics import load_f64, load_i64, load_u8  # noqa: E402
+from decikit._engine.boundary._arrow.kernels import string_lengths  # noqa: E402
+from decikit._engine.boundary._arrow.plan import ArrowKindError, ColumnSpec, FramePlan  # noqa: E402
+from decikit._engine.boundary._arrow.view import FrameView  # noqa: E402
+from decikit._engine.ir.decls import FeatureKind as K  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # helpers
@@ -369,11 +369,11 @@ _CACHE_CHILD = textwrap.dedent(
     import contextlib, io, json, warnings
     warnings.filterwarnings("ignore")
     import numpy as np, polars as pl
-    from decider._engine.boundary._arrow._shim import GET_STRING_ADDR
-    from decider._engine.boundary._arrow.kernels import string_lengths
-    from decider._engine.boundary._arrow.plan import FramePlan
-    from decider._engine.boundary._arrow.view import FrameView
-    from decider._engine.ir.decls import FeatureKind as K
+    from decikit._engine.boundary._arrow._shim import GET_STRING_ADDR
+    from decikit._engine.boundary._arrow.kernels import string_lengths
+    from decikit._engine.boundary._arrow.plan import FramePlan
+    from decikit._engine.boundary._arrow.view import FrameView
+    from decikit._engine.ir.decls import FeatureKind as K
     df = pl.DataFrame({"s": ["dog", None, "a much longer merchant descriptor"], "f": [1.0, None, 3.0]})
     log = io.StringIO()
     with contextlib.redirect_stdout(log):
@@ -445,7 +445,7 @@ def test_the_shim_exports_only_its_own_functions_and_namespaced_nanoarrow():
     out = subprocess.run(["nm", "-D", "--defined-only", so], capture_output=True, text=True, check=True).stdout
     symbols = [line.split()[-1] for line in out.splitlines() if line.strip()]
     assert "sm_gather_row" in symbols and "sm_get_string" in symbols
-    assert all(s.startswith(("sm_", "DeciderArrow")) for s in symbols), symbols
+    assert all(s.startswith(("sm_", "DecikitArrow")) for s in symbols), symbols
 
 
 def test_the_vendored_nanoarrow_matches_its_manifest_and_the_header_matches_the_pin():
@@ -461,11 +461,11 @@ def test_the_vendored_nanoarrow_matches_its_manifest_and_the_header_matches_the_
 _MISSING_CHILD = textwrap.dedent(
     """
     import json
-    import decider._engine.boundary._arrow as a
+    import decikit._engine.boundary._arrow as a
     d = a.diagnose()
     assert d["shim"] == "unavailable", d
     try:
-        from decider._engine.boundary._arrow import view
+        from decikit._engine.boundary._arrow import view
     except ImportError as e:
         print(json.dumps({"error": str(e), "diagnose_error": d["error"]}))
     else:
@@ -491,7 +491,7 @@ _CORRUPT_CHILD = textwrap.dedent(
     """
     import json
     try:
-        import decider._engine.boundary._arrow.view
+        import decikit._engine.boundary._arrow.view
     except ImportError as e:
         print(json.dumps({"error": str(e)}))
     else:
@@ -503,7 +503,7 @@ _CORRUPT_CHILD = textwrap.dedent(
 def test_a_corrupt_cached_shim_reports_the_loader_error_rather_than_rebuilding(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
     so = _build.build()
-    assert so.parent == tmp_path / "cache" / "decider" / "arrow-shim"
+    assert so.parent == tmp_path / "cache" / "decikit" / "arrow-shim"
     so.write_bytes(b"not a shared object")
     proc = _run_child(_CORRUPT_CHILD, tmp_path, {"XDG_CACHE_HOME": str(tmp_path / "cache")})
     assert proc.returncode == 0, proc.stderr

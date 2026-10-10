@@ -1,5 +1,5 @@
 """Overdraft on a salary account. Policy rules: each rule declines an application for one reason."""
-from decider import flow, param, step
+from decikit import flow, param, step
 
 
 @step(output="od_min_age")

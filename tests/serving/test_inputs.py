@@ -9,14 +9,14 @@ import polars as pl
 import pytest
 from typing_extensions import TypedDict
 
-from decider import Engine, flow, frame_step
-from decider.ops import Struct
-from decider.config import JsonFileStore
-from decider.exceptions import DeciderError, ParamsError
-from decider.serving import RequestHandler
-from decider.serving._handler import _dates, construct_handler_from_settings
-from decider.serving._parse import coerce_record, dummy, has_date
-from decider.serving._servers.starlette import create_app
+from decikit import Engine, flow, frame_step
+from decikit.ops import Struct
+from decikit.config import JsonFileStore
+from decikit.exceptions import DecikitError, ParamsError
+from decikit.serving import RequestHandler
+from decikit.serving._handler import _dates, construct_handler_from_settings
+from decikit.serving._parse import coerce_record, dummy, has_date
+from decikit.serving._servers.starlette import create_app
 
 from test_serving import _request
 
@@ -155,7 +155,7 @@ def second(history: list[float]) -> float:
 
 def test_a_warm_up_that_fails_on_synthetic_inputs_suggests_a_sample_request(tmp_path):
     sample = tmp_path / "sample_request.json"
-    with pytest.raises(DeciderError, match=r"IndexError.*'history': \[1\.0\].*sample_request\.json"):
+    with pytest.raises(DecikitError, match=r"IndexError.*'history': \[1\.0\].*sample_request\.json"):
         _handler(tmp_path, flow(second, name="g"), sample_request=str(sample)).stage()
     sample.write_text('{"history": [1.0, 2.0]}')
     _handler(tmp_path, flow(second, name="g"), sample_request=str(sample)).stage()
@@ -164,7 +164,7 @@ def test_a_warm_up_that_fails_on_synthetic_inputs_suggests_a_sample_request(tmp_
 def test_a_failing_sample_request_is_named_in_the_error(tmp_path):
     sample = tmp_path / "sample_request.json"
     sample.write_text('{"history": []}')
-    with pytest.raises(DeciderError, match="Fix .*sample_request.json"):
+    with pytest.raises(DecikitError, match="Fix .*sample_request.json"):
         _handler(tmp_path, flow(second, name="g"), sample_request=str(sample)).stage()
 
 
@@ -182,7 +182,7 @@ def test_invalid_params_still_raise_params_error_from_warm_up(tmp_path):
 
 
 PIPELINE = '''
-from decider import flow
+from decikit import flow
 def {name}(x: float) -> float:
     return x
 def build():
@@ -192,7 +192,7 @@ def build():
 
 def test_code_path_wins_over_an_earlier_path_entry_and_the_pipeline_file_is_reported(
         tmp_path, monkeypatch, capsys):
-    from decider._settings import get_settings
+    from decikit._settings import get_settings
 
     settings = get_settings()
 
@@ -223,7 +223,7 @@ def test_code_path_wins_over_an_earlier_path_entry_and_the_pipeline_file_is_repo
 ])
 def test_a_dotted_handler_in_a_package_is_used_and_a_missing_one_falls_back(
         tmp_path, monkeypatch, handler_path, expected):
-    from decider._settings import get_settings
+    from decikit._settings import get_settings
 
     settings = get_settings()
 
@@ -231,7 +231,7 @@ def test_a_dotted_handler_in_a_package_is_used_and_a_missing_one_falls_back(
     package.mkdir()
     (package / "__init__.py").write_text("")
     (package / "pipeline.py").write_text(PIPELINE.format(name="mine"))
-    (package / "inference.py").write_text("from decider.serving import RequestHandler\n\n"
+    (package / "inference.py").write_text("from decikit.serving import RequestHandler\n\n"
                                           "class Handler(RequestHandler):\n    pass\n")
     store = JsonFileStore(basepath=str(tmp_path / "configs"))
     store.create_version({"params": {}})
@@ -247,8 +247,8 @@ def test_a_dotted_handler_in_a_package_is_used_and_a_missing_one_falls_back(
         sys.modules.pop(name, None)
 
 
-def test_python_dash_m_decider_runs_the_cli():
-    result = subprocess.run([sys.executable, "-m", "decider", "--help"], capture_output=True, text=True)
+def test_python_dash_m_decikit_runs_the_cli():
+    result = subprocess.run([sys.executable, "-m", "decikit", "--help"], capture_output=True, text=True)
     assert result.returncode == 0 and "build" in result.stdout
 
 

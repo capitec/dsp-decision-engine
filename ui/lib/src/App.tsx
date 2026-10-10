@@ -38,7 +38,7 @@ export interface AppProps {
  *     createRoot(el).render(<App send={post} listen={subscribe} can={new Set(["reveal", "run", "step"])} />);
  */
 export function App(props: AppProps) {
-  return <div className="decider"><View {...props} /></div>;
+  return <div className="decikit"><View {...props} /></div>;
 }
 
 function View({ send, listen, can, showStructure = true, showBreakpointForm = true, onSelectionChange, onNodeContextMenu }: AppProps) {

@@ -72,7 +72,7 @@ dispatch to queues, outcome feedback, languages, the runners-up record, and the 
 
 ## Features it shows
 
-| decider feature | Where |
+| Decider toolkit feature | Where |
 |---|---|
 | `TreeConfig` as a flat rule set: `prioritized_flat_rule`, `mode: "all"`, so every rule answers and none exits early | `_tree` in [rules.py](fraud_interdiction/rules.py) |
 | A step type of your own, `ConfigurableStep`, whose document holds rule governance *and* conditions and which expands into trees and a frame step with `ctx.expand` | [rules.py](fraud_interdiction/rules.py), [`configs/0.1.0/rule_set.json`](configs/0.1.0/rule_set.json) |
@@ -82,7 +82,7 @@ dispatch to queues, outcome feedback, languages, the runners-up record, and the 
 | `@allow_fallback` for steps that are Python on purpose (dates, lists, strings), checked with `Engine(strict_compile=True)` | [action.py](fraud_interdiction/action.py), [overlays.py](fraud_interdiction/overlays.py), [tests/test_serving.py](tests/test_serving.py) |
 | `DecisionTableConfig` in a config document, then `flow` so a later step may overwrite what the table wrote | [`client_wording.json`](configs/0.1.0/client_wording.json), [pipeline.py](fraud_interdiction/pipeline.py), [wording.py](fraud_interdiction/wording.py) |
 | `dag` (dependency order) for the pipeline, `flow` (written order) for one value written twice | [pipeline.py](fraud_interdiction/pipeline.py) |
-| `ConfigurableStep` types whose fields are the data, compared by `decider.lab.diff`: overlays, reason codes and rule-set versions from `credit_core`, and this package's `AmountOverlays` and `ActionResolver`, which hold an `AdjustmentStack` as a field | [overlays.py](fraud_interdiction/overlays.py), [action.py](fraud_interdiction/action.py), [tests/test_release_checks.py](tests/test_release_checks.py) |
+| `ConfigurableStep` types whose fields are the data, compared by `decikit.lab.diff`: overlays, reason codes and rule-set versions from `credit_core`, and this package's `AmountOverlays` and `ActionResolver`, which hold an `AdjustmentStack` as a field | [overlays.py](fraud_interdiction/overlays.py), [action.py](fraud_interdiction/action.py), [tests/test_release_checks.py](tests/test_release_checks.py) |
 | A params document, including a switch that turns the whole overlay stack off | [`params.json`](configs/0.1.0/params.json), [backtest.py](fraud_interdiction/backtest.py) |
 | One executable for a batch (`run`) and a record (`score`) with the same answers; a backtest is the batch run | [backtest.py](fraud_interdiction/backtest.py), [tests/test_serving.py](tests/test_serving.py) |
 | JSON dates arriving as strings, warm-up from `sample_request.json`, serving the raw request bytes | [sample_request.json](sample_request.json), [tests/test_serving.py](tests/test_serving.py) |
@@ -94,21 +94,21 @@ From the repository root, put every example on the path once (this project impor
 ```bash
 export PYTHONPATH=$(printf '%s:' "$PWD"/examples/*/)
 cd examples/transaction-fraud
-export DECIDER_API__CODE_PATH="$PWD" DECIDER_API__PIPELINE="fraud_interdiction.pipeline:build" DECIDER_CONFIG__BASEPATH="$PWD/configs"
+export DECIKIT_API__CODE_PATH="$PWD" DECIKIT_API__PIPELINE="fraud_interdiction.pipeline:build" DECIKIT_CONFIG__BASEPATH="$PWD/configs"
 ```
 
 Build (validates `configs/0.1.0`, compiles and warms every kernel with `sample_request.json`). The first build in
 a fresh checkout takes about a minute and a half while numba compiles the rule trees; later builds reuse the cache:
 
 ```bash
-uv run decider build
+uv run decikit build
 # built config version 0.1.0 (pipeline fraud_interdiction.pipeline:build, mode fused)
 ```
 
 Serve, and assess the sample payment. Its date is a plain JSON string:
 
 ```bash
-uv run decider serve --workers 1 &
+uv run decikit serve --workers 1 &
 curl -s -d @sample_request.json -H 'content-type: application/json' localhost:8080/invocations |
   jq '{action_code, action_source_rule_id, primary_reason_code, client_wording_key, mule_scam_amount_multiplier,
        applied_adjustment_ids, fired_on_overlay_ids, counterfactual_action_code,
@@ -162,7 +162,7 @@ To regenerate `configs/0.1.0` (the synthetic rules, the wording table, the overl
 ## The documents
 
 `build` receives one document per argument, each a file in `configs/<version>/`. A change to any of them is a new config
-version, and `decider.lab.diff.structure` reports it.
+version, and `decikit.lab.diff.structure` reports it.
 
 - [`rule_set.json`](configs/0.1.0/rule_set.json) and [`client_wording.json`](configs/0.1.0/client_wording.json): the rules and the
   wording table, as before.
@@ -250,10 +250,10 @@ tests/
 - **Hard blocks floor the counterfactual too.** They are not overlays, so what the authored rules alone would have
   done still includes them.
 - **Many rules, one tree per list.** `RuleSet` writes one `prioritized_flat_rule` tree per list (live, shadow,
-  overlay-adjusted) in `mode: "all"`. `decider` splits a list of more than 32 rules into `<tree>/part_<k>` nodes
+  overlay-adjusted) in `mode: "all"`. `decikit` splits a list of more than 32 rules into `<tree>/part_<k>` nodes
   when it builds the plan; the step report and `diff` name those paths. The answers do not depend on the split.
 - **Data in documents, not objects.** No step reads a register or a module-level `dict`: the overlays, the reason codes and the
-  rule-set versions are config documents, and a step's constants hold the rest. A release check (`decider.lab.diff.structure`)
+  rule-set versions are config documents, and a step's constants hold the rest. A release check (`decikit.lab.diff.structure`)
   therefore sees an overlay change from x0.7 to x0.35, a moved cut-over, a reordered severity and a rule asking for a different
   action, and none of the steps raises `HiddenStateWarning` (see [tests/test_release_checks.py](tests/test_release_checks.py)).
   Owner, approval reference, rationale and review date stay in the overlay documents for people and the ageing report; the

@@ -1,7 +1,7 @@
 """Hard eligibility: the shared library's gates plus three of this product's. Every gate is checked, none short-circuits."""
 from __future__ import annotations
 
-from decider import allow_fallback, missing_as, param, step
+from decikit import allow_fallback, missing_as, param, step
 
 from credit_core import eligibility
 

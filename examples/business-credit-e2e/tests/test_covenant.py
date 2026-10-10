@@ -4,8 +4,8 @@ from datetime import date
 
 import pytest
 
-from decider import Engine, HiddenStateWarning, flow
-from decider.lab import diff
+from decikit import Engine, HiddenStateWarning, flow
+from decikit.lab import diff
 
 from business_credit_e2e import covenant, vocab
 from business_credit_e2e.pipeline import build

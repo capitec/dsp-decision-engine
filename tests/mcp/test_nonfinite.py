@@ -1,7 +1,7 @@
 import json
 import math
 
-from decider._tooling.mcp import Policy, build_server
+from decikit._tooling.mcp import Policy, build_server
 from tests.mcp.test_mcp import _call
 
 BANDS = {"type": "decision_table", "name": "band", "columns": {"lo": "Float64", "hi": "Float64", "band": "String"},

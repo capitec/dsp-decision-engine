@@ -1,7 +1,7 @@
 """Hard blocks: gates that set a minimum action no rule or overlay can soften."""
 from __future__ import annotations
 
-from decider import missing_as, step
+from decikit import missing_as, step
 
 from fraud_interdiction.vocab import Action
 

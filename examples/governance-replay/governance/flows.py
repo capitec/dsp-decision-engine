@@ -13,8 +13,8 @@ from typing import Callable
 
 from credit_core.adjustments import Overlay
 from credit_core.reason_codes import Code
-from decider import ConfigurableStep
-from decider.config import JsonFileStore
+from decikit import ConfigurableStep
+from decikit.config import JsonFileStore
 
 from governance.replayer import Replayer
 

@@ -7,7 +7,7 @@ from typing import Annotated, NotRequired, Optional, TypedDict
 import pytest
 from pydantic import Field, TypeAdapter, ValidationError
 
-from decider.ir import pydantic_ready
+from decikit.ir import pydantic_ready
 
 
 class Inner(TypedDict):

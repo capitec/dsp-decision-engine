@@ -78,7 +78,7 @@ The rules, in the order the pipeline applies them:
 
 ## Features it shows
 
-| decider feature | Where |
+| Decider toolkit feature | Where |
 |---|---|
 | `each` over a list column, and an `each` inside an `each`: per-item rules as ordinary steps at both levels of nesting | [entity.py](business_nested/entity.py) |
 | A child flow sees only its own item, so the parent's context is copied onto it; cross-item work (merging paths) is one step over the whole list | [structure.py](business_nested/structure.py) |
@@ -102,21 +102,21 @@ From the repository root, put every example on the path once (this one imports `
 ```bash
 export PYTHONPATH=$(printf '%s:' "$PWD"/examples/*/)
 cd examples/business-nested
-export DECIDER_API__CODE_PATH="$PWD" DECIDER_API__PIPELINE="business_nested.pipeline:build" DECIDER_CONFIG__BASEPATH="$PWD/configs"
+export DECIKIT_API__CODE_PATH="$PWD" DECIKIT_API__PIPELINE="business_nested.pipeline:build" DECIKIT_CONFIG__BASEPATH="$PWD/configs"
 ```
 
 Build (validates `configs/0.2.0`, compiles and warms every kernel with `sample_request.json`; the first build in a
 fresh checkout takes a minute while numba compiles):
 
 ```bash
-uv run decider build
+uv run decikit build
 # built config version 0.2.0 (pipeline business_nested.pipeline:build, mode fused)
 ```
 
 Serve, and decide the sample application. Its dates are plain JSON strings, inside the nested lists too:
 
 ```bash
-uv run decider serve --workers 1 &
+uv run decikit serve --workers 1 &
 curl -s -d @sample_request.json -H 'content-type: application/json' localhost:8080/invocations |
   jq '{outcome_code, decline_reason_codes, attributing_entity_id, attributing_event_ids, attributing_rule_id,
        risk_grade, risk_grade_unadjusted, offered_amount, instalment}'
@@ -207,8 +207,8 @@ To regenerate `configs/0.2.0` (the four documents below and the params document)
 ## The documents
 
 `build(entity_score_adjustments, business_pd_adjustments, event_threshold_overlays, reason_codes)` receives one document per argument, each a file in
-`configs/<version>/` that `decider build` and `decider serve` pass by name. Left out, `build()` loads the ones in `configs/0.2.0`, so the projects that embed this
-decision (`business-credit-e2e`) call it without arguments. A change to a document is a new config version and `decider.lab.diff.structure` reports it:
+`configs/<version>/` that `decikit build` and `decikit serve` pass by name. Left out, `build()` loads the ones in `configs/0.2.0`, so the projects that embed this
+decision (`business-credit-e2e`) call it without arguments. A change to a document is a new config version and `decikit.lab.diff.structure` reports it:
 the overlays and the reason codes are fields of a step, not objects a step closes over. The governance fields (`owner`, `approval_reference`,
 `rationale`, `review_date`) are for people and the ageing report; the diff ignores them. Everything else is behaviour.
 

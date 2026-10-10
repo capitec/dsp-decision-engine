@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import polars as pl
-from decider import frame_step
+from decikit import frame_step
 
 from fraud_interdiction import vocab
 
@@ -73,7 +73,7 @@ def _row(row: dict, live: tuple[RuleRow, ...], shadow: tuple[RuleRow, ...]) -> d
 def firing_step(rules: tuple[Rule, ...]):
     """A frame step: the rule population is as wide as the rule set, so it reads columns by name from the frame.
 
-    It closes over tuples of plain values only, which is what lets `decider.lab.diff` see a rule's dates, segments
+    It closes over tuples of plain values only, which is what lets `decikit.lab.diff` see a rule's dates, segments
     or stale-data behaviour change.
     """
     live = tuple(pack(r) for r in rules if r.status == "live")

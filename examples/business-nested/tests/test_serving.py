@@ -1,13 +1,13 @@
-"""The decision as served: raw request bytes through the handler `decider serve` uses, in its compiled default mode."""
+"""The decision as served: raw request bytes through the handler `decikit serve` uses, in its compiled default mode."""
 import json
 from pathlib import Path
 
 import polars as pl
 import pytest
-from decider import Engine
-from decider.config import JsonFileStore
-from decider.lab.testing import assert_equivalent
-from decider.serving import RequestHandler
+from decikit import Engine
+from decikit.config import JsonFileStore
+from decikit.lab.testing import assert_equivalent
+from decikit.serving import RequestHandler
 
 from business_nested.pipeline import DECISION_OUTPUTS, build
 from business_nested.records import parse_dates

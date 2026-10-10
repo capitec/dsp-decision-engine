@@ -7,8 +7,8 @@
   <rect x="0" y="0" width="1000" height="1020" fill="#ffffff"/>
 
   <rect x="250" y="16" width="500" height="64" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
-  <text x="500" y="42" font-size="15" font-weight="600" text-anchor="middle" fill="#4c1d95">decider mcp [--raw]  ·  FastMCP over stdio</text>
-  <text x="500" y="64" font-size="13" text-anchor="middle" fill="#4c1d95">build_server(Policy(raw), EditorBridge())  ·  decider/_tooling/mcp/_server.py</text>
+  <text x="500" y="42" font-size="15" font-weight="600" text-anchor="middle" fill="#4c1d95">decikit mcp [--raw]  ·  FastMCP over stdio</text>
+  <text x="500" y="64" font-size="13" text-anchor="middle" fill="#4c1d95">build_server(Policy(raw), EditorBridge())  ·  decikit/_tooling/mcp/_server.py</text>
   <line x1="350" y1="80" x2="250" y2="118" stroke="#4b5563" stroke-width="1.5" marker-end="url(#a)"/>
   <line x1="650" y1="80" x2="745" y2="118" stroke="#4b5563" stroke-width="1.5" marker-end="url(#a)"/>
   <line x1="500" y1="80" x2="500" y2="458" stroke="#4b5563" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#a)"/>
@@ -110,7 +110,7 @@
   </g>
   <rect x="640" y="700" width="320" height="76" rx="8" fill="#ffffff" stroke="#7c3aed" stroke-width="1.5"/>
   <text x="800" y="724" font-size="13" text-anchor="middle" fill="#4c1d95">EditorBridge.send(workspace, action)</text>
-  <text x="800" y="746" font-size="13" text-anchor="middle" fill="#4c1d95">~/.decider/editor/&lt;hash&gt;.sock + .token</text>
+  <text x="800" y="746" font-size="13" text-anchor="middle" fill="#4c1d95">~/.decikit/editor/&lt;hash&gt;.sock + .token</text>
   <text x="800" y="766" font-size="13" text-anchor="middle" fill="#4c1d95">one JSON line {token, action} each way</text>
   <text x="36" y="930" font-size="13" fill="#4c1d95">&lt;hash&gt; = sha256 of the workspace's resolved path, first 16 hex characters; the directory is mode 0700.</text>
   <text x="36" y="954" font-size="13" fill="#4c1d95">A missing window, wrong token or dead socket comes back as {"ok": false, "error": ...}, never raised.</text>

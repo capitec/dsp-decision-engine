@@ -1,6 +1,6 @@
 import pytest
 
-from decider.lab.testing import assert_equivalent
+from decikit.lab.testing import assert_equivalent
 
 
 @pytest.fixture

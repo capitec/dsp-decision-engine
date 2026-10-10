@@ -1,5 +1,5 @@
 [project]
-name = "decider"
+name = "decikit"
 dynamic = ["version"]
 description = "Build, serve and inspect decision pipelines"
 readme = "README.md"
@@ -44,13 +44,13 @@ all = [
 ]
 
 [project.scripts]
-decider = "decider._tooling.cli:cli"
+decikit = "decikit._tooling.cli:cli"
 
-# Packages that ship types for decider declare them in these entry-point groups,
-# named by the type tag: decider.steps, decider.config_stores, decider.metrics,
-# decider.plots, decider.blocks, decider.datasets, decider.checks. For example,
+# Packages that ship types for decikit declare them in these entry-point groups,
+# named by the type tag: decikit.steps, decikit.config_stores, decikit.metrics,
+# decikit.plots, decikit.blocks, decikit.datasets, decikit.checks. For example,
 # in the package's own pyproject.toml:
-#   [project.entry-points."decider.steps"]
+#   [project.entry-points."decikit.steps"]
 #   scaled = "credit_risk.steps:Scaled"
 
 # ── build ─────────────────────────────────────────────────────────────────────
@@ -67,7 +67,7 @@ source = "vcs"
 tag_regex = "^v(?P<version>[0-9]+\\.[0-9]+\\.[0-9]+.*)$"
 
 [tool.hatch.build.targets.wheel]
-packages = ["decider"]
+packages = ["decikit"]
 
 # ── uv ────────────────────────────────────────────────────────────────────────
 

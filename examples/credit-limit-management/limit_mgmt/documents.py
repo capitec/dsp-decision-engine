@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from decider import ConfigurableStep
+from decikit import ConfigurableStep
 
 SHIPPED = Path(__file__).resolve().parents[1] / "configs" / "0.1.0"
 

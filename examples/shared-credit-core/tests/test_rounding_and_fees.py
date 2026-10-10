@@ -1,7 +1,7 @@
 from datetime import date
 
 import pytest
-from decider import flow
+from decikit import flow
 
 from credit_core.fees import (
     build_fee_caps_table, fee_caps_version_step, initiation_fee, initiation_fee_capped, initiation_fee_capped_step,

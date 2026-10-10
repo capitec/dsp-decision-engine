@@ -1,7 +1,7 @@
 """The steps read no Python objects of their own: what they need is a param, a table, a document or a plain tuple."""
 import warnings
 
-from decider import Engine, HiddenStateWarning
+from decikit import Engine, HiddenStateWarning
 
 from consolidation.pipeline import build
 

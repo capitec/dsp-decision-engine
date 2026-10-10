@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import date
 from typing import TypedDict
 
-from decider import (
+from decikit import (
     DecisionTableConfig,
     ParamTable,
     allow_fallback,

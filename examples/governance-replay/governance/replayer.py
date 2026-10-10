@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 
-from decider.serving import RequestHandler
+from decikit.serving import RequestHandler
 
 
 class _Tap:
@@ -23,7 +23,7 @@ class _Tap:
 
 @dataclass
 class Replayer(RequestHandler):
-    """Scores raw JSON requests exactly as `decider serve` does, against one staged config version.
+    """Scores raw JSON requests exactly as `decikit serve` does, against one staged config version.
 
     `params` replaces the version's params document, for what-if runs. `score` gives the typed result;
     `served` gives it as the client would receive it, which is what evidence records and replay compares.

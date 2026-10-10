@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 import pytest
-from decider import DecisionTableConfig, param_table
+from decikit import DecisionTableConfig, param_table
 from loan_granting.pricing import CreditLifeIndex, RateCardIndex
 from loan_granting.rate_tables import RATE_CARD_COLUMNS, CreditLifeTable, credit_life_rows
 

@@ -1,11 +1,11 @@
 """The business credit decision: structure, entities, people, financials, grade, price and outcome in one pipeline.
 
-`decider build` and `decider serve` use `build`. The two halves are public for callers that re-run one of them:
+`decikit build` and `decikit serve` use `build`. The two halves are public for callers that re-run one of them:
 `entities_unit()` assesses each entity, `decision_unit()` is everything that reads the assessed entities.
 """
 from __future__ import annotations
 
-from decider import dag
+from decikit import dag
 
 from business_nested import blend, entity, financial, grade, outcome, pricing, sole_proprietor, structure
 
@@ -45,9 +45,9 @@ def decision_unit(pd_adjustments=None, reason_codes=None):
 
 def build(entity_score_adjustments=None, business_pd_adjustments=None, event_threshold_overlays=None,
           reason_codes=None):
-    """The whole decision, as `decider serve` runs it and as other projects embed it.
+    """The whole decision, as `decikit serve` runs it and as other projects embed it.
 
-    Each argument is a document from `configs/<version>/` (`decider build` passes them by name); left out, the one
+    Each argument is a document from `configs/<version>/` (`decikit build` passes them by name); left out, the one
     this package ships in `configs/0.2.0` is used, so `build()` works for callers that embed the decision.
 
     Example: `build(reason_codes=ConfigurableStep.load("configs/0.2.0/reason_codes.json"))`.

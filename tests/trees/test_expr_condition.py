@@ -4,10 +4,10 @@ import warnings
 import polars as pl
 import pytest
 
-from decider import Engine, FallbackWarning, branch, flow, step
-from decider.exceptions import ExprError
-from decider.steps.trees import expr_condition
-from decider.lab.testing import assert_equivalent
+from decikit import Engine, FallbackWarning, branch, flow, step
+from decikit.exceptions import ExprError
+from decikit.steps.trees import expr_condition
+from decikit.lab.testing import assert_equivalent
 
 
 def test_numeric_comparison_against_a_threshold(run):

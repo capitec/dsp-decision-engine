@@ -1098,9 +1098,9 @@ export type ProjectUpdate = {
  */
 export type ServerInfoResponse = {
     /**
-     * Decider Version
+     * Decikit Version
      */
-    decider_version: string;
+    decikit_version: string;
     /**
      * Service
      */

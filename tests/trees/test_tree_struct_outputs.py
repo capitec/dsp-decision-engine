@@ -2,8 +2,8 @@
 import polars as pl
 import pytest
 
-from decider._engine import Engine
-from decider.steps.trees import TreeConfig
+from decikit._engine import Engine
+from decikit.steps.trees import TreeConfig
 
 TYPE_DEFS = {
     "act": {"name": "Act", "type": "struct", "definition": {

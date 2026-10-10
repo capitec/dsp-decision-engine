@@ -5,13 +5,13 @@ import subprocess
 import polars as pl
 import pytest
 
-from decider import flow
-from decider.lab.experiments import Experiment, ExperimentDef, RunStatus, run, start
-from decider.lab.experiments._experiments import ScenarioStatus
-from decider.lab.diff._revisions import resolve
-from decider.lab.experiments.callbacks import Callback
-from decider.lab.experiments.metrics import Divergence, ValueCounts
-from decider.lab.experiments import JobStatus
+from decikit import flow
+from decikit.lab.experiments import Experiment, ExperimentDef, RunStatus, run, start
+from decikit.lab.experiments._experiments import ScenarioStatus
+from decikit.lab.diff._revisions import resolve
+from decikit.lab.experiments.callbacks import Callback
+from decikit.lab.experiments.metrics import Divergence, ValueCounts
+from decikit.lab.experiments import JobStatus
 
 LIMIT_03 = {"demo": {"approved": {"limit": 0.3}}}
 
@@ -157,7 +157,7 @@ def test_out_dir_gets_each_scenarios_output_batches_and_the_result(pipeline, fra
 
 def test_a_plain_python_caller_runs_a_json_definition_end_to_end(tmp_path, monkeypatch):
     (tmp_path / "credit.py").write_text(
-        "from decider import flow, param\n"
+        "from decikit import flow, param\n"
         "def ratio(income, debt):\n"
         "    return debt / income if income > 0 else 1.0\n"
         "def approved(ratio, limit=param(0.4)):\n"
@@ -183,7 +183,7 @@ def test_a_plain_python_caller_runs_a_json_definition_end_to_end(tmp_path, monke
 
 def test_run_given_a_path_reads_the_input_relative_to_the_definition_file(tmp_path, monkeypatch):
     (tmp_path / "credit.py").write_text(
-        "from decider import flow\n"
+        "from decikit import flow\n"
         "def ratio(income, debt):\n"
         "    return debt / income if income > 0 else 1.0\n"
         "pipeline = flow(ratio, name='credit')\n"
@@ -230,7 +230,7 @@ def test_a_revision_scenario_runs_the_checked_out_code_even_with_the_live_module
 
 def test_start_runs_a_definition_file_in_the_background(tmp_path, monkeypatch):
     (tmp_path / "credit_bg.py").write_text(
-        "from decider import flow\n"
+        "from decikit import flow\n"
         "def ratio(income, debt):\n"
         "    return debt / income if income > 0 else 1.0\n"
         "pipeline = flow(ratio, name='credit')\n"

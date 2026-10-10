@@ -2,9 +2,9 @@
 import polars as pl
 import pytest
 
-from decider import _engine as engine
-from decider.steps.trees import TreeConfig
-from decider.steps.trees._split import DEFAULT_PART_OUTPUTS
+from decikit import _engine as engine
+from decikit.steps.trees import TreeConfig
+from decikit.steps.trees._split import DEFAULT_PART_OUTPUTS
 
 W = 8  # part width the tests ask for, so a wide tree stays a few dozen rules
 

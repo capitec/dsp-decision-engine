@@ -11,16 +11,16 @@ from fractions import Fraction
 
 import pytest
 
-from decider import flow
-from decider._engine.compile import fingerprint
-from decider.lab import diff
-from decider.ops.decimal import Rounding
+from decikit import flow
+from decikit._engine.compile import fingerprint
+from decikit.lab import diff
+from decikit.ops.decimal import Rounding
 
 _STEPS = '''
 import datetime, functools, re
 from decimal import Decimal
-from decider.ops import decimal
-from decider.ops.decimal import Rounding
+from decikit.ops import decimal
+from decikit.ops.decimal import Rounding
 
 LIMIT = datetime.date(2024, 1, 1)
 CODES = {"gold": (1, 2), "tiers": [3, 4], "fresh": frozenset({"a", "b", "c", "d", "e"})}
@@ -52,7 +52,7 @@ def classed(x: float) -> float:
 _CHILD = """
 import json
 import steps
-from decider._engine.compile import fingerprint
+from decikit._engine.compile import fingerprint
 
 names = ("rounded", "dated", "coded", "classed")
 print(json.dumps({n: fingerprint(getattr(steps, n), strict=True) for n in names}))
@@ -72,12 +72,12 @@ def test_the_key_of_a_step_reading_classes_dates_and_containers_is_the_same_in_e
     assert keys("1") == keys("2")
 
 
-_CACHED = "from decider.ops import decimal\nfrom decider.ops.decimal import Rounding\n\n\n" \
+_CACHED = "from decikit.ops import decimal\nfrom decikit.ops.decimal import Rounding\n\n\n" \
           "def r(x: float) -> float:\n    return decimal.round(x, 2, Rounding.HALF_UP)\n"
 _CACHE_CHILD = """
 import json
 import step
-import decider._engine.compile.njit as njit
+import decikit._engine.compile.njit as njit
 _, kernel = njit.jit(step.r)
 print(json.dumps([kernel(3.14159), len(kernel.stats.cache_hits), len(kernel.stats.cache_misses)]))
 """
@@ -99,7 +99,7 @@ def test_a_step_using_decimal_round_hits_the_disk_cache_in_the_next_process(tmp_
 
 
 def rounded(x: float) -> float:
-    from decider.ops import decimal
+    from decikit.ops import decimal
 
     return decimal.round(x, 2, Rounding.HALF_UP)
 
@@ -108,7 +108,7 @@ _PICK = "from shapes import P\n\n\ndef pick(x: float) -> float:\n    return P(x,
 _PICK_CHILD = """
 import json
 import step
-import decider._engine.compile.njit as njit
+import decikit._engine.compile.njit as njit
 _, kernel = njit.jit(step.pick)
 print(json.dumps(kernel(7.0)))
 """

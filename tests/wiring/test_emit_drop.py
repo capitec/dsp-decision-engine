@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import pytest
 
-from decider import flow, param, step
-from decider._engine.wiring import resolve
+from decikit import flow, param, step
+from decikit._engine.wiring import resolve
 
 
 def a(x: float) -> float:

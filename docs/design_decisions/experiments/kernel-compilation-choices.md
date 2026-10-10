@@ -28,4 +28,4 @@ Fusion, split/fused time (above 1 means fusion wins):
 - `prange`: the crossover is serial wall-clock, not row count, about 90 µs against a 65-70 µs fork/join floor; a rule on predicted serial time scored 97.9% out of sample, a row threshold 66.7%, a warmup probe at 10k rows predicting 100k+ 52.8% (0% for medium bodies). A trivial add reaches 2.8-3.1x at 1M rows; a 64-iteration body 11.4-12.0x at 5M. `parallel=True` compiles 1.92-7.92x slower (median 3.15x).
 
 ## Decision
-Fixed grouping, `nogil` unconditionally, `fastmath` off, fallback per whole step on compile errors only, content-keyed kernels with no generated source, and no `prange` (nothing in `decider/` uses it). See [engine](../decisions/engine.md).
+Fixed grouping, `nogil` unconditionally, `fastmath` off, fallback per whole step on compile errors only, content-keyed kernels with no generated source, and no `prange` (nothing in `decikit/` uses it). See [engine](../decisions/engine.md).

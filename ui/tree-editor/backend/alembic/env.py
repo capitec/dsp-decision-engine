@@ -4,8 +4,8 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.ext.asyncio import async_engine_from_config
 from alembic import context
 from sqlmodel import SQLModel
-from dsp_decider.settings import settings
-from dsp_decider.db.models import *  # Import all models so SQLModel can see them
+from dsp_decikit.settings import settings
+from dsp_decikit.db.models import *  # Import all models so SQLModel can see them
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -86,7 +86,7 @@ async def run_async_migrations():
 
     """
     # Reuse the main application's engine - already has all the right settings
-    from dsp_decider.db.session import engine as db_engine
+    from dsp_decikit.db.session import engine as db_engine
 
     connectable = db_engine
 

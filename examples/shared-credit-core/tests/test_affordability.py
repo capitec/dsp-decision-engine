@@ -1,5 +1,5 @@
 import pytest
-from decider import dag
+from decikit import dag
 
 from credit_core.affordability import (
     FAIL, INDETERMINATE, MARGINAL, PASS, affordability_buffer_applied_step, affordability_verdict_code_step,

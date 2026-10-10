@@ -8,7 +8,7 @@ from __future__ import annotations
 import math
 import statistics
 
-from decider import allow_fallback, flow, missing_as, param
+from decikit import allow_fallback, flow, missing_as, param
 
 EMPLOYER_CONFIRMED = 1
 PAYSLIP = 2

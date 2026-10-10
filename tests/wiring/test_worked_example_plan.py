@@ -1,8 +1,8 @@
 """The spec's worked example pipeline, resolved (a scalar step stands in for the tree)."""
 from __future__ import annotations
 
-from decider import branch, dag, flow, frame_step, missing_as, param, step
-from decider._engine.wiring import Branch, Sequence, resolve
+from decikit import branch, dag, flow, frame_step, missing_as, param, step
+from decikit._engine.wiring import Branch, Sequence, resolve
 
 
 def disposable_income(net_income: float, expenses: float) -> float:

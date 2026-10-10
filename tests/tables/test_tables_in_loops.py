@@ -1,11 +1,11 @@
 """A decision table (or tree) inside a loop or branch runs in the same kernel as its neighbours."""
 import polars as pl
 
-from decider import branch, flow, optimise, step
-from decider._engine import Engine
-from decider.lab.testing import assert_equivalent
-from decider.steps.tables import DecisionTableConfig
-from decider.steps.trees import TreeConfig
+from decikit import branch, flow, optimise, step
+from decikit._engine import Engine
+from decikit.lab.testing import assert_equivalent
+from decikit.steps.tables import DecisionTableConfig
+from decikit.steps.trees import TreeConfig
 
 FRAME = pl.DataFrame({"n": [5, 40, 0]})
 

@@ -1,10 +1,10 @@
 """Flow files build `dag`, `each` and `optimise` nodes like the Python constructors."""
 import polars as pl
 
-from decider import dag, each, flow, optimise
-from decider.steps import _composites
-from decider.steps.flowfile import _load
-from decider.lab.testing import assert_equivalent
+from decikit import dag, each, flow, optimise
+from decikit.steps import _composites
+from decikit.steps.flowfile import _load
+from decikit.lab.testing import assert_equivalent
 from tests.flowfile import components as comp
 from tests.flowfile.test_load_flow import _write
 

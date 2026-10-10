@@ -10,7 +10,7 @@ from collections import Counter
 from datetime import date
 
 from credit_core.reason_codes import rank_codes
-from decider import ParamTable, allow_fallback, missing_as, param, step
+from decikit import ParamTable, allow_fallback, missing_as, param, step
 
 from consolidation import candidates, vocab
 from consolidation.capacity import Capacity

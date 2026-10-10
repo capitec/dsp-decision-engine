@@ -4,14 +4,14 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from decider import flow, step
-from decider._engine.compile import Fallback, Kernel, compile_plan, numpy_dtype
-from decider._engine.ir.decls import FeatureKind as K
-from decider._engine.ir.decls import Input, NullPolicy, Output, ParamDecl, feature_kind
-from decider._engine.ir.nodes import CallNode, SequenceNode
-from decider._engine.ir.origin import Origin
-from decider._engine.params import param
-from decider._engine.wiring import resolve
+from decikit import flow, step
+from decikit._engine.compile import Fallback, Kernel, compile_plan, numpy_dtype
+from decikit._engine.ir.decls import FeatureKind as K
+from decikit._engine.ir.decls import Input, NullPolicy, Output, ParamDecl, feature_kind
+from decikit._engine.ir.nodes import CallNode, SequenceNode
+from decikit._engine.ir.origin import Origin
+from decikit._engine.params import param
+from decikit._engine.wiring import resolve
 
 
 def disposable_income(net_income: float, expenses: float) -> float:

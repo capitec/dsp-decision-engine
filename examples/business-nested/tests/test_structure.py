@@ -3,7 +3,7 @@ import random
 from datetime import date
 
 import pytest
-from decider import Engine, flow
+from decikit import Engine, flow
 
 from business_nested import structure, vocab
 from business_nested.records import entity, event

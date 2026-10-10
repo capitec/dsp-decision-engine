@@ -64,7 +64,7 @@
   <text x="478" y="392" font-size="13" fill="#7f1d1d">Session: one per thread. It shallow-copies the runner, so it shares</text>
   <text x="478" y="412" font-size="13" fill="#7f1d1d">the immutable Compiled snapshot and sets visit and skip on its copy.</text>
   <text x="478" y="440" font-size="13" fill="#7f1d1d">TraceSink: one per call. Its counters are plain ints.</text>
-  <text x="478" y="468" font-size="13" fill="#7f1d1d">The step functions users write: decider cannot make them safe;</text>
+  <text x="478" y="468" font-size="13" fill="#7f1d1d">The step functions users write: decikit cannot make them safe;</text>
   <text x="478" y="488" font-size="13" fill="#7f1d1d">the impure and mutates_input checks flag the usual ways they fail.</text>
   <text x="478" y="516" font-size="13" fill="#7f1d1d">Experiments, checks, diff, data loaders, the bridge, MCP.</text>
 </svg>

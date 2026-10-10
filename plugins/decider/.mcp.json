@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "decider": {
-      "command": "uv",
-      "args": ["run", "--with", "fastmcp>=4.0.10", "decider", "mcp"]
-    }
-  }
-}

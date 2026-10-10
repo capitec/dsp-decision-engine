@@ -1,7 +1,7 @@
 """The config documents this example ships, for callers that embed the assessment without passing their own."""
 from pathlib import Path
 
-from decider import ConfigurableStep
+from decikit import ConfigurableStep
 
 CONFIGS = Path(__file__).resolve().parents[1] / "configs" / "0.1.0"
 

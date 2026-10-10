@@ -8,12 +8,12 @@ import polars as pl
 import pytest
 from pydantic import TypeAdapter
 
-from decider import ConfigurableStep, CustomFunction, FallbackWarning, Value, allow_fallback, flow, missing_as, step
-from decider.exceptions import MissingInputError, NotIntegralError
-from decider.lab import diff
-from decider.lab.testing import assert_equivalent
-from decider.steps import StepRef
-from decider.steps.tables import DecisionTableConfig
+from decikit import ConfigurableStep, CustomFunction, FallbackWarning, Value, allow_fallback, flow, missing_as, step
+from decikit.exceptions import MissingInputError, NotIntegralError
+from decikit.lab import diff
+from decikit.lab.testing import assert_equivalent
+from decikit.steps import StepRef
+from decikit.steps.tables import DecisionTableConfig
 
 
 class Cap(CustomFunction):

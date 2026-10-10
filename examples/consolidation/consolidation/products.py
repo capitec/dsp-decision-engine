@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from decider import allow_fallback, step
+from decikit import allow_fallback, step
 
 
 @dataclass(frozen=True)

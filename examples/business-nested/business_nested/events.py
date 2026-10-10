@@ -10,7 +10,7 @@ import math
 from datetime import date
 from typing import Any, Literal
 
-from decider import (
+from decikit import (
     ConfigurableStep, DecisionTableConfig, ParamRef, Value, allow_fallback, flow, missing_as, step,
 )
 from pydantic import model_validator

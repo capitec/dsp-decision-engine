@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import polars as pl
-from decider import Executable
+from decikit import Executable
 
 from fraud_interdiction.vocab import Action
 

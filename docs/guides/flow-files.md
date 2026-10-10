@@ -11,7 +11,7 @@ flowchart LR
     D["configs/&lt;version&gt;/*.json<br/>tree, table, scorecard documents"] --> L
     L --> S["Step tree<br/>flow / branch / loop / dag / each / optimise"]
     S --> E["Engine, compile, score"]
-    S --> H["RequestHandler<br/>decider build, decider serve"]
+    S --> H["RequestHandler<br/>decikit build, decikit serve"]
     P["configs/&lt;version&gt;/params.json"] --> E
     P --> H
     classDef authoring fill:#fff1e0,stroke:#f57c00,color:#7c2d00,stroke-width:1.5px;
@@ -75,7 +75,7 @@ steps:
 `components/__init__.py`:
 
 ```python
-from decider import param, step
+from decikit import param, step
 
 
 def debt_ratio(income: float, debt: float) -> float:
@@ -126,9 +126,9 @@ def cap_limit(limit: float, cap: float = param(150000.0)) -> float:
 import sys
 from pathlib import Path
 import polars as pl
-from decider import load_flow
-from decider.config import JsonFileStore
-from decider.ir import step_map
+from decikit import load_flow
+from decikit.config import JsonFileStore
+from decikit.ir import step_map
 
 root = Path("flowapp")
 sys.path.insert(0, str(root))             # so `components: components` imports
@@ -180,11 +180,11 @@ The flow file above is exactly this Python. `step_map`, the params document and 
 import sys
 from pathlib import Path
 import polars as pl
-from decider import ConfigurableStep, branch, flow, load_flow
-from decider.config import JsonFileStore
-from decider.ir import step_map
-from decider.lab.testing import assert_equivalent
-from decider.steps.trees import expr_condition
+from decikit import ConfigurableStep, branch, flow, load_flow
+from decikit.config import JsonFileStore
+from decikit.ir import step_map
+from decikit.lab.testing import assert_equivalent
+from decikit.steps.trees import expr_condition
 
 root = Path("flowapp").resolve()
 sys.path.insert(0, str(root))
@@ -244,7 +244,7 @@ A name defined in both places is an error, never a precedence rule. `components(
 ```python
 import sys
 from pathlib import Path
-from decider.steps.flowfile import components, read_flow
+from decikit.steps.flowfile import components, read_flow
 
 sys.path.insert(0, "flowapp")
 import components as comp_module
@@ -281,7 +281,7 @@ An `expr` supports numeric comparisons, string equality against a quoted literal
 import json, types
 from pathlib import Path
 import polars as pl
-from decider import load_flow, step
+from decikit import load_flow, step
 
 @step(output="fast_track")
 def fast_track(score: float) -> bool:
@@ -325,13 +325,13 @@ shape: (4, 4)
 import sys
 from pathlib import Path
 import polars as pl
-from decider import load_flow
+from decikit import load_flow
 
 Path("comp_pkg").mkdir(exist_ok=True)
 Path("comp_pkg/__init__.py").write_text('''
 from typing import TypedDict
-from decider import missing_as, param, step
-from decider.ops import Columnar
+from decikit import missing_as, param, step
+from decikit.ops import Columnar
 
 
 def large(balance: float = missing_as(0.0), large_balance: float = param(20000.0)) -> bool:
@@ -417,18 +417,18 @@ The params path of a step inside an `optimise` node runs through the loop it low
 - `as:` runs a step a second time under another name, with its own params: `- {step: full_limit, as: full_limit_again}`.
 - `path_columns: fn` on a `step:` node that names a tree sets the tree's `path_columns` to the function `fn` from components. A step that is not a tree refuses it.
 - `suppress_checks: [durable_ids]` on any node silences those checks for that node and everything inside it; see [checks](checks.md).
-- `id: "0123abcdef45"` gives a node a durable id. `decider ids` rewrites Python source only, so write flow-file ids by hand.
+- `id: "0123abcdef45"` gives a node a durable id. `decikit ids` rewrites Python source only, so write flow-file ids by hand.
 
 ## Serving a flow file
 
-Set `DECIDER_API__PIPELINE` to the file instead of an import path. It is resolved against `DECIDER_API__CODE_PATH` (the current directory by default), and the store's documents are passed as `documents`:
+Set `DECIKIT_API__PIPELINE` to the file instead of an import path. It is resolved against `DECIKIT_API__CODE_PATH` (the current directory by default), and the store's documents are passed as `documents`:
 
 ```bash
 $ cat .env
-DECIDER_API__PIPELINE=flow.yaml
-DECIDER_CONFIG__BASEPATH=configs
-$ decider build
-decider: pipeline from flow file /…/flowapp/flow.yaml
+DECIKIT_API__PIPELINE=flow.yaml
+DECIKIT_CONFIG__BASEPATH=configs
+$ decikit build
+decikit: pipeline from flow file /…/flowapp/flow.yaml
 built config version 0.0.0 (pipeline flow.yaml, mode fused)
 ```
 
@@ -436,8 +436,8 @@ In-process, pass the path to `RequestHandler`:
 
 ```python
 import sys
-from decider.config import JsonFileStore
-from decider.serving import RequestHandler
+from decikit.config import JsonFileStore
+from decikit.serving import RequestHandler
 
 sys.path.insert(0, ".")                       # so `components: components` imports
 handler = RequestHandler(JsonFileStore(basepath="configs"), "flow.yaml")
@@ -453,7 +453,7 @@ print(handler.process_fn(body, "application/json", "application/json").content.d
 
 The pipeline is rebuilt from the file for each staged config version, so a version with a new `limit_band.json` gets the new table. Everything else about serving is in [projects and serving](projects-and-serving.md).
 
-YAML files need the YAML parser: `pip install 'decider[yaml]'`. JSON files need nothing extra and use the same schema.
+YAML files need the YAML parser: `pip install 'decikit[yaml]'`. JSON files need nothing extra and use the same schema.
 
 ## Errors
 
@@ -491,6 +491,6 @@ Other errors name the problem the same way: `flow 'screen' has inline steps, but
 
 ## Where to go next
 
-- [Projects and serving](projects-and-serving.md): the config store, `decider build`, `decider serve`.
+- [Projects and serving](projects-and-serving.md): the config store, `decikit build`, `decikit serve`.
 - [Trees, tables and scorecards](trees-tables-scorecards.md): the documents a `step:` can name.
 - [Expressions and flow files architecture](../architecture/configurable-steps/expr-and-flowfile.md): how `load_flow` and `expr_condition` are built.

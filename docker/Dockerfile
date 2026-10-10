@@ -1,6 +1,6 @@
 # Targets (podman commands tested; docker needs BuildKit for --build-context and --mount, not tested):
-#   runtime   (default)  decider + sanic only. Mount your project at /opt/ml/model/code; nothing is baked.
-#   project              runtime + a project baked in at /opt/ml/model/code, with `decider build` run at
+#   runtime   (default)  decikit + sanic only. Mount your project at /opt/ml/model/code; nothing is baked.
+#   project              runtime + a project baked in at /opt/ml/model/code, with `decikit build` run at
 #                        image build time so a bad config or a missing document fails the build.
 #
 # Run every command from the repository root.
@@ -8,17 +8,17 @@
 # 1. runtime image, project mounted:
 #      podman build -t decider:latest -f docker/Dockerfile .
 #      podman run --rm -p 8080:8080 -v $PWD/my-project:/opt/ml/model/code:ro,Z \
-#          -e DECIDER_API__PIPELINE=my_pkg.pipeline:build decider:latest
-#    The project is a folder holding the pipeline package, configs/ and sample_request.json (decider template).
+#          -e DECIKIT_API__PIPELINE=my_pkg.pipeline:build decider:latest
+#    The project is a folder holding the pipeline package, configs/ and sample_request.json (decikit template).
 #    :Z relabels the folder for SELinux. The container user (uid 1000) must be able to read it: a folder
 #    only you can read needs --userns=keep-id as well. Nothing is built, so the first start compiles everything.
 #
 # 2. the runtime image as a base for your own tiny Dockerfile (a requirements.txt in the project is pip-installed):
 #      FROM decider:latest
 #      COPY . /opt/ml/model/code
-#      ENV DECIDER_API__PIPELINE=my_pkg.pipeline:build
+#      ENV DECIKIT_API__PIPELINE=my_pkg.pipeline:build
 #      RUN bake
-#    `bake` is requirements.txt, then `decider build`; plain `RUN decider build` also works. The entrypoint,
+#    `bake` is requirements.txt, then `decikit build`; plain `RUN decikit build` also works. The entrypoint,
 #    port and the variables below are already right; override any with ENV.
 #
 # 3. a project directory outside this repository, as a named build context:
@@ -32,7 +32,7 @@
 #          --build-arg PIPELINE=loan_granting.pipeline:build -t loan-granting -f docker/Dockerfile .
 #
 # Run a baked image, wait for /ping, and ask:
-#      podman run --rm -p 8080:8080 -e DECIDER_SERVE__WORKERS=2 my-app
+#      podman run --rm -p 8080:8080 -e DECIKIT_SERVE__WORKERS=2 my-app
 #      curl -s -d @sample_request.json -H 'content-type: application/json' localhost:8080/invocations
 #
 # Build arguments:
@@ -44,14 +44,14 @@
 #   CPU_TARGET    generic (default) or host: see the CPU caveat
 #
 # Environment variables (all optional; override with -e, or ENV in your own Dockerfile):
-#   DECIDER_SERVE__HOST        bind address      (default 0.0.0.0)
-#   DECIDER_SERVE__PORT        bind port         (default 8080)
-#   DECIDER_SERVE__WORKERS     worker processes  (default 2 * CPUs + 1; every worker compiles its kernels
+#   DECIKIT_SERVE__HOST        bind address      (default 0.0.0.0)
+#   DECIKIT_SERVE__PORT        bind port         (default 8080)
+#   DECIKIT_SERVE__WORKERS     worker processes  (default 2 * CPUs + 1; every worker compiles its kernels
 #                                                 at start, so set it)
-#   DECIDER_API__CODE_PATH     project root      (default /opt/ml/model/code)
-#   DECIDER_API__PIPELINE      pipeline          (default pipeline:build)
-#   DECIDER_CONFIG__BASEPATH   config store      (default /opt/ml/model/code/configs)
-#   NUMBA_CACHE_DIR            numba's disk cache and decider-cpu-target.json (default /opt/ml/numba-cache)
+#   DECIKIT_API__CODE_PATH     project root      (default /opt/ml/model/code)
+#   DECIKIT_API__PIPELINE      pipeline          (default pipeline:build)
+#   DECIKIT_CONFIG__BASEPATH   config store      (default /opt/ml/model/code/configs)
+#   NUMBA_CACHE_DIR            numba's disk cache and decikit-cpu-target.json (default /opt/ml/numba-cache)
 #
 # What is baked: the project, its sibling example packages, its configs, and numba's disk cache for its step
 # functions. That cache is keyed by source file path, so it hits because the project is at the same fixed path
@@ -62,7 +62,7 @@
 # CPU caveat: numba's cache is keyed by CPU. The default CPU_TARGET=generic builds and serves with
 # NUMBA_CPU_NAME=generic (baseline x86-64, no AVX), so the baked cache hits on any x86-64 host; per record it
 # measured the same as code for the build machine's CPU. CPU_TARGET=host compiles for the build machine: on
-# another CPU model numba misses the cache, `decider serve` warns "ran for CPU ... but this host is ...", and
+# another CPU model numba misses the cache, `decikit serve` warns "ran for CPU ... but this host is ...", and
 # every worker compiles at start (2 to 3 times slower to /ping, still correct). Both the runtime and the
 # project images follow CPU_TARGET.
 #
@@ -78,12 +78,12 @@ ARG PIP_CONF=
 ARG VERSION=0.0.0
 ENV SETUPTOOLS_SCM_PRETEND_VERSION=${VERSION}
 COPY pyproject.toml README.md /src/
-COPY decider /src/decider
+COPY decikit /src/decikit
 RUN python -m venv /opt/venv && \
     printf '%s\n' "$PIP_CONF" > /tmp/pip.conf && \
     PIP_CONFIG_FILE=/tmp/pip.conf /opt/venv/bin/pip install --no-cache-dir "/src[serve-sanic]" && \
     rm /tmp/pip.conf && \
-    XDG_CACHE_HOME=/opt/ml/cache /opt/venv/bin/python -c "from decider._engine.boundary._arrow import _build; _build.build()"
+    XDG_CACHE_HOME=/opt/ml/cache /opt/venv/bin/python -c "from decikit._engine.boundary._arrow import _build; _build.build()"
 
 FROM docker.io/library/python:${PY}-slim-bookworm AS runtime
 RUN useradd --create-home --uid 1000 app && \
@@ -96,15 +96,15 @@ ENV PATH=/opt/venv/bin:$PATH \
     PYTHONDONTWRITEBYTECODE=TRUE \
     XDG_CACHE_HOME=/opt/ml/cache \
     NUMBA_CACHE_DIR=/opt/ml/numba-cache \
-    DECIDER_API__CODE_PATH=/opt/ml/model/code \
-    DECIDER_CONFIG__BASEPATH=/opt/ml/model/code/configs \
-    DECIDER_SERVE__SERVER=sanic
+    DECIKIT_API__CODE_PATH=/opt/ml/model/code \
+    DECIKIT_CONFIG__BASEPATH=/opt/ml/model/code/configs \
+    DECIKIT_SERVE__SERVER=sanic
 USER app
 WORKDIR /opt/ml
 EXPOSE 8080
 HEALTHCHECK --interval=5s --timeout=3s --start-period=120s \
-    CMD python -c "import os,urllib.request as u; u.urlopen('http://127.0.0.1:%s/ping' % os.environ.get('DECIDER_SERVE__PORT', '8080'))"
-ENTRYPOINT ["decider", "serve"]
+    CMD python -c "import os,urllib.request as u; u.urlopen('http://127.0.0.1:%s/ping' % os.environ.get('DECIKIT_SERVE__PORT', '8080'))"
+ENTRYPOINT ["decikit", "serve"]
 
 # Empty unless --build-context app=<dir> is given.
 FROM scratch AS app
@@ -132,7 +132,7 @@ RUN --mount=type=bind,from=examples,target=/examples \
         for d in /examples/*/; do [ "$(basename "$d")" = "$name" ] || cp -r "$d" /opt/ml/examples/; done && \
         printf '%s\n' /opt/ml/examples/*/ > "$(python -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')/examples.pth"; \
     fi
-ENV DECIDER_API__PIPELINE=${PIPELINE:-pipeline:build}
+ENV DECIKIT_API__PIPELINE=${PIPELINE:-pipeline:build}
 RUN bake
 
 # Last stage, so a build without --target gives the runtime image (for CPU_TARGET).

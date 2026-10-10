@@ -2,9 +2,9 @@
 import polars as pl
 import pytest
 
-from decider import _engine as engine
-from decider._engine import Engine
-from decider.steps.trees import TreeConfig
+from decikit import _engine as engine
+from decikit._engine import Engine
+from decikit.steps.trees import TreeConfig
 
 
 def _node(nid, op, feature, threshold):

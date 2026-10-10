@@ -8,7 +8,7 @@ from __future__ import annotations
 import math
 from datetime import date
 
-from decider import allow_fallback, dag, missing_as, param, step
+from decikit import allow_fallback, dag, missing_as, param, step
 
 from loan_granting import reasons
 

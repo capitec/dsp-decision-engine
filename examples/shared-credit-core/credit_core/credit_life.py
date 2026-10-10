@@ -1,7 +1,7 @@
 """Credit life premium: a rate per R1 000 of cover by age, term and cover type, capped by statute."""
 from __future__ import annotations
 
-from decider import DecisionTableConfig, param, step
+from decikit import DecisionTableConfig, param, step
 
 from credit_core.evidence import cell_id
 

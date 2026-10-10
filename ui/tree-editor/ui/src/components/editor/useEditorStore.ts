@@ -77,7 +77,7 @@ const inferPolarsTypeFromNode = (nodeType: string, op?: string): 'String' | 'Flo
   }
 };
 
-// Map decider's validation_errors onto node highlighting and section flags
+// Map decikit's validation_errors onto node highlighting and section flags
 const applyValidationErrors = (errors: ValidationError[], nodes: Array<{ id: string }>) => {
   const parsed = parseValidationErrors(errors, nodes);
   return {
@@ -543,7 +543,7 @@ const editorStore = create<EditorStoreState>()(
           body: { project_data: projectData }
         });
 
-        // Validation never blocks a save: the server returns what decider found
+        // Validation never blocks a save: the server returns what decikit found
         const errors = (response.data?.validation_errors ?? []) as unknown as ValidationError[];
         const formatted = applyValidationErrors(errors, state.nodes);
         set({ isDirty: false, ...formatted.state });

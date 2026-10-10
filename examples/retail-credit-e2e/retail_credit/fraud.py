@@ -1,7 +1,7 @@
 """Application fraud: every rule is checked, every firing is recorded, and the verdict has its own precedence."""
 from __future__ import annotations
 
-from decider import allow_fallback, missing_as, param, step
+from decikit import allow_fallback, missing_as, param, step
 
 from credit_core.vocab import FraudVerdictCode
 

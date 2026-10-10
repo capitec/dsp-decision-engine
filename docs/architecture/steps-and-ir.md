@@ -8,7 +8,7 @@ needs nothing from the engine.
 
 The IR data model itself (node fields, declarations, ids,
 hashing, validation) is on [IR internals](engine/ir.md); what happens to the IR next is on [Wiring](engine/wiring.md).
-The code is in `decider/steps/` and `decider/_engine/ir/context.py`.
+The code is in `decikit/steps/` and `decikit/_engine/ir/context.py`.
 
 ## The Step class hierarchy
 
@@ -56,8 +56,8 @@ classDiagram
 Every built-in step except `ConfigurableStep` is a `@dataclass(frozen=True, slots=True, eq=False)`: immutable, compact,
 compared by identity so that one step object placed twice is still one object. `named`, `relabel` and `bind` return
 copies through `_replace`, which is `dataclasses.replace` for dataclasses and `model_copy` for the pydantic
-`ConfigurableStep`. Each class sets `__module__ = "decider.steps"` so that an origin names the public import path
-(`decider.steps:SequentialStep`) rather than the private file.
+`ConfigurableStep`. Each class sets `__module__ = "decikit.steps"` so that an origin names the public import path
+(`decikit.steps:SequentialStep`) rather than the private file.
 
 Most steps share four optional fields: `name`, `id` (a durable 12-hex token), `suppress_checks` (check aliases or codes
 the checks package skips for this step) and the `reads` / `writes` pairs a `relabel` stores. `EachStep` and
@@ -70,7 +70,7 @@ wraps a callable in `step(fn)`, and raises `TypeError` for anything else. Python
 
 ## From a signature to declarations
 
-`decider/_engine/params/harvest.py` reads a function once and returns three tuples: `Input`s, `ParamDecl`s and
+`decikit/_engine/params/harvest.py` reads a function once and returns three tuples: `Input`s, `ParamDecl`s and
 `Output`s. `FunctionStep.__post_init__` calls it, so a bad signature fails when the step is made, not when it runs.
 
 <div class="diagram" markdown>
@@ -94,8 +94,8 @@ wraps a callable in `step(fn)`, and raises `TypeError` for anything else. Python
 The real objects for the signature in the diagram:
 
 ```python
-from decider import step, param, missing_as, flow
-from decider.ir import to_ir
+from decikit import step, param, missing_as, flow
+from decikit.ir import to_ir
 
 @step(output="limit")
 def cap_limit(limit: float,
@@ -135,7 +135,7 @@ document key. A relabel changes `name` and never `arg`, so `dti(instalment=...)`
 
 ## How to_ir is called
 
-`to_ir` on a step is never called directly by users. The entry point is `decider.ir.to_ir(step)` (also reached
+`to_ir` on a step is never called directly by users. The entry point is `decikit.ir.to_ir(step)` (also reached
 through `resolve`, `Engine.bind`, `parameters()` and every tool), which builds the tree with an `IRContext` and checks
 the result.
 
@@ -161,7 +161,7 @@ sequenceDiagram
     U->>U: _check(root)
 ```
 
-`IRContext` (`decider/_engine/ir/context.py`) is a frozen dataclass with two fields: `path`, the parent's path, and
+`IRContext` (`decikit/_engine/ir/context.py`) is a frozen dataclass with two fields: `path`, the parent's path, and
 `steps`, the `path -> Step` map being collected. It carries no shared-param table; shared types are checked in one pass over the finished IR. Its methods are the whole toolkit a `to_ir` needs:
 
 | Method | Does |
@@ -179,8 +179,8 @@ the entry when the step is collected, before its `id` can be reused; `id` is use
 value. So an unchanged step returns the very same node, and re-running one notebook cell rebuilds only the new step:
 
 ```python
-from decider import step
-from decider.ir import to_ir
+from decikit import step
+from decikit.ir import to_ir
 
 def heavy(weight: float) -> bool:
     return weight > 20.0
@@ -253,14 +253,14 @@ declared inputs join the parent's. That is how `a | b | c` stays one flat flow, 
 
 ```text
 == step(disposable_income) | dti | affordable
-SequenceNode ''  source=decider.steps:SequentialStep
+SequenceNode ''  source=decikit.steps:SequentialStep
   CallNode[scalar] 'disposable_income'  (net_income, expenses) -> (disposable_income)  source=__main__:disposable_income
   CallNode[scalar] 'dti'  (disposable_income, instalment) -> (dti)  source=__main__:dti
   CallNode[scalar] 'affordable'  (dti) -> (affordable)  params=[max_dti (shared max_dti)]  source=__main__:affordable
 
 == flow(base, name="inner") | cap_limit
-SequenceNode ''  source=decider.steps:SequentialStep
-  SequenceNode 'inner'  source=decider.steps:SequentialStep
+SequenceNode ''  source=decikit.steps:SequentialStep
+  SequenceNode 'inner'  source=decikit.steps:SequentialStep
     CallNode[scalar] 'inner/base'  (income) -> (base)  source=__main__:base
   CallNode[scalar] 'cap_limit'  (limit) -> (limit)  params=[cap]  source=__main__:cap_limit
 ```
@@ -269,7 +269,7 @@ The root of an anonymous pipeline has the empty path `''`. `emit(...)` and `drop
 copied onto the node as `name` or `name@path` specs; the wiring interprets them.
 
 ```text
-SequenceNode 'outer' emits=('limit@*',) drops=('income',)  source=decider.steps:SequentialStep
+SequenceNode 'outer' emits=('limit@*',) drops=('income',)  source=decikit.steps:SequentialStep
 ```
 
 ### Dags
@@ -281,7 +281,7 @@ earliest-written ready member, so members already in dependency order keep their
 comes back sorted, while `walk()` still shows the authoring order:
 
 ```text
-SequenceNode 'afford'  source=decider.steps:DagStep
+SequenceNode 'afford'  source=decikit.steps:DagStep
   CallNode[scalar] 'afford/disposable_income'  (net_income, expenses) -> (disposable_income)  source=__main__:disposable_income
   CallNode[scalar] 'afford/dti'  (disposable_income, instalment) -> (dti)  source=__main__:dti
   CallNode[scalar] 'afford/affordable'  (dti) -> (affordable)  params=[max_dti (shared max_dti)]  source=__main__:affordable
@@ -301,10 +301,10 @@ reading that column. An anonymous arm is named `arm0`, `arm1` and so on, because
 path. A single arm gets an empty `SequentialStep` named `arm1` as its else, so the false rows run nothing.
 
 ```text
-BranchNode 'cap_if_affordable' modifies=('limit',)  source=decider.steps:BranchStep
-  CallNode[scalar] 'cap_if_affordable/affordable'  (affordable<-value) -> (affordable)  source=decider.steps._branch:_column_condition.<locals>.identity
+BranchNode 'cap_if_affordable' modifies=('limit',)  source=decikit.steps:BranchStep
+  CallNode[scalar] 'cap_if_affordable/affordable'  (affordable<-value) -> (affordable)  source=decikit.steps._branch:_column_condition.<locals>.identity
   CallNode[scalar] 'cap_if_affordable/cap_limit'  (limit) -> (limit)  params=[cap]  source=__main__:cap_limit
-  SequenceNode 'cap_if_affordable/arm1'  source=decider.steps:SequentialStep
+  SequenceNode 'cap_if_affordable/arm1'  source=decikit.steps:SequentialStep
 ```
 
 `affordable<-value` is a relabelled input: the identity function's argument `value` reads the column `affordable`.
@@ -316,9 +316,9 @@ anonymous body `body`, requires `carries` and a positive `max_iterations`, which
 can't be interrupted.
 
 ```text
-LoopNode 'repay' carries=('balance', 'months') max_iterations=360  source=decider.steps:LoopStep
+LoopNode 'repay' carries=('balance', 'months') max_iterations=360  source=decikit.steps:LoopStep
   CallNode[scalar] 'repay/unpaid'  (balance) -> (unpaid)  source=__main__:unpaid
-  SequenceNode 'repay/body'  source=decider.steps:SequentialStep
+  SequenceNode 'repay/body'  source=decikit.steps:SequentialStep
     CallNode[scalar] 'repay/body/pay'  (balance, payment) -> (balance)  params=[rate]  source=__main__:pay
     CallNode[scalar] 'repay/body/tick'  (months) -> (months)  source=__main__:tick
 ```
@@ -332,9 +332,9 @@ forwards a tuned value into the child; `hoist` records which child path each one
 params with the same name are an `IRError` here.
 
 ```text
-SequenceNode 'order'  source=decider.steps:SequentialStep
-  ScatterGatherNode 'order/items' column='items' output='items' hoist=(('heavy_kg', 'order/items/item/heavy'),)  source=decider.steps:EachStep
-    SequenceNode 'order/items/item'  source=decider.steps:SequentialStep
+SequenceNode 'order'  source=decikit.steps:SequentialStep
+  ScatterGatherNode 'order/items' column='items' output='items' hoist=(('heavy_kg', 'order/items/item/heavy'),)  source=decikit.steps:EachStep
+    SequenceNode 'order/items/item'  source=decikit.steps:SequentialStep
       CallNode[scalar] 'order/items/item/heavy'  (weight [missing_as]) -> (heavy)  params=[heavy_kg]  source=__main__:heavy
 ```
 
@@ -349,17 +349,17 @@ relabelled to write `count`, a `seed` that initialises five carries, and a `sear
 `advance`. Because the result is a plain loop of scalar steps, the fused runner can pack it into one kernel.
 
 ```text
-SequenceNode 'best' drops=('index',)  source=decider.steps:OptimiseStep
+SequenceNode 'best' drops=('index',)  source=decikit.steps:OptimiseStep
   CallNode[scalar] 'best/bundles'  (items) -> (count)  source=__main__:bundles
-  CallNode[scalar] 'best/seed'  (count) -> (index, best_index, best_score, evaluated, disqualified)  source=decider.steps._optimise:_seed
-  LoopNode 'best/search' carries=('index', 'best_index', 'best_score', 'evaluated', 'disqualified') max_iterations=256  source=decider.steps:LoopStep
-    CallNode[scalar] 'best/search/_more'  (index, count) -> (_more)  source=decider.steps._optimise:_more
-    SequenceNode 'best/search/body'  source=decider.steps:SequentialStep
-      SequenceNode 'best/search/body/evaluate'  source=decider.steps:SequentialStep
+  CallNode[scalar] 'best/seed'  (count) -> (index, best_index, best_score, evaluated, disqualified)  source=decikit.steps._optimise:_seed
+  LoopNode 'best/search' carries=('index', 'best_index', 'best_score', 'evaluated', 'disqualified') max_iterations=256  source=decikit.steps:LoopStep
+    CallNode[scalar] 'best/search/_more'  (index, count) -> (_more)  source=decikit.steps._optimise:_more
+    SequenceNode 'best/search/body'  source=decikit.steps:SequentialStep
+      SequenceNode 'best/search/body/evaluate'  source=decikit.steps:SequentialStep
         CallNode[scalar] 'best/search/body/evaluate/margin'  (index, items) -> (score)  source=__main__:margin
-      CallNode[scalar] 'best/search/body/reject'  () -> (reject)  source=decider.steps._optimise:_no_reject
-      CallNode[scalar] 'best/search/body/keep'  (index, best_index, best_score, evaluated, disqualified, score, reject) -> (best_index, best_score, evaluated, disqualified)  source=decider.steps._optimise:_keep
-      CallNode[scalar] 'best/search/body/advance'  (index) -> (index)  source=decider.steps._optimise:_advance
+      CallNode[scalar] 'best/search/body/reject'  () -> (reject)  source=decikit.steps._optimise:_no_reject
+      CallNode[scalar] 'best/search/body/keep'  (index, best_index, best_score, evaluated, disqualified, score, reject) -> (best_index, best_score, evaluated, disqualified)  source=decikit.steps._optimise:_keep
+      CallNode[scalar] 'best/search/body/advance'  (index) -> (index)  source=decikit.steps._optimise:_advance
 ```
 
 With `record=Item`, `to_ir` adds a `best_record` carry and defines four more functions at lowering time
@@ -398,7 +398,7 @@ no `fn`.
 `ctx.expand(self, helper)` builds other steps under the config's name and gives the root node the config's origin:
 
 ```text
-SequenceNode 'app'  source=decider.steps:SequentialStep
+SequenceNode 'app'  source=decikit.steps:SequentialStep
   SequenceNode 'app/afford'  source=__main__:Affordability
     CallNode[scalar] 'app/afford/disposable_income'  (net_income, expenses) -> (disposable_income)  source=__main__:disposable_income
     CallNode[scalar] 'app/afford/dti'  (disposable_income, instalment) -> (dti)  source=__main__:dti
@@ -411,11 +411,11 @@ Python twin the interpreted runner calls so a session can step inside the tree. 
 one per variable plus a total:
 
 ```text
-CallNode[row] 'fraud_rules'  (amount [missing_as]) -> (hit)  params=[big_amount]  consts=(('ints', 94080279287568), ('floats', 94080275608880), ('chars', 94080273005424), ('layout', (0, 30, 30, 1, 32, 32, 33, 34, 0, 0, 1)), ('outputs', ((-1, 35, 2, 0),)))  source=decider.steps.trees:TreeConfig
-CallNode[row] 'band'  (bureau_score [missing_as]) -> (band)  consts=(('program', 94080281968864), ('entry', 0), ('outputs', ((1, 0),)), ('rows', Rows(ints=94080281973760, floats=94080281969216, chars=94080281972368, n=3)))  source=decider.steps.tables:DecisionTableConfig
-SequenceNode 'card' emits=('age_score', 'score')  source=decider.steps.scorecard._config:ScorecardConfig
-  CallNode[row] 'card/age'  (age<-x [optional]) -> (age_score)  params=[young]  consts=(('nb', 2), ...)  source=decider.steps.scorecard._config:ScorecardConfig
-  CallNode[row] 'card/score'  (age_score) -> (score)  source=decider.steps.scorecard._config:ScorecardConfig
+CallNode[row] 'fraud_rules'  (amount [missing_as]) -> (hit)  params=[big_amount]  consts=(('ints', 94080279287568), ('floats', 94080275608880), ('chars', 94080273005424), ('layout', (0, 30, 30, 1, 32, 32, 33, 34, 0, 0, 1)), ('outputs', ((-1, 35, 2, 0),)))  source=decikit.steps.trees:TreeConfig
+CallNode[row] 'band'  (bureau_score [missing_as]) -> (band)  consts=(('program', 94080281968864), ('entry', 0), ('outputs', ((1, 0),)), ('rows', Rows(ints=94080281973760, floats=94080281969216, chars=94080281972368, n=3)))  source=decikit.steps.tables:DecisionTableConfig
+SequenceNode 'card' emits=('age_score', 'score')  source=decikit.steps.scorecard._config:ScorecardConfig
+  CallNode[row] 'card/age'  (age<-x [optional]) -> (age_score)  params=[young]  consts=(('nb', 2), ...)  source=decikit.steps.scorecard._config:ScorecardConfig
+  CallNode[row] 'card/score'  (age_score) -> (score)  source=decikit.steps.scorecard._config:ScorecardConfig
 ```
 
 A threshold written as `{"param": ...}` becomes a `ParamDecl` (`big_amount`, `young`); everything else in the
@@ -424,7 +424,7 @@ document is data in the consts. The [configurable steps](configurable-steps/inde
 ### Helper and allow_fallback
 
 `@helper(signatures=...)` and `@allow_fallback` are not steps and lower to nothing. They set attributes on a function
-(`__decider_helper_signatures__`, `__decider_allow_fallback__`) that the compiler reads through
+(`__decikit_helper_signatures__`, `__decikit_allow_fallback__`) that the compiler reads through
 `helper_signatures()` and `allows_fallback()` in `steps/_helpers.py`: a helper is compiled for its declared
 signatures when a step calls it, and an allowed fallback runs in Python without a warning. `@allow_fallback` on a
 tree, table, scorecard, branch or loop raises `TypeError`, since those fall back as a whole.
@@ -511,7 +511,7 @@ A step can be placed more than once, in different flows or under different names
 path and node. Inside one flow, `named` gives the second placement its own name:
 
 ```text
-SequenceNode 'twice'  source=decider.steps:SequentialStep
+SequenceNode 'twice'  source=decikit.steps:SequentialStep
   CallNode[scalar] 'twice/base_limit'  (disposable_income) -> (limit)  params=[multiple]  source=__main__:base_limit
   CallNode[scalar] 'twice/limit_again'  (disposable_income) -> (limit)  params=[multiple]  source=__main__:base_limit
 ```
@@ -553,7 +553,7 @@ gets JSON loading, a type tag, entry-point discovery and `parameters()` for free
 - one function per row: `ctx.call(self, fn, inputs=..., values=...)`;
 - an assembly of existing steps: `ctx.expand(self, flow(...))`;
 - a row kernel over encoded data, as trees and tables do: build `Input`, `Output` and `ParamDecl` objects and a
-  `CallNode(ctx.origin(self), "row", fn, ..., reference=..., consts=...)` from the `decider.ir` kit.
+  `CallNode(ctx.origin(self), "row", fn, ..., reference=..., consts=...)` from the `decikit.ir` kit.
 
 Whatever `to_ir` returns, it must give every node an origin from `ctx.origin`, place members with `ctx.child(...)
 .build(...)` so their paths and relabels are right, and return only the node types the engine runs. The [extending

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
-from decider import DecisionTableConfig, ParamTable, allow_fallback, missing_as, param, param_table, step
+from decikit import DecisionTableConfig, ParamTable, allow_fallback, missing_as, param, param_table, step
 
 from credit_core.credit_life import CREDIT_LIFE_VERSION
 from loan_granting.pricing import PriceEvaluator

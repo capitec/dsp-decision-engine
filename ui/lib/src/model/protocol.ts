@@ -4,7 +4,7 @@ import type { Scenario, Sweep } from "./sweep";
 
 // Shapes the Python bridge sends (the generated block), and the messages between a host and the UI.
 
-// <generated: uv run python -m decider._tooling.bridge.protocol>
+// <generated: uv run python -m decikit._tooling.bridge.protocol>
 export interface Hello {
   protocol: string;
   contract_version: string;

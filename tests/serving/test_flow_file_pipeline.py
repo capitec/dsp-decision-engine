@@ -5,12 +5,12 @@ import sys
 
 from click.testing import CliRunner
 
-from decider._tooling.cli import cli
-from decider.config import JsonFileStore
-from decider.serving._handler import RequestHandler
+from decikit._tooling.cli import cli
+from decikit.config import JsonFileStore
+from decikit.serving._handler import RequestHandler
 
 COMPONENTS = """\
-from decider import param
+from decikit import param
 
 
 def eligible(score: float) -> bool:
@@ -69,12 +69,12 @@ def test_a_params_change_in_a_new_version_changes_the_answer(tmp_path, monkeypat
     assert body["bonus"] == 20.0
 
 
-def test_decider_build_succeeds_with_a_flow_file_pipeline(tmp_path, monkeypatch):
-    monkeypatch.setattr(os, "environ", {k: v for k, v in os.environ.items() if not k.upper().startswith("DECIDER_")})
+def test_decikit_build_succeeds_with_a_flow_file_pipeline(tmp_path, monkeypatch):
+    monkeypatch.setattr(os, "environ", {k: v for k, v in os.environ.items() if not k.upper().startswith("DECIKIT_")})
     monkeypatch.setattr(sys, "path", list(sys.path))
     monkeypatch.delitem(sys.modules, "components", raising=False)
     monkeypatch.chdir(tmp_path)
     _write_project(tmp_path)
-    result = CliRunner().invoke(cli, ["build"], env={"DECIDER_API__PIPELINE": "flow.yaml"})
+    result = CliRunner().invoke(cli, ["build"], env={"DECIKIT_API__PIPELINE": "flow.yaml"})
     assert result.exit_code == 0, result.output
     assert "built config version 0.0.0" in result.output

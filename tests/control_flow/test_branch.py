@@ -2,10 +2,10 @@
 import polars as pl
 import pytest
 
-from decider import branch, dag, flow, frame_step, param, step
-from decider._engine import Engine
-from decider.exceptions import WiringError
-from decider.lab.testing import assert_equivalent
+from decikit import branch, dag, flow, frame_step, param, step
+from decikit._engine import Engine
+from decikit.exceptions import WiringError
+from decikit.lab.testing import assert_equivalent
 
 MODES = ("interpreted", "stepped", "fused")
 

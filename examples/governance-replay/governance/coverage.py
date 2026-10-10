@@ -4,7 +4,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 
-from decider.lab import checks
+from decikit.lab import checks
 
 from governance.flows import Flow
 
@@ -14,7 +14,7 @@ DOMINANT = 0.40
 @dataclass(frozen=True)
 class Coverage:
     """Rule hits over a population. `dead` rules never bound, `dominant` ones bound on more than 40% of
-    decisions, `unknown` ids bound but are not in the flow's rule list. `static_findings` are what decider's
+    decisions, `unknown` ids bound but are not in the flow's rule list. `static_findings` are what decikit's
     static checks say about the logic whatever the traffic (unreachable branches, overlapping rows, table gaps); `cells` counts distinct table cells read per field."""
 
     decisions: int

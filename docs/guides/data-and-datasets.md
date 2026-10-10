@@ -1,8 +1,8 @@
 # Data and datasets
 
-`decider.lab.data` loads the records you test, check, compare and experiment on. It reads JSON, CSV and Parquet files (the formats a Redshift `UNLOAD` writes) into polars frames, and it gives a project named datasets, so a check, a diff or an experiment can say `applications` instead of a path that only works on one laptop.
+`decikit.lab.data` loads the records you test, check, compare and experiment on. It reads JSON, CSV and Parquet files (the formats a Redshift `UNLOAD` writes) into polars frames, and it gives a project named datasets, so a check, a diff or an experiment can say `applications` instead of a path that only works on one laptop.
 
-Serving never touches this module. A served pipeline gets its records from the HTTP request; `decider.lab.data` is for the work you do around it.
+Serving never touches this module. A served pipeline gets its records from the HTTP request; `decikit.lab.data` is for the work you do around it.
 
 ```mermaid
 flowchart LR
@@ -12,8 +12,8 @@ flowchart LR
     P --> L["load()<br/>LoadedData"]
     R --> FR["polars DataFrame<br/>or LazyFrame"]
     L --> FR
-    FR --> C["checks.run(data=)<br/>decider check --data"]
-    FR --> X["diff.outputs<br/>decider diff --data"]
+    FR --> C["checks.run(data=)<br/>decikit check --data"]
+    FR --> X["diff.outputs<br/>decikit diff --data"]
     L --> E["experiments<br/>input.dataset"]
     classDef data fill:#dcfce7,stroke:#16a34a,color:#14532d,stroke-width:1.5px;
     classDef tooling fill:#ede9fe,stroke:#7c3aed,color:#4c1d95,stroke-width:1.5px;
@@ -29,7 +29,7 @@ flowchart LR
 
 ```python
 from pathlib import Path
-from decider.lab.data import read
+from decikit.lab.data import read
 
 Path("loans.jsonl").write_text('{"client_id": "C-1", "income": 1000.0, "debt": 350.0}\n'
                                '{"client_id": "C-2", "income": 500.0, "debt": 400.0}\n')
@@ -58,7 +58,7 @@ A `.json` file may hold one object per line (what Redshift exports) or one array
 `read` also takes bytes, for a payload you already hold in memory. Bytes have no suffix, so pass `format=`:
 
 ```python
-from decider.lab.data import read
+from decikit.lab.data import read
 
 df = read(b'{"income": 1000.0}\n{"income": 500.0}\n', format="json")
 assert df.height == 2
@@ -72,7 +72,7 @@ A polars `DataFrame` passed to `read` comes back unchanged, which lets a functio
 
 ```python
 import polars as pl
-from decider.lab.data import scan
+from decikit.lab.data import scan
 
 lazy = scan("loans.jsonl")
 print(type(lazy).__name__, lazy.filter(pl.col("debt") > 360).collect().to_dicts())
@@ -86,7 +86,7 @@ A plain `.json` file cannot be scanned lazily, because the two JSON shapes can o
 
 ### Read errors
 
-Every failure inside `read` is a `LoadError` (a `DeciderError`) whose message names the file and the reason:
+Every failure inside `read` is a `LoadError` (a `DecikitError`) whose message names the file and the reason:
 
 ```text
 LoadError: could not load 'loans.txt': no data format given; pass format='json'|'csv'|'parquet' or use a .json/.csv/.parquet path
@@ -130,7 +130,7 @@ The rules:
 ```python
 import polars as pl
 from pathlib import Path
-from decider.lab.data import datasets
+from decikit.lab.data import datasets
 
 root = Path("proj")
 (root / "datasets/loans").mkdir(parents=True, exist_ok=True)
@@ -164,9 +164,9 @@ shape: (2, 3)
 └───────────┴───────┴────────┘
 ```
 
-`start` is any file or directory inside the project; the default is the current directory. The project root is the nearest ancestor holding a `configs/` directory, the same rule `decider serve` uses.
+`start` is any file or directory inside the project; the default is the current directory. The project root is the nearest ancestor holding a `configs/` directory, the same rule `decikit serve` uses.
 
-`datasets()` validates every entry and raises one `DatasetError` that lists all the bad ones. `dataset(name)` validates only the one you ask for, so a broken sibling never stops a run that does not use it. Experiments, `decider check --data` and `decider diff --data` all use `dataset(name)`.
+`datasets()` validates every entry and raises one `DatasetError` that lists all the bad ones. `dataset(name)` validates only the one you ask for, so a broken sibling never stops a run that does not use it. Experiments, `decikit check --data` and `decikit diff --data` all use `dataset(name)`.
 
 ```text
 DatasetError: unknown dataset 'nope'; known: bureau, clients, loans
@@ -187,7 +187,7 @@ DatasetError: mixed formats in folder '.../proj/datasets/loans': csv, json
 
 - `type` is `file`, `folder`, the `type` alias of a registered provider class, or `"package.module:Class"`, which is imported on first use.
 - A relative `path` resolves against the `datasets/` folder. A path containing `://` is left alone and read by polars with its default credentials.
-- `format` (`json`, `csv` or `parquet`) is needed only when the suffix does not say. A remote folder always needs it, because decider cannot list it.
+- `format` (`json`, `csv` or `parquet`) is needed only when the suffix does not say. A remote folder always needs it, because the decider toolkit cannot list it.
 - No `${VAR}` substitution happens in this file. A provider that needs credentials reads them itself.
 
 ### The providers
@@ -212,7 +212,7 @@ Every provider has the same methods:
 `load()` collects the frame and wraps it with what an experiment manifest records about its input:
 
 ```python
-from decider.lab.data import datasets
+from decikit.lab.data import datasets
 
 loaded = datasets(start="proj")["loans"].load()
 print(loaded.dataset, loaded.row_count, loaded.columns, loaded.suggested_key, loaded.fingerprint[:16])
@@ -250,11 +250,11 @@ MissingRecordKeyError: 1 record(s) have a null value in the key columns ['client
 MissingKeyColumnError: key column ['loan_id'] is not in the data
 ```
 
-All three derive from `RecordKeyError`, which is both a `DeciderError` and a `ValueError`, so `except RecordKeyError` catches them together.
+All three derive from `RecordKeyError`, which is both a `DecikitError` and a `ValueError`, so `except RecordKeyError` catches them together.
 
 Without a `key`, `load()` guesses one and does not check it: the first column called `id`, else the first ending in `_id`, else the first starting with `id_`. The guess lands in `suggested_key` and is a suggestion for a UI to confirm. It is never validated, so do not treat it as durable.
 
-A row number is never a key. `decider.lab.RecordRef` keeps an `ordinal` for display, but its identity is `dataset` plus `key`, because row order is not stable across loads.
+A row number is never a key. `decikit.lab.RecordRef` keeps an `ordinal` for display, but its identity is `dataset` plus `key`, because row order is not stable across loads.
 
 ## Fingerprints
 
@@ -271,7 +271,7 @@ For a source that is not a file, subclass `DatasetProvider`, give it a `type` al
 import sqlite3
 import typing as t
 import polars as pl
-from decider.lab.data import DatasetProvider
+from decikit.lab.data import DatasetProvider
 
 class SqliteTable(DatasetProvider):
     type: t.Literal["sqlite"] = "sqlite"
@@ -291,7 +291,7 @@ class SqliteTable(DatasetProvider):
 ```
 
 ```python
-from decider.lab.data import datasets
+from decikit.lab.data import datasets
 
 loaded = datasets(start="proj")["warehouse"].load()
 print(loaded.frame.to_dicts(), loaded.fingerprint, loaded.suggested_key)
@@ -301,25 +301,25 @@ print(loaded.frame.to_dicts(), loaded.fingerprint, loaded.suggested_key)
 [{'client_id': 1, 'income': 1000.0}, {'client_id': 2, 'income': 500.0}] clients.db:clients:2 ('client_id',)
 ```
 
-Only `path` is resolved against the datasets folder; `database` here is relative to the working directory. Provider documents are validated with `extra="forbid"`, so a misspelt field is an error naming the dataset. An installed package can register providers under the `decider.datasets` entry-point group so the alias works without an import path; [Extending decider](extending.md) covers the registry.
+Only `path` is resolved against the datasets folder; `database` here is relative to the working directory. Provider documents are validated with `extra="forbid"`, so a misspelt field is an error naming the dataset. An installed package can register providers under the `decikit.datasets` entry-point group so the alias works without an import path; [Extending the decider toolkit](extending.md) covers the registry.
 
 !!! warning "Defining a provider in a script you run directly"
     A class defined in `__main__` and imported again by its module name registers twice, and validation fails with `type alias 'sqlite' is claimed by both __main__:SqliteTable and warehouse:SqliteTable`. Put providers in a module and import them.
 
 ## Where the folder is
 
-The folder is the `datasets_path` setting, `${PROJECT_ROOT}/datasets` by default. `${PROJECT_ROOT}` is the only placeholder and means the project root found from `start` (or the current directory when there is no `configs/` above it). Set `DECIDER_DATASETS_PATH` to use another folder; a relative value is relative to the current directory. Both `datasets()` and `dataset()` also take `path=` to override the setting for one call.
+The folder is the `datasets_path` setting, `${PROJECT_ROOT}/datasets` by default. `${PROJECT_ROOT}` is the only placeholder and means the project root found from `start` (or the current directory when there is no `configs/` above it). Set `DECIKIT_DATASETS_PATH` to use another folder; a relative value is relative to the current directory. Both `datasets()` and `dataset()` also take `path=` to override the setting for one call.
 
-`decider` loads `.env` with python-dotenv, which expands `${...}` itself, even inside single quotes, and an unset `PROJECT_ROOT` becomes an empty string. In a `.env`, write an absolute path or a path relative to the directory you run from.
+`decikit` loads `.env` with python-dotenv, which expands `${...}` itself, even inside single quotes, and an unset `PROJECT_ROOT` becomes an empty string. In a `.env`, write an absolute path or a path relative to the directory you run from.
 
 ## Using data elsewhere
 
 | Where | How it names data |
 |---|---|
 | `checks.run(pipeline, data=frame)` | a frame from `read` or `load().frame`; enables the data checks ([Checks](checks.md)) |
-| `decider check ENTRY --data X` | `X` is a file path if it exists, else a dataset name |
+| `decikit check ENTRY --data X` | `X` is a file path if it exists, else a dataset name |
 | `diff.outputs(old, new, frame, key=...)` | a frame; `key` labels rows in the change table ([Comparing versions](diff-and-equivalence.md)) |
-| `decider diff BASE HEAD ENTRY --data X` | same rule as `decider check` |
+| `decikit diff BASE HEAD ENTRY --data X` | same rule as `decikit check` |
 | `ExperimentDef(input={"dataset": "applications"})` | a dataset name, or `{"path": "..."}` for a file ([Experiments](experiments.md)) |
 | MCP `run_summary`, `check_report` | a file path ([CLI and MCP](cli-and-mcp.md)) |
 

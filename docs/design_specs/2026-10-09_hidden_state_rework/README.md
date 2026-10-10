@@ -1,19 +1,19 @@
 # Hidden state in steps
 
 Status: proposal, 2026-10-09. Nothing in this folder is built. Read it before changing how steps read data that is not an input, a param
-or a config document, or before changing `decider/_engine/compile/fingerprint.py`.
+or a config document, or before changing `decikit/_engine/compile/fingerprint.py`.
 
 ## Purpose
 
 A step that reads a Python object it did not receive (a register in a closure, a module-level dict, an instance) cannot be compiled by numba,
-cannot be compared by `decider.lab.diff`, and is invisible in config. The 12 shipped examples do this 113 times. This spec records what is wrong,
-the owner's position, the design that replaces it, the checks decider will add, and the order of work.
+cannot be compared by `decikit.lab.diff`, and is invisible in config. The 12 shipped examples do this 113 times. This spec records what is wrong,
+the owner's position, the design that replaces it, the checks the decider toolkit will add, and the order of work.
 
 ## Owner's position
 
 - Steps must not read hidden objects. Data lives in config documents, params, tables, or in a `ConfigurableStep`/`CustomFunction` whose fields are
   the data and whose `to_ir` calls a plain function.
-- decider does not learn to digest arbitrary objects. A content digest of an instance without its class code would let a method edit read as
+- The decider toolkit does not learn to digest arbitrary objects. A content digest of an instance without its class code would let a method edit read as
   "unchanged"; with the class code it is more machinery than the design needs.
 - `@allow_fallback` stays, is discouraged, and must not silence a hidden-state warning.
 
@@ -62,7 +62,7 @@ through an entry-point group).
 Compilation does not change: these steps take a `date` or return `str`/lists, so they stay Python. The gain is diffability, visibility in config and
 an honest warning, not speed.
 
-## Checks decider adds
+## Checks the decider toolkit adds
 
 1. Fingerprint fixes first: module constants keyed by value (the stale-cache bug), library callables keyed by module and qualname without
    walking into them, `**kwargs` steps fall back.

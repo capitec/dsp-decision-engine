@@ -8,12 +8,12 @@ import typing as t
 import polars as pl
 import pytest
 
-from decider import ConfigurableStep, Value, flow, param
-from decider.config import JsonFileStore, Version
-from decider.exceptions import MissingInputError
-from decider.serving._handler import RequestHandler
-from decider.serving._servers.starlette import create_app
-from decider.lab.testing import no_recompile
+from decikit import ConfigurableStep, Value, flow, param
+from decikit.config import JsonFileStore, Version
+from decikit.exceptions import MissingInputError
+from decikit.serving._handler import RequestHandler
+from decikit.serving._servers.starlette import create_app
+from decikit.lab.testing import no_recompile
 
 
 def _scale(x: float, factor: float) -> float:
@@ -100,7 +100,7 @@ def _string_tree(tree):
     return tree
 
 
-STRING_TREE = {"type": "decider.steps.trees:TreeConfig", "name": "warm", "tree": {
+STRING_TREE = {"type": "decikit.steps.trees:TreeConfig", "name": "warm", "tree": {
     "nodes": [{"id": "root", "data": {"type": "unary", "condition": {
                   "op": "string_match", "feature": "s", "match_type": "ends_with",
                   "patterns": ["ing", {"param": "extra", "default": "zzz"}]}}},
@@ -275,8 +275,8 @@ def test_an_unsupported_content_type_is_a_415(handler):
 
 
 INFERENCE = '''
-from decider.serving._format import Response
-from decider.serving._handler import RequestHandler
+from decikit.serving._format import Response
+from decikit.serving._handler import RequestHandler
 
 class Handler(RequestHandler):
     def output_fn(self, output, accept):
@@ -285,7 +285,7 @@ class Handler(RequestHandler):
 
 
 def test_startup_uses_the_inference_handler_and_activates_the_latest_version(store, tmp_path, monkeypatch):
-    from decider._settings import get_settings
+    from decikit._settings import get_settings
 
     settings = get_settings()
 

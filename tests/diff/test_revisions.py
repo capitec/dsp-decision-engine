@@ -2,8 +2,8 @@
 import polars as pl
 import pytest
 
-from decider.lab import diff
-from decider.exceptions import DeciderError
+from decikit.lab import diff
+from decikit.exceptions import DecikitError
 
 ENTRY = "shop.pipeline:build"
 FRAME = pl.DataFrame({"income": [1000.0, 500.0], "debt": [350.0, 400.0]})
@@ -26,12 +26,12 @@ def test_the_same_revision_twice_is_identical(repo):
 
 
 def test_an_unknown_revision_is_an_error(repo):
-    with pytest.raises(DeciderError, match="did not resolve"):
+    with pytest.raises(DecikitError, match="did not resolve"):
         diff.revisions("nope", "HEAD", entry=ENTRY).structure()
 
 
 def test_resolve_gives_none_for_an_unknown_revision_and_a_sha_for_a_known_one(repo):
-    from decider.lab.diff._revisions import resolve
+    from decikit.lab.diff._revisions import resolve
 
     assert resolve("nope") is None
     assert len(resolve("HEAD")) == 40

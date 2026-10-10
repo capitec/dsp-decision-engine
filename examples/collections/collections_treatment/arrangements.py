@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import math
 
-from decider import allow_fallback, dag, missing_as, param, step
+from decikit import allow_fallback, dag, missing_as, param, step
 
 from assessment import modes
 from assessment.pipeline import capacity_unit, evidence_unit

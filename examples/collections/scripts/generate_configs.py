@@ -6,7 +6,7 @@ import json
 import sys
 from pathlib import Path
 
-from decider import ConfigurableStep, DecisionTableConfig
+from decikit import ConfigurableStep, DecisionTableConfig
 
 from collections_treatment import capacity, matrix
 from collections_treatment import vocab as v

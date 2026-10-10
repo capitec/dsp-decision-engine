@@ -1,6 +1,6 @@
 """A consolidation assessment: which of a client's debts to settle, under which product, and why.
 
-`decider build` and `decider serve` use `build`, which receives the product 11 rate card, the two Everyday Card rate
+`decikit build` and `decikit serve` use `build`, which receives the product 11 rate card, the two Everyday Card rate
 documents and the settleability rules from `configs/<version>/`.
 """
 from __future__ import annotations
@@ -11,7 +11,7 @@ from assessment import modes
 from assessment.pipeline import evidence_unit
 from credit_core import fees
 from credit_core.rate_card import generate_flex_loan_card
-from decider import DecisionTableConfig, flow, param
+from decikit import DecisionTableConfig, flow, param
 from loan_granting.rate_tables import rate_card_rows
 
 from consolidation import (
@@ -67,7 +67,7 @@ def flex_loan_card() -> tuple[list[dict], str]:
 def build(rate_card_product11, card_promotional_rates, card_reversion_rates, settleability_rules, client_reason_codes=None,
           scenario_rejection_codes=None, intervention_adjustments=None, objective_adjustments=None, capacity_adjustments=None,
           affordability_reason_codes=None):
-    """Each argument is the config document of that name, loaded by `decider`. The reason code sets and the two overlay
+    """Each argument is the config document of that name, loaded by `decikit`. The reason code sets and the two overlay
     sets default to the documents shipped in `configs/0.1.0/`. `capacity_adjustments` and `affordability_reason_codes`
     are the affordability assessment's own documents, which the capacity unit scored per scenario is built from; they
     default to the ones `assessment` ships."""

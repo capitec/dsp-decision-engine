@@ -1,0 +1,21 @@
+from decikit.exceptions import DecikitError
+
+
+class UnsupportedContentTypeError(DecikitError):
+    _STATUS_CODE = 415
+    _MESSAGE = "Unsupported content type."
+
+
+class InputParsingError(DecikitError):
+    _STATUS_CODE = 400
+    _MESSAGE = "Failed to parse request input."
+
+
+class UnsupportedAcceptError(DecikitError):
+    _STATUS_CODE = 406
+    _MESSAGE = "Unsupported Accept media type."
+
+
+class OutputFormattingError(DecikitError):
+    _STATUS_CODE = 500
+    _MESSAGE = "Failed to format the output."

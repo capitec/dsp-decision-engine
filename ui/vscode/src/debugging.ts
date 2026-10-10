@@ -1,6 +1,6 @@
 import * as path from "node:path";
 import * as vscode from "vscode";
-import { callNodes, type CallNodeJson, type IRNodeJson } from "@decider/ui";
+import { callNodes, type CallNodeJson, type IRNodeJson } from "@decikit/ui";
 import { ask, configuredExecutable } from "./python";
 import { breakpointPaths, callsAt, fromRepr, NODE_PATH, onlyAt, pausedAt, type SourceLine } from "./locate";
 
@@ -42,15 +42,15 @@ export async function debugFlow(file: string, pipeline?: string, dataset?: strin
   await vscode.debug.startDebugging(vscode.workspace.getWorkspaceFolder(vscode.Uri.file(file)), {
     type: "debugpy",
     request: "launch",
-    name: `decider: ${pipeline ?? path.basename(file)}${dataset ? ` · ${dataset}${row == null ? "" : `#${row}`}` : ""}`,
-    module: "decider._tooling.bridge.run",
+    name: `decikit: ${pipeline ?? path.basename(file)}${dataset ? ` · ${dataset}${row == null ? "" : `#${row}`}` : ""}`,
+    module: "decikit._tooling.bridge.run",
     args: [file, ...(pipeline ? ["--pipeline", pipeline] : []), ...(rows ? ["--data", rows] : []), ...(dataset ? ["--dataset", dataset] : []), ...(row == null ? [] : ["--row", String(row)])],
     cwd: path.dirname(file),
     justMyCode: true,
     console: "integratedTerminal",
     ...(python ? { python } : {}),
-    deciderFlow: file,
-    deciderPipeline: pipeline,
+    decikitFlow: file,
+    decikitPipeline: pipeline,
   });
 }
 
@@ -69,7 +69,7 @@ export function watchDebugger(hooks: DebugHooks): { disposables: vscode.Disposab
   };
   const disposables = [
     vscode.debug.onDidStartDebugSession((s) => {
-      if (s.configuration.deciderFlow) hooks.show(s.configuration.deciderFlow, s.configuration.deciderPipeline);
+      if (s.configuration.decikitFlow) hooks.show(s.configuration.decikitFlow, s.configuration.decikitPipeline);
     }),
     vscode.debug.onDidChangeActiveStackItem(onStack),
     vscode.debug.registerDebugAdapterTrackerFactory("*", {
@@ -110,7 +110,7 @@ export function currentBreakpoints(ir: IRNodeJson): Set<string> {
   return breakpointPaths(ir, sourceLines());
 }
 
-/** A step whose Python is the user's: a tree or table runs decider's own walker, where `justMyCode` never stops. */
+/** A step whose Python is the user's: a tree or table runs decikit's own walker, where `justMyCode` never stops. */
 export function userCode(n: CallNodeJson): boolean {
   return !!n.python && n.callKind !== "row";
 }
@@ -121,7 +121,7 @@ async function locate(item: vscode.DebugStackFrame, ir: IRNodeJson): Promise<str
     const at = fromRepr(r.result);
     if (at) return at;
   } catch {
-    // decider not importable in the debuggee: fall back to where the frames are.
+    // decikit not importable in the debuggee: fall back to where the frames are.
   }
   const { stackFrames } = await item.session.customRequest("stackTrace", { threadId: item.threadId, startFrame: 0, levels: 50 });
   const frames: { id: number; line: number; source?: { path?: string } }[] = stackFrames;

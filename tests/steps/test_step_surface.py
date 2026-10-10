@@ -1,9 +1,9 @@
 import polars as pl
 import pytest
 
-from decider import Executable, flow, param, step
-from decider.exceptions import ParamsError
-from decider.trace import Kind, TraceSink
+from decikit import Executable, flow, param, step
+from decikit.exceptions import ParamsError
+from decikit.trace import Kind, TraceSink
 
 
 def ratio(income: float, debt: float) -> float:

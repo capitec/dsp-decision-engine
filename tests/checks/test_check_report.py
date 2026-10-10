@@ -1,7 +1,7 @@
 """Report: skipped checks, text, SARIF, counts and the gate."""
-from decider import flow, step
-from decider.lab import checks
-from decider.lab.checks import Check, Severity
+from decikit import flow, step
+from decikit.lab import checks
+from decikit.lab.checks import Check, Severity
 from typing import Literal
 
 
@@ -41,7 +41,7 @@ def test_sarif_carries_rules_levels_locations_and_fingerprints():
     assert run["tool"]["driver"]["rules"] == [{"id": "DCD101", "name": "int64_overflow"}]
     (result,) = run["results"]
     assert result["ruleId"] == "DCD101" and result["level"] == "warning"
-    assert result["partialFingerprints"]["decider/v1"] == "fedcba543210/term/scale/DCD101"
+    assert result["partialFingerprints"]["decikit/v1"] == "fedcba543210/term/scale/DCD101"
     location = result["locations"][0]["physicalLocation"]
     assert location["artifactLocation"]["uri"].endswith("test_check_report.py") and location["region"]["startLine"] > 0
 

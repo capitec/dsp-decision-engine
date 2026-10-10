@@ -4,302 +4,302 @@ The public API, generated from the docstrings and grouped by what you use each n
 
 ## Build steps
 
-::: decider.step
+::: decikit.step
 
-::: decider.frame_step
+::: decikit.frame_step
 
-::: decider.flow
+::: decikit.flow
 
-::: decider.dag
+::: decikit.dag
 
-::: decider.branch
+::: decikit.branch
 
-::: decider.loop
+::: decikit.loop
 
-::: decider.each
+::: decikit.each
 
-::: decider.optimise
+::: decikit.optimise
 
-::: decider.EachMode
+::: decikit.EachMode
 
-::: decider.allow_fallback
+::: decikit.allow_fallback
 
-::: decider.helper
+::: decikit.helper
 
-::: decider.param
+::: decikit.param
 
-::: decider.param_table
+::: decikit.param_table
 
-::: decider.missing_as
+::: decikit.missing_as
 
-::: decider.ParamTable
+::: decikit.ParamTable
 
-::: decider.load_flow
+::: decikit.load_flow
 
 ## Configurable steps
 
-::: decider.TreeConfig
+::: decikit.TreeConfig
 
-::: decider.DecisionTableConfig
+::: decikit.DecisionTableConfig
 
-::: decider.ScorecardConfig
+::: decikit.ScorecardConfig
 
 ## Run
 
-::: decider.Engine
+::: decikit.Engine
 
-::: decider.Executable
+::: decikit.Executable
 
-::: decider.describe
+::: decikit.describe
 
 ## Extend
 
-::: decider.Step
+::: decikit.Step
 
-::: decider.ConfigurableStep
+::: decikit.ConfigurableStep
 
-::: decider.Value
+::: decikit.Value
 
-::: decider.ParamRef
+::: decikit.ParamRef
 
-::: decider.StepRef
+::: decikit.StepRef
 
 ## Errors
 
-::: decider.DeciderError
+::: decikit.DecikitError
 
-::: decider.FallbackWarning
+::: decikit.FallbackWarning
 
-::: decider.HiddenStateWarning
+::: decikit.HiddenStateWarning
 
-::: decider.ShadowedTableWarning
+::: decikit.ShadowedTableWarning
 
 ## Value types
 
-::: decider.ops.Text
+::: decikit.ops.Text
 
-::: decider.ops.decimal.Currency
+::: decikit.ops.decimal.Currency
 
-::: decider.ops.decimal.Decimal
+::: decikit.ops.decimal.Decimal
 
-::: decider.ops.Percent
+::: decikit.ops.Percent
 
-::: decider.ops.Duration
+::: decikit.ops.Duration
 
-::: decider.ops.Struct
+::: decikit.ops.Struct
 
-::: decider.ops.Columnar
+::: decikit.ops.Columnar
 
-::: decider.ops.FieldMetadata
+::: decikit.ops.FieldMetadata
 
 ## Serving
 
-::: decider.serving.RequestHandler
+::: decikit.serving.RequestHandler
 
 ## Config store
 
-::: decider.config.ConfigStore
+::: decikit.config.ConfigStore
 
-::: decider.config.JsonFileStore
+::: decikit.config.JsonFileStore
 
-::: decider.config.Version
+::: decikit.config.Version
 
-::: decider.config.VersionPart
+::: decikit.config.VersionPart
 
-::: decider.config.VersionedConfig
+::: decikit.config.VersionedConfig
 
 ## Debug
 
-::: decider.debug.Session
+::: decikit.debug.Session
 
-::: decider.debug.RunSummary
+::: decikit.debug.RunSummary
 
-::: decider.debug.Event
+::: decikit.debug.Event
 
-::: decider.debug.Paused
+::: decikit.debug.Paused
 
-::: decider.debug.NodeStarted
+::: decikit.debug.NodeStarted
 
-::: decider.debug.NodeFinished
+::: decikit.debug.NodeFinished
 
-::: decider.debug.NodeVisited
+::: decikit.debug.NodeVisited
 
-::: decider.debug.Overridden
+::: decikit.debug.Overridden
 
-::: decider.debug.Edited
+::: decikit.debug.Edited
 
-::: decider.debug.ParamsValidated
+::: decikit.debug.ParamsValidated
 
-::: decider.debug.RunStarted
+::: decikit.debug.RunStarted
 
-::: decider.debug.RunFinished
+::: decikit.debug.RunFinished
 
-::: decider.debug.ReloadFailed
+::: decikit.debug.ReloadFailed
 
-::: decider.debug.WarningEvent
+::: decikit.debug.WarningEvent
 
-::: decider.debug.ErrorEvent
+::: decikit.debug.ErrorEvent
 
 ## Trace
 
-::: decider.trace.TraceSink
+::: decikit.trace.TraceSink
 
-::: decider.trace.TraceEvent
+::: decikit.trace.TraceEvent
 
-::: decider.trace.Kind
+::: decikit.trace.Kind
 
-::: decider.trace.Adapter
+::: decikit.trace.Adapter
 
-::: decider.trace.PassThroughAdapter
+::: decikit.trace.PassThroughAdapter
 
-::: decider.trace.TraceLossError
+::: decikit.trace.TraceLossError
 
 ## Lab: data
 
-::: decider.lab.data.read
+::: decikit.lab.data.read
 
-::: decider.lab.data.scan
+::: decikit.lab.data.scan
 
-::: decider.lab.data.dataset
+::: decikit.lab.data.dataset
 
-::: decider.lab.data.datasets
+::: decikit.lab.data.datasets
 
-::: decider.lab.data.DatasetProvider
+::: decikit.lab.data.DatasetProvider
 
-::: decider.lab.data.FileProvider
+::: decikit.lab.data.FileProvider
 
-::: decider.lab.data.FolderProvider
+::: decikit.lab.data.FolderProvider
 
-::: decider.lab.data.LoadedData
+::: decikit.lab.data.LoadedData
 
-::: decider.lab.data.InputFingerprint
+::: decikit.lab.data.InputFingerprint
 
-::: decider.lab.data.DatasetError
+::: decikit.lab.data.DatasetError
 
-::: decider.lab.data.LoadError
+::: decikit.lab.data.LoadError
 
-::: decider.lab.data.RecordKeyError
+::: decikit.lab.data.RecordKeyError
 
-::: decider.lab.data.MissingKeyColumnError
+::: decikit.lab.data.MissingKeyColumnError
 
-::: decider.lab.data.MissingRecordKeyError
+::: decikit.lab.data.MissingRecordKeyError
 
-::: decider.lab.data.DuplicateRecordKeyError
+::: decikit.lab.data.DuplicateRecordKeyError
 
 ## Lab: checks
 
-::: decider.lab.checks.run
+::: decikit.lab.checks.run
 
-::: decider.lab.checks.standard
+::: decikit.lab.checks.standard
 
-::: decider.lab.checks.catalogue
+::: decikit.lab.checks.catalogue
 
-::: decider.lab.checks.check
+::: decikit.lab.checks.check
 
-::: decider.lab.checks.Check
+::: decikit.lab.checks.Check
 
-::: decider.lab.checks.CheckContext
+::: decikit.lab.checks.CheckContext
 
-::: decider.lab.checks.Finding
+::: decikit.lab.checks.Finding
 
-::: decider.lab.checks.Severity
+::: decikit.lab.checks.Severity
 
-::: decider.lab.checks.Report
+::: decikit.lab.checks.Report
 
-::: decider.lab.checks.SkippedCheck
+::: decikit.lab.checks.SkippedCheck
 
-::: decider.lab.checks.Suppression
+::: decikit.lab.checks.Suppression
 
 ## Lab: diff and proof
 
-::: decider.lab.diff.structure
+::: decikit.lab.diff.structure
 
-::: decider.lab.diff.outputs
+::: decikit.lab.diff.outputs
 
-::: decider.lab.diff.revisions
+::: decikit.lab.diff.revisions
 
-::: decider.lab.diff.prove
+::: decikit.lab.diff.prove
 
-::: decider.lab.diff.Revisions
+::: decikit.lab.diff.Revisions
 
-::: decider.lab.diff.StructureDiff
+::: decikit.lab.diff.StructureDiff
 
-::: decider.lab.diff.OutputDiff
+::: decikit.lab.diff.OutputDiff
 
-::: decider.lab.diff.Proof
+::: decikit.lab.diff.Proof
 
-::: decider.lab.diff.SmtEvidence
+::: decikit.lab.diff.SmtEvidence
 
-::: decider.lab.diff.StepChange
+::: decikit.lab.diff.StepChange
 
-::: decider.lab.diff.StepMove
+::: decikit.lab.diff.StepMove
 
-::: decider.lab.diff.EdgeChange
+::: decikit.lab.diff.EdgeChange
 
-::: decider.lab.diff.ParamChange
+::: decikit.lab.diff.ParamChange
 
-::: decider.lab.diff.ColumnDiff
+::: decikit.lab.diff.ColumnDiff
 
 ## Lab: testing
 
-::: decider.lab.testing.assert_equivalent
+::: decikit.lab.testing.assert_equivalent
 
-::: decider.lab.testing.corpus
+::: decikit.lab.testing.corpus
 
-::: decider.lab.testing.no_recompile
+::: decikit.lab.testing.no_recompile
 
 ## Lab: experiments
 
-::: decider.lab.experiments.Experiment
+::: decikit.lab.experiments.Experiment
 
-::: decider.lab.experiments.ExperimentDef
+::: decikit.lab.experiments.ExperimentDef
 
-::: decider.lab.experiments.ExperimentResult
+::: decikit.lab.experiments.ExperimentResult
 
-::: decider.lab.experiments.Scenario
+::: decikit.lab.experiments.Scenario
 
-::: decider.lab.experiments.ScenarioResult
+::: decikit.lab.experiments.ScenarioResult
 
-::: decider.lab.experiments.RunStatus
+::: decikit.lab.experiments.RunStatus
 
-::: decider.lab.experiments.run
+::: decikit.lab.experiments.run
 
-::: decider.lab.experiments.start
+::: decikit.lab.experiments.start
 
-::: decider.lab.experiments.validate
+::: decikit.lab.experiments.validate
 
 ## Lab: references
 
-::: decider.lab.resolve_step
+::: decikit.lab.resolve_step
 
-::: decider.lab.source_location
+::: decikit.lab.source_location
 
-::: decider.lab.FlowDescription
+::: decikit.lab.FlowDescription
 
-::: decider.lab.FlowRef
+::: decikit.lab.FlowRef
 
-::: decider.lab.StepRef
+::: decikit.lab.StepRef
 
-::: decider.lab.EdgeRef
+::: decikit.lab.EdgeRef
 
-::: decider.lab.ValueSlotRef
+::: decikit.lab.ValueSlotRef
 
-::: decider.lab.RecordRef
+::: decikit.lab.RecordRef
 
 ## Trees and expressions
 
-::: decider.steps.trees.TreeConfig
+::: decikit.steps.trees.TreeConfig
 
-::: decider.steps.trees.expr_condition
+::: decikit.steps.trees.expr_condition
 
-::: decider.steps.trees.Route
+::: decikit.steps.trees.Route
 
-::: decider.steps.trees.Visit
+::: decikit.steps.trees.Visit
 
 ## Flow files
 
-::: decider.steps.flowfile.load_flow
+::: decikit.steps.flowfile.load_flow
 
-::: decider.steps.flowfile.read_flow
+::: decikit.steps.flowfile.read_flow
 
-::: decider.steps.flowfile.components
+::: decikit.steps.flowfile.components

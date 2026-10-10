@@ -1,5 +1,5 @@
 """Personal loan: unsecured, 6 to 84 months. Limits: product caps and the offer."""
-from decider import flow, param, step
+from decikit import flow, param, step
 
 
 def pl_product_cap(grade: int, cap: float = param(350000.0)) -> float:

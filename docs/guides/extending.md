@@ -1,13 +1,13 @@
-# Extending decider
+# Extending the decider toolkit
 
-decider has a small number of extension points, and each is an ordinary Python class you subclass. A step type of your own loads from JSON like a tree or a table. A check runs in `decider check` beside the built-in ones. A dataset provider reads records from your warehouse. A trace adapter sends decision evidence where your audit store wants it. A config store keeps versions in a database instead of a folder. Each of them can live in your project, or ship in an installed package that decider finds without anyone importing it.
+The decider toolkit has a small number of extension points, and each is an ordinary Python class you subclass. A step type of your own loads from JSON like a tree or a table. A check runs in `decikit check` beside the built-in ones. A dataset provider reads records from your warehouse. A trace adapter sends decision evidence where your audit store wants it. A config store keeps versions in a database instead of a folder. Each of them can live in your project, or ship in an installed package that decider toolkit finds without anyone importing it.
 
 ## How config finds your classes
 
 Configurable steps, checks, dataset providers, config stores, experiment metrics, plots and report blocks are each a registry root. A subclass registers itself when its class is defined, under its import path (`"credit_steps.steps:CappedMarkup"`) and under the short alias it declares as `type: Literal["capped_markup"] = "capped_markup"`. A document names the class by either spelling in its `type` field.
 
 <div class="diagram" markdown>
-![The registry roots: ConfigurableStep, Check, DatasetProvider, ConfigStore and the experiment Metric, Plot and Block, each with its entry-point group (decider.steps, decider.checks, decider.datasets, decider.config_stores, decider.metrics, decider.plots, decider.blocks) and the documents that name types by them; trace adapters, callbacks, request handlers and field metadata are plain Python hooks instead](../assets/diagrams/guide-extending-roots.svg)
+![The registry roots: ConfigurableStep, Check, DatasetProvider, ConfigStore and the experiment Metric, Plot and Block, each with its entry-point group (decikit.steps, decikit.checks, decikit.datasets, decikit.config_stores, decikit.metrics, decikit.plots, decikit.blocks) and the documents that name types by them; trace adapters, callbacks, request handlers and field metadata are plain Python hooks instead](../assets/diagrams/guide-extending-roots.svg)
 
 *Every registry root resolves a `type` tag the same way.*
 </div>
@@ -18,7 +18,7 @@ Configurable steps, checks, dataset providers, config stores, experiment metrics
 flowchart TD
     T["type: tag"] --> R["1. registry<br/>lookup"]
     R -->|miss| L["2. built-in lazy alias<br/>(tree, decision_table, ...)<br/>or 'module:Class':<br/>import the module"]
-    L -->|still a miss| E["3. entry point named tag<br/>in decider.&lt;group&gt;:<br/>load it"]
+    L -->|still a miss| E["3. entry point named tag<br/>in decikit.&lt;group&gt;:<br/>load it"]
     E -->|still a miss| X["RegistryError<br/>with a did-you-mean"]
     R -->|hit| OK["the class, if it is<br/>registered under this root"]
     L -->|hit| OK
@@ -48,7 +48,7 @@ Subclass `ConfigurableStep`, declare the fields the document holds, and implemen
 ```python
 from typing import Literal
 
-from decider import ConfigurableStep, Value
+from decikit import ConfigurableStep, Value
 
 
 def capped_markup(amount: float, rate: float, cap: float) -> float:
@@ -81,7 +81,7 @@ To build a step type out of other steps, return `ctx.expand(self, helper)`. The 
 ```python
 from typing import Literal
 import polars as pl
-from decider import ConfigurableStep, StepRef, flow, param
+from decikit import ConfigurableStep, StepRef, flow, param
 
 
 def disposable(income: float, expenses: float) -> float:
@@ -138,7 +138,7 @@ shape: (2, 6)
 decision_table
 ```
 
-The dump keeps each nested step's own type and fields. Anything beyond `ctx.call` and `ctx.expand`, such as a row kernel over packed arrays the way trees and tables work, means building IR nodes by hand from the `decider.ir` kit (`Input`, `Output`, `ParamDecl`, `NullPolicy`, `CallNode`, `IRContext`); the [steps and IR](../architecture/steps-and-ir.md) and [configurable steps](../architecture/configurable-steps/index.md) architecture pages show how the built-in ones do it.
+The dump keeps each nested step's own type and fields. Anything beyond `ctx.call` and `ctx.expand`, such as a row kernel over packed arrays the way trees and tables work, means building IR nodes by hand from the `decikit.ir` kit (`Input`, `Output`, `ParamDecl`, `NullPolicy`, `CallNode`, `IRContext`); the [steps and IR](../architecture/steps-and-ir.md) and [configurable steps](../architecture/configurable-steps/index.md) architecture pages show how the built-in ones do it.
 
 ### Checking a step's own document
 
@@ -164,10 +164,10 @@ name = "credit-steps"
 version = "0.1.0"
 requires-python = ">=3.10"
 
-[project.entry-points."decider.steps"]
+[project.entry-points."decikit.steps"]
 capped_markup = "credit_steps.steps:CappedMarkup"
 
-[project.entry-points."decider.checks"]
+[project.entry-points."decikit.checks"]
 no_float_money = "credit_steps.checks:NoFloatMoney"
 
 [build-system]
@@ -175,15 +175,15 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 ```
 
-The groups are `decider.steps`, `decider.checks`, `decider.datasets`, `decider.config_stores`, `decider.metrics`, `decider.plots` and `decider.blocks`. On a registry miss, `resolve` loads the entry point of that name, which imports the module and registers the class. An entry point that names a class not registered under the root is still refused.
+The groups are `decikit.steps`, `decikit.checks`, `decikit.datasets`, `decikit.config_stores`, `decikit.metrics`, `decikit.plots` and `decikit.blocks`. On a registry miss, `resolve` loads the entry point of that name, which imports the module and registers the class. An entry point that names a class not registered under the root is still refused.
 
 With the package installed (here into a throwaway environment with `uv run --with ./credit_steps python use_plugin.py`), a document loads the type before anything imports `credit_steps`:
 
 ```python
 import sys
 import polars as pl
-from decider import ConfigurableStep, flow
-from decider.lab import checks
+from decikit import ConfigurableStep, flow
+from decikit.lab import checks
 
 print("credit_steps" in sys.modules)
 fee = ConfigurableStep.load({"type": "capped_markup", "name": "fee", "column": "amount",
@@ -213,10 +213,10 @@ CRS001 no_float_money pricing/fee fee is money in a float
 CRS010 markup_rate pricing/fee fee: rate 15.0 is outside 0 to 1
 ```
 
-The check `no_float_money` resolved through the `decider.checks` entry point the same way, and the step's own `check` hook added `CRS010`.
+The check `no_float_money` resolved through the `decikit.checks` entry point the same way, and the step's own `check` hook added `CRS010`.
 
-!!! warning "Pin the decider dependency"
-    The example package above lists no dependencies, because the environment that installs it already has decider. Given a bare `dependencies = ["decider"]`, a fresh `uv` environment resolved decider 0.0.1, an old release without `ConfigurableStep`, and `from decider import ConfigurableStep` failed with `ImportError`. Pin the version your projects run, or leave decider to the host environment.
+!!! warning "Pin the decider toolkit dependency"
+    The example package above lists no dependencies, because the environment that installs it already has the decider toolkit. Given a bare `dependencies = ["decikit"]`, a fresh `uv` environment resolved decider 0.0.1, an old release without `ConfigurableStep`, and `from decikit import ConfigurableStep` failed with `ImportError`. Pin the version your projects run, or leave the decider toolkit to the host environment.
 
 ## A check
 
@@ -225,7 +225,7 @@ A `Check` subclass has a `type` alias, a stable `code` with your own prefix (nev
 ```python
 from typing import Literal
 
-from decider.lab.checks import Check
+from decikit.lab.checks import Check
 
 
 class NoFloatMoney(Check):
@@ -247,8 +247,8 @@ class NoFloatMoney(Check):
 For a one-off rule, decorate a function instead:
 
 ```python
-from decider import flow
-from decider.lab import checks
+from decikit import flow
+from decikit.lab import checks
 
 
 def disposable(income: float, expenses: float) -> float:
@@ -280,7 +280,7 @@ import typing as t
 from pathlib import Path
 
 import polars as pl
-from decider.lab.data import DatasetProvider, datasets
+from decikit.lab.data import DatasetProvider, datasets
 
 
 class SqliteTable(DatasetProvider):
@@ -314,7 +314,7 @@ print(loaded.dataset, loaded.suggested_key, loaded.frame.height)
 applications ('application_id',) 2
 ```
 
-`datasets()` reads `datasets/` beside the nearest folder holding `configs/` (or `DECIDER_DATASETS_PATH`), so run it inside a project. Credentials are the provider's business: read them from the environment in `scan()`, never from `config.json`. Override `fingerprint()` when the source has a cheaper identity than hashing the frame (a table version, a snapshot id). [Data and datasets](data-and-datasets.md) covers the built-in `file` and `folder` providers.
+`datasets()` reads `datasets/` beside the nearest folder holding `configs/` (or `DECIKIT_DATASETS_PATH`), so run it inside a project. Credentials are the provider's business: read them from the environment in `scan()`, never from `config.json`. Override `fingerprint()` when the source has a cheaper identity than hashing the frame (a table version, a snapshot id). [Data and datasets](data-and-datasets.md) covers the built-in `file` and `folder` providers.
 
 ## A trace adapter
 
@@ -323,8 +323,8 @@ Decision tracing is off unless a run is given a `TraceSink`. The sink checks tha
 ```python
 import json
 import polars as pl
-from decider import flow, param
-from decider.trace import TraceSink
+from decikit import flow, param
+from decikit.trace import TraceSink
 
 
 class JsonLinesAdapter:
@@ -382,9 +382,9 @@ A `ConfigStore` subclass keeps versions somewhere other than a folder. Implement
 
 ```python
 import copy, typing as t
-from decider import flow, param
-from decider.config import ConfigStore, Version, VersionedConfig
-from decider.serving import RequestHandler
+from decikit import flow, param
+from decikit.config import ConfigStore, Version, VersionedConfig
+from decikit.serving import RequestHandler
 
 _VERSIONS: dict[str, dict[str, dict]] = {}       # stands in for a database table
 
@@ -430,13 +430,13 @@ print(handler.process_fn(b'{"income": 1000, "debt": 300}', "application/json", "
 b'{"income":1000,"debt":300,"approved":false}'
 ```
 
-The server builds its store from settings the same way: `DECIDER_CONFIG__TYPE=memory` picks the class, and the other `DECIDER_CONFIG__*` variables are its fields (`DECIDER_CONFIG__NAMESPACE=credit`). Ship the class in a package under `decider.config_stores`, or name it by import path, so the server process can resolve it.
+The server builds its store from settings the same way: `DECIKIT_CONFIG__TYPE=memory` picks the class, and the other `DECIKIT_CONFIG__*` variables are its fields (`DECIKIT_CONFIG__NAMESPACE=credit`). Ship the class in a package under `decikit.config_stores`, or name it by import path, so the server process can resolve it.
 
 ## Other hooks
 
 - Request handling: subclass `RequestHandler` in the project's `inference.py`; see [projects and serving](projects-and-serving.md).
 - Experiments: subclass `Metric`, `Plot` or a report `Block` (registry roots, saved in `experiment.json`), or `Callback` (a plain class, not saved); see [experiments](experiments.md).
-- Display units in the debugger: subclass `decider.ops.FieldMetadata`; see [types and money](types-and-money.md).
+- Display units in the debugger: subclass `decikit.ops.FieldMetadata`; see [types and money](types-and-money.md).
 
 ## Where to go next
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from decider import Engine, allow_fallback, dag, each, flow, step
+from decikit import Engine, allow_fallback, dag, each, flow, step
 
 MODES = ("interpreted", "fused")
 

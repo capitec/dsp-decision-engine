@@ -2,9 +2,9 @@ import json
 from datetime import date
 
 import pytest
-from decider import ConfigurableStep, flow, step
-from decider.exceptions import WiringError
-from decider.lab import diff
+from decikit import ConfigurableStep, flow, step
+from decikit.exceptions import WiringError
+from decikit.lab import diff
 
 from credit_core.adjustments import AdjustmentStack, Effect, Overlay, evaluate
 

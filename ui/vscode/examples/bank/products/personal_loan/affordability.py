@@ -1,5 +1,5 @@
 """Personal loan: unsecured, 6 to 84 months. Affordability: the instalment at the offered and a stressed rate against disposable income."""
-from decider import flow, param, step
+from decikit import flow, param, step
 
 
 def pl_instalment(requested_amount: float, requested_term: float, pl_monthly_rate: float, pl_monthly_fee: float) -> float:

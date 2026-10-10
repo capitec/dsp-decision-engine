@@ -1,5 +1,5 @@
 """Reasons, final validation and the outcome."""
-from decider import flow, step
+from decikit import flow, step
 
 from retail_credit import validation
 

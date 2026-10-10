@@ -1,5 +1,5 @@
 """Overdraft on a salary account. Application scorecard: points per characteristic, summed into a score."""
-from decider import flow, param, step
+from decikit import flow, param, step
 
 
 def od_pts_bureau_score(bureau_score: float, cut_1: float = param(0.03), cut_2: float = param(0.09), cut_3: float = param(0.36),

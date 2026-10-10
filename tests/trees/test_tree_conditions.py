@@ -1,7 +1,7 @@
 import pydantic
 import pytest
 
-from decider.steps.trees.schema import (
+from decikit.steps.trees.schema import (
     CasesIsIn,
     CasesIsInRule,
     CasesRanges,
@@ -24,7 +24,7 @@ from decider.steps.trees.schema import (
     UnaryStringMatch,
     V3TreeDocument,
 )
-from decider.steps._values import ParamRef
+from decikit.steps._values import ParamRef
 
 
 def test_a_computed_feature_reports_the_columns_it_reads():

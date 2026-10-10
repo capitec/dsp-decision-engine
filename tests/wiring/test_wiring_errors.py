@@ -6,8 +6,8 @@ import warnings
 
 import pytest
 
-from decider import dag, flow, param, step
-from decider._engine.wiring import resolve
+from decikit import dag, flow, param, step
+from decikit._engine.wiring import resolve
 
 
 def disposable_income(net_income: float, expenses: float) -> float:
@@ -69,7 +69,7 @@ def test_reading_an_input_then_narrowing_it_later_is_a_forward_reference():
 
 
 def test_a_forward_reference_from_a_branch_condition_is_caught_after_the_branch():
-    from decider import branch
+    from decikit import branch
 
     def is_big(amount: float) -> bool:
         return amount > 1

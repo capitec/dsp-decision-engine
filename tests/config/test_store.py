@@ -5,11 +5,11 @@ import json
 import pytest
 from pydantic import TypeAdapter
 
-from decider.config import JsonFileStore, Version, VersionPart
-from decider._engine.ir.decls import Input, Output
-from decider._engine.ir.nodes import CallNode
-from decider._settings import DeciderConfigSettings
-from decider.steps import ConfigurableStep, ParamRef, StepRef, Value
+from decikit.config import JsonFileStore, Version, VersionPart
+from decikit._engine.ir.decls import Input, Output
+from decikit._engine.ir.nodes import CallNode
+from decikit._settings import DecikitConfigSettings
+from decikit.steps import ConfigurableStep, ParamRef, StepRef, Value
 
 
 class Cutoff(ConfigurableStep):
@@ -114,7 +114,7 @@ def test_configurable_step_and_params_round_trip(tmp_path):
 
 
 def test_settings_build_the_store(tmp_path):
-    store = DeciderConfigSettings(basepath=str(tmp_path)).get()
+    store = DecikitConfigSettings(basepath=str(tmp_path)).get()
     assert isinstance(store, JsonFileStore) and store.basepath == str(tmp_path)
     with pytest.raises(LookupError, match="file:yaml"):
-        DeciderConfigSettings(type="file:yaml").get()
+        DecikitConfigSettings(type="file:yaml").get()

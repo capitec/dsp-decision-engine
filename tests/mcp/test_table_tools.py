@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from decider._tooling.mcp import _configs as configs, _scorecards as scorecards, _tables as tables
+from decikit._tooling.mcp import _configs as configs, _scorecards as scorecards, _tables as tables
 
 ROOT = Path(__file__).resolve().parents[2]
 MATRIX = ROOT / "examples/credit-limit-management/configs/0.1.0/matrix.json"

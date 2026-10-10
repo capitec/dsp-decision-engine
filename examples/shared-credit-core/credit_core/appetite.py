@@ -1,7 +1,7 @@
 """Risk appetite: the limits for a product, segment and risk grade, and which one a request breaks first."""
 from __future__ import annotations
 
-from decider import DecisionTableConfig, missing_as, step
+from decikit import DecisionTableConfig, missing_as, step
 
 from credit_core.evidence import cell_id
 

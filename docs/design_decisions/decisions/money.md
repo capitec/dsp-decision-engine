@@ -7,7 +7,7 @@ Read this before changing `Decimal`, `Currency`, rounding or overflow behaviour:
 - `Decimal[p, s]` is an int64 `raw` count of `10**-s` units; `Currency` is scale 4 (to 922,337,203,685,477.5807).
 - Why: floats drift; an `int`-subclass `Cents` leaked (`1.5 + Cents(3)` answered a float), so `Decimal` is a plain class.
 - Not: a rate held as scaled int (`round(rate * 1e9)`): +5 cents of total interest on R250,000 over 60 months, where float64 matched a 60-digit `Decimal` on all 20,000 instalments tested. Money that is split must allocate by largest remainder (11 float64 parts of R1,207.99 summed to R1,208.02).
-- See: [experiment](../experiments/money-types-and-rounding.md), `decider/ops/decimal.py`, [kernels](../../architecture/engine/kernels.md)
+- See: [experiment](../experiments/money-types-and-rounding.md), `decikit/ops/decimal.py`, [kernels](../../architecture/engine/kernels.md)
 
 ## A kernel types the int64 at its edge
 
@@ -47,7 +47,7 @@ Read this before changing `Decimal`, `Currency`, rounding or overflow behaviour:
 ## Constructors: floats round from the exact value, strings from digits
 
 - `Currency(2.675)` is 2.67, `Currency("2.675")` is 2.68, `Currency(major, minor)` is exact with `0 <= minor < 10**scale`.
-- Why: polars casts floats through the shortest repr (2.68); decider keeps the float's CPython meaning.
+- Why: polars casts floats through the shortest repr (2.68); the decider toolkit keeps the float's CPython meaning.
 
 ## Units are a display string, no locale library
 
@@ -58,7 +58,7 @@ Read this before changing `Decimal`, `Currency`, rounding or overflow behaviour:
 
 - `OverflowError` in Python (`_fit`), low 64 bits in a kernel; `assert_equivalent` reports it.
 - Why: a kernel cannot check per operation, and wrapping in Python too would hide the bug.
-- Corpora include `.xx5` ties and large principals. See `decider/lab/checks/_builtin/numeric/money.py`.
+- Corpora include `.xx5` ties and large principals. See `decikit/lab/checks/_builtin/numeric/money.py`.
 
 ## Running totals that can grow accumulate in float64
 
@@ -68,4 +68,4 @@ Read this before changing `Decimal`, `Currency`, rounding or overflow behaviour:
 ## A spelling a kernel rejects fails in every mode
 
 - It is a numba `TypingError`, so the step falls back (or raises under `strict_compile=True`) and the Python class raises `TypeError`.
-- Gap: the reported reason is numba's candidate listing with decider's line in the middle.
+- Gap: the reported reason is numba's candidate listing with the decider toolkit's line in the middle.

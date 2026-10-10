@@ -4,7 +4,7 @@ import math
 
 import polars as pl
 import pytest
-from decider import Engine
+from decikit import Engine
 
 from loan_granting import reasons
 from loan_granting.pipeline import build

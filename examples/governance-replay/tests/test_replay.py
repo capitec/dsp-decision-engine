@@ -2,7 +2,7 @@ import dataclasses
 import shutil
 import json
 
-from decider.config import JsonFileStore
+from decikit.config import JsonFileStore
 
 from governance.evidence import EvidenceStore
 from governance.flows import BUSINESS, FLOWS

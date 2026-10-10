@@ -5,7 +5,7 @@ without a code change. `generate_flex_loan_card` builds a synthetic one; `diff_c
 """
 from __future__ import annotations
 
-from decider import DecisionTableConfig, flow, param, step
+from decikit import DecisionTableConfig, flow, param, step
 
 from credit_core.evidence import cell_id
 

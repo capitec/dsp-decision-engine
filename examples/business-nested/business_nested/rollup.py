@@ -6,7 +6,7 @@ the whole set of events that satisfied the rule, so a decline can say which enti
 """
 from __future__ import annotations
 
-from decider import allow_fallback, param, step
+from decikit import allow_fallback, param, step
 
 from credit_core.adverse_events import ADMINISTRATION_ORDER, FRAUD_CONVICTION, IMMATERIAL, SEQUESTRATION
 

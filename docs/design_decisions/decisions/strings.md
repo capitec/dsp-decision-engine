@@ -12,7 +12,7 @@ Read this before changing how a compiled step holds, compares or returns a strin
 
 - `compile_call` returns `dispatcher.py_func` with a `FallbackWarning`; `@allow_fallback` accepts it, and `strict_compile=True` has no `str` exemption.
 - Why: unboxing a `str` per row made njit 2.6x-4.9x slower in batch and 1.1x-2.6x on `score()`; a Python `str` step costs under 10 µs on one record.
-- See: [experiment](../experiments/string-representations.md), `decider/_engine/compile/njit.py`
+- See: [experiment](../experiments/string-representations.md), `decikit/_engine/compile/njit.py`
 
 ## No dictionary codes: spans replaced `Raw[str]`
 
@@ -43,7 +43,7 @@ Read this before changing how a compiled step holds, compares or returns a strin
 
 - Up to 32 values, `spans` borrows each `bytes` buffer via `PyBytes_AsString` and keeps them in `alive`; above that it exports Arrow buffers.
 - Why: building a frame cost 19.8 µs for one row against 2.6 µs borrowed; 32 is the measured crossover. Annotation helpers are `lru_cache`d on the plain type, taking a string-gated tree `score()` from 145 to 91 µs.
-- See: [experiment](../experiments/string-representations.md), `decider/_engine/run/representations.py`
+- See: [experiment](../experiments/string-representations.md), `decikit/_engine/run/representations.py`
 
 ## Declarations keep `Annotated` metadata; type logic strips it
 
@@ -54,4 +54,4 @@ Read this before changing how a compiled step holds, compares or returns a strin
 
 - A tree's string outputs come back as indices into a `CodeTable` built once per kernel; `score()` indexes a cached object array (about 0.1 µs a row), `run()` gathers from a cached polars column.
 - `lookup(values, dtype)` does the same for lists and records; a struct flattens to `column.field` columns; `decode()` deep-copies mutable values.
-- Not: one decode for both paths. An object column into polars grows with rows (2 µs at 1, 2 ms at 100k) while `gather` is flat. See [experiment](../experiments/string-representations.md), `decider/_engine/compile/outputs.py`
+- Not: one decode for both paths. An object column into polars grows with rows (2 µs at 1, 2 ms at 100k) while `gather` is flat. See [experiment](../experiments/string-representations.md), `decikit/_engine/compile/outputs.py`

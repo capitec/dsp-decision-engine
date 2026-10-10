@@ -3,7 +3,7 @@ import threading
 
 import polars as pl
 
-from decider import Engine, flow, missing_as, param
+from decikit import Engine, flow, missing_as, param
 
 
 def heavy(weight: float = missing_as(0.0), heavy_kg: float = param(20.0)) -> bool:
@@ -11,7 +11,7 @@ def heavy(weight: float = missing_as(0.0), heavy_kg: float = param(20.0)) -> boo
 
 
 def pipeline():
-    from decider import each
+    from decikit import each
 
     return flow(each("items", flow(heavy, name="item"), name="items"), name="order")
 

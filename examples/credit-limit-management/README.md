@@ -13,7 +13,7 @@ Two things make this unlike the other examples.
 - **The increase is not free.** All the increases the programme would like to make, added up, land on the balance
   sheet, and the Asset and Liability Committee (ALCO) sets a monthly ceiling on new limit. Typically only about half of
   the qualifying accounts can be funded, and *which* half is a decision about the whole book that no amount of
-  per-account reasoning produces. So the example has two halves: a per-account pipeline that `decider` serves, and a
+  per-account reasoning produces. So the example has two halves: a per-account pipeline that `decikit` serves, and a
   book-wide allocation that runs over the pipeline's results ([why it is not a step](#things-worth-knowing)).
 - **Everything the bank does to the numbers must stay visible.** Policy moves the programme between quarterly matrix
   releases with *overlays*: "run at 80% of the matrix this month", "nothing above R5 000 this cycle", "-15 points on
@@ -78,7 +78,7 @@ Then [`allocation.allocate`](limit_mgmt/allocation.py) takes the whole book:
 
 ## Features it shows
 
-| decider feature | Where |
+| Decider toolkit feature | Where |
 |---|---|
 | A 1 152-cell `DecisionTableConfig` kept as a config document and handed to `build(matrix)` by name, so policy can replace it without a deployment | [matrix.py](limit_mgmt/matrix.py), [`configs/0.1.0/matrix.json`](configs/0.1.0/matrix.json), [pipeline.py](limit_mgmt/pipeline.py) |
 | `ScorecardConfig`, a `DecisionTableConfig` with open-ended band ladders per product, and `credit_core`'s PD step reused with `.relabel` | [scoring.py](limit_mgmt/scoring.py) |
@@ -88,7 +88,7 @@ Then [`allocation.allocate`](limit_mgmt/allocation.py) takes the whole book:
 | Multi-output steps, `param` with bounds, `missing_as`, `@helper` for a function a compiled step calls | [caps.py](limit_mgmt/caps.py), [exclusions.py](limit_mgmt/exclusions.py) |
 | Steps whose only input is a param, so a constant (the assessment mode) shows in the params document and the evidence record | [affordability.py](limit_mgmt/affordability.py) |
 | `@allow_fallback` for steps that are Python on purpose (dates, ragged lists), checked by `Engine(strict_compile=True)` | [population.py](limit_mgmt/population.py), [tests/test_serving.py](tests/test_serving.py) |
-| One pipeline, three consumers: `decider serve` for one account, `.compile("fused").run(frame)` over the whole book, and the same run with a candidate params document for simulation | [simulation.py](limit_mgmt/simulation.py), [tests/test_cycle.py](tests/test_cycle.py) |
+| One pipeline, three consumers: `decikit serve` for one account, `.compile("fused").run(frame)` over the whole book, and the same run with a candidate params document for simulation | [simulation.py](limit_mgmt/simulation.py), [tests/test_cycle.py](tests/test_cycle.py) |
 | A book-wide decision outside the engine, as a plain polars function over the engine's frame | [allocation.py](limit_mgmt/allocation.py), [tests/test_allocation.py](tests/test_allocation.py) |
 | Warm-up from `sample_request.json`, and serving the raw request bytes | [tests/test_serving.py](tests/test_serving.py) |
 
@@ -99,14 +99,14 @@ From the repository root, put every example on the path once (this one imports `
 ```bash
 export PYTHONPATH=$(printf '%s:' "$PWD"/examples/*/)
 cd examples/credit-limit-management
-export DECIDER_API__CODE_PATH="$PWD" DECIDER_API__PIPELINE="limit_mgmt.pipeline:build" DECIDER_CONFIG__BASEPATH="$PWD/configs"
+export DECIKIT_API__CODE_PATH="$PWD" DECIKIT_API__PIPELINE="limit_mgmt.pipeline:build" DECIKIT_CONFIG__BASEPATH="$PWD/configs"
 ```
 
 Build (validates `configs/0.1.0`, loads the matrix, and compiles and warms every kernel with `sample_request.json`; the
 first build in a fresh checkout takes a minute while numba compiles):
 
 ```bash
-uv run decider build
+uv run decikit build
 # built config version 0.1.0 (pipeline limit_mgmt.pipeline:build, mode fused)
 ```
 
@@ -114,7 +114,7 @@ Serve, and decide the sample account: a card at R15 000, grade 2, a steady salar
 Its dates are plain JSON strings:
 
 ```bash
-uv run decider serve --workers 1 &
+uv run decikit serve --workers 1 &
 curl -s -d @sample_request.json -H 'content-type: application/json' localhost:8080/invocations |
   jq '{change_type_code, notice_class_code, matrix_cell_id, matrix_multiplier_unadjusted, matrix_multiplier,
        matrix_adjustments_applied, policy_proposed_limit_unadjusted, policy_proposed_limit, final_proposed_limit}'
@@ -250,9 +250,9 @@ and the programme excludes the account for as long as it is true.
 - **The overlays and the reason codes are documents.** Credit Risk Policy edits `configs/0.1.0/matrix_dial_adjustments.json`
   (the 80% dial), `behaviour_score_adjustments.json` and `behaviour_pd_adjustments.json` (the partner-channel score shift,
   the Access Facility PD multiplier), `buffer_adjustments.json` (the programme's wider affordability buffer) and
-  `reason_codes.json` (the severity order); `decider build` hands each to `pipeline.build` by its name.
+  `reason_codes.json` (the severity order); `decikit build` hands each to `pipeline.build` by its name.
   Owner, approval reference, rationale and review date are in the same file but are not behaviour: editing them does not
-  show in a `decider.lab.diff`, changing an effect or a window does. Step names and params paths are unchanged.
+  show in a `decikit.lab.diff`, changing an effect or a window does. Step names and params paths are unchanged.
 
   ```json
   {"type": "adjustment_stack", "name": "apply_matrix_multiplier_excess_adjustments", "target": "matrix_multiplier_excess",
@@ -264,7 +264,7 @@ and the programme excludes the account for as long as it is true.
   `scripts/generate_configs.py` writes them. The affordability bridge still embeds `assessment`'s capacity unit, whose
   own overlay and reason codes are not yet documents, so a whole-pipeline `structure(a, a')` is not yet identical; that
   is the affordability example's to change.
-- **Why the allocation is not a `decider` step.** A rank and a funding line mean nothing for one row: they depend on
+- **Why the allocation is not a `decikit` step.** A rank and a funding line mean nothing for one row: they depend on
   where an account sits among 700 000 others and where the money runs out. An implementation that decides one account
   at a time ends up with a hard-coded score threshold standing in for the budget, wrong every month and silently. So
   `run_cycle` runs the pipeline compiled over the whole book and hands the frame to `allocate`.
@@ -274,7 +274,7 @@ and the programme excludes the account for as long as it is true.
   [conftest.py](tests/conftest.py)) is the unadjusted answer for the whole book.
 - **Overlays are checked before the cycle, not only applied.** `run_cycle` raises while any overlay is past its review
   date and not yet lapsed, so an unreviewed 70% dial cannot quietly run for three years. A single request served by
-  `decider serve` does not run that check.
+  `decikit serve` does not run that check.
 - **Caps use the income on file.** C2 and C3 read `declared_gross_income_on_file` and `declared_net_income_on_file`, not
   the income the assessment works out: the assessment needs the proposed limit these caps produce, so keying them on
   its output would make the two depend on each other. C3 leaves this account only what the client's other accounts do

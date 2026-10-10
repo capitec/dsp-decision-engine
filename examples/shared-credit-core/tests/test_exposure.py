@@ -1,7 +1,7 @@
 from datetime import date
 
 from credit_core.exposure import exposure_headroom, group_exposure_limit_step, group_total_exposure, group_total_exposure_step
-from decider import dag
+from decikit import dag
 
 FACILITIES = [
     {"balance": 100_000.0, "opened_date": date(2020, 1, 1)},

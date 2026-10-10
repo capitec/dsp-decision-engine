@@ -5,7 +5,7 @@ The fraud engine is a separate service, called before this flow. Its answer is t
 """
 from __future__ import annotations
 
-from decider import missing_as, param, step
+from decikit import missing_as, param, step
 
 from credit_core.vocab import FraudVerdictCode
 

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from decider import flow
+from decikit import flow
 
 from retail_credit import pricing, solve
 from retail_credit.pipeline import build

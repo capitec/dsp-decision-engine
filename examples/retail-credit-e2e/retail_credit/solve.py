@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import math
 
-from decider import allow_fallback, flow, helper, optimise, step
+from decikit import allow_fallback, flow, helper, optimise, step
 
 from retail_credit import pricing
 from retail_credit.vocab import BIND_AFF, BIND_CAP, BIND_MAX, BIND_MIN, BIND_REQ

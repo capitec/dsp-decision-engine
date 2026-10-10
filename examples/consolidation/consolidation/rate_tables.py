@@ -9,7 +9,7 @@ from __future__ import annotations
 import polars as pl
 from credit_core.credit_life import CREDIT_LIFE_VERSION
 from credit_core.evidence import cell_id
-from decider import DecisionTableConfig, param, param_table
+from decikit import DecisionTableConfig, param, param_table
 from loan_granting.rate_tables import (
     CREDIT_LIFE_COLUMNS,
     OPEN,

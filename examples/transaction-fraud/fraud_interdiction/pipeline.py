@@ -1,7 +1,7 @@
 """The instant-payment fraud decision: `build` receives one document per argument, each a file in `configs/<version>/`."""
 from __future__ import annotations
 
-from decider import DecisionTableConfig, dag, flow
+from decikit import DecisionTableConfig, dag, flow
 from credit_core import consent
 from credit_core.adjustments import AdjustmentStack
 from credit_core.dates import EffectiveVersions

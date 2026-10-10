@@ -6,7 +6,7 @@ and the step after the branch wants whichever arm each row took. Wiring settles 
 `resolve(ir)` binds every read to one `NodeVersion`, a single written value of a name, and checks the result.
 The output is a `Plan`, which every [runner](runners.md) and the [compiler](compile.md) execute.
 
-The code lives in `decider/_engine/wiring/`:
+The code lives in `decikit/_engine/wiring/`:
 
 | File | Holds |
 |---|---|
@@ -66,7 +66,7 @@ merge limit v7 prior None arms ['v5', 'v6']
 
 ## The data structures
 
-All of these are in `decider/_engine/wiring/plan.py`.
+All of these are in `decikit/_engine/wiring/plan.py`.
 
 `NodeVersion(id, name, producer, annotation)` is one written value. `producer` is the origin path of the node that
 wrote it, or `None` for a pipeline input column. A branch's merged value is produced by the branch path, a loop's
@@ -167,7 +167,7 @@ flowchart TD
 ### Typos
 
 Candidates are names produced earlier in the walk, minus the reading node's own outputs (so `term_cap_a` may read
-`term_cap`). `suggest` finds the closest at a difflib ratio of 0.8 (`TYPO_CUTOFF` in `decider/_suggest.py`).
+`term_cap`). `suggest` finds the closest at a difflib ratio of 0.8 (`TYPO_CUTOFF` in `decikit/_suggest.py`).
 `_is_typo` then counts the edits: within two, unless the two names differ only in digits, it is an error.
 
 ```text
@@ -370,7 +370,7 @@ refused with `WiringError: p.relabel(reads={'items': 'basket'}): it reads no 'it
 ## Where wiring fails, and when
 
 Every check runs at `resolve`, so at `Engine.bind`, `Step.compile`, `Step.run` and `Step.session`, before any data
-is read. Every error is a `WiringError` (a `ValueError` and a `DeciderError`) naming the node path, except two:
+is read. Every error is a `WiringError` (a `ValueError` and a `DecikitError`) naming the node path, except two:
 an `Item` field that is itself a list or struct, in a `Columnar[Item]` or `Struct[Item]` input, is a `TypeError`
 naming the Python spelling to use instead; and a `FiniteStateMachineNode` is a `TypeError`. A typo that is only
 similar is a `UserWarning`. The [branches, loops and frames guide](../../guides/branches-loops-frames.md) shows how

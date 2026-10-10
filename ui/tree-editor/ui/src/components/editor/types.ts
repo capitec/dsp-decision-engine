@@ -33,7 +33,7 @@ export interface SubtreeState {
   activeSubtreeId: string | null;
 }
 
-// v3 Node Types - matching the decider V3TreeDocument node types
+// v3 Node Types - matching the decikit V3TreeDocument node types
 // Structure managed by edges, no embedded then/otherwise/branches
 
 export type LeafNodeData = {

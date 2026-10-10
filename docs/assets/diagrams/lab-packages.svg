@@ -9,7 +9,7 @@
   <!-- tooling consumers -->
   <rect x="40" y="16" width="290" height="58" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
   <text x="185" y="40" text-anchor="middle" font-size="15" font-weight="600" fill="#4c1d95">CLI</text>
-  <text x="185" y="61" text-anchor="middle" font-size="13" fill="#4c1d95">decider check · diff · experiment</text>
+  <text x="185" y="61" text-anchor="middle" font-size="13" fill="#4c1d95">decikit check · diff · experiment</text>
   <rect x="355" y="16" width="290" height="58" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
   <text x="500" y="40" text-anchor="middle" font-size="15" font-weight="600" fill="#4c1d95">MCP tools</text>
   <text x="500" y="61" text-anchor="middle" font-size="13" fill="#4c1d95">describe_flow · inspect_step · check_report</text>
@@ -20,7 +20,7 @@
 
   <!-- lab frame -->
   <rect x="20" y="106" width="960" height="330" rx="12" fill="#f9fafb" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="6 4"/>
-  <text x="36" y="130" font-size="15" font-weight="600" fill="#1f2937">decider.lab</text>
+  <text x="36" y="130" font-size="15" font-weight="600" fill="#1f2937">decikit.lab</text>
 
   <!-- experiments -->
   <rect x="380" y="140" width="240" height="56" rx="10" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
@@ -68,5 +68,5 @@
   <line x1="500" y1="436" x2="500" y2="462" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
   <rect x="20" y="464" width="960" height="56" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
   <text x="500" y="488" text-anchor="middle" font-size="15" font-weight="600" fill="#134e4a">core (L1) and foundation (L0)</text>
-  <text x="500" y="508" text-anchor="middle" font-size="13" fill="#134e4a">decider.ir · _engine.wiring · Engine · decider.debug · _registry · _settings</text>
+  <text x="500" y="508" text-anchor="middle" font-size="13" fill="#134e4a">decikit.ir · _engine.wiring · Engine · decikit.debug · _registry · _settings</text>
 </svg>

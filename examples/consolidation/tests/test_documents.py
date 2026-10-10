@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 from assessment.documents import shipped as assessment_document
-from decider import ConfigurableStep, DecisionTableConfig
-from decider.lab import diff
+from decikit import ConfigurableStep, DecisionTableConfig
+from decikit.lab import diff
 
 from consolidation.pipeline import build
 

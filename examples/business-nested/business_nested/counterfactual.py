@@ -8,7 +8,7 @@ from __future__ import annotations
 import copy
 from functools import cache
 
-from decider import Engine, Executable, flow
+from decikit import Engine, Executable, flow
 
 from business_nested import structure
 from business_nested.entity import entity_unit

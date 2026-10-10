@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as vscode from "vscode";
-import type { DescribeResult } from "@decider/ui";
+import type { DescribeResult } from "@decikit/ui";
 import { startAgentBridge } from "./agentBridge";
 import { currentBreakpoints, debugFlow, setBreakpointNodes, toggleBreakpoint, userCode, watchDebugger } from "./debugging";
 import { copyDatasetName, DatasetsProvider, debugWithDataset, previewDataset, revealDataset } from "./datasets";
@@ -32,7 +32,7 @@ export function activate(ctx: vscode.ExtensionContext) {
   const flows = new FlowsProvider();
   const datasets = new DatasetsProvider();
   const structure = new StructureProvider((kind, target) => void insertAt(kind, target));
-  const tree = vscode.window.createTreeView("decider.structure", { treeDataProvider: structure, dragAndDropController: structure, showCollapseAll: true });
+  const tree = vscode.window.createTreeView("decikit.structure", { treeDataProvider: structure, dragAndDropController: structure, showCollapseAll: true });
   const toolbox = new ToolboxProvider();
   const watcher = vscode.workspace.createFileSystemWatcher("**/*.{py,yaml,yml}", false, true, false);
   const debug = watchDebugger({
@@ -83,7 +83,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     } catch (e) {
       if (g !== generation) return;
       const msg = (e as Error).message.split("\n")[0];
-      s.error = /No module named 'decider'|ENOENT/.test(msg) ? `${msg}: set decider.python to an interpreter with decider installed` : msg;
+      s.error = /No module named 'decikit'|ENOENT/.test(msg) ? `${msg}: set decikit.python to an interpreter with decikit installed` : msg;
     }
     render();
   }
@@ -93,8 +93,8 @@ export function activate(ctx: vscode.ExtensionContext) {
     if (!file) return;
     if (shown?.file !== file || shown.pipeline !== pipeline) shown = { file, pipeline };
     datasets.follow(file, pipeline);
-    vscode.commands.executeCommand("setContext", "decider.flowShown", true);
-    vscode.commands.executeCommand("setContext", "decider.yamlFlow", isFlowPath(file));
+    vscode.commands.executeCommand("setContext", "decikit.flowShown", true);
+    vscode.commands.executeCommand("setContext", "decikit.yamlFlow", isFlowPath(file));
     if (graph) GraphPanel.show(ctx, onPanel);
     render();
     await describe();
@@ -167,44 +167,44 @@ export function activate(ctx: vscode.ExtensionContext) {
     }
     if (target.into) return insert(target, "inside", kind);
     if (target.yamlPath?.length && target.kind !== "condition") return insert(target, "after", kind);
-    vscode.window.showInformationMessage("decider: drop onto a step, a flow, a loop or a branch arm");
+    vscode.window.showInformationMessage("decikit: drop onto a step, a flow, a loop or a branch arm");
   }
 
   ctx.subscriptions.push(
     tree,
     watcher,
-    vscode.window.createTreeView("decider.flows", { treeDataProvider: flows }),
-    vscode.window.createTreeView("decider.toolbox", { treeDataProvider: toolbox, dragAndDropController: toolbox }),
+    vscode.window.createTreeView("decikit.flows", { treeDataProvider: flows }),
+    vscode.window.createTreeView("decikit.toolbox", { treeDataProvider: toolbox, dragAndDropController: toolbox }),
     datasets,
-    (datasets.view = vscode.window.createTreeView("decider.datasets", { treeDataProvider: datasets })),
-    vscode.commands.registerCommand("decider.refreshDatasets", () => datasets.refresh()),
-    vscode.commands.registerCommand("decider.previewDataset", previewDataset),
-    vscode.commands.registerCommand("decider.debugWithDataset", debugWithDataset),
-    vscode.commands.registerCommand("decider.copyDatasetName", copyDatasetName),
-    vscode.commands.registerCommand("decider.revealDataset", revealDataset),
+    (datasets.view = vscode.window.createTreeView("decikit.datasets", { treeDataProvider: datasets })),
+    vscode.commands.registerCommand("decikit.refreshDatasets", () => datasets.refresh()),
+    vscode.commands.registerCommand("decikit.previewDataset", previewDataset),
+    vscode.commands.registerCommand("decikit.debugWithDataset", debugWithDataset),
+    vscode.commands.registerCommand("decikit.copyDatasetName", copyDatasetName),
+    vscode.commands.registerCommand("decikit.revealDataset", revealDataset),
     vscode.languages.registerCodeLensProvider([{ language: "python" }, { language: "yaml" }], new FlowCodeLens()),
     watcher.onDidCreate(() => flows.refresh()),
     watcher.onDidDelete(() => flows.refresh()),
-    vscode.commands.registerCommand("decider.refreshFlows", () => flows.refresh()),
-    vscode.commands.registerCommand("decider.showFlow", (uri?: vscode.Uri, pipeline?: string) =>
+    vscode.commands.registerCommand("decikit.refreshFlows", () => flows.refresh()),
+    vscode.commands.registerCommand("decikit.showFlow", (uri?: vscode.Uri, pipeline?: string) =>
       show(uri ?? (shown && vscode.Uri.file(shown.file)), uri ? pipeline : shown?.pipeline),
     ),
-    vscode.commands.registerCommand("decider.refreshStructure", () => shown && show(vscode.Uri.file(shown.file), shown.pipeline, false)),
-    vscode.commands.registerCommand("decider.debugFlow", (arg?: vscode.Uri | { file: string; pipeline?: string }, pipeline?: string) => {
+    vscode.commands.registerCommand("decikit.refreshStructure", () => shown && show(vscode.Uri.file(shown.file), shown.pipeline, false)),
+    vscode.commands.registerCommand("decikit.debugFlow", (arg?: vscode.Uri | { file: string; pipeline?: string }, pipeline?: string) => {
       const ref = arg instanceof vscode.Uri ? { file: arg.fsPath, pipeline } : arg ?? (shown ?? (vscode.window.activeTextEditor && { file: vscode.window.activeTextEditor.document.uri.fsPath }));
       return ref && debugFlow(ref.file, ref.pipeline);
     }),
-    vscode.commands.registerCommand("decider.select", (item: Item) => {
+    vscode.commands.registerCommand("decikit.select", (item: Item) => {
       if (item.file) void open(item.file, item.line);
       GraphPanel.post({ type: "select", path: item.path });
     }),
-    vscode.commands.registerCommand("decider.openCode", (item: Item) => revealNode(item.path)),
-    vscode.commands.registerCommand("decider.toggleBreakpoint", (item: Item) => ir() && toggleBreakpoint(ir()!, item.path)),
-    vscode.commands.registerCommand("decider.insertBefore", (item: Item) => insert(item, "before")),
-    vscode.commands.registerCommand("decider.insertAfter", (item: Item) => insert(item, "after")),
-    vscode.commands.registerCommand("decider.insertInside", (item: Item) => insert(item, "inside")),
-    vscode.commands.registerCommand("decider.insertFromToolbox", (t: { kind: NodeType["kind"] }) => insertAt(t.kind, tree.selection[0])),
-    vscode.commands.registerCommand("decider.deleteNode", async (item: Item) => {
+    vscode.commands.registerCommand("decikit.openCode", (item: Item) => revealNode(item.path)),
+    vscode.commands.registerCommand("decikit.toggleBreakpoint", (item: Item) => ir() && toggleBreakpoint(ir()!, item.path)),
+    vscode.commands.registerCommand("decikit.insertBefore", (item: Item) => insert(item, "before")),
+    vscode.commands.registerCommand("decikit.insertAfter", (item: Item) => insert(item, "after")),
+    vscode.commands.registerCommand("decikit.insertInside", (item: Item) => insert(item, "inside")),
+    vscode.commands.registerCommand("decikit.insertFromToolbox", (t: { kind: NodeType["kind"] }) => insertAt(t.kind, tree.selection[0])),
+    vscode.commands.registerCommand("decikit.deleteNode", async (item: Item) => {
       const ok = await vscode.window.showWarningMessage(`Delete ${item.kind} "${item.name}" from ${path.basename(item.file!)}?`, { modal: true }, "Delete");
       if (ok && item.file && item.yamlPath) await edit(item.file, (text) => deleteNode(text, item.yamlPath!, item.file!.endsWith(".json")));
     }),

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from decider import ParamTable, allow_fallback, missing_as, param, param_table, step
+from decikit import ParamTable, allow_fallback, missing_as, param, param_table, step
 from loan_granting.pricing import PriceEvaluator
 from loan_granting.rate_tables import RATE_CARD_COLUMNS, RateCardTable
 from loan_granting.solve import PRODUCT_MAX_AMOUNT, solve_term

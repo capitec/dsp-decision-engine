@@ -2,7 +2,7 @@ import math
 from datetime import date
 
 import pytest
-from decider import flow
+from decikit import flow
 
 from credit_core.expense_norms import (
     DECLARED, NORM_FLOOR, STATEMENT_DERIVED, build_internal_table, build_statutory_table, expense_basis_code,

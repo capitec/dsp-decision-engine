@@ -1,6 +1,6 @@
 # Design decisions
 
-Why decider is built the way it is, for maintainers: read the decision file for an area before changing it, and the experiment behind a rule before arguing with its numbers. Not published on the docs site; how things work is in `docs/architecture/`.
+Why the decider toolkit is built the way it is, for maintainers: read the decision file for an area before changing it, and the experiment behind a rule before arguing with its numbers. Not published on the docs site; how things work is in `docs/architecture/`.
 
 - `decisions/`: the rules each area holds, each with its reason, in a few bullets.
 - `experiments/`: one question per file: purpose, method, result, decision. Most name the `benchmarks/` script that reproduces them (`uv run python benchmarks/<name>.py`); "spike" means the code lives outside the repo in `../decider-experimentation/`.
@@ -36,7 +36,7 @@ New rationale goes into the decision file for its area; a new measurement become
 | [Where does a one-record run spend its time outside the steps?](experiments/per-step-overhead.md) | spike |
 | [Can one scatter/gather primitive replace `each`'s two modes?](experiments/each-scatter-gather.md) | `each_unified.py` |
 | [Does a loop over candidate bundles pack?](experiments/packed-loop-over-bundles.md) | `bundle_search.py`, `fan_out_reduce.py` |
-| [How did decider compare with decider2?](experiments/decider-vs-decider2.md) | `modes.py`, `control_flow.py` |
+| [How did the decider toolkit compare with decider2?](experiments/decider-vs-decider2.md) | `modes.py`, `control_flow.py` |
 | **Types** | |
 | [Can a kernel match prefix, suffix, contains and regex, and in which language?](experiments/string-matching-beyond-equality.md) | spike |
 | [What does a fixed-point money type cost; where does rounding disagree?](experiments/money-types-and-rounding.md) | `decimal_steps.py` |

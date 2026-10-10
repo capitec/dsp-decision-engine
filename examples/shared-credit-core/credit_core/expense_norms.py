@@ -7,7 +7,7 @@ from __future__ import annotations
 import math
 from datetime import date
 
-from decider import DecisionTableConfig, allow_fallback, helper, missing_as
+from decikit import DecisionTableConfig, allow_fallback, helper, missing_as
 
 from credit_core.dates import EffectiveVersions, Version
 from credit_core.evidence import cell_id

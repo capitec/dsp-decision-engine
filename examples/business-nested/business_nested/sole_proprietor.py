@@ -5,7 +5,7 @@ params document under `business_credit/sole_proprietor/...`. It runs only where 
 """
 from __future__ import annotations
 
-from decider import branch, flow, param, step
+from decikit import branch, flow, param, step
 
 from assessment.pipeline import build as build_assessment
 

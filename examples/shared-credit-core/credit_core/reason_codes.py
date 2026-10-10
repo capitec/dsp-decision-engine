@@ -5,7 +5,7 @@ from typing import Any, Literal, Sequence
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from decider import ConfigurableStep, allow_fallback
+from decikit import ConfigurableStep, allow_fallback
 
 
 class Code(BaseModel):

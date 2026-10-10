@@ -6,10 +6,10 @@ from typing import Literal
 import polars as pl
 import pytest
 
-from decider import ConfigurableStep, Value, missing_as
-from decider._engine import to_ir
-from decider._engine.ir import CallNode, NullPolicy, ParamDecl
-from decider.exceptions import IRError
+from decikit import ConfigurableStep, Value, missing_as
+from decikit._engine import to_ir
+from decikit._engine.ir import CallNode, NullPolicy, ParamDecl
+from decikit.exceptions import IRError
 
 
 def scale(x: float, factor: float) -> float:

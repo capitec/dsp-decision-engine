@@ -2,7 +2,7 @@ import json
 import re
 
 import polars as pl
-from decider import TreeConfig
+from decikit import TreeConfig
 from playwright.sync_api import Page, expect
 
 from tree_ui import build_loan_tree, create_tree_project, save
@@ -37,7 +37,7 @@ def test_saved_tree_survives_reload(signed_in: Page):
     expect(signed_in.get_by_text("<= 1000")).to_be_visible()
 
 
-def test_exported_tree_runs_in_decider(signed_in: Page, tmp_path):
+def test_exported_tree_runs_in_decikit(signed_in: Page, tmp_path):
     create_tree_project(signed_in, "Exported tree")
     build_loan_tree(signed_in, limit=1000)
     save(signed_in)

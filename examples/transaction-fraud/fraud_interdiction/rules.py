@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Any, Literal
 
-from decider import ConfigurableStep, TreeConfig, flow
+from decikit import ConfigurableStep, TreeConfig, flow
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from fraud_interdiction import vocab
@@ -12,7 +12,7 @@ from fraud_interdiction.firing import firing_step
 
 
 class Rule(BaseModel):
-    """One rule. `condition` is a decider tree-rule condition; `base_condition` is the same rule at its
+    """One rule. `condition` is a decikit tree-rule condition; `base_condition` is the same rule at its
     authored thresholds, set only on rules whose condition reads an overlay-adjusted feature."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")

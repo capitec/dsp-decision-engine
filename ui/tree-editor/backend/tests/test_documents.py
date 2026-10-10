@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from dsp_decider.db.models.projects import ProjectType
-from dsp_decider.services.documents import (
+from dsp_decikit.db.models.projects import ProjectType
+from dsp_decikit.services.documents import (
     add_document_schemas,
     check_document,
     default_project_data,

@@ -7,7 +7,7 @@ from __future__ import annotations
 import math
 from datetime import date
 
-from decider import allow_fallback, flow, missing_as, param, step
+from decikit import allow_fallback, flow, missing_as, param, step
 
 from credit_core import affordability
 from credit_core.affordability import FAIL, INDETERMINATE, MARGINAL, PASS  # noqa: F401  (the codes are published here for callers)

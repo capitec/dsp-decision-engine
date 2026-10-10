@@ -20,7 +20,7 @@
   <text x="302" y="72" text-anchor="middle" font-size="13" fill="#1f2937">ConfigurableStep</text>
   <text x="302" y="90" text-anchor="middle" font-size="13" fill="#1f2937">.resolve("tree")</text>
   <text x="302" y="116" text-anchor="middle" font-size="13" fill="#1f2937">first use imports</text>
-  <text x="302" y="134" text-anchor="middle" font-size="13" fill="#1f2937">decider.steps.trees</text>
+  <text x="302" y="134" text-anchor="middle" font-size="13" fill="#1f2937">decikit.steps.trees</text>
 
   <rect x="407" y="20" width="180" height="160" rx="10" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
   <text x="497" y="46" text-anchor="middle" font-size="15" font-weight="600" fill="#7c2d00">Validated model</text>

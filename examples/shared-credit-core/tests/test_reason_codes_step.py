@@ -1,6 +1,6 @@
 import pytest
-from decider import ConfigurableStep, flow
-from decider.lab import diff
+from decikit import ConfigurableStep, flow
+from decikit.lab import diff
 
 from credit_core.reason_codes import Code, ReasonCodes
 

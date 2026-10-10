@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from decider import param, step
+from decikit import param, step
 
 from limit_mgmt.documents import shipped
 

@@ -3,8 +3,8 @@ import json
 import warnings
 
 import pytest
-from decider import ConfigurableStep, Engine, HiddenStateWarning
-from decider.lab import diff
+from decikit import ConfigurableStep, Engine, HiddenStateWarning
+from decikit.lab import diff
 
 from assessment import documents
 from assessment.pipeline import build

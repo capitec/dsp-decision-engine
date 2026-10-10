@@ -1,7 +1,7 @@
 from datetime import date
 
 import pytest
-from decider import flow
+from decikit import flow
 
 from credit_core.deductions import build_tax_table, net_monthly_income, statutory_deductions, tax_table_version_step
 

@@ -3,7 +3,7 @@ import numpy as np
 import polars as pl
 import pytest
 
-from decider.steps.tables import DecisionTableConfig
+from decikit.steps.tables import DecisionTableConfig
 
 COLUMNS = {"lo": "Float64", "hi": "Float64", "key": "String", "keys": {"type": "List", "inner": "String"},
            "vals": {"type": "List", "inner": "Int64"}, "lvl": "Float64", "on": "Boolean",

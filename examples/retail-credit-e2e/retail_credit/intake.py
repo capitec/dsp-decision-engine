@@ -1,7 +1,7 @@
 """Admission: reject a malformed request, resolve who the client is, and note whether the bureau is down."""
 from __future__ import annotations
 
-from decider import allow_fallback, missing_as, param, step
+from decikit import allow_fallback, missing_as, param, step
 
 from retail_credit.vocab import DEGRADED_BUREAU_DOWN, DEGRADED_NONE
 

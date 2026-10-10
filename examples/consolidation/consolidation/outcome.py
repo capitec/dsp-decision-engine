@@ -13,7 +13,7 @@ from credit_core.vocab import (
     OUTCOME_DECLINE,
     OUTCOME_REFER,
 )
-from decider import allow_fallback, missing_as, param, step
+from decikit import allow_fallback, missing_as, param, step
 
 from consolidation import eligibility, reasons, vocab
 from consolidation.inventory import num

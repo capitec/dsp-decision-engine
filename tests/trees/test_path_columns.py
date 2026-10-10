@@ -7,9 +7,9 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from decider import load_flow
-from decider.exceptions import WiringError
-from decider.steps.trees import TreeConfig
+from decikit import load_flow
+from decikit.exceptions import WiringError
+from decikit.steps.trees import TreeConfig
 
 # Branch 0 of root leads nowhere; branches 1 and 2 share one edge into `hi`, whose otherwise leads nowhere.
 DOC = {

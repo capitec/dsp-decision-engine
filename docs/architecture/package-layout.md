@@ -1,6 +1,6 @@
 # Package layout
 
-`decider/` is one installable package of about 240 Python files. Three rules shape it: a leading underscore marks
+`decikit/` is one installable package of about 240 Python files. Three rules shape it: a leading underscore marks
 anything private, public packages are thin, and imports only go down a five-level layer map. A test file,
 `tests/test_conventions.py`, checks all three on every run, together with a 500-line limit per file. The picture of how the
 layers fit together is on the [architecture overview](index.md).
@@ -10,28 +10,28 @@ layers fit together is on the [architecture overview](index.md).
 The rules come from the Python API redesign, which was implemented on 2026-10-06; the reasons are in
 `docs/design_decisions/decisions/api-layout.md`.
 
-1. A leading underscore anywhere in a path means private. `decider/_engine/run/state.py` and
-   `decider/lab/checks/_run.py` are private; so is everything under `decider/_engine/`. Inside a private package, files
+1. A leading underscore anywhere in a path means private. `decikit/_engine/run/state.py` and
+   `decikit/lab/checks/_run.py` are private; so is everything under `decikit/_engine/`. Inside a private package, files
    keep plain names, because the package's underscore already says it. Every public module defines `__all__`.
 2. Public packages are thin. A public package is an `__init__.py` (plus any public subpackages, such as
    `lab.experiments.metrics`) over `_`-prefixed implementation files. Users import from the package, never from one of
    its files.
 3. Layers only import downward. Within one layer an import is allowed if it forms no cycle between packages. Only the
-   core may import `decider._engine`.
+   core may import `decikit._engine`.
 
 There are no compatibility shims. When a name moves, its callers change in the same commit.
 
 <div class="diagram" markdown>
 ![The lab/checks package: a public __init__.py re-exporting names from private _base.py, _report.py and _run.py; user code imports the package; tests may import private files](../assets/diagrams/arch-public-package.svg)
 
-*A thin public package. `decider.lab.checks` exports eleven names; six private files hold the code.*
+*A thin public package. `decikit.lab.checks` exports eleven names; six private files hold the code.*
 </div>
 
-Rule 2 has a few deliberate exceptions where a module is itself the public unit. `decider.ops` is a package of public
+Rule 2 has a few deliberate exceptions where a module is itself the public unit. `decikit.ops` is a package of public
 modules (`text`, `decimal`, `nested`, `measures`), because a function is reached through its module
-(`decimal.round(...)`). The document grammars are public too: `decider.steps.trees.schema` (a package) and
-`decider.steps.tables.schema` (a module) hold the classes you build a tree or table from in Python. And
-`decider.lab.experiments.callbacks` is a public module beside the `metrics`, `plots` and `report` subpackages.
+(`decimal.round(...)`). The document grammars are public too: `decikit.steps.trees.schema` (a package) and
+`decikit.steps.tables.schema` (a module) hold the classes you build a tree or table from in Python. And
+`decikit.lab.experiments.callbacks` is a public module beside the `metrics`, `plots` and `report` subpackages.
 
 ## The layer map
 
@@ -39,7 +39,7 @@ Each top-level unit (a package or a top-level module) has a layer, written as `L
 
 | Layer | Units | What it is for |
 |---|---|---|
-| L4 tooling | `serving`, `_tooling`, `__main__` | the HTTP server users import, and the programs `decider` launches |
+| L4 tooling | `serving`, `_tooling`, `__main__` | the HTTP server users import, and the programs `decikit` launches |
 | L3 libraries | `lab`, `credit` | everything done to a flow away from serving; `credit` is mapped but not built yet |
 | L2 | none | the numbering skips it |
 | L1 core | `__init__`, `steps`, `ir`, `trace`, `debug`, `config`, `_engine` | write, run and debug a pipeline; the versioned config store |
@@ -68,7 +68,7 @@ The main downward paths, without the exceptions:
 flowchart TB
     tooling["L4 · _tooling"]:::tool --> serving["L4 · serving"]:::tool
     tooling --> lab["L3 · lab"]:::tool
-    serving --> init["L1 · decider/__init__"]:::authoring
+    serving --> init["L1 · decikit/__init__"]:::authoring
     lab --> facades["L1 · ir · trace · debug"]:::ir
     lab --> steps
     init --> steps["L1 · steps"]:::authoring
@@ -87,7 +87,7 @@ flowchart TB
 
 The edges that break the rules are accepted exceptions, each with a reason in `tests/conventions_allowlists.py`:
 
-- `__init__ -> lab` is permanent. `describe` lives in `decider.lab` beside the refs it returns, and is also a top-level
+- `__init__ -> lab` is permanent. `describe` lives in `decikit.lab` beside the refs it returns, and is also a top-level
   name for users.
 - `_settings -> config`: the settings build a config store from its type tag.
 - `_engine <-> steps` is a cycle inside L1. The IR context reaches `steps` lazily for `as_step` and `ParamRef`, and
@@ -104,20 +104,20 @@ import); the rest holds today but no test checks it.
 
 | Kind | Examples | Promise |
 |---|---|---|
-| The authoring namespace | `decider` (31 names) | what you write in a pipeline file; one canonical path per name |
-| Companion packages, one per task | `decider.lab.checks`, `decider.lab.diff`, `decider.serving`, `decider.config` | small `__all__` (at most 25 names unless allowlisted) |
-| Facades over the engine | `decider.ir`, `decider.trace`, `decider.debug` | the engine's types for step authors and tools, without importing `_engine` |
-| Public modules | `decider.ops.decimal`, `decider.steps.tables.schema`, `decider.lab.experiments.callbacks` | the module is the unit users import |
-| Private | `decider._engine`, `decider._registry`, `decider._tooling`, any `_file.py` | no stability promise; tests may import it |
+| The authoring namespace | `decikit` (31 names) | what you write in a pipeline file; one canonical path per name |
+| Companion packages, one per task | `decikit.lab.checks`, `decikit.lab.diff`, `decikit.serving`, `decikit.config` | small `__all__` (at most 25 names unless allowlisted) |
+| Facades over the engine | `decikit.ir`, `decikit.trace`, `decikit.debug` | the engine's types for step authors and tools, without importing `_engine` |
+| Public modules | `decikit.ops.decimal`, `decikit.steps.tables.schema`, `decikit.lab.experiments.callbacks` | the module is the unit users import |
+| Private | `decikit._engine`, `decikit._registry`, `decikit._tooling`, any `_file.py` | no stability promise; tests may import it |
 
 `__all__` alone hides nothing: `dir()` and deep imports still work. The underscore is what IDEs, `help()` and the docs
 skip, and what a test can check. Two packages are allowed past the 25-name budget, both in `BIG_ALL`: the top-level
-`decider` ("the authoring vocabulary is one namespace by design") and `steps/trees/schema` ("the document grammar is
+`decikit` ("the authoring vocabulary is one namespace by design") and `steps/trees/schema` ("the document grammar is
 public by design").
 
-`import decider` stays light. `decider/__init__.py` resolves `Engine`, `Executable`, `TreeConfig`,
+`import decikit` stays light. `decikit/__init__.py` resolves `Engine`, `Executable`, `TreeConfig`,
 `DecisionTableConfig` and `ScorecardConfig` through a module `__getattr__` on first use, because their modules import
-numba; `decider.ops` does the same for `Currency` and `Decimal`.
+numba; `decikit.ops` does the same for `Currency` and `Decimal`.
 
 ## Every package and file
 
@@ -128,14 +128,14 @@ Directories that hold no Python file are left out, except the non-Python assets 
 | File | Layer | Purpose |
 |---|---|---|
 | `__init__.py` | L1 | the authoring vocabulary: constructors, `param`, `Engine`, `load_flow`, `describe`, `Step`, `ConfigurableStep`, errors |
-| `__main__.py` | L4 | `python -m decider` runs the CLI |
-| `GUIDE.md` | | the getting-started guide `decider guide` prints; `tests/test_guide.py` runs every example in it |
+| `__main__.py` | L4 | `python -m decikit` runs the CLI |
+| `GUIDE.md` | | the getting-started guide `decikit guide` prints; `tests/test_guide.py` runs every example in it |
 | `ir.py` | L1 | facade: node and declaration classes, `to_ir`, `step_map`, `iter_nodes`, `check_name`, `check_id` |
 | `trace.py` | L1 | facade: `TraceSink`, `TraceEvent`, `Kind`, `Adapter`, `PassThroughAdapter`, `TraceLossError` |
 | `debug.py` | L1 | facade: `Session` and the events it yields |
-| `exceptions.py` | L0 | `DeciderError` and its subclasses, `FallbackWarning` |
+| `exceptions.py` | L0 | `DecikitError` and its subclasses, `FallbackWarning` |
 | `_registry.py` | L0 | type-tag registry for pydantic plugin roots, with entry-point lookup |
-| `_settings.py` | L0 | `DECIDER_*` environment settings, read lazily by `get_settings()` |
+| `_settings.py` | L0 | `DECIKIT_*` environment settings, read lazily by `get_settings()` |
 | `_suggest.py` | L0 | did-you-mean suggestions for error messages |
 
 [Foundation packages](foundation.md) covers the L0 files and `ops/` and `_serde/` in depth.
@@ -175,7 +175,7 @@ Directories that hold no Python file are left out, except the non-Python assets 
 | `_configurable.py` | `ConfigurableStep` (registry root, group `steps`), `StepRef`, the lazy built-in tags |
 | `_values.py` | `ParamRef`, `TableRef`, `Value`, `TableValue` |
 | `_helpers.py` | `@helper(signatures=...)`, `@allow_fallback` and the readers the compiler uses |
-| `_composites.py` | the constructors by name, read by `decider ids` and flow files |
+| `_composites.py` | the constructors by name, read by `decikit ids` and flow files |
 | `_entry.py` | `import_flow("module:qualname")`, used by the lab and tooling to import a flow |
 | `expr/__init__.py` | `parse`, `Expr`, `ExprError`: a closed arithmetic grammar for computed tree features |
 | `expr/_postfix.py` | expressions as postfix opcode rows, evaluated by one njit kernel |
@@ -283,9 +283,9 @@ Inside the lab, `data` sits under `checks`, `diff` and `testing`, which sit unde
 | `serving/_handler.py` | `RequestHandler`: load, warm, stage, activate, score |
 | `serving/_parse.py`, `_format.py`, `_errors.py` | request parsing and date coercion, response formats, HTTP errors |
 | `serving/_servers/` | `core.py` (shared helpers), `starlette.py`, `sanic.py` app factories |
-| `_tooling/cli/` | the `decider` command: `guide`, `ids`, `build`, `serve`, `mcp`, `template`, `check`, `diff`, `experiment`; `ids.py` rewrites source; `templates/` is the starter project |
+| `_tooling/cli/` | the `decikit` command: `guide`, `ids`, `build`, `serve`, `mcp`, `template`, `check`, `diff`, `experiment`; `ids.py` rewrites source; `templates/` is the starter project |
 | `_tooling/mcp/` | `run_stdio`, `build_server`, `Policy`: the MCP server and its tools |
-| `_tooling/bridge/` | the editor bridge, run as `python -m decider._tooling.bridge`: protocol models, sessions, timelines, forks, experiments, datasets |
+| `_tooling/bridge/` | the editor bridge, run as `python -m decikit._tooling.bridge`: protocol models, sessions, timelines, forks, experiments, datasets |
 
 See [Serving](serving.md), [Tooling](tooling.md) and [Editor bridge](editor-bridge.md).
 
@@ -300,7 +300,7 @@ package except the salt test.
 | `test_no_references_to_docs_or_experiments` | no `doc 03`, `§` or `EXPERIMENTS` in code | none |
 | `test_public_modules_define_all` | every module with no `_` segment has `__all__` | `NO_ALL` (empty) |
 | `test_public_packages_stay_within_all_budget` | a public package's `__all__` has at most 25 names | `BIG_ALL` (2) |
-| `test_no_private_imports_across_packages` | `decider.<a>._x` imported only inside `decider/<a>/`; `_engine` only from the core | `PRIVATE_IMPORT` (45) |
+| `test_no_private_imports_across_packages` | `decikit.<a>._x` imported only inside `decikit/<a>/`; `_engine` only from the core | `PRIVATE_IMPORT` (45) |
 | `test_every_top_level_package_has_a_layer` | every top-level unit is in `LAYERS` | none |
 | `test_imports_only_go_down_the_layer_map` | no import from a lower layer into a higher one | `UPWARD_IMPORT` (2) |
 | `test_no_import_cycles_between_packages_in_a_layer` | no cycle between units of one layer | `LAYER_CYCLE` (2) |
@@ -312,7 +312,7 @@ Every allowlist test also fails on a stale entry, so an allowlist can only shrin
 
 ```mermaid
 flowchart TB
-    imp["an import in decider/a/..."]:::neutral --> isdec{"imports decider.*?"}:::ir
+    imp["an import in decikit/a/..."]:::neutral --> isdec{"imports decikit.*?"}:::ir
     isdec -->|no| ok["ignored"]:::neutral
     isdec -->|yes| up{"layer of target<br/>above layer of a?"}:::ir
     up -->|yes| upa{"in UPWARD_IMPORT?"}:::ir
@@ -333,11 +333,11 @@ flowchart TB
     classDef neutral fill:#f3f4f6,stroke:#6b7280,color:#1f2937,stroke-width:1.5px;
 ```
 
-The walker resolves relative imports, counts imports nested inside functions, and treats `from decider.x import y` as
-an import of the module `decider.x.y` when that file exists, so an allowlist key names a module, never a class.
+The walker resolves relative imports, counts imports nested inside functions, and treats `from decikit.x import y` as
+an import of the module `decikit.x.y` when that file exists, so an allowlist key names a module, never a class.
 
 !!! note "Allowlist keys must be what the walker records"
-    `decider/lab/_describe.py` imports `from decider._engine.wiring import Plan, resolve`, which the walker records as
+    `decikit/lab/_describe.py` imports `from decikit._engine.wiring import Plan, resolve`, which the walker records as
     `lab._describe -> _engine.wiring` and `lab._describe -> _engine.wiring.resolve`; those are the two keys in
     `PRIVATE_IMPORT`. A key naming a class (`..._engine.wiring.Plan`) matches nothing, so the import fails the test and
     the key is reported as stale.
@@ -346,21 +346,21 @@ an import of the module `decider.x.y` when that file exists, so an allowlist key
 
 Seven pydantic base classes are registry roots (`BaseRegistryModule, root=True`). A subclass registers itself by
 import path and by its `type: Literal[...]` alias, a document names it by either, and an installed package can ship
-one without the user importing it, by declaring an entry point in the group `decider.<group>`:
+one without the user importing it, by declaring an entry point in the group `decikit.<group>`:
 
 | Root | Where | Entry-point group | Built-ins load lazily from |
 |---|---|---|---|
-| `ConfigurableStep` | `steps/_configurable.py` | `decider.steps` | `tree`, `decision_table`, `scorecard` |
-| `ConfigStore` | `config/_store.py` | `decider.config_stores` | |
-| `DatasetProvider` | `lab/data/_providers/base.py` | `decider.datasets` | `file`, `folder` |
-| `Check` | `lab/checks/_base.py` | `decider.checks` | the `_builtin/` catalogue, by alias |
-| `Metric` | `lab/experiments/metrics/_base.py` | `decider.metrics` | |
-| `Plot` | `lab/experiments/plots/_base.py` | `decider.plots` | |
-| `Block` | `lab/experiments/report/_blocks.py` | `decider.blocks` | |
+| `ConfigurableStep` | `steps/_configurable.py` | `decikit.steps` | `tree`, `decision_table`, `scorecard` |
+| `ConfigStore` | `config/_store.py` | `decikit.config_stores` | |
+| `DatasetProvider` | `lab/data/_providers/base.py` | `decikit.datasets` | `file`, `folder` |
+| `Check` | `lab/checks/_base.py` | `decikit.checks` | the `_builtin/` catalogue, by alias |
+| `Metric` | `lab/experiments/metrics/_base.py` | `decikit.metrics` | |
+| `Plot` | `lab/experiments/plots/_base.py` | `decikit.plots` | |
+| `Block` | `lab/experiments/report/_blocks.py` | `decikit.blocks` | |
 
 ```toml
 # in the plugin package's pyproject.toml
-[project.entry-points."decider.steps"]
+[project.entry-points."decikit.steps"]
 markup = "credit_risk.steps:Markup"
 ```
 
@@ -370,11 +370,11 @@ and returns the class only if it registered under that root. [Foundation package
 Other extension points take a plain subclass or a decorator:
 
 - A new step type subclasses `ConfigurableStep` and implements `to_ir`, with `ctx.call` for one function per row,
-  `ctx.expand` to assemble other steps, or the `decider.ir` kit to build row nodes by hand.
+  `ctx.expand` to assemble other steps, or the `decikit.ir` kit to build row nodes by hand.
 - `@helper(signatures=...)` marks a function a compiled step calls; `@allow_fallback` accepts a Python step.
 - `FieldMetadata` subclasses say what a value measures, for the debugger to format it.
 - `RequestHandler` methods ending in `_fn` are overridden in a project's `inference.py`.
-- `Callback` (`decider.lab.experiments.callbacks`) is a plain class on purpose, because callbacks are not saved with
+- `Callback` (`decikit.lab.experiments.callbacks`) is a plain class on purpose, because callbacks are not saved with
   an experiment definition.
 - A trace `Adapter` receives decoded trace events from a `TraceSink`.
 
@@ -403,7 +403,7 @@ flowchart TB
 
 | Feature | Goes in | Because |
 |---|---|---|
-| a function users call inside a step, compiled too | `decider/ops/<domain>.py`, written once with `@register_jitable` | the kernel-decorator test allows it there, and the salt covers the file |
+| a function users call inside a step, compiled too | `decikit/ops/<domain>.py`, written once with `@register_jitable` | the kernel-decorator test allows it there, and the salt covers the file |
 | an operator or builtin that must answer as Python does in a kernel | `_engine/compile/semantics/` | the only place `@overload` and `@intrinsic` may live |
 | a new kind of configurable step | `steps/<name>/` with a thin `__init__.py` and a lazy alias in `_configurable.py` | the built-ins use the same extension point as a plugin |
 | a new check | `lab/checks/_builtin/<family>.py` and an alias in the lazy table in `_base.py` | checks are registry modules with stable codes |

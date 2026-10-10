@@ -1,7 +1,7 @@
 """How much of the discretionary income may be committed: a proportional buffer and an absolute floor race, then overlays tighten."""
 from __future__ import annotations
 
-from decider import DecisionTableConfig, flow, step
+from decikit import DecisionTableConfig, flow, step
 
 from credit_core import affordability, rounding
 from credit_core.evidence import cell_id

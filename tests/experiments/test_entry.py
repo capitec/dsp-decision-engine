@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import polars as pl
 
-from decider import flow
-from decider.lab.experiments import Experiment, ExperimentDef, RunStatus, run, validate
-from decider.lab.experiments._entry import infer_entry
-from decider.steps._entry import import_flow
+from decikit import flow
+from decikit.lab.experiments import Experiment, ExperimentDef, RunStatus, run, validate
+from decikit.lab.experiments._entry import infer_entry
+from decikit.steps._entry import import_flow
 
 
 def ratio(income: float, debt: float) -> float:

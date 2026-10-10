@@ -2,11 +2,11 @@
 import polars as pl
 import pytest
 
-from decider import flow
-from decider._engine import Engine
-from decider.exceptions import ParamsError
-from decider.steps.tables import DecisionTableConfig
-from decider.lab.testing import no_recompile
+from decikit import flow
+from decikit._engine import Engine
+from decikit.exceptions import ParamsError
+from decikit.steps.tables import DecisionTableConfig
+from decikit.lab.testing import no_recompile
 
 COLUMNS = {"lo": "Float64", "hi": "Float64", "band": {"type": "Enum", "categories": ["low", "mid", "high"]},
            "pts": "Int64", "keys": {"type": "List", "inner": "String"}}

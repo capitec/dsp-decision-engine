@@ -6,12 +6,12 @@ import sys
 import polars as pl
 import pytest
 
-from decider._tooling.bridge.bridge import Bridge
-from decider._tooling.bridge.run import main
+from decikit._tooling.bridge.bridge import Bridge
+from decikit._tooling.bridge.run import main
 
 FLOW = {"flow": "credit", "steps": [{"step": "double"}]}
 STEPS = """\
-from decider import step
+from decikit import step
 
 
 @step(output="twice")
@@ -103,7 +103,7 @@ def test_run_script_rejects_a_row_past_the_end(project):
 
 def test_the_json_lines_protocol_answers_datasets_from_the_project_cwd(project):
     r, w = os.pipe()
-    proc = subprocess.Popen([sys.executable, "-m", "decider._tooling.bridge", "--fd", str(w)], cwd=project,
+    proc = subprocess.Popen([sys.executable, "-m", "decikit._tooling.bridge", "--fd", str(w)], cwd=project,
                             stdin=subprocess.PIPE, pass_fds=(w,), text=True)
     os.close(w)
     proc.stdin.write('{"id": 1, "cmd": "datasets"}\n{"id": 2, "cmd": "exit"}\n')

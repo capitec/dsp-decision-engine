@@ -14,9 +14,9 @@ import numpy as np
 import polars as pl
 from numba import njit
 
-from decider import Engine, flow
-from decider.ops import Columnar
-from decider._engine.compile.rows import build_rows
+from decikit import Engine, flow
+from decikit.ops import Columnar
+from decikit._engine.compile.rows import build_rows
 
 N = 200_000
 ITEMS = 3
@@ -289,7 +289,7 @@ def with_strings() -> None:
     from numba.core.datamodel import models
     from numba.extending import register_model, typeof_impl
 
-    from decider._engine.compile.span import SPAN, span_array
+    from decikit._engine.compile.span import SPAN, span_array
 
     class SpanRecord(types.Record):
         def __init__(self, fields, size, aligned, np_dtype):
@@ -343,7 +343,7 @@ def with_strings() -> None:
         el_1 = rng.choice([1, 400], total).astype(np.int64)
         words = [str(w).encode() for w in rng.choice(WORDS, total)]
         pairs = np.empty(total * 2, np.int64)
-        from decider._engine.compile.span import _address
+        from decikit._engine.compile.span import _address
         for j, b in enumerate(words):
             pairs[2 * j], pairs[2 * j + 1] = _address(b), len(b)
         col_spans = span_array(pairs, words)

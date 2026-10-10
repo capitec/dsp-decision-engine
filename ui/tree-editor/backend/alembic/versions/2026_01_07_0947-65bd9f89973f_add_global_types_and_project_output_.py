@@ -12,7 +12,7 @@ from alembic import op
 import sqlalchemy as sa
 import sqlmodel.sql.sqltypes
 from sqlalchemy.dialects import postgresql
-from dsp_decider.settings import settings
+from dsp_decikit.settings import settings
 
 # revision identifiers, used by Alembic.
 revision: str = "65bd9f89973f"

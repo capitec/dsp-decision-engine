@@ -1,12 +1,12 @@
 """One client's evaluation for campaign 23 (the Flex Loan pre-approved top-up): the assignment record.
 
-`decider build` and `decider serve` use `build`, which receives the tree document `configs/<version>/campaign_23.json`,
+`decikit build` and `decikit serve` use `build`, which receives the tree document `configs/<version>/campaign_23.json`,
 the rate card document `configs/<version>/rate_card_flex_loan.json` and the cap reductions
 `configs/<version>/cap_reductions.json`.
 """
 from __future__ import annotations
 
-from decider import allow_fallback, branch, flow, missing_as, param, step
+from decikit import allow_fallback, branch, flow, missing_as, param, step
 
 from credit_core import eligibility
 from credit_core.appetite import build_appetite_table

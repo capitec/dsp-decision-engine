@@ -5,7 +5,7 @@ one without a release. Two overlays work in the month: an intensity dial and a t
 """
 from __future__ import annotations
 
-from decider import DecisionTableConfig, allow_fallback, step
+from decikit import DecisionTableConfig, allow_fallback, step
 
 from credit_core.evidence import cell_id
 

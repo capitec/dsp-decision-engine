@@ -50,7 +50,7 @@ one() {
     t1=$(now)
     size=$($cli image inspect $img --format '{{.Size}}' | awk '{printf "%dMB", $1/1e6}')
     $cli run -d --name $name --memory=${MEMORY:-2g} -p 127.0.0.1:$port:8080 \
-        -e DECIDER_SERVE__WORKERS=${WORKERS:-1} $img > /dev/null || return 1
+        -e DECIKIT_SERVE__WORKERS=${WORKERS:-1} $img > /dev/null || return 1
     t2=$(now) ready=
     for _ in $(seq 1 3000); do
         [[ $(curl -s -o /dev/null -w '%{http_code}' localhost:$port/ping) == 200 ]] && { ready=$(now); break; }

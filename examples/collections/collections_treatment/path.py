@@ -6,7 +6,7 @@ after the day), so audit can replay the first and analysis can use the second.
 """
 from __future__ import annotations
 
-from decider import allow_fallback, missing_as, param, step
+from decikit import allow_fallback, missing_as, param, step
 
 from collections_treatment import vocab as v
 
