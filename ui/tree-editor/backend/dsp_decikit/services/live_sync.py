@@ -62,6 +62,17 @@ def check_message(message: t.Any) -> None:
             raise Rejected(f"{kind} needs a value: {path}")
         if kind == "order" and not (isinstance(op["value"], list) and all(isinstance(k, str) for k in op["value"])):
             raise Rejected(f"order needs a list of keys: {path}")
+    if _has_nul(ops):
+        # Postgres JSON cannot hold one: the write would fail and the client would send it again and again.
+        raise Rejected("text cannot contain a NUL character")
+
+
+def _has_nul(value: t.Any) -> bool:
+    if isinstance(value, str):
+        return "\x00" in value
+    if isinstance(value, dict):
+        return any(_has_nul(k) or _has_nul(v) for k, v in value.items())
+    return isinstance(value, list) and any(_has_nul(v) for v in value)
 
 
 def _stamp(node: t.Any) -> None:
