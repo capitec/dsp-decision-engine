@@ -7,7 +7,7 @@ from business_nested.records import parse_dates as parse_entity_dates
 
 
 def parse_dates(record: dict) -> dict:
-    """A copy of a JSON request with its dates parsed, as `Executable.score` takes them.
+    """A copy of a JSON request with its dates parsed, as `Executable.run` takes them.
 
     Example: `parse_dates(json.load(open("sample_request.json")))["decision_date"]` is `date(2026, 9, 24)`.
     """

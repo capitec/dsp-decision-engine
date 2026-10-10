@@ -36,4 +36,4 @@ def test_allow_fallback_silences_the_star_kwargs_warning():
     exe = flow(Total(name="s", declared=True), name="p").compile("fused")
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        assert exe.score({"a": 1.0, "b": 2.0})["s"] == 3.0
+        assert exe.run({"a": 1.0, "b": 2.0})["s"] == 3.0

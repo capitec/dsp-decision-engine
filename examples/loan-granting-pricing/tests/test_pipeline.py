@@ -228,7 +228,7 @@ def test_the_batch_run_gives_the_same_answers_as_scoring_one_record_at_a_time(do
                parse({**sample, "applicant_age_years": 15.0})]
     batch = executable.run(pl.DataFrame(records), params=params)
     for i, record in enumerate(records):
-        single = executable.score(record, params)
+        single = executable.run(record, params)
         for name in ("outcome_code", "risk_grade", "amount_cap", "max_affordable_instalment", "solve_total_evaluations"):
             assert batch[name][i] == single[name], (i, name)
         assert batch["recommended_offer"][i] == single["recommended_offer"] or (

@@ -131,7 +131,7 @@ class NotIntegralError(DecikitError, ValueError):
 
     Example::
 
-        exe.score({"count": 7.5})   # NotIntegralError: input 'count' is declared int but got 7.5 ...
+        exe.run({"count": 7.5})     # NotIntegralError: input 'count' is declared int but got 7.5 ...
     """
 
     _STATUS_CODE = 400

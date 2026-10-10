@@ -119,7 +119,7 @@ def test_strict_null_handling_raises_for_numbers_and_strings(mode):
 
 
 @pytest.mark.parametrize("mode", MODES)
-def test_score_routes_a_null_like_run(mode):
+def test_a_record_run_routes_a_null_like_a_frame_run(mode):
     exe = Engine().bind(_composite("or", lt("x", 50.0), lt("y", 50.0)), mode=mode)
-    assert exe.score({"x": None, "y": 10.0})["r"] == "yes"
-    assert exe.score({"x": None, "y": 90.0})["r"] == "no"
+    assert exe.run({"x": None, "y": 10.0})["r"] == "yes"
+    assert exe.run({"x": None, "y": 90.0})["r"] == "no"

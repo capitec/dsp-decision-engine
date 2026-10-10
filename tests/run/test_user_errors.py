@@ -62,9 +62,9 @@ def test_a_fused_kernel_error_names_every_step_it_runs():
 
 @needs_notes
 @pytest.mark.parametrize("mode", MODES)
-def test_score_errors_name_the_step_too(mode):
+def test_record_run_errors_name_the_step_too(mode):
     with pytest.raises(ZeroDivisionError) as err:
-        Engine().bind(flow(ratio), mode).score({"income": 0.0, "debt": 1.0})
+        Engine().bind(flow(ratio), mode).run({"income": 0.0, "debt": 1.0})
     assert "in step ratio" in notes(err)
 
 

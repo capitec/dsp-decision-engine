@@ -1,4 +1,4 @@
-"""`run()` over a frame accepts the object outputs `score()` returns."""
+"""`run()` over a frame accepts the object outputs `run()` on a record returns."""
 from __future__ import annotations
 
 import polars as pl
