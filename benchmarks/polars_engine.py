@@ -2,9 +2,11 @@
 
 Pipelines: `flagship` (arithmetic), `fallback` (ten str/date steps that run as Python fallbacks) and `tree` (127
 nodes). Configurations: `fused-mem`, `fused-io` (eager, the io one reads and writes parquet), `host-mem`,
-`host-stream` (scan to sink_parquet), `native-mem`, `native-stream` (hand-written polars) and, for `fallback`,
+`host-memstream` (the frame in memory, collected by the streaming engine), `host-stream` (scan to sink_parquet),
+`native-mem`, `native-stream` (hand-written polars) and, for `fallback`,
 `frames-*` (ten frame steps with polars bodies) and `frame1-*` (one frame step); `flagship` also has `copy-stream`, a
-plain scan to sink. Every run is a child process.
+plain scan to sink. Every run is a child process. `E2_ROWGROUP` sets the input parquet row-group size (a separate
+data folder), `E2_CHUNK` the streaming chunk size.
 
     uv run python benchmarks/polars_engine.py check                       # outputs equal fused, 10k rows
     uv run python benchmarks/polars_engine.py run --sizes 10k 1m --out r.jsonl
@@ -37,6 +39,8 @@ from decikit.steps.trees import TreeConfig  # noqa: E402
 DATA = Path(__file__).resolve().parent.parent / ".scratch" / "e2-data"
 SIZES = {"10k": 10_000, "1m": 1_000_000, "5m": 5_000_000, "50m": 50_000_000}
 CHUNK = 2_500_000
+# Input row-group size and streaming chunk size are set from the environment so a run can vary them.
+ROWGROUP = int(os.environ.get("E2_ROWGROUP", 1_000_000))
 MEMORY_MAX = "7G"
 
 
@@ -243,7 +247,11 @@ def configs(pipe: str) -> list[str]:
     engines = ["fused", "host", "native"] + [e for e in ("frames", "frame1") if e in PIPELINES[pipe]]
     out = []
     for e in engines:
-        out += ["fused-mem", "fused-io"] if e == "fused" else [f"{e}-mem", f"{e}-stream"]
+        if e == "fused":
+            out += ["fused-mem", "fused-io"]
+        else:
+            # host-memstream: the in-memory frame through the host, collected by the streaming engine.
+            out += [f"{e}-mem"] + (["host-memstream"] if e == "host" else []) + [f"{e}-stream"]
     # A scan straight into a sink: what streaming costs in memory before any step runs.
     return out + (["copy-stream"] if pipe == "flagship" else [])
 
@@ -274,7 +282,9 @@ def runner(pipe: str, engine: str):
 # ---- data ------------------------------------------------------------------------------------------------------------
 def data_path(pipe: str, size: str) -> str:
     # A size above one chunk is a folder of parquet parts read as a glob: merging them needs more memory than the cap.
-    return str(DATA / f"{pipe}-{size}" / "*.parquet") if SIZES[size] > CHUNK else str(DATA / f"{pipe}-{size}.parquet")
+    tag = "" if ROWGROUP == 1_000_000 else f"-rg{ROWGROUP}"
+    return (str(DATA / f"{pipe}-{size}{tag}" / "*.parquet") if SIZES[size] > CHUNK
+            else str(DATA / f"{pipe}-{size}{tag}.parquet"))
 
 
 def ensure_data(pipe: str, size: str) -> str:
@@ -286,7 +296,7 @@ def ensure_data(pipe: str, size: str) -> str:
     for i, start in enumerate(range(0, n, CHUNK)):
         part = path.replace("*", f"part{i:03d}") if n > CHUNK else path
         PIPELINES[pipe]["gen"](min(CHUNK, n - start), np.random.default_rng([i, 7])).write_parquet(
-            part, row_group_size=1_000_000)
+            part, row_group_size=ROWGROUP)
     return path
 
 
@@ -295,7 +305,16 @@ def child(pipe: str, cfg: str, size: str) -> dict:
     engine, mode = cfg.split("-")
     path = ensure_data(pipe, size)
     n = SIZES[size]
+    if os.environ.get("E2_CHUNK"):
+        pl.Config.set_streaming_chunk_size(int(os.environ["E2_CHUNK"]))
     run, build = runner(pipe, engine)
+    calls = []  # one entry per batch the host hands a segment
+    try:
+        from decikit._engine.polars import host
+        original = host._run_batch
+        host._run_batch = lambda *a: (calls.append(1), original(*a))[1]
+    except ImportError:
+        pass
     t = time.perf_counter()
     warm = pl.read_parquet(path, n_rows=1000)
     (run(warm) if engine == "fused" else run(warm.lazy()).collect())
@@ -315,17 +334,23 @@ def child(pipe: str, cfg: str, size: str) -> dict:
         lf = df.lazy()
 
         def once():
-            run(df) if engine == "fused" else run(lf).collect()
+            if engine == "fused":
+                run(df)
+            else:
+                run(lf).collect(engine="streaming") if mode == "memstream" else run(lf).collect()
     # A fast run repeats in the child (up to 20 times or 3 s) and reports the median; a slow one runs once.
     walls = []
     while not walls or (len(walls) < 20 and sum(walls) < 3):
+        before = len(calls)
         t = time.perf_counter()
         once()
         walls.append(time.perf_counter() - t)
+        batches = len(calls) - before
     out.unlink(missing_ok=True)
     wall = statistics.median(walls)
     return {"pipeline": pipe, "config": cfg, "size": size, "rows": n, "status": "ok", "build_s": round(build, 3),
-            "load_s": round(load, 3), "wall_s": round(wall, 4), "first_s": round(walls[0], 4), "inner": len(walls), "rows_per_s": round(n / wall),
+            "load_s": round(load, 3), "wall_s": round(wall, 4), "first_s": round(walls[0], 4), "inner": len(walls), "batches": batches,
+            "threads": pl.thread_pool_size(), "rowgroup": ROWGROUP, "chunk": os.environ.get("E2_CHUNK"), "rows_per_s": round(n / wall),
             "peak_rss_mb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024)}
 
 
@@ -404,8 +429,10 @@ def check(a: argparse.Namespace) -> None:
             if engine in ("fused", "copy"):
                 continue
             run, _ = runner(pipe, engine)
-            if mode == "mem":
-                got = run(df.lazy()).collect()
+            if mode in ("mem", "memstream"):
+                pl.Config.set_streaming_chunk_size(1000)
+                got = run(df.lazy()).collect(engine="streaming" if mode == "memstream" else "auto")
+                pl.Config.restore_defaults()
             else:
                 out = DATA / f"check-{pipe}-{cfg}.parquet"
                 pl.Config.set_streaming_chunk_size(1000)
