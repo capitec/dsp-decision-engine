@@ -142,7 +142,7 @@ class Step(ABC):
         `engine` is a tag or an `Engine` instance, as for `compile`; `None`
         takes the default engine: fused, unless a `decikit.engine(...)` block
         sets another. A `LazyFrame` with `engine=None` runs on the polars engine
-        whatever the default, and returns a `LazyFrame` to collect, stream or
+        (the default's own settings when the default is a `PolarsEngine`), and returns a `LazyFrame` to collect, stream or
         sink; a numba engine named explicitly collects it first. Each call binds
         the pipeline again; for repeated runs, `compile` once instead.
 
@@ -155,7 +155,8 @@ class Step(ABC):
             pipeline.run(pl.scan_parquet("in.parquet")).sink_parquet("out.parquet")   # polars
         """
         if engine is None and isinstance(data, pl.LazyFrame):
-            engine = "polars"
+            default = _as_engine(None)
+            engine = default if default.type == "polars" else "polars"
         return _as_engine(engine).bind(self).run(data, params, trace)
 
     def session(self, data: Any, params: Any = None, engine: str | Engine = "interpreted") -> Session:

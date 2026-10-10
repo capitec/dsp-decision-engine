@@ -4,7 +4,7 @@ import pytest
 
 import decikit
 from decikit import FusedEngine, flow, param
-from decikit.exceptions import EngineError
+from decikit.exceptions import EngineError, FallbackWarning
 
 ENGINES = ("interpreted", "stepped", "fused", "polars")
 
@@ -41,6 +41,19 @@ def test_a_lazyframe_runs_on_the_polars_engine_whatever_the_default():
         out = PIPE.run(DF.lazy())
         assert isinstance(PIPE.run(DF), pl.DataFrame)
     assert isinstance(out, pl.LazyFrame) and out.collect().equals(WANT)
+
+
+def shout(code: str) -> str:
+    return code.upper()
+
+
+def test_a_lazyframe_keeps_the_settings_of_a_polars_default():
+    pipe, lf = flow(shout, name="s"), pl.LazyFrame({"code": ["a"]})
+    with pytest.warns(FallbackWarning):
+        assert pipe.run(lf).collect()["shout"].to_list() == ["A"]
+    with decikit.engine(decikit.PolarsEngine(segments=FusedEngine(strict_compile=True))):
+        with pytest.raises(EngineError, match="shout"):
+            pipe.run(lf).collect()
 
 
 @pytest.mark.parametrize("engine", ENGINES)
