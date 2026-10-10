@@ -201,7 +201,8 @@ class SteppedRunner(InterpretedRunner):
                     raise MissingInputError(decl.name, path, int((~mask).sum()), len(mask), absent=_absent(state, v))
                 if not filled and _fills(decl, mask, kind):
                     # ponytail: one fill per version per kernel; two readers with different fills share the first.
-                    x = fill_missing(x, mask, stored_fill(decl)).astype(x.dtype, copy=False)
+                    # A struct's records come back as dicts beside the fill, as a Python body takes them.
+                    x = fill_missing(x, mask, stored_fill(decl)).astype(object if x.dtype.names else x.dtype, copy=False)
                 valid[v.id] = mask
             values.setdefault(v.id, x)
         try:
@@ -212,13 +213,11 @@ class SteppedRunner(InterpretedRunner):
             # and a subset of rows would mislabel records from the buffer's
             # row-major offsets.
             top = scope.rows is None and scope.arm is None and scope.iteration is None
-            if trace is not None and isinstance(unit, Kernel) and top:
-                unit.run(values, valid, bundles, n, trace, ctx.table)
-            else:
-                unit.run(values, valid, bundles, n)
-                if trace is not None:
-                    for c in unit.calls:
-                        self._emit_rows(Kind.STEP, c.node.origin, scope, n, step=c.id + 1)
+            captured = (unit.run(values, valid, bundles, n, trace, ctx.table)
+                        if trace is not None and isinstance(unit, Kernel) and top else unit.run(values, valid, bundles, n))
+            if trace is not None and not captured:
+                for c in unit.calls:
+                    self._emit_rows(Kind.STEP, c.node.origin, scope, n, step=c.id + 1)
         except Exception as e:
             paths = [c.node.origin.path for c in unit.calls]
             where = (f"step {paths[0]}" if len(paths) == 1 else
