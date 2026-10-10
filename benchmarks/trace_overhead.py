@@ -46,8 +46,8 @@ def main():
     batch_trace, _ = timed(lambda: exe.run(df, trace=TraceSink()))
 
     sink = TraceSink()
-    score_no_trace, _ = timed(lambda: exe.score({"income": 1000.0, "debt": 200.0}))
-    score_trace, _ = timed(lambda: exe.score({"income": 1000.0, "debt": 200.0}, trace=sink))
+    score_no_trace, _ = timed(lambda: exe.run({"income": 1000.0, "debt": 200.0}))
+    score_trace, _ = timed(lambda: exe.run({"income": 1000.0, "debt": 200.0}, trace=sink))
 
     events = sink.events()
     per_record = len(events)

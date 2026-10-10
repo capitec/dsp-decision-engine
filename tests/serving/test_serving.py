@@ -70,7 +70,7 @@ def handler(store):
 
 def _score(handler, record=RECORD):
     live = handler.module_fn()
-    return live.executable.score(record, live.params)
+    return live.executable.run(record, live.params)
 
 
 def test_stage_builds_the_version_without_serving_it(handler):
@@ -121,8 +121,8 @@ def test_after_staging_the_first_string_tree_requests_compile_nothing(tmp_path):
     frame = pl.DataFrame({"s": ["running", "ran", "héllo wörld", None]})
     with no_recompile():
         assert live.executable.run(frame, live.params)["hit"].to_list() == [1, 0, 0, 0]
-        assert live.executable.score({"s": "singing"}, live.params)["hit"] == 1
-        assert live.executable.score({"s": "日本語"}, {"warm": {"extra": "語"}})["hit"] == 1
+        assert live.executable.run({"s": "singing"}, live.params)["hit"] == 1
+        assert live.executable.run({"s": "日本語"}, {"warm": {"extra": "語"}})["hit"] == 1
 
 
 def test_record_fields_survive_in_the_answer(handler):

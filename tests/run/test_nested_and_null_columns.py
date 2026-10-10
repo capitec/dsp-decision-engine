@@ -9,7 +9,7 @@ from decikit import Engine, flow, frame_step, missing_as, param
 
 def _both(pipeline, record):
     exe = Engine().bind(pipeline)
-    return exe.run(pl.DataFrame([record])).row(0, named=True), exe.score(record)
+    return exe.run(pl.DataFrame([record])).row(0, named=True), exe.run(record)
 
 
 def test_list_of_struct_frame_output_materialises():
@@ -46,7 +46,7 @@ def test_all_empty_nested_frame_output_keeps_its_declared_dtype():
         return df.with_columns(seen=pl.lit(str(df.schema["clean"])))
 
     exe = Engine().bind(flow(clean, seen, name="p"), mode="fused")
-    assert exe.score({"items": []})["seen"] == "List(Struct({'price': Float64}))"
+    assert exe.run({"items": []})["seen"] == "List(Struct({'price': Float64}))"
     assert exe.run(pl.DataFrame({"items": [[]]}))["seen"][0] == "List(Struct({'price': Float64}))"
 
 
@@ -125,7 +125,7 @@ def test_list_of_struct_input_reaches_a_plain_step_as_dicts():
     assert run["first"] == score["first"] == repr(account)
 
 
-def test_list_input_is_a_list_under_run_and_score():
+def test_list_input_is_a_list_under_a_frame_and_a_record_run():
     def kind(hist: list[float]) -> str:
         return type(hist).__name__
 
@@ -137,7 +137,7 @@ def test_list_input_is_a_list_under_run_and_score():
     ({"hist": [1.0], "last": None, "v": 1.0}, 2),
     ({"hist": [], "last": dt.date(2026, 1, 1), "v": None}, 1),
 ])
-def test_one_record_with_empty_list_or_lone_none_scores_with_a_frame_step(record, n):
+def test_one_record_with_empty_list_or_lone_none_runs_with_a_frame_step(record, n):
     def count(hist: list[float], last: dt.date | None = None, v: float | None = None) -> int:
         return len(hist) + (last is not None) + (v is not None)
 
@@ -145,7 +145,7 @@ def test_one_record_with_empty_list_or_lone_none_scores_with_a_frame_step(record
     def fm(df):
         return df.with_columns(m=pl.col("count") + 1)
 
-    out = Engine().bind(flow(count, fm, name="p")).score(record)
+    out = Engine().bind(flow(count, fm, name="p")).run(record)
     assert out["m"] == n + 1
 
 
@@ -160,7 +160,7 @@ def test_missing_as_empty_list_fills_each_absent_row(with_frame_step):
         return df.with_columns(t2=pl.col("total") * 2)
 
     exe = Engine().bind(flow(total, t2, name="p").emit("total") if with_frame_step else flow(total, name="p"))
-    assert exe.score({"x": 1.0})["total"] == 1.0
+    assert exe.run({"x": 1.0})["total"] == 1.0
     out = exe.run(pl.DataFrame({"hist": [[5.0], None, None]}))
     assert out["total"].to_list() == [2.0, 1.0, 1.0]
 
@@ -198,7 +198,7 @@ def test_param_name_in_the_record_warns_once():
 
     exe = Engine().bind(flow(intensity, name="p"))
     with pytest.warns(UserWarning, match="'stack_enabled' is a param.*params document"):
-        exe.score({"base": 2, "stack_enabled": False})
+        exe.run({"base": 2, "stack_enabled": False})
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        exe.score({"base": 2, "stack_enabled": False})
+        exe.run({"base": 2, "stack_enabled": False})

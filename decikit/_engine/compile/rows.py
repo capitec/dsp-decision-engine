@@ -107,7 +107,7 @@ def build_rows(values: np.ndarray, schema: Schema, source: pl.Series | None = No
         fields = [_flat(values, name, dtype, opt)
                   for (name, _), dtype, opt in zip(schema, dtypes, optional)]
         if len(values) == 1:
-            # score()'s shape: the one row owns every item, so there is nothing to slice.
+            # A record's run's shape: the one row owns every item, so there is nothing to slice.
             out = np.empty(1, object)
             out[0] = nt(*fields)
             return out

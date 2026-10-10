@@ -122,8 +122,8 @@ def test_every_shape_gives_the_same_answer_in_every_mode(fn, over_frame, for_rec
 
 @pytest.mark.parametrize("fn, _over_frame, for_record, _kernel", SHAPES, ids=IDS)
 @pytest.mark.parametrize("mode", ("interpreted", *COMPILED))
-def test_every_shape_scores_one_record(mode, fn, _over_frame, for_record, _kernel):
-    assert Engine().bind(flow(fn, name="p"), mode=mode).score(RECORD)[fn.__name__] == for_record
+def test_every_shape_runs_one_record(mode, fn, _over_frame, for_record, _kernel):
+    assert Engine().bind(flow(fn, name="p"), mode=mode).run(RECORD)[fn.__name__] == for_record
 
 
 @pytest.mark.parametrize("fn, _over_frame, _for_record, kernel", SHAPES, ids=IDS)
@@ -247,7 +247,7 @@ def test_a_null_reads_the_same_way_in_every_mode(fn, expected):
 @pytest.mark.parametrize("mode", ("interpreted", *COMPILED))
 def test_a_null_reads_the_same_way_for_one_record(mode, fn, expected):
     record = {"sector": None, "accounts": None, "applicant": None}
-    assert Engine().bind(flow(fn, name="p"), mode=mode).score(record)[fn.__name__] == expected[1]
+    assert Engine().bind(flow(fn, name="p"), mode=mode).run(record)[fn.__name__] == expected[1]
 
 
 # --- outputs ------------------------------------------------------------------------------------

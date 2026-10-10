@@ -116,7 +116,7 @@ def test_two_closures_from_one_installed_factory_are_different_steps(installed):
     assert fingerprint(calling(low)) != fingerprint(calling(high))
     pipeline = flow(step(low, output="low").named("low"), step(high, output="high").named("high"), name="p")
     for mode in ("interpreted", "stepped", "fused"):
-        out = pipeline.compile(mode).score({"x": 50.0})
+        out = pipeline.compile(mode).run({"x": 50.0})
         assert (out["low"], out["high"]) == (10.0, 20.0), mode
 
 

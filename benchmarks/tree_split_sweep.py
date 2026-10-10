@@ -4,7 +4,7 @@
     uv run python benchmarks/tree_split_sweep.py one and3 250 32      # one cell in this process
 
 `sweep` runs every cell in two fresh processes sharing one `NUMBA_CACHE_DIR`: the first is cold (bind plus the
-first `score` compile everything), the second is warm (the disk cache is hot), and both then time `score()` and a
+first record `run` compile everything), the second is warm (the disk cache is hot), and both then time `run(record)` and a
 batch `run()`. Part sizes are in outputs; a rule writes one boolean, so that is rules per part. `whole` is unsplit.
 Run the sweep under one wrapped process so other work cannot compete for the cores.
 """
@@ -134,18 +134,18 @@ def one(shape: str, n: int, part: str, rows: int, calls: int) -> dict:
     start = time.perf_counter()
     exe = Engine().bind(flow(tree(shape, n, part), name="p"), mode="fused")
     rng = random.Random(3)
-    exe.score(record(shape, rng))
+    exe.run(record(shape, rng))
     bind = time.perf_counter() - start
     rec = [record(shape, rng) for _ in range(64)]
     for i in range(1000):
-        exe.score(rec[i % 64])
+        exe.run(rec[i % 64])
     gc.collect()
     samples = np.empty(calls)
     perf = time.perf_counter
     for i in range(calls):
         r = rec[i % 64]
         t = perf()
-        exe.score(r)
+        exe.run(r)
         samples[i] = perf() - t
     df = frame(shape, rows)
     exe.run(df.head(1000))

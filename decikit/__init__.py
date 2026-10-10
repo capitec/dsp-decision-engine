@@ -18,7 +18,7 @@ Quickstart::
     pipeline = flow(ratio, affordable, name="afford")
     df = pl.DataFrame({"income": [1000.0, 500.0], "debt": [200.0, 400.0]})
     pipeline.run(df)                                          # income, debt, affordable
-    pipeline.compile("fused").score({"income": 1000.0, "debt": 200.0})   # compile once, then one record at a time (a dict)
+    pipeline.compile("fused").run({"income": 1000.0, "debt": 200.0})     # compile once, then one record at a time (a dict)
 
 A function's arguments are the columns it reads and its name is the column it
 writes. `flow` runs steps in written order (a later write wins), `dag` in

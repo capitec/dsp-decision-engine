@@ -62,6 +62,6 @@ def score():
     """`score(step, record, params=None)`: one record through a step or flow, interpreted."""
 
     def run(step, record, params=None):
-        return step.compile("interpreted").score(record, params)
+        return step.compile("interpreted").run(record, params)
 
     return run

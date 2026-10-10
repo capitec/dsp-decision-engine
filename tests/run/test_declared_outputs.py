@@ -77,7 +77,7 @@ def pair(x: float) -> Struct[Pair]:
 def test_a_wrong_value_in_a_declared_dict_output_is_refused_naming_step_and_field(mode, fn):
     exe = bound(fn, mode)
     with pytest.raises(ValueError, match=rf"step p/{fn.__name__}: output '{fn.__name__}' row 0.*v.*'high'"):
-        exe.score({"x": 1.0})
+        exe.run({"x": 1.0})
 
 
 @pytest.mark.parametrize("mode", MODES)
@@ -117,7 +117,7 @@ def test_a_tuple_output_that_cannot_be_the_declared_record_is_reported_at_compil
     exe = Engine().bind(flow(fn, name="p"), mode="fused")
     with pytest.warns(FallbackWarning, match=f"p/{fn.__name__} runs in Python"):
         with pytest.raises(ValueError, match=f"step p/{fn.__name__}: output '{fn.__name__}' row 0"):
-            exe.score({"x": 1.0})
+            exe.run({"x": 1.0})
     assert fn.__name__ in " ".join(exe.fallbacks())
     if field:
         assert f"field '{field}'" in exe.fallbacks()[f"p/{fn.__name__}"]
@@ -126,25 +126,25 @@ def test_a_tuple_output_that_cannot_be_the_declared_record_is_reported_at_compil
 @pytest.mark.parametrize("fn", [good_struct, good_rows])
 def test_a_tuple_output_matching_the_declared_record_stays_in_the_kernel(fn):
     exe = Engine(strict_compile=True).bind(flow(fn, name="p"), mode="fused")
-    assert exe.score({"x": 1.0})[fn.__name__] is not None
+    assert exe.run({"x": 1.0})[fn.__name__] is not None
     assert exe.fallbacks() == {}
 
 
 @pytest.mark.parametrize("mode", MODES)
 def test_an_int_is_a_valid_float_but_a_bool_is_not(mode):
-    assert bound(widened, mode).score({"x": 1.0})["widened"] == {"v": 3}
+    assert bound(widened, mode).run({"x": 1.0})["widened"] == {"v": 3}
     with pytest.raises(ValueError, match="bool_for_float.*field v"):
-        bound(bool_for_float, mode).score({"x": 1.0})
+        bound(bool_for_float, mode).run({"x": 1.0})
 
 
 @pytest.mark.parametrize("mode", MODES)
 def test_a_missing_not_required_key_is_accepted(mode):
-    assert bound(optional_note, mode).score({"x": 1.0})["optional_note"] == {"v": 1.0}
+    assert bound(optional_note, mode).run({"x": 1.0})["optional_note"] == {"v": 1.0}
 
 
 def test_a_struct_output_is_held_to_its_fields():
     with pytest.raises(ValueError, match="output 'pair' row 0, field hi"):
-        bound(pair, "interpreted").score({"x": 1.0})
+        bound(pair, "interpreted").run({"x": 1.0})
 
 
 def mixed_rows(x: float) -> list[Offer]:
@@ -188,11 +188,11 @@ def test_an_undeclared_dict_widens_an_int_beside_a_float(mode):
 
 @pytest.mark.parametrize("mode", MODES)
 @pytest.mark.parametrize("fn, key", [(int_keys, "int_keys"), (int_keys_in_list, "int_keys_in_list")])
-def test_run_turns_non_string_dict_keys_into_text_and_score_keeps_them(mode, fn, key):
+def test_a_frame_run_turns_non_string_dict_keys_into_text_and_a_record_run_keeps_them(mode, fn, key):
     exe = bound(fn, mode)
     out = exe.run(pl.DataFrame({"x": [0.5]}))[key].to_list()[0]
     assert out in ({"1": 0.5}, [{"1": 0.5}])
-    assert exe.score({"x": 0.5})[key] in ({1: 0.5}, [{1: 0.5}])
+    assert exe.run({"x": 0.5})[key] in ({1: 0.5}, [{1: 0.5}])
 
 
 class Count(TypedDict):
@@ -208,7 +208,7 @@ def numpy_numbers(x: float) -> list[Count]:
 @pytest.mark.parametrize("mode", MODES)
 def test_a_numpy_number_in_a_declared_dict_is_the_number_it_is(mode):
     exe = bound(numpy_numbers, mode)
-    assert exe.score({"x": 2.0})["numpy_numbers"] == [{"n": 3, "share": 0.5, "flag": True}]
+    assert exe.run({"x": 2.0})["numpy_numbers"] == [{"n": 3, "share": 0.5, "flag": True}]
     assert exe.run(pl.DataFrame({"x": [0.5, 2.0]}))["numpy_numbers"].to_list() == [
         [{"n": 3, "share": 0.5, "flag": False}], [{"n": 3, "share": 0.5, "flag": True}]]
 
@@ -231,7 +231,7 @@ def counted(x: float) -> list[Count]:
 @pytest.mark.parametrize("x", [7.5, 7.0, math.nan])
 def test_a_float_in_an_int_field_of_a_declared_list_is_refused_naming_the_field(mode, x):
     with pytest.raises(ValueError, match=r"output 'counted' row 0, field 1\.n: .*valid integer"):
-        bound(counted, mode).score({"x": x})
+        bound(counted, mode).run({"x": x})
 
 
 def numpy_in_one_row(x: float) -> dict:

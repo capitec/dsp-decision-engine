@@ -94,17 +94,17 @@ def codec(kind, handler):
         return pack(*(float(out[k]) for k in keys))
 
     if kind == "json":
-        return lambda body: to_json(exe.score(json.loads(body), params))
+        return lambda body: to_json(exe.run(json.loads(body), params))
     if kind == "arrow":
-        return lambda body: ipc_bytes(pl.DataFrame([exe.score(
+        return lambda body: ipc_bytes(pl.DataFrame([exe.run(
             pl.read_ipc_stream(body).row(0, named=True), params)]))
     if kind == "arrow_run":
         return lambda body: ipc_bytes(exe.run(pl.read_ipc_stream(body), params))
     if kind == "arrow_batch":
         # The schema arrived once, on the handshake; polars still needs it in front of every batch.
-        return lambda body: reply(exe.score(
+        return lambda body: reply(exe.run(
             pl.read_ipc_stream(SCHEMA_MSG + body).row(0, named=True), params))
-    return lambda body: reply(exe.score(dict(zip(NAMES, unpack(body))), params))
+    return lambda body: reply(exe.run(dict(zip(NAMES, unpack(body))), params))
 
 
 # ── servers ───────────────────────────────────────────────────────────────────
@@ -163,7 +163,7 @@ def serve_pa(kind, family):
         live = handler.module_fn()
         exe, params = live.executable, live.params
         keys = tuple(k for k, v in exe.plan.outputs.items() if v.producer is not None)
-        score = lambda r: exe.score(r, params)      # noqa: E731
+        score = lambda r: exe.run(r, params)      # noqa: E731
     out_schema = pa.schema([(k, pa.float64()) for k in keys])
     writer = pa.ipc.new_stream(wf, out_schema)
     writer.write_batch(pa.record_batch([[0.0] for _ in keys], schema=out_schema))

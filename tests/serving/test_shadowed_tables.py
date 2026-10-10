@@ -74,7 +74,7 @@ def test_a_run_time_params_override_stays_silent_and_applies(tmp_path):
     handler.activate()
     with warnings.catch_warnings():
         warnings.simplefilter("error", ShadowedTableWarning)
-        assert handler._active.executable.score({"score": 1}, {"p": {"seeded": {"rates": ROWS[:1]}}})["seeded"] == 1.0
+        assert handler._active.executable.run({"score": 1}, {"p": {"seeded": {"rates": ROWS[:1]}}})["seeded"] == 1.0
 
 
 def test_the_warning_can_be_ignored_by_category(tmp_path):

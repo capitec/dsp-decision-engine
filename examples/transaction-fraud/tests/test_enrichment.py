@@ -12,7 +12,7 @@ def assess():
         "velocity_completeness_band", "enrichment_degradation_code")
     executable = Engine(strict_compile=True).bind(steps, mode="fused")  # raises if any of it leaves the kernel
     fresh = {"velocity_count_1min_state": 0, "velocity_count_10min_state": 0, "velocity_sum_amount_1h_state": 0}
-    return lambda **record: executable.score({**fresh, **record})
+    return lambda **record: executable.run({**fresh, **record})
 
 
 def test_fresh_enrichment_is_normal(assess):
@@ -68,8 +68,8 @@ def test_a_stale_gating_list_fails_closed(assess, stale):
 def test_restriction_threshold_is_a_param(assess):
     executable = Engine().bind(flow(enrichment.degraded_mode_code, name="m"))
     two_sources = {"enrichment_degradation_code": 3, "velocity_completeness_band": 0}
-    assert executable.score(two_sources)["degraded_mode_code"] == Mode.RESTRICTED
-    assert executable.score(two_sources, {"m": {"degraded_mode_code": {"restricted_from_sources": 3}}})[
+    assert executable.run(two_sources)["degraded_mode_code"] == Mode.RESTRICTED
+    assert executable.run(two_sources, {"m": {"degraded_mode_code": {"restricted_from_sources": 3}}})[
         "degraded_mode_code"] == Mode.REDUCED
 
 
