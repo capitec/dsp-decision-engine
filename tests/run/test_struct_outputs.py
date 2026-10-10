@@ -130,6 +130,24 @@ def test_a_python_step_reads_a_python_columnar_output_as_dicts_in_every_mode():
     assert out["first_offer"].to_list() == ["rate,code=0.1", "rate,code=0.1"]
 
 
+@step(output="best")
+def pass_on(offers: Columnar[Product] | None, offer: Struct[Product]) -> Struct[Product]:
+    return offer  # an optional Columnar input runs one compiled call per row
+
+
+@allow_fallback
+def best_fields(best: dict) -> str:
+    return f"{','.join(best)}={best['rate'] / 0.5}"
+
+
+def test_a_per_row_compiled_step_handing_on_its_struct_input_agrees_in_every_engine():
+    frame = pl.DataFrame({"offers": [[{"rate": 0.1, "code": 1}], None],
+                          "offer": [{"rate": 0.5, "code": 5}, {"rate": 0.6, "code": 6}]})
+    out = assert_equivalent(flow(pass_on, best_fields, name="order").emit("best"), frame)
+    assert out["best"].to_list() == [{"rate": 0.5, "code": 5}, {"rate": 0.6, "code": 6}]
+    assert out["best_fields"].to_list() == ["rate,code=1.0", "rate,code=1.2"]
+
+
 @allow_fallback
 @step(output="offer")
 def best_too_long(rate: float, label: str) -> Struct[Product]:

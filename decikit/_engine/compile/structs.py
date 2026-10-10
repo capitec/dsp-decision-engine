@@ -45,6 +45,8 @@ def to_dicts(annotation: Any) -> Callable[[Any], Any] | None:
     names = [name for name, _ in item_schema(item)]
 
     def record(x: Any) -> Any:
+        if isinstance(x, np.void):  # a compiled body handing on a struct it read
+            x = x.item()
         # Anything but a tuple of exactly the fields stays as returned, for the output check to refuse.
         return dict(zip(names, x)) if isinstance(x, (tuple, list)) and len(x) == len(names) else x
 
