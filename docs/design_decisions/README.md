@@ -30,6 +30,7 @@ New rationale goes into the decision file for its area; a new measurement become
 | **Engine** | |
 | [When to fuse, release the GIL, use fastmath, fall back or cache?](experiments/kernel-compilation-choices.md) | spike |
 | [How should `score` take a record, and what should it cache?](experiments/single-record-calling-convention.md) | spike |
+| [Where does a one-record run spend its time outside the steps?](experiments/per-step-overhead.md) | spike |
 | [Can one scatter/gather primitive replace `each`'s two modes?](experiments/each-scatter-gather.md) | `each_unified.py` |
 | [Does a loop over candidate bundles pack?](experiments/packed-loop-over-bundles.md) | `bundle_search.py`, `fan_out_reduce.py` |
 | [How did decider compare with decider2?](experiments/decider-vs-decider2.md) | `modes.py`, `control_flow.py` |
