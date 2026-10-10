@@ -119,6 +119,26 @@ def test_list_view_shows_the_same_projects_with_actions(signed_in: Page):
 
 # ---- moving between folders -------------------------------------------------------------------------------------
 
+@pytest.mark.parametrize("change", ["delete", "rename"])
+def test_changing_a_project_inside_a_folder_keeps_the_list_on_that_folder(signed_in: Page, change: str):
+    folder = create_folder(signed_in, "Inbox")["id"]
+    create_project(signed_in, "In inbox", flat_document(), folder_id=folder)
+    create_project(signed_in, "Also in inbox", flat_document(), folder_id=folder)
+    create_project(signed_in, "At the root", flat_document())
+    open_projects(signed_in)
+    select_folder(signed_in, "Inbox")
+
+    if change == "delete":
+        delete_project(signed_in, "In inbox")
+        expect(project_card(signed_in, "In inbox")).to_have_count(0)
+    else:
+        rename_project(signed_in, "In inbox", "Renamed in inbox")
+        expect(project_card(signed_in, "Renamed in inbox")).to_be_visible()
+
+    expect(project_card(signed_in, "Also in inbox")).to_be_visible()
+    expect(project_card(signed_in, "At the root")).to_have_count(0)
+
+
 def test_a_project_moved_into_a_folder_shows_in_that_folder_and_in_all_projects(signed_in: Page):
     create_folder(signed_in, "Inbox")
     create_project(signed_in, "Mover", flat_document())
