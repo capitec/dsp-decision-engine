@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 
 import pytest
-from decikit import Engine
+from decikit import FusedEngine
 from decikit.config import JsonFileStore
 from decikit.serving import RequestHandler
 
@@ -64,6 +64,6 @@ def test_a_json_array_of_requests_is_decided_like_the_same_requests_one_by_one(h
 
 
 def test_every_step_that_runs_in_python_says_so_on_purpose(documents):
-    executable = Engine(strict_compile=True).bind(build(*documents), mode="fused")  # raises on an unannounced fallback
+    executable = FusedEngine(strict_compile=True).bind(build(*documents))  # raises on an unannounced fallback
     assert executable.fallbacks()
     assert all(reason.startswith("@allow_fallback") for reason in executable.fallbacks().values())

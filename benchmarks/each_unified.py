@@ -15,7 +15,7 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 
-from decikit import Engine, each, flow, loop, missing_as, param, step
+from decikit import FusedEngine, each, flow, loop, missing_as, param, step
 
 ARGS = [int(a) for a in sys.argv[1:]]
 ITEMS = ARGS[:4] if ARGS else [1, 5, 20, 100]
@@ -126,7 +126,7 @@ if __name__ == "__main__":
     print(header)
     print("-" * len(header))
     for child_name, build in PIPELINES.items():
-        exe = Engine().bind(build(), mode="fused")
+        exe = FusedEngine().bind(build())
         for items in ITEMS:
             for r in RECORDS:
                 frame = make_frame(r, items)

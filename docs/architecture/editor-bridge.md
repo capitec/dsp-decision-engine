@@ -159,7 +159,7 @@ sequenceDiagram
     participant S as Session
     H->>R: {"id":3,"cmd":"start",...}
     R->>M: queue
-    M->>S: Engine().bind(step).session(frame, params)<br/>break_at(_checkpoint), break_at(paths)
+    M->>S: InterpretedEngine().bind(step).session(frame, params)<br/>break_at(_checkpoint), break_at(paths)
     M-->>H: Status (paused before the run)
     H->>R: {"id":4,"cmd":"resume"}
     R->>M: queue
@@ -227,7 +227,7 @@ One call node from `loan.py`, as the describe reply carries it:
 
 ### A session and its observers
 
-`start` binds the step in interpreted mode (`Engine().bind(step).session(frame, params)`; see [Debug sessions](engine/debug.md)), then attaches two observers through the session's breakpoint hook. `_checkpoint` is registered first, before any user breakpoint, because `Session` evaluates breakpoints with `any` and stops at the first that says pause; the observer must see every checkpoint. At each checkpoint it records the checkpoint in the `Timeline`, applies any force that is due and evaluates the value breakpoints. It pauses only when a watch fires.
+`start` binds the step in interpreted mode (`InterpretedEngine().bind(step).session(frame, params)`; see [Debug sessions](engine/debug.md)), then attaches two observers through the session's breakpoint hook. `_checkpoint` is registered first, before any user breakpoint, because `Session` evaluates breakpoints with `any` and stops at the first that says pause; the observer must see every checkpoint. At each checkpoint it records the checkpoint in the `Timeline`, applies any force that is due and evaluates the value breakpoints. It pauses only when a watch fires.
 
 The input rows come from, in order: `data` (a path read with `lab.data.read`, one record, or a list of records), `dataset` (a name in the project's datasets folder; both at once is an error), the module's `SAMPLE`, or the build pipeline's `sample_request.json`. `overrides` with an optional `row` change input columns before the run. The data's identity (`InputFingerprint`: name, content hash, columns, row count) is reported in every `Status` so a host can show which data the run is on.
 

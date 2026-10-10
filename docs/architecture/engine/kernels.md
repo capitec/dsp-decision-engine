@@ -380,7 +380,7 @@ copies has no validity, so a null in it sends that launch down the unpacked path
 
 - A typing error inside a step (a decimal mixed with a float, a span compared with a string built
   at run time, `//` on a decimal) is one of numba's compile errors: the step runs in Python with a
-  `FallbackWarning`, or raises under `Engine(strict_compile=True)`. [The compile cache](cache.md)
+  `FallbackWarning`, or raises under `FusedEngine(strict_compile=True)`. [The compile cache](cache.md)
   covers the decision.
 - Overflow is silent in a kernel. Checks flag the risky products; tests should include large
   principals and `.xx5` ties, which random sampling rarely reaches (the wrap point was found by

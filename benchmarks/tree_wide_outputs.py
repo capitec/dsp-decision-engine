@@ -9,7 +9,7 @@ import sys
 import time
 
 from decikit import TreeConfig, flow
-from decikit._engine import Engine
+from decikit._engine import FusedEngine
 
 
 def tree(n: int, part_outputs: int | None = 64) -> TreeConfig:
@@ -31,5 +31,5 @@ def tree(n: int, part_outputs: int | None = 64) -> TreeConfig:
 if __name__ == "__main__":
     n = int(sys.argv[1])
     start = time.time()
-    Engine().bind(flow(tree(n, None if "--whole" in sys.argv else 64), name="p"), mode="fused").run({f"f{i}": float(i) for i in range(12)})
+    FusedEngine().bind(flow(tree(n, None if "--whole" in sys.argv else 64), name="p")).run({f"f{i}": float(i) for i in range(12)})
     print(f"{n} rules: {time.time() - start:.1f} s")

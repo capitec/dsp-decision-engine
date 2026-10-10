@@ -227,7 +227,7 @@ decikit build                # validates configs/0.0.0 and warms every kernel wi
 decikit serve --workers 1    # needs decikit[serve-starlette]
 ```
 
-`decikit build` prints which pipeline and handler it loaded, and ends with `built config version 0.0.0 (pipeline credit_risk.pipeline:build, mode fused)`. It also prints one `FallbackWarning`, because `month_end` reads a `date`, which no numba kernel holds, so that one step runs in Python while the other two compile. [Compiled modes and fallback](guides/compile-and-fallback.md) explains the warning and how to accept it.
+`decikit build` prints which pipeline and handler it loaded, and ends with `built config version 0.0.0 (pipeline credit_risk.pipeline:build, engine fused)`. It also prints one `FallbackWarning`, because `month_end` reads a `date`, which no numba kernel holds, so that one step runs in Python while the other two compile. [Compiled modes and fallback](guides/compile-and-fallback.md) explains the warning and how to accept it.
 
 With the server running, post the sample request:
 

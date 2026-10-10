@@ -24,7 +24,7 @@ def test_a_null_numeric_feature_is_a_missing_input_under_strict_null_handling(mo
                      {"data": [{"r": "match"}], "default": {"r": "no"}, "dtypes": [["r", "String"]]},
                      null_handling="error")
     with pytest.raises(MissingInputError, match="'v'"):
-        Engine().bind(tree, mode=mode).run(pl.DataFrame({"v": pl.Series([50.0, None], dtype=pl.Float64)}))
+        Engine.resolve(mode)().bind(tree).run(pl.DataFrame({"v": pl.Series([50.0, None], dtype=pl.Float64)}))
 
 
 def test_a_param_threshold_is_one_value_per_call_not_per_row(run):

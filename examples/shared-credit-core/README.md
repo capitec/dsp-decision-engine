@@ -64,7 +64,7 @@ The rules, in the order the pipeline applies them:
 | `ScorecardConfig` with bin edges that are params | [scorecard.py](credit_core/scorecard.py) |
 | Multi-output steps (`outputs=`) | [adjustments.py](credit_core/adjustments.py), [reason_codes.py](credit_core/reason_codes.py), [bureau.py](credit_core/bureau.py), [obligations.py](credit_core/obligations.py) |
 | `TypedDict` inputs: JSON date strings arrive as `date`s | [obligations.py](credit_core/obligations.py), [bureau.py](credit_core/bureau.py), [exposure.py](credit_core/exposure.py) |
-| `@allow_fallback` for steps that are Python on purpose (dates, lists of dicts, strings), checked by `Engine(strict_compile=True)` | [tests/test_serving.py](tests/test_serving.py) |
+| `@allow_fallback` for steps that are Python on purpose (dates, lists of dicts, strings), checked by `FusedEngine(strict_compile=True)` | [tests/test_serving.py](tests/test_serving.py) |
 | `.relabel` and `.named`: one step reused on other column names or twice with different settings | [pipeline.py](credit_core/pipeline.py), [tests/test_affordability.py](tests/test_affordability.py) |
 | `decikit.ops.decimal.round` for half-up money rounding that runs the same in Python and in a kernel | [rounding.py](credit_core/rounding.py) |
 | The params document and a switch that turns a whole overlay stack off | [`configs/0.1.0/params.json`](configs/0.1.0/params.json), [tests/test_quote_pipeline.py](tests/test_quote_pipeline.py) |
@@ -86,7 +86,7 @@ build in a fresh checkout takes a minute while numba compiles):
 
 ```bash
 uv run decikit build
-# built config version 0.1.0 (pipeline credit_core.pipeline:build, mode fused)
+# built config version 0.1.0 (pipeline credit_core.pipeline:build, engine fused)
 ```
 
 Serve, and quote the sample application. Its dates are plain JSON strings:

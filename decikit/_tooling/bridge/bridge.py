@@ -28,7 +28,7 @@ import polars as pl
 from decikit.lab.data import dataset as named_dataset
 from decikit._tooling.bridge.describing import (assignment_lines, field_metadata, find_pipelines, formula, key_column,
                                          node_json, values_file)
-from decikit import Engine
+from decikit import InterpretedEngine
 from decikit._engine.debug import EVENT
 from decikit._tooling.bridge.controls import Controls
 from decikit._engine.debug.edit import swap
@@ -145,7 +145,7 @@ class Bridge:
         self.doc = base_params(self.mod, params, self._build_params)
         self.original = self.step
         self.edits = []  # (path, step or None), so each edit can be compared on its own
-        self.session = Engine().bind(self.step).session(apply_overrides(self._rows(data, dataset, file), overrides, row), self.doc)
+        self.session = InterpretedEngine().bind(self.step).session(apply_overrides(self._rows(data, dataset, file), overrides, row), self.doc)
         self.controls = Controls(self.described["ir"])
         self.controls.set(forces, watches)
         self.controls.session = self.session

@@ -11,7 +11,7 @@ def run_modes(step, df: pl.DataFrame, params=None) -> pl.DataFrame:
 
     Every tree test goes through this, so every fixture checks the two walkers against each other.
     """
-    outs = {m: Engine().bind(step, mode=m).run(df, params=params) for m in MODES}
+    outs = {m: Engine.resolve(m)().bind(step).run(df, params=params) for m in MODES}
     for m in MODES[1:]:
         assert outs[m].equals(outs["interpreted"]), f"{m} disagrees with interpreted:\n{outs[m]}\n{outs['interpreted']}"
         assert outs[m].schema == outs["interpreted"].schema, m

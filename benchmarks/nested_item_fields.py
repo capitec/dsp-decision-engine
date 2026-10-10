@@ -140,7 +140,7 @@ def end_to_end() -> None:
         for _, fn, fields, mode in variants:
             data = rows(N, ITEMS, fields)
             df = pl.DataFrame({"items": data})
-            exe = Engine().bind(flow(fn, name="p"), mode=mode)
+            exe = Engine.resolve(mode)().bind(flow(fn, name="p"))
             cases.append((exe, df, {"items": data[0]}))
         lats = latency([(exe, record) for exe, _, record in cases])
         out = [(label, batch(exe, df), *lat) for (label, *_), (exe, df, _), lat in zip(variants, cases, lats)]

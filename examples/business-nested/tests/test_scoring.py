@@ -3,11 +3,11 @@ import math
 from datetime import date
 
 import pytest
-from decikit import Engine
+from decikit import InterpretedEngine
 
 from business_nested import scoring
 
-score = Engine().bind(scoring.entity_scoring_unit(), mode="interpreted")
+score = InterpretedEngine().bind(scoring.entity_scoring_unit())
 PERSON = {"is_natural_person": True, "bureau_score": 705.0, "months_on_record": 140.0, "worst_delinquency_months": 0.0,
           "effective_ownership_pct": 55.0, "decision_date": date(2026, 9, 24)}
 
@@ -65,7 +65,7 @@ def test_the_bureau_cut_offs_are_params():
     assert scored(params, bureau_score=690.0)["score_before_overlay"] == scored(bureau_score=640.0)["score_before_overlay"]
 
 
-grade = Engine().bind(scoring.grade_lookup("pd", "grade"), mode="interpreted")
+grade = InterpretedEngine().bind(scoring.grade_lookup("pd", "grade"))
 
 
 @pytest.mark.parametrize("segment, probability, expected", [

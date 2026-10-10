@@ -9,7 +9,8 @@ import time
 import warnings
 
 import polars as pl
-from decikit import Engine, flow, param
+from decikit import FusedEngine, flow, param
+from decikit.exceptions import EngineError
 
 def disposable(income: float, expenses: float) -> float:
     return income - expenses
@@ -24,7 +25,7 @@ pipeline = flow(disposable, ratio, affordable, name="afford")
 record = {"income": 1000.0, "expenses": 300.0, "debt": 200.0}
 
 for mode in ("interpreted", "stepped", "fused"):
-    exe = pipeline.compile(mode)          # same as Engine().bind(pipeline, mode)
+    exe = pipeline.compile(mode)          # same as Engine.resolve(mode)().bind(pipeline)
     print(mode, exe.run(record))
 ```
 
@@ -34,17 +35,17 @@ stepped {'income': 1000.0, 'expenses': 300.0, 'debt': 200.0, 'affordable': True}
 fused {'income': 1000.0, 'expenses': 300.0, 'debt': 200.0, 'affordable': True}
 ```
 
-| Mode | What runs | A session pauses at | Use it for |
+| Engine | What runs | A session pauses at | Use it for |
 |---|---|---|---|
 | `"interpreted"` | each step as a Python function, row by row | every step, and inside trees | debugging, the reference answer, pipelines that barely run |
 | `"stepped"` | each step as its own numba kernel over all rows, with a Python driver between steps | every step | debugging compiled behaviour, finding which step of a kernel raised |
 | `"fused"` | one kernel per run of consecutive compilable steps; branches and loops of plain scalar steps packed into one kernel | kernel boundaries only | serving (`decikit serve`'s default), batch runs |
 
-`pipeline.run(df)` is interpreted. `Engine(...).bind(pipeline, mode)` does what `compile` does and takes the engine options (`strict_compile=`, `params_validation=`). An unknown mode is refused: `EngineError: unknown mode 'jit'; expected one of ['fused', 'interpreted', 'stepped']`.
+`pipeline.run(df)` is interpreted. An engine is a settings document named by its tag: `pipeline.compile(FusedEngine(strict_compile=True))` takes the engine options (`strict_compile=`, `params_validation=`), and `Engine.registered()` lists the tags. An unknown tag is refused: `RegistryError: 'fsued' is not a registered Engine type. Did you mean 'fused'?`.
 
 Measured on a flagship pipeline at 1M rows through `run` and 20k single-record `run` calls (CPython 3.14, dev box):
 
-| Mode | Batch rows/s | record p50 | record p99 |
+| Engine | Batch rows/s | record p50 | record p99 |
 |---|---|---|---|
 | interpreted | 0.25M | 59.1 µs | 84.5 µs |
 | stepped | 12.9M | 37.1 µs | 47.6 µs |
@@ -211,7 +212,7 @@ for mode in ("interpreted", "stepped", "fused"):
 ```text
 interpreted division by zero ['in step z/per_income, row 1']
 stepped division by zero ['in step z/per_income']
-fused division by zero ["in one of the steps ['z/disposable', 'z/per_income'], fused into one kernel; run in mode='stepped' to see which"]
+fused division by zero ["in one of the steps ['z/disposable', 'z/per_income'], fused into one kernel; run in engine='stepped' to see which"]
 ```
 
 Division by zero raises in every mode, as it does in Python. A fused kernel cannot tell which of its steps raised, so its note lists them all and suggests stepped mode. The notes need Python 3.11 or newer.
@@ -241,26 +242,26 @@ except TypeError as e:
 
 ### Strict compile
 
-`Engine(strict_compile=True)` raises at the first run instead of warning, for any step that would run in Python without `@allow_fallback`. Use it in CI or at service start-up to keep a fallback from slipping in:
+`FusedEngine(strict_compile=True)` raises at the first run instead of warning, for any step that would run in Python without `@allow_fallback`. Use it in CI or at service start-up to keep a fallback from slipping in:
 
 ```python
 try:
-    Engine(strict_compile=True).bind(mixed, mode="fused").run(data)
-except ValueError as e:
+    FusedEngine(strict_compile=True).bind(mixed).run(data)
+except EngineError as e:
     print(e)
 
-accepted = Engine(strict_compile=True).bind(flow(legacy_score, name="q"), mode="fused")
+accepted = FusedEngine(strict_compile=True).bind(flow(legacy_score, name="q"))
 print(accepted.run({"code": 4}))
 ```
 
 ```text
-mixed/applied_month runs in Python, row by row: reads 'applied_on' as <class 'datetime.date'>, which no kernel takes; accept it with @allow_fallback, or run mode='interpreted'
+mixed/applied_month runs in Python, row by row: reads 'applied_on' as <class 'datetime.date'>, which no kernel takes; accept it with @allow_fallback, or run engine='interpreted'
 {'code': 4, 'legacy_score': 8.0}
 ```
 
-The strict error is a plain `ValueError`, not a `DecikitError`.
+The strict error is an `EngineError` (a `DecikitError` and a `ValueError`).
 
-`strict_compile=True` also refuses hidden state, in every mode: a step that reads a module-level object (a `HiddenStateWarning` otherwise) makes `bind` raise `EngineError`, so a CI build with one fails.
+`strict_compile=True` also refuses hidden state, in every engine: a step that reads a module-level object (a `HiddenStateWarning` otherwise) makes `bind` raise `EngineError`, so a CI build with one fails.
 
 ## The first call and the numba cache
 

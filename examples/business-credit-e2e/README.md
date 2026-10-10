@@ -99,7 +99,7 @@ The scale is not a cause of probability movement. It decides whether two grades 
 | `@helper` functions called from compiled steps, and `@allow_fallback` where a step is Python on purpose (dates, strings, lists of dicts) | [covenant.py](business_credit_e2e/covenant.py), [pipeline.py](business_credit_e2e/pipeline.py), [tests/test_serving.py](tests/test_serving.py) |
 | A typed list input (`list[Account]`), so the `opened_date`s in the request arrive as dates from raw JSON | [covenant.py](business_credit_e2e/covenant.py), [tests/test_serving.py](tests/test_serving.py) |
 | One compiled pipeline scored many times with changed records and params: the counterfactual runs behind a cause | [review.py](business_credit_e2e/review.py), [tests/test_review.py](tests/test_review.py) |
-| Another example's pipeline (the limit programme) bound to an `Engine` and scored for one record | [review.py](business_credit_e2e/review.py) (`limit_decision`) |
+| Another example's pipeline (the limit programme) bound to an engine and scored for one record | [review.py](business_credit_e2e/review.py) (`limit_decision`) |
 | A partial re-assessment (one entity) that equals the full run | [tests/test_daily_pass.py](tests/test_daily_pass.py) |
 | `assert_equivalent`: every mode and a single record agree; warm-up from `sample_request.json` and raw request bytes | [tests/test_serving.py](tests/test_serving.py) |
 
@@ -119,7 +119,7 @@ fresh checkout takes a minute while numba compiles):
 
 ```bash
 uv run decikit build
-# built config version 0.1.0 (pipeline business_credit_e2e.pipeline:build, mode fused)
+# built config version 0.1.0 (pipeline business_credit_e2e.pipeline:build, engine fused)
 ```
 
 Serve, and decide the sample application. Its dates are plain JSON strings, inside the lists too:
@@ -185,13 +185,13 @@ only thing that moved:
 
 ```python
 import json
-from decikit import Engine
+from decikit import InterpretedEngine
 from business_credit_e2e import history, review, vocab
 from business_credit_e2e.pipeline import build
 from business_credit_e2e.records import parse_dates
 
 params = json.load(open("configs/0.1.0/params.json"))
-executable = Engine().bind(build(), mode="interpreted")
+executable = InterpretedEngine().bind(build())
 sample = json.load(open("sample_request.json"))
 
 store = history.DecisionStore()

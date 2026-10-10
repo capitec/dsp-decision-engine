@@ -1,5 +1,5 @@
 import pytest
-from decikit import Engine, flow
+from decikit import FusedEngine, flow
 
 from fraud_interdiction import hard_blocks, vocab
 from fraud_interdiction.vocab import Action
@@ -10,7 +10,7 @@ GATE_INPUTS = {1: "sanctions_list_match", 2: "account_frozen", 4: "mule_watchlis
 
 @pytest.fixture(scope="module")
 def gates():
-    executable = Engine(strict_compile=True).bind(flow(hard_blocks.hard_block_step, name="gates"), mode="fused")
+    executable = FusedEngine(strict_compile=True).bind(flow(hard_blocks.hard_block_step, name="gates"))
     return lambda **held: executable.run(held)
 
 

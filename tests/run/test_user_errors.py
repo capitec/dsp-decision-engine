@@ -5,7 +5,7 @@ import polars as pl
 import pytest
 
 from decikit import branch, flow, frame_step, param, step
-from decikit._engine import Engine
+from decikit._engine import Engine, FusedEngine
 
 MODES = ("interpreted", "stepped", "fused")
 needs_notes = pytest.mark.skipif(sys.version_info < (3, 11), reason="exception notes are Python 3.11+")
@@ -41,7 +41,7 @@ def notes(err):
 @pytest.mark.parametrize("mode", MODES)
 def test_an_error_in_a_step_keeps_its_type_and_names_the_step(mode):
     with pytest.raises(ZeroDivisionError) as err:
-        Engine().bind(flow(ratio), mode).run(FRAME)
+        Engine.resolve(mode)().bind(flow(ratio)).run(FRAME)
     assert "in step ratio" in notes(err)
 
 
@@ -56,15 +56,15 @@ def test_interpreted_mode_also_names_the_row_counted_in_the_input_frame():
 @needs_notes
 def test_a_fused_kernel_error_names_every_step_it_runs():
     with pytest.raises(ZeroDivisionError) as err:
-        Engine().bind(flow(ratio, doubled), "fused").run(FRAME)
-    assert "['ratio', 'doubled']" in notes(err) and "mode='stepped'" in notes(err)
+        FusedEngine().bind(flow(ratio, doubled)).run(FRAME)
+    assert "['ratio', 'doubled']" in notes(err) and "engine='stepped'" in notes(err)
 
 
 @needs_notes
 @pytest.mark.parametrize("mode", MODES)
 def test_record_run_errors_name_the_step_too(mode):
     with pytest.raises(ZeroDivisionError) as err:
-        Engine().bind(flow(ratio), mode).run({"income": 0.0, "debt": 1.0})
+        Engine.resolve(mode)().bind(flow(ratio)).run({"income": 0.0, "debt": 1.0})
     assert "in step ratio" in notes(err)
 
 
@@ -77,7 +77,7 @@ def test_a_python_fallback_error_names_the_step(mode):
         return math.log(income)
 
     with pytest.raises(ValueError) as err:
-        Engine().bind(flow(imports), mode).run(FRAME)
+        Engine.resolve(mode)().bind(flow(imports)).run(FRAME)
     assert "in step imports" in notes(err)
 
 
@@ -101,10 +101,10 @@ def test_a_kernel_numba_cannot_type_runs_in_python(mode):
     pipeline = flow(ratio, scaled)
     df = FRAME.head(2)
     expected = pipeline.run(df)
-    assert Engine().bind(pipeline, mode).run(df).equals(expected)
+    assert Engine.resolve(mode)().bind(pipeline).run(df).equals(expected)
 
 
 @pytest.mark.parametrize("mode", ("stepped", "fused"))
 def test_a_step_error_still_propagates_after_its_kernel_fell_back(mode):
     with pytest.raises(ZeroDivisionError):
-        Engine().bind(flow(ratio, scaled), mode).run(FRAME)
+        Engine.resolve(mode)().bind(flow(ratio, scaled)).run(FRAME)

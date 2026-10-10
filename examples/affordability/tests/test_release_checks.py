@@ -3,7 +3,7 @@ import json
 import warnings
 
 import pytest
-from decikit import ConfigurableStep, Engine, HiddenStateWarning
+from decikit import ConfigurableStep, HiddenStateWarning, InterpretedEngine
 from decikit.lab import diff
 
 from assessment import documents
@@ -27,7 +27,7 @@ def shipped():
 def test_the_assessment_reads_no_hidden_objects(shipped):
     with warnings.catch_warnings():
         warnings.simplefilter("error", HiddenStateWarning)
-        Engine().bind(shipped, mode="interpreted")
+        InterpretedEngine().bind(shipped)
 
 
 def test_the_same_documents_build_an_unchanged_pipeline(shipped):

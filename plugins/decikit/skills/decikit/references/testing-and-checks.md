@@ -14,12 +14,12 @@ from datetime import date
 import polars as pl
 import pytest
 
-from decikit import Engine
+from decikit import FusedEngine
 from decikit.lab.testing import assert_equivalent
 
 from credit_risk.pipeline import build
 
-EXE = Engine().bind(build(), mode="fused")
+EXE = FusedEngine().bind(build())
 PARAMS = {"credit_risk": {"approved": {"limit": 0.4, "month_end_limit": 0.3}}}
 
 

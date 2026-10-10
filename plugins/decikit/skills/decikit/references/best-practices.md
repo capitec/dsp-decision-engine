@@ -78,7 +78,7 @@ the rule changes:
 ```
 
 `assert out >= 0` and `assert out in (1, 2, 3)` pass for a wrong rule. Test
-through decikit (`Engine().bind(build()).run(record, params)` or the
+through decikit (`FusedEngine().bind(build()).run(record, params)` or the
 handler), never by calling the functions, so the test proves the pipeline wires,
 builds and serves. testing-and-checks.md has the full pattern.
 
@@ -89,13 +89,13 @@ Config versions are immutable. A new policy is a new version
 
 ```python
 from datetime import date
-from decikit import Engine
+from decikit import FusedEngine
 from decikit.config import JsonFileStore
 from credit_risk.pipeline import build
 
 stored = {"income": 1000.0, "debt": 350.0, "applied_on": date(2026, 1, 10)}   # the request as logged
 params = JsonFileStore(basepath="configs").read("0.0.0").config["params"]      # the version it ran under
-Engine().bind(build(), mode="fused").run(stored, params)["approved"]           # True
+FusedEngine().bind(build()).run(stored, params)["approved"]           # True
 ```
 
 Replay against `store.read(version)`, never whatever `configs/` holds now. A

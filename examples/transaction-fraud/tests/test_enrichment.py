@@ -1,5 +1,5 @@
 import pytest
-from decikit import Engine, flow
+from decikit import FusedEngine, InterpretedEngine, flow
 
 from fraud_interdiction import enrichment, vocab
 from fraud_interdiction.vocab import Mode, VelocityBand
@@ -10,7 +10,7 @@ def assess():
     steps = flow(enrichment.velocity_completeness_band, enrichment.enrichment_degradation_code,
                  enrichment.degraded_mode_code, enrichment.late_arrival_flag, name="enrichment").emit(
         "velocity_completeness_band", "enrichment_degradation_code")
-    executable = Engine(strict_compile=True).bind(steps, mode="fused")  # raises if any of it leaves the kernel
+    executable = FusedEngine(strict_compile=True).bind(steps)  # raises if any of it leaves the kernel
     fresh = {"velocity_count_1min_state": 0, "velocity_count_10min_state": 0, "velocity_sum_amount_1h_state": 0}
     return lambda **record: executable.run({**fresh, **record})
 
@@ -66,7 +66,7 @@ def test_a_stale_gating_list_fails_closed(assess, stale):
 
 
 def test_restriction_threshold_is_a_param(assess):
-    executable = Engine().bind(flow(enrichment.degraded_mode_code, name="m"))
+    executable = InterpretedEngine().bind(flow(enrichment.degraded_mode_code, name="m"))
     two_sources = {"enrichment_degradation_code": 3, "velocity_completeness_band": 0}
     assert executable.run(two_sources)["degraded_mode_code"] == Mode.RESTRICTED
     assert executable.run(two_sources, {"m": {"degraded_mode_code": {"restricted_from_sources": 3}}})[

@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 
 import pytest
-from decikit import Engine
+from decikit import FusedEngine
 from decikit.config import JsonFileStore
 from decikit.serving import RequestHandler
 
@@ -53,6 +53,6 @@ def test_a_request_without_a_proposed_instalment_is_served_with_no_arrangement_v
 
 
 def test_every_step_that_runs_in_python_says_so_on_purpose(matrix_document, build_pipeline):
-    executable = Engine(strict_compile=True).bind(build_pipeline(matrix_document), mode="fused")
+    executable = FusedEngine(strict_compile=True).bind(build_pipeline(matrix_document))
     assert executable.fallbacks()
     assert all(reason.startswith("@allow_fallback") for reason in executable.fallbacks().values())

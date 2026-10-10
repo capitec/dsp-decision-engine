@@ -105,7 +105,7 @@ def terms(pipeline, row):
     """(name, callable) for every term of one request, plus the floors."""
     store = JsonFileStore(basepath=tempfile.mkdtemp(dir=".scratch"))
     store.create_version({"params": {}})
-    handler = RequestHandler(store, pipeline, mode="fused")
+    handler = RequestHandler(store, pipeline, engine="fused")
     handler.stage()
     handler.activate()
     live = handler.module_fn()

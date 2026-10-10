@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Iterator, Literal
 
-from decikit import Engine
+from decikit import InterpretedEngine
 from decikit.lab.checks._base import Check, CheckContext
 from decikit.lab.checks._report import Finding, Severity
 from decikit.lab.testing import MODES, assert_equivalent, corpus
@@ -19,7 +19,7 @@ class CrashProbe(Check):
     severity: Severity = Severity.ERROR
 
     def run(self, ctx: CheckContext) -> Iterator[Finding]:
-        exe = Engine().bind(ctx.pipeline)
+        exe = InterpretedEngine().bind(ctx.pipeline)
         for name, frame in corpus(ctx.pipeline).items():
             try:
                 exe.run(frame, ctx.params)

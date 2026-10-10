@@ -3,7 +3,7 @@ import polars as pl
 import pytest
 
 from decikit import branch, loop, param, step
-from decikit._engine import Engine
+from decikit._engine import FusedEngine
 from decikit.lab.testing import assert_equivalent
 
 
@@ -115,7 +115,7 @@ def test_a_condition_reading_a_str_input_is_right_but_does_not_pack():
                           "cap": [10.0, 10.0, 10.0]})
     mixed = branch(sector_and_income, cap_a, cap_b, modifies=["cap"], name="mixed")
     assert assert_equivalent(mixed, frame)["cap"].to_list() == [11.0, 12.0, 12.0]
-    exe = Engine().bind(mixed, "fused")
+    exe = FusedEngine().bind(mixed)
     with pytest.warns(UserWarning, match="reads 'sector' as str"):
         exe.run(frame)
     assert list(exe.runner.packed) == []

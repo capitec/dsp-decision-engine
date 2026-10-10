@@ -10,7 +10,7 @@ import numpy as np
 import polars as pl
 import pytest
 
-from decikit import Engine, allow_fallback, flow
+from decikit import Engine, FusedEngine, allow_fallback, flow
 from decikit.config import JsonFileStore
 from decikit.exceptions import FallbackWarning
 from decikit.ops import Columnar, Struct
@@ -36,7 +36,7 @@ class Pair(TypedDict):
 def bound(fn, mode):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", FallbackWarning)
-        return Engine().bind(flow(fn, name="p"), mode=mode)
+        return Engine.resolve(mode)().bind(flow(fn, name="p"))
 
 
 def labelled(x: float) -> Offer:
@@ -114,7 +114,7 @@ def short_tuple_rows(x: float) -> Columnar[Item]:
 
 @pytest.mark.parametrize("fn, field", [(tuple_struct, "count"), (tuple_rows, "count"), (short_tuple_rows, "")])
 def test_a_tuple_output_that_cannot_be_the_declared_record_is_reported_at_compile_time(fn, field):
-    exe = Engine().bind(flow(fn, name="p"), mode="fused")
+    exe = FusedEngine().bind(flow(fn, name="p"))
     with pytest.warns(FallbackWarning, match=f"p/{fn.__name__} runs in Python"):
         with pytest.raises(ValueError, match=f"step p/{fn.__name__}: output '{fn.__name__}' row 0"):
             exe.run({"x": 1.0})
@@ -125,7 +125,7 @@ def test_a_tuple_output_that_cannot_be_the_declared_record_is_reported_at_compil
 
 @pytest.mark.parametrize("fn", [good_struct, good_rows])
 def test_a_tuple_output_matching_the_declared_record_stays_in_the_kernel(fn):
-    exe = Engine(strict_compile=True).bind(flow(fn, name="p"), mode="fused")
+    exe = FusedEngine(strict_compile=True).bind(flow(fn, name="p"))
     assert exe.run({"x": 1.0})[fn.__name__] is not None
     assert exe.fallbacks() == {}
 
