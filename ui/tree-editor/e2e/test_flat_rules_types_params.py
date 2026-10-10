@@ -10,23 +10,17 @@ from flat_rules_ui import (
     add_categorical_type,
     add_output_column,
     open_custom_types,
+    open_parameters,
     open_tab,
     output_cell,
     rule_card,
     save,
 )
 from seed import export_document
-
-LIMIT = {"limit": {"type": "Float64", "default_value": 1000}}
-
+from test_flat_rule_params import LIMIT
 
 def type_defs(reply: dict) -> dict:
     return reply["project_data"]["output"]["type_defs"]
-
-
-def params_dialog(page: Page):
-    page.get_by_role("button", name=re.compile(r"^Manage Parameters")).click()
-    return page.get_by_role("dialog", name="Manage Parameters")
 
 
 def test_categorical_type_is_added_and_saved_valid(signed_in: Page):
@@ -106,7 +100,7 @@ def test_unused_type_can_be_deleted(signed_in: Page):
     open_tab(signed_in, "Configure Outputs")
     dialog = open_custom_types(signed_in)
     add_categorical_type(signed_in, "Tier", ["gold"])
-    dialog.locator(".grid .cursor-pointer").filter(has_text="Tier").get_by_role("button").last.click()
+    dialog.get_by_test_id("custom-type-delete").click()
     dialog.get_by_role("button", name="Close").click()
 
     assert type_defs(save(signed_in)) == {}
@@ -123,7 +117,7 @@ def test_deleting_a_type_a_column_uses_is_blocked_or_warned(signed_in: Page):
     dialog = open_custom_types(signed_in)
     messages: list[str] = []
     signed_in.on("dialog", lambda d: messages.append(d.message))
-    dialog.locator(".grid .cursor-pointer").filter(has_text="Tier").get_by_role("button").last.click()
+    dialog.get_by_test_id("custom-type-delete").click()
 
     assert any("used" in m or "column" in m for m in messages) or dialog.get_by_text(re.compile("used|column")).count()
 
@@ -139,7 +133,7 @@ def test_removing_a_category_a_record_uses_shows_the_delete_impact_and_cleans_up
     signed_in.get_by_role("option", name="silver", exact=True).click()
     dialog = open_custom_types(signed_in)
     dialog.get_by_role("heading", name="Tier").click()
-    dialog.get_by_text("silver", exact=True).locator("xpath=following-sibling::*[1]").click()
+    dialog.get_by_text("silver", exact=True).locator("..").get_by_test_id("chip-remove").click()
     dialog.get_by_role("button", name="Save Type").click()
 
     impact = signed_in.get_by_role("dialog").filter(has_text="Delete Category?")
@@ -165,7 +159,7 @@ def test_cancelling_the_delete_impact_keeps_the_category(signed_in: Page):
     signed_in.get_by_role("option", name="silver", exact=True).click()
     dialog = open_custom_types(signed_in)
     dialog.get_by_role("heading", name="Tier").click()
-    dialog.get_by_text("silver", exact=True).locator("xpath=following-sibling::*[1]").click()
+    dialog.get_by_text("silver", exact=True).locator("..").get_by_test_id("chip-remove").click()
     dialog.get_by_role("button", name="Save Type").click()
     signed_in.get_by_role("dialog").filter(has_text="Delete Category?").get_by_role("button", name="Cancel").click()
     dialog.get_by_role("button", name="Cancel").first.click()
@@ -177,7 +171,7 @@ def test_cancelling_the_delete_impact_keeps_the_category(signed_in: Page):
 
 def test_parameter_dialog_offers_the_same_types_the_document_accepts(signed_in: Page):
     open_doc(signed_in, DEFAULT)
-    dialog = params_dialog(signed_in)
+    dialog = open_parameters(signed_in)
     dialog.get_by_role("button", name="Add Your First Parameter").click()
     dialog.locator("tbody tr").get_by_role("combobox").click()
     offered = signed_in.get_by_role("option").all_inner_texts()
@@ -196,7 +190,7 @@ def first_param_row(dialog):
 
 def test_unused_parameter_can_be_renamed_and_the_new_name_is_saved(signed_in: Page):
     open_doc(signed_in, DEFAULT, parameters=LIMIT)
-    dialog = params_dialog(signed_in)
+    dialog = open_parameters(signed_in)
     first_param_row(dialog).get_by_role("textbox").first.fill("cap")
     dialog.get_by_role("button", name="Save Changes").click()
 
@@ -205,7 +199,7 @@ def test_unused_parameter_can_be_renamed_and_the_new_name_is_saved(signed_in: Pa
 
 def test_unused_parameter_can_be_deleted_and_the_deletion_is_saved(signed_in: Page):
     open_doc(signed_in, DEFAULT, parameters=LIMIT)
-    dialog = params_dialog(signed_in)
+    dialog = open_parameters(signed_in)
     first_param_row(dialog).get_by_title("Delete parameter").click()
     dialog.get_by_role("button", name="Save Changes").click()
 
@@ -214,7 +208,7 @@ def test_unused_parameter_can_be_deleted_and_the_deletion_is_saved(signed_in: Pa
 
 def test_parameter_in_use_is_marked_and_cannot_be_renamed_or_deleted(signed_in: Page):
     open_doc(signed_in, uses_limit(), parameters=LIMIT)
-    dialog = params_dialog(signed_in)
+    dialog = open_parameters(signed_in)
     row = first_param_row(dialog)
 
     expect(row.get_by_text("Yes")).to_be_visible()
@@ -227,12 +221,12 @@ def test_parameter_stays_in_use_until_every_use_is_gone(signed_in: Page):
     open_doc(signed_in, uses_limit(), uses_limit(">"), parameters=LIMIT)
     # switch rule 1's threshold back to a plain number
     rule_card(signed_in, 0).get_by_role("button", name="#").first.click()
-    dialog = params_dialog(signed_in)
+    dialog = open_parameters(signed_in)
     expect(first_param_row(dialog).get_by_text("Yes")).to_be_visible()
     dialog.get_by_role("button", name="Cancel").click()
 
     rule_card(signed_in, 1).get_by_role("button", name="#").first.click()
-    dialog = params_dialog(signed_in)
+    dialog = open_parameters(signed_in)
     expect(first_param_row(dialog).get_by_text("Yes")).to_have_count(0)
     expect(first_param_row(dialog).get_by_title("Delete parameter")).to_be_enabled()
 
@@ -245,7 +239,7 @@ def test_parameter_stays_in_use_until_every_use_is_gone(signed_in: Page):
 ])
 def test_invalid_new_parameter_name_is_refused_in_the_dialog_with_a_reason(signed_in: Page, name, message):
     open_doc(signed_in, DEFAULT)
-    dialog = params_dialog(signed_in)
+    dialog = open_parameters(signed_in)
     dialog.get_by_role("button", name="Add Your First Parameter").click()
     dialog.get_by_placeholder("parameter_name").fill(name)
     dialog.get_by_role("button", name="Add", exact=True).click()
@@ -255,7 +249,7 @@ def test_invalid_new_parameter_name_is_refused_in_the_dialog_with_a_reason(signe
 
 def test_duplicate_parameter_name_is_refused_in_the_dialog(signed_in: Page):
     open_doc(signed_in, DEFAULT, parameters=LIMIT)
-    dialog = params_dialog(signed_in)
+    dialog = open_parameters(signed_in)
     dialog.get_by_role("button", name="Add Parameter").click()
     dialog.get_by_placeholder("parameter_name").fill("limit")
     dialog.get_by_role("button", name="Add", exact=True).click()
@@ -270,7 +264,7 @@ OFFERED_TYPES = ["String", "Int64", "Float64", "Boolean", "Date", "Datetime", "I
 
 def test_every_type_the_parameter_dialog_offers_saves_a_valid_document(signed_in: Page):
     open_doc(signed_in, DEFAULT)
-    dialog = params_dialog(signed_in)
+    dialog = open_parameters(signed_in)
     dialog.get_by_role("button", name="Add Your First Parameter").click()
     for index, dtype in enumerate(OFFERED_TYPES):
         if index:

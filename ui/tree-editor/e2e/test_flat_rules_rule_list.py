@@ -5,11 +5,10 @@ import time
 import pytest
 from playwright.sync_api import Page, expect
 
-from flat_docs import APPROVE, OUTPUT3, decisions_for, document, open_doc, run_frame
+from flat_docs import APPROVE, OUTPUT3, SMALL, decisions_for, document, open_doc, run_frame
 from flat_rules_ui import rename_rule, rule_card, rule_names, save
 from seed import create_project, export_document, get_project
 
-SMALL = {"type": "unary", "condition": {"type": "unary", "op": "<=", "feature": "amount", "threshold": 5}, "then": APPROVE}
 
 
 def numbered(count: int) -> list[dict]:

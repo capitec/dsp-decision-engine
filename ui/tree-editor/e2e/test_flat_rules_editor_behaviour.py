@@ -5,11 +5,10 @@ import re
 import pytest
 from playwright.sync_api import Page, expect
 
-from flat_docs import APPROVE, open_doc
-from flat_rules_ui import export, fill_number, rename_rule, rule_card, rule_names, save, unary_rule
+from flat_docs import SMALL, open_doc
+from flat_rules_ui import export, fill_number, open_parameters, rename_rule, rule_card, rule_names, save, unary_rule
 from seed import get_project
 
-SMALL = {"type": "unary", "condition": {"type": "unary", "op": "<=", "feature": "amount", "threshold": 5}, "then": APPROVE}
 UNSAVED = re.compile(r"unsaved|not saved", re.I)
 
 
@@ -93,8 +92,7 @@ def test_export_after_saving_includes_the_edit(signed_in: Page, tmp_path):
 
 def test_escape_closes_the_parameters_dialog_without_saving_a_new_row(signed_in: Page):
     open_doc(signed_in, SMALL)
-    signed_in.get_by_role("button", name=re.compile(r"^Manage Parameters")).click()
-    dialog = signed_in.get_by_role("dialog", name="Manage Parameters")
+    dialog = open_parameters(signed_in)
     dialog.get_by_role("button", name="Add Your First Parameter").click()
     dialog.get_by_placeholder("parameter_name").fill("draft")
     signed_in.keyboard.press("Escape")  # first closes the new row, the second the dialog
@@ -107,8 +105,7 @@ def test_escape_closes_the_parameters_dialog_without_saving_a_new_row(signed_in:
 
 def test_enter_in_the_new_parameter_name_adds_the_row(signed_in: Page):
     open_doc(signed_in, SMALL)
-    signed_in.get_by_role("button", name=re.compile(r"^Manage Parameters")).click()
-    dialog = signed_in.get_by_role("dialog", name="Manage Parameters")
+    dialog = open_parameters(signed_in)
     dialog.get_by_role("button", name="Add Your First Parameter").click()
     dialog.get_by_placeholder("parameter_name").fill("limit")
     dialog.get_by_placeholder("parameter_name").press("Enter")
