@@ -143,7 +143,7 @@ def try_config(path: str, rows: list[dict], params: dict | None = None) -> dict:
     found = check(path, doc)
     if found:
         return {"problems": found}
-    out = ConfigurableStep.load(doc).run(pl.DataFrame(rows), params=params)
+    out = ConfigurableStep.load(doc).run(pl.DataFrame(rows), params=params, engine="interpreted")
     return {"columns": out.columns, "rows": json_safe(out.to_dicts())}
 
 
