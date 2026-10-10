@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 import pytest
+from decikit.steps.trees.schema import load_document
 
 from dsp_decikit.db.models.projects import ProjectType
 from dsp_decikit.services.documents import (
@@ -9,6 +10,7 @@ from dsp_decikit.services.documents import (
     check_document,
     default_project_data,
     detect_project_type,
+    imported_document,
     validation_errors,
 )
 
@@ -105,3 +107,46 @@ def test_openapi_contains_document_types():
         "ParamRef",
         "TreeDocument",
     } <= set(schemas)
+
+
+def _flat_with_param(default):
+    doc = default_project_data(ProjectType.FLAT_RULE)
+    doc["output"]["dtypes"] = [["decision", "String"]]
+    doc["parameters"] = {"limit": {"type": "String", "default_value": default}}
+    doc["rules"] = [{"rule": {"type": "unary", "then": {"type": "leaf", "result_idx": -1},
+                              "condition": {"op": "<=", "feature": "amount", "threshold": {"param": "limit"}}}}]
+    return doc
+
+
+def test_parameter_default_the_tree_cannot_use_is_reported_under_parameters():
+    errors = validation_errors(_flat_with_param(""))
+    assert [e["loc"] for e in errors] == [["parameters", "limit"]]
+    assert "limit" in errors[0]["msg"] and "float" in errors[0]["msg"]
+
+
+@pytest.mark.parametrize("default", [1000, 999.5, "1000", None])
+def test_parameter_default_the_tree_can_use_is_valid(default):
+    assert validation_errors(_flat_with_param(default)) == []
+
+
+def test_a_step_document_imports_as_its_tree():
+    tree = default_project_data(ProjectType.TREE)
+    step = {"type": "tree", "name": "campaign", "path_output": "path", "tree": tree}
+    assert imported_document(step) == tree
+    assert imported_document(tree) == tree
+
+
+@pytest.mark.parametrize("data", [{"type": "rule_set", "rules": {}}, {"a": 1}])
+def test_a_document_that_is_no_tree_is_refused_naming_what_it_is(data):
+    with pytest.raises(ValueError, match="not a tree") as e:
+        detect_project_type(data)
+    assert data.get("type", "not a tree") in str(e.value)
+
+
+def test_a_one_rule_flat_document_imports_as_a_prioritized_set_that_runs_the_same():
+    rule = {"meta": {"name": "only"}, "rule": {"type": "leaf", "result_idx": 0}}
+    output = {"dtypes": [["d", "String"]], "data": [{"d": "x"}]}
+    flat = {"type": "flat_rule", "rule": rule, "output": output}
+    imported = imported_document(flat)
+    assert detect_project_type(imported) == ProjectType.FLAT_RULE
+    assert load_document(imported).to_tree().model_dump() == load_document(flat).to_tree().model_dump()

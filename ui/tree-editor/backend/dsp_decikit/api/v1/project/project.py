@@ -2,6 +2,8 @@ import typing as t
 import uuid
 from datetime import datetime, timezone
 import json
+import re
+from urllib.parse import quote
 
 import decikit
 
@@ -32,6 +34,7 @@ from dsp_decikit.services.documents import (
     check_document,
     default_project_data,
     detect_project_type,
+    imported_document,
     validation_errors,
 )
 
@@ -179,6 +182,11 @@ async def _check_project_access(
 # ================================
 
 
+def _newest_first(projects: t.List[ProjectResponse]) -> t.List[ProjectResponse]:
+    # Paging slices this list, so its order must not depend on how Postgres happens to return rows.
+    return sorted(projects, key=lambda p: (p.updated_at, p.id), reverse=True)
+
+
 @router.get("/projects", response_model=Page[ProjectResponse])
 async def list_projects(
     current_user: SessionInfo = Depends(get_current_user_session),
@@ -200,8 +208,8 @@ async def list_projects(
             query = select(Project)
             if search:
                 query = query.where(
-                    (Project.name.ilike(f"%{search}%"))
-                    | (Project.description.ilike(f"%{search}%"))
+                    (Project.name.icontains(search, autoescape=True))
+                    | (Project.description.icontains(search, autoescape=True))
                 )
             if project_type:
                 query = query.where(Project.project_type == project_type)
@@ -222,7 +230,7 @@ async def list_projects(
                     )
                 )
 
-            return paginate(project_responses, params)
+            return paginate(_newest_first(project_responses), params)
 
         # Get user's teams for shared project lookup
         user_teams = await get_user_teams(current_user)
@@ -231,8 +239,8 @@ async def list_projects(
         owned_query = select(Project).where(Project.created_by == current_user.user_id)
         if search:
             owned_query = owned_query.where(
-                (Project.name.ilike(f"%{search}%"))
-                | (Project.description.ilike(f"%{search}%"))
+                (Project.name.icontains(search, autoescape=True))
+                | (Project.description.icontains(search, autoescape=True))
             )
         if project_type:
             owned_query = owned_query.where(Project.project_type == project_type)
@@ -250,8 +258,8 @@ async def list_projects(
         )
         if search:
             shared_query = shared_query.where(
-                (Project.name.ilike(f"%{search}%"))
-                | (Project.description.ilike(f"%{search}%"))
+                (Project.name.icontains(search, autoescape=True))
+                | (Project.description.icontains(search, autoescape=True))
             )
         if project_type:
             shared_query = shared_query.where(Project.project_type == project_type)
@@ -270,8 +278,8 @@ async def list_projects(
         )
         if search:
             team_shared_query = team_shared_query.where(
-                (Project.name.ilike(f"%{search}%"))
-                | (Project.description.ilike(f"%{search}%"))
+                (Project.name.icontains(search, autoescape=True))
+                | (Project.description.icontains(search, autoescape=True))
             )
         if project_type:
             team_shared_query = team_shared_query.where(
@@ -306,7 +314,7 @@ async def list_projects(
                 )
                 seen_project_ids.add(project.id)
 
-        return paginate(project_responses, params)
+        return paginate(_newest_first(project_responses), params)
 
 
 @router.post("/projects", response_model=ProjectCreateResponse)
@@ -663,7 +671,7 @@ async def search_users(q: str, _: SessionInfo = Depends(get_current_user_session
     async with db_session() as session:
         query = (
             select(User.id, User.email, User.full_name)
-            .where(User.email.ilike(f"%{q}%"))
+            .where(User.email.icontains(q, autoescape=True))
             .where(User.is_active == True)
             .limit(10)
         )
@@ -687,7 +695,7 @@ async def search_teams(q: str, _: SessionInfo = Depends(get_current_user_session
     async with db_session() as session:
         query = (
             select(Team.id, Team.name, Team.description)
-            .where(Team.name.ilike(f"%{q}%"))
+            .where(Team.name.icontains(q, autoescape=True))
             .limit(10)
         )
         result = await session.execute(query)
@@ -725,22 +733,25 @@ async def export_project(
         )
 
     export_data = dict(project.project_data)
+    # The document's own metadata (its name, description) wins over the project's name; the stamp is fresh.
     export_data["metadata"] = {
+        "name": project.name,
         **(export_data.get("metadata") or {}),
         "project_id": str(project.id),
-        "name": project.name,
         "project_type": project.project_type.value,
         "exported_at": datetime.now(timezone.utc).isoformat(),
         "decikit_version": decikit.__version__,
     }
 
     formatted_json = json.dumps(export_data, indent=2, ensure_ascii=False)
-    filename = project.name.replace(" ", "_")
+    # Any name may hold quotes or non-Latin-1 characters: an ASCII fallback plus the RFC 5987 UTF-8 form
+    filename = project.name.replace(" ", "_") + "_export.json"
+    fallback = re.sub(r"[^A-Za-z0-9._-]", "_", filename)
     return Response(
         content=formatted_json,
         media_type="application/json",
         headers={
-            "Content-Disposition": f'attachment; filename="{filename}_export.json"'
+            "Content-Disposition": f"attachment; filename=\"{fallback}\"; filename*=UTF-8''{quote(filename)}"
         },
     )
 
@@ -766,6 +777,7 @@ async def import_project(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to read file: {str(e)}")
 
+    project_data_dict = imported_document(project_data_dict)
     try:
         detected_type = detect_project_type(project_data_dict)
     except ValueError as e:

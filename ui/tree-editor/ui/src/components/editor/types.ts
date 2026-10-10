@@ -87,7 +87,8 @@ export type CasesIsInNodeData = {
 
 // Recursive type for composite conditions
 export interface CompositeCondition {
-    logic_op: TLogicOp;
+    type?: "composite";
+    op: TLogicOp;
     conditions: (UnaryCondition | CompositeCondition)[];
 }
 
@@ -100,7 +101,8 @@ export interface UnaryCondition {
 export type CompositeNodeData = {
     type: "composite";
     id?: string;
-    condition: CompositeCondition;
+    op: TLogicOp;
+    conditions: (UnaryCondition | CompositeCondition)[];
 };
 
 export type TreeNode = LeafNodeData | UnaryNodeData | CasesRangesNodeData | CasesStringMatchNodeData | CasesIsInNodeData | CompositeNodeData;

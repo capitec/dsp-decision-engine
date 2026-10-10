@@ -19,7 +19,9 @@ import { UnaryOperatorSelector } from '../shared-tree/UnaryOperatorSelector';
 import { CompositeLogicSelector } from '../shared-tree/CompositeLogicSelector';
 import { ComputedFeatureInput } from '../shared-tree/ComputedFeatureInput';
 import { CompositeConditionEditor } from './CompositeConditionEditor';
+import { copyWithNewIds } from './copyNode';
 import { hasErrorAtPath, getErrorAtPath } from '@/utils/flat-rule-validation-parser';
+import { boundLabel } from '@/utils/param-refs';
 import type { RuleTableRow, RuleBranch, RangeCondition, RuleCondition, LeafRuleNode, CompositeRuleNode } from './types';
 import { ParameterOption } from '../shared-tree/ParameterizedNumericInput';
 import {
@@ -238,6 +240,7 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
   return (
     <div
       key={node.id}
+      data-testid="rule-node"
       className={`border rounded-md p-2 mb-1 ${bgColor} ${textColor} ${
         isFocused ? 'ring-2 ring-blue-400 shadow-md' : ''
       } ${nodeHasError ? 'ring-2 ring-red-500' : ''}`}
@@ -245,7 +248,7 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
     >
       {/* Error indicator badge */}
       {nodeHasError && (
-        <div className="absolute -top-2 -left-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
+        <div data-testid="node-error" className="absolute -top-2 -left-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
           !
         </div>
       )}
@@ -289,6 +292,7 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
                   id: node.id,
                   type: 'cases',
                   op: 'ranges',
+                  strict: false,
                   feature: '',
                   conditions: [],
                   branches: [],
@@ -306,7 +310,7 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
               }
             }}
           >
-            <SelectTrigger className="w-28">
+            <SelectTrigger className="w-28" data-testid="node-type">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -328,6 +332,7 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
                   updateNode(treeId, node.id, {
                     type: 'cases',
                     op: 'ranges',
+                    strict: false,
                     feature: currentFeature,
                     conditions: [],
                     branches: [],
@@ -354,7 +359,7 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
                 }
               }}
             >
-              <SelectTrigger className="w-32">
+              <SelectTrigger className="w-32" data-testid="cases-op">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -377,14 +382,14 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
 
                   // Clear operator-specific fields when changing operators
                   if (['<=', '<', '==', '>', '>=', '!='].includes(newOp)) {
-                    newCondition = { type: 'unary', op: newOp, feature: currentFeature, threshold: 0 };
+                    newCondition = { type: 'unary', op: newOp, feature: currentFeature, threshold: (node.condition as any).threshold ?? 0 };
                   } else if (newOp === 'between') {
                     newCondition = { type: 'unary', op: newOp, feature: currentFeature, min: null, max: null };
                   } else if (newOp === 'isin') {
                     newCondition = { type: 'unary', op: newOp, feature: currentFeature, values: [] };
                   } else if (newOp === 'string_match') {
                     newCondition = { type: 'unary', op: newOp, feature: currentFeature, patterns: [''], match_type: 'exact', case_sensitive: true, trim_whitespace: false };
-                  } else if (newOp === 'is_null' || newOp === 'is_not_null' || newOp === 'is_true' || newOp === 'is_false') {
+                  } else if (newOp === 'is_true' || newOp === 'is_false') {
                     newCondition = { type: 'unary', op: newOp, feature: currentFeature };
                   }
 
@@ -460,7 +465,8 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
             </div>
           )}
           
-          {node.type !== 'leaf' && (
+          {/* Only a cases node has a list of branches; unary and composite nodes have THEN/OTHERWISE */}
+          {node.type === 'cases' && (
             <>
               <Button
                 variant="outline"
@@ -492,34 +498,7 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
                 const nodeToUse = copiedNode;
 
                 if (nodeToUse) {
-                  // Deep copy the node with fresh IDs to avoid conflicts
-                  const deepCopyWithNewIds = (originalNode: RuleTableRow): RuleTableRow => {
-                    const base = {
-                      ...originalNode,
-                      id: crypto.randomUUID(),
-                    };
-
-                    // Handle different node types
-                    if (originalNode.type === 'unary' || originalNode.type === 'composite') {
-                      return {
-                        ...base,
-                        then: originalNode.then ? deepCopyWithNewIds(originalNode.then) : originalNode.then,
-                        otherwise: originalNode.otherwise ? deepCopyWithNewIds(originalNode.otherwise) : originalNode.otherwise,
-                      } as RuleTableRow;
-                    }
-
-                    if (originalNode.type === 'cases') {
-                      return {
-                        ...base,
-                        branches: originalNode.branches?.map(branch => deepCopyWithNewIds(branch)),
-                        otherwise: originalNode.otherwise ? deepCopyWithNewIds(originalNode.otherwise) : originalNode.otherwise,
-                      } as RuleTableRow;
-                    }
-
-                    return base as RuleTableRow;
-                  };
-
-                  const nodeWithNewIds = deepCopyWithNewIds(nodeToUse);
+                  const nodeWithNewIds = copyWithNewIds(nodeToUse);
 
                   // Paste the node by replacing this node
                   updateNode(treeId, node.id, nodeWithNewIds);
@@ -660,7 +639,6 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
                     value={node.feature || ''}
                     onChange={(newFeature: string | { type: 'computed'; expression: string }) => updateNode(treeId, node.id, { feature: newFeature } as any)}
                     availableFeatures={availableFeatures}
-                    availableParameters={availableParameters}
                   />
                 </div>
 
@@ -673,7 +651,7 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
                         value={(node as any).match_type || 'exact'}
                         onValueChange={(value) => updateNode(treeId, node.id, { match_type: value } as any)}
                       >
-                        <SelectTrigger className="w-32 h-8">
+                        <SelectTrigger className="w-32 h-8" data-testid="match-type">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -710,7 +688,7 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
                 <div className="mt-2 p-2 rounded bg-white bg-opacity-60">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <Checkbox
-                      checked={(node as any).strict ?? false}
+                      checked={(node as any).strict ?? true}
                       onCheckedChange={(checked) => {
                         const isEnablingStrictMode = !!checked;
 
@@ -732,7 +710,7 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
                     <span className="text-sm text-gray-700">Strict Mode (auto-infer lower bounds)</span>
                   </label>
                   <p className="text-xs text-gray-500 mt-1 ml-6">
-                    {(node as any).strict
+                    {((node as any).strict ?? true)
                       ? 'Only upper bounds needed. Lower bounds auto-filled from previous condition.'
                       : 'Manual mode: specify both min and max for each range.'}
                   </p>
@@ -760,7 +738,7 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
                       {/* Table rows */}
                       <div className="divide-y divide-gray-200">
                       {node.conditions.map((condition, idx) => {
-                        const isStrictMode = (node as any).strict ?? false;
+                        const isStrictMode = (node as any).strict ?? true;
                         const prevMax = idx > 0 ? (node.conditions[idx - 1].when as any).max : null;
                         const displayMin = isStrictMode ? prevMax : (condition.when as any).min;
 
@@ -770,11 +748,12 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
                             <div>
                               {isStrictMode ? (
                                 <div className="text-xs text-gray-500 px-2 py-1 bg-gray-100 rounded h-8 flex items-center">
-                                  {idx === 0 ? '-∞' : displayMin ?? '-∞'}
+                                  {idx === 0 ? '-∞' : boundLabel(displayMin)}
                                 </div>
                               ) : (
                                 <ParameterizedNumericInput
                                   value={(condition.when as any).min ?? null}
+                                  allowEmpty
                                   onChange={(newValue) => {
                                     const newConditions = [...node.conditions];
                                     newConditions[idx] = { ...condition, when: { ...condition.when, min: newValue } };
@@ -796,6 +775,7 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
                             <div>
                               <ParameterizedNumericInput
                                 value={(condition.when as any).max ?? null}
+                                allowEmpty
                                 onChange={(newValue) => {
                                   const newConditions = [...node.conditions];
                                   newConditions[idx] = { ...condition, when: { ...condition.when, max: newValue } };
@@ -822,7 +802,7 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
                                   updateNode(treeId, node.id, { conditions: newConditions } as any);
                                 }}
                               >
-                                <SelectTrigger className="h-8">
+                                <SelectTrigger className="h-8" data-testid="case-then">
                                   <SelectValue placeholder="Branch" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -861,7 +841,7 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
                             size="sm"
                             className="h-8 text-xs border-dashed w-full"
                             onClick={() => {
-                              const isStrictMode = (node as any).strict ?? false;
+                              const isStrictMode = (node as any).strict ?? true;
                               const prevMax = node.conditions.length > 0
                                 ? (node.conditions[node.conditions.length - 1].when as any).max
                                 : null;
@@ -912,7 +892,7 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
                                 }}
                                 availableParameters={availableParameters}
                                 label=""
-                                placeholder="Type integers and press Enter"
+                                placeholder="Type numbers and press Enter"
                                 onManageParameters={onManageParameters}
                                 showManageParameters={true}
                                 showLabel={false}
@@ -929,7 +909,7 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
                                   updateNode(treeId, node.id, { conditions: newConditions } as any);
                                 }}
                               >
-                                <SelectTrigger className="h-8">
+                                <SelectTrigger className="h-8" data-testid="case-then">
                                   <SelectValue placeholder="Branch" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -1069,7 +1049,7 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
                                   updateNode(treeId, node.id, { conditions: newConditions } as any);
                                 }}
                               >
-                                <SelectTrigger className="h-8">
+                                <SelectTrigger className="h-8" data-testid="case-then">
                                   <SelectValue placeholder="Branch" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -1136,14 +1116,12 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
                         onClick={() => {
                           // Remove branch and update condition references
                           const newBranches = node.branches.filter((_, i) => i !== branchIdx);
-                          const newConditions = node.conditions.map(cond => ({
-                            ...cond,
-                            then: cond.then > branchIdx ? cond.then - 1 : cond.then === branchIdx ? 0 : cond.then
-                          }));
-                          // Note: otherwise is a direct child node, not an index - no need to update it
+                          const shift = (i: number) => i > branchIdx ? i - 1 : i === branchIdx ? 0 : i;
+                          const newConditions = node.conditions.map(cond => ({ ...cond, then: shift(cond.then) }));
                           updateNode(treeId, node.id, {
                             branches: newBranches,
-                            conditions: newConditions
+                            conditions: newConditions,
+                            otherwise: shift(node.otherwise ?? 0)
                           } as any);
                         }}
                         title="Delete branch"
@@ -1185,7 +1163,25 @@ export const NodeBlock: React.FC<NodeBlockProps> = ({
                 </Button>
               </div>
 
-              {/* OTHERWISE branch - handled by onAddOtherwiseBranch callback, rendered below */}
+              {/* Where a value no condition matches goes: an index into the branches above */}
+              <div className="mt-2 flex items-center gap-2 text-xs">
+                <span className="font-medium text-gray-600">Otherwise →</span>
+                <Select
+                  value={String(node.otherwise ?? 0)}
+                  onValueChange={(value) => updateNode(treeId, node.id, { otherwise: parseInt(value) } as any)}
+                >
+                  <SelectTrigger className="h-8 w-32" data-testid="cases-otherwise">
+                    <SelectValue placeholder="Branch" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {node.branches.map((_, branchIdx) => (
+                      <SelectItem key={branchIdx} value={String(branchIdx)}>
+                        Branch {branchIdx}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </>
           );
         }

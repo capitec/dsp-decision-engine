@@ -275,7 +275,7 @@ async def search_users(
         query = (
             select(User)
             .where(User.is_active == True)
-            .where((User.email.ilike(f"%{q}%")) | (User.full_name.ilike(f"%{q}%")))
+            .where(User.email.icontains(q, autoescape=True) | User.full_name.icontains(q, autoescape=True))
             .limit(limit)
         )
         result = await session.execute(query)

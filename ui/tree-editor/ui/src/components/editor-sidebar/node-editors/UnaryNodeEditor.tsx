@@ -49,14 +49,14 @@ export const UnaryNodeEditor: React.FC<UnaryNodeEditorProps> = ({ node }) => {
               let newCondition: any = { ...condition, op: newOp };
 
               if (['<=', '<', '==', '>', '>=', '!='].includes(newOp)) {
-                newCondition = { op: newOp, feature: condition.feature || '', threshold: 0 };
+                newCondition = { op: newOp, feature: condition.feature || '', threshold: (condition as any).threshold ?? 0 };
               } else if (newOp === 'between') {
                 newCondition = { op: newOp, feature: condition.feature || '', min: null, max: null };
               } else if (newOp === 'isin') {
                 newCondition = { op: newOp, feature: condition.feature || '', values: [] };
               } else if (newOp === 'string_match') {
                 newCondition = { op: newOp, feature: condition.feature || '', patterns: [''], match_type: 'exact', case_sensitive: true, trim_whitespace: false };
-              } else if (newOp === 'is_null' || newOp === 'is_not_null' || newOp === 'is_true' || newOp === 'is_false') {
+              } else if (newOp === 'is_true' || newOp === 'is_false') {
                 newCondition = { op: newOp, feature: condition.feature || '' };
               }
 

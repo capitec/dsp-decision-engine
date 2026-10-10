@@ -1,12 +1,13 @@
 import React from 'react';
 import { ParameterizedNumericInput, ParameterOption } from '../shared-tree/ParameterizedNumericInput';
 import type { ParameterReference } from '@/types/tree-types';
+import { boundLabel } from '@/utils/param-refs';
 
 interface RangeInputProps {
   minValue: number | ParameterReference | null | undefined;
   maxValue: number | ParameterReference | null | undefined;
-  onMinChange: (value: number | ParameterReference | undefined) => void;
-  onMaxChange: (value: number | ParameterReference | undefined) => void;
+  onMinChange: (value: number | ParameterReference | null) => void;
+  onMaxChange: (value: number | ParameterReference | null) => void;
   availableParameters?: ParameterOption[];
   onManageParameters?: () => void;
   disabled?: boolean;
@@ -36,13 +37,8 @@ export const RangeInput: React.FC<RangeInputProps> = ({
     const upperOp = rangeConfig === 'lower_inclusive' ? '<' : '≤';
 
     // Format previous value for display
-    const formatValue = (val: number | ParameterReference | null | undefined): string => {
-      if (val === null || val === undefined) return '-∞';
-      if (typeof val === 'object' && 'name' in val) return `$${val.name}`;
-      if (val === Infinity) return '+∞';
-      if (val === -Infinity) return '-∞';
-      return String(val);
-    };
+    const formatValue = (val: number | ParameterReference | null | undefined): string =>
+      val === Infinity ? '+∞' : val === -Infinity ? '-∞' : boundLabel(val);
 
     return (
       <div className="flex items-center gap-2 flex-wrap">
@@ -61,7 +57,7 @@ export const RangeInput: React.FC<RangeInputProps> = ({
               // Ensure min stays null in strict mode
               onMaxChange(value);
               if (minValue !== null && minValue !== undefined) {
-                onMinChange(undefined);
+                onMinChange(null);
               }
             }}
             availableParameters={availableParameters}

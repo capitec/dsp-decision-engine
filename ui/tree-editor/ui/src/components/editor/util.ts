@@ -391,7 +391,7 @@ export const generateDefaultNodeName = (node: Node): string => {
     }
     return `${feature} cases(${conditions.length})`;
   } else if (data.type === "composite") {
-    return `Composite (${data.condition.logic_op})`;
+    return `Composite (${data.op})`;
   }
 
   return 'Unselected';

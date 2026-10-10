@@ -95,7 +95,7 @@ async def list_folders(
 
         # Search filter
         if search:
-            stmt = stmt.where(Folder.name.ilike(f"%{search}%"))
+            stmt = stmt.where(Folder.name.icontains(search, autoescape=True))
 
         # Access filter: owned OR shared
         stmt = stmt.where(

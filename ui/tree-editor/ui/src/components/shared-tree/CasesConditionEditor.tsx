@@ -5,6 +5,7 @@ import { ParameterizedNumericInput } from './ParameterizedNumericInput';
 import { ParameterizedCategoricalInput } from './ParameterizedCategoricalInput';
 import { ParameterizedStringInput } from './ParameterizedStringInput';
 import { ParameterOption } from './ParameterizedNumericInput';
+import { boundLabel } from '@/utils/param-refs';
 
 interface CasesConditionEditorProps {
   caseType: 'cases_ranges' | 'cases_isin' | 'cases_string_match';
@@ -89,11 +90,12 @@ export const CasesConditionEditor: React.FC<CasesConditionEditorProps> = ({
                 <span className="font-medium text-gray-600 text-sm w-16">Min:</span>
                 {strictMode ? (
                   <div className="text-xs text-gray-500 px-2 py-1 bg-gray-100 rounded h-8 flex items-center flex-1">
-                    {index === 0 ? '-∞' : (conditions[index - 1]?.max ?? '-∞')}
+                    {index === 0 ? '-∞' : boundLabel(conditions[index - 1]?.max)}
                   </div>
                 ) : (
                   <ParameterizedNumericInput
                     value={condition.min ?? null}
+                    allowEmpty
                     onChange={(newValue) => updateCondition(index, { min: newValue })}
                     availableParameters={availableParameters}
                     label=""
@@ -109,6 +111,7 @@ export const CasesConditionEditor: React.FC<CasesConditionEditorProps> = ({
                 <span className="font-medium text-gray-600 text-sm w-16">Max:</span>
                 <ParameterizedNumericInput
                   value={condition.max ?? null}
+                  allowEmpty
                   onChange={(newValue) => updateCondition(index, { max: newValue })}
                   availableParameters={availableParameters}
                   label=""
