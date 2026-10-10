@@ -425,8 +425,10 @@ def _typed_dtype(annotation: Any) -> pl.DataType | None:
 
 
 def _floats(value: Any, dtype: pl.DataType | None) -> Any:
-    # `value` with every int in a Float64 field of `dtype` a float: polars builds a Struct strictly
-    # whatever `strict` says, so an int in a float field of a list inside a struct raises.
+    # `value` with every int in a Float64 field of `dtype` a float and every numpy scalar its Python
+    # value: polars builds a Struct strictly whatever `strict` says, so either raises in a list inside one.
+    if isinstance(value, np.generic):
+        value = value.item()
     if dtype == pl.Float64:
         return float(value) if isinstance(value, int) else value
     if isinstance(dtype, pl.Struct) and isinstance(value, dict):
