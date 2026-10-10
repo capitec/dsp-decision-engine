@@ -166,7 +166,7 @@ def test_deleting_a_shared_project_from_the_list_tells_the_user_and_keeps_it(sig
     assert get_project(signed_in, project)["name"] == "Not yours"
 
 
-def test_a_read_only_user_cannot_share_the_project_onward(signed_in: Page, other: Other, browser, base_url):
+def test_a_read_only_user_cannot_share_the_project_onward(signed_in: Page, other: Other):
     project = create_project(signed_in, "Closed", flat_document())["id"]
     share_project(signed_in, project, other.id, "read")
 
@@ -219,7 +219,7 @@ def test_another_users_unshared_project_cannot_be_deleted(signed_in: Page, other
 def test_a_missing_project_id_is_a_clear_not_found(signed_in: Page):
     signed_in.goto("/flat-rules/00000000-0000-4000-8000-000000000000")
 
-    expect(signed_in.get_by_text("Project not found").or_(signed_in.get_by_text(re.compile("not found", re.I))).first).to_be_visible()
+    expect(signed_in.get_by_text(re.compile("not found", re.I)).first).to_be_visible()
 
 
 def test_a_malformed_project_id_in_the_url_is_a_clear_error(signed_in: Page):
@@ -283,6 +283,7 @@ def test_the_other_user_can_open_a_subfolder_of_a_shared_folder(signed_in: Page,
     create_folder(signed_in, "Low", parent_id=top["id"])
     share_folder(signed_in, top["id"], other.id, "read")
     open_projects(other.page)
+    expect(folder_row(other.page, "Top").get_by_label("Expand folder")).to_be_visible()
 
     expand_folder(other.page, "Top")
 
@@ -328,7 +329,8 @@ def test_another_users_unshared_folder_is_refused_by_the_api(signed_in: Page, ot
     reads = other.page.request.get(f"/api/v1/folders/{folder}")
     renames = other.page.request.put(f"/api/v1/folders/{folder}", data={"name": "mine now"})
 
-    assert (reads.status in (403, 404), renames.status in (403, 404)) == (True, True)
+    assert reads.status in (403, 404), reads.text()
+    assert renames.status in (403, 404), renames.text()
     assert [f["name"] for f in list_folders(signed_in)] == ["Hidden"]
 
 
