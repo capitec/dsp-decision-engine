@@ -12,26 +12,25 @@ function getFeatureName(feature: any): string | null {
 }
 
 /**
- * Extract unique feature names from all nodes in the tree (v3).
+ * `schema` with every column the nodes read that it lacks appended, typed as decikit reads it: a string match makes
+ * a String, an is_true/is_false a Boolean, anything else a Float64. A computed feature is not a column.
  */
-export function extractFeatures(nodes: Node[]): string[] {
-  const features = new Set<string>();
+export function withNodeFeatures(schema: [string, any][], nodes: Node[]): [string, any][] {
+  const known = new Set(schema.map(([name]) => name));
+  const found = new Map<string, string>();
+  const read = (feature: unknown, op?: string) => {
+    if (typeof feature !== 'string' || !feature || known.has(feature)) return;
+    const dtype = op === 'string_match' ? 'String' : op === 'is_true' || op === 'is_false' ? 'Boolean' : 'Float64';
+    if (!found.has(feature) || dtype !== 'Float64') found.set(feature, dtype);
+  };
+  const readCondition = (c: any) => (c?.conditions ? c.conditions.forEach(readCondition) : read(c?.feature, c?.op));
   for (const node of nodes) {
-    if ('feature' in node.data) {
-      const featureName = getFeatureName(node.data.feature);
-      if (featureName) {
-        features.add(featureName);
-      }
-    }
-    // For unary nodes, extract from condition.feature
-    if (node.data.type === 'unary' && 'condition' in node.data) {
-      const featureName = getFeatureName(node.data.condition.feature);
-      if (featureName) {
-        features.add(featureName);
-      }
-    }
+    const data: any = node.data;
+    if (data.type === 'unary') read(data.condition?.feature, data.condition?.op);
+    else if (data.type === 'cases') read(data.feature, data.op);
+    else if (data.type === 'composite') data.conditions?.forEach(readCondition);
   }
-  return Array.from(features).sort();
+  return found.size ? [...schema, ...found] : schema;
 }
 
 /**
