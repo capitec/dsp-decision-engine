@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 
-from decikit import Engine
+from decikit import InterpretedEngine
 from decikit.config import JsonFileStore
 from decikit._engine.params import merge
 from decikit.serving import RequestHandler
@@ -19,7 +19,7 @@ def base_params(mod, params, default=None):
 
 
 def _date_inputs(step):
-    return {i.name: i.annotation for i in Engine().bind(step).plan.inputs if has_date(i.annotation)}
+    return {i.name: i.annotation for i in InterpretedEngine().bind(step).plan.inputs if has_date(i.annotation)}
 
 
 def build_step(fn, file):

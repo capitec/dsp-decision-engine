@@ -1,7 +1,7 @@
 """Run a pipeline to the end and keep what each call wrote, for comparisons."""
 from __future__ import annotations
 
-from decikit import Engine
+from decikit import InterpretedEngine
 from decikit._tooling.bridge.controls import Controls
 
 
@@ -10,7 +10,7 @@ def trace(step, frame, params: dict | None, ir: dict | None = None, forces=()) -
 
     `forces` (branch arms or loop iteration counts, see `Controls.set`) need the described `ir`.
     """
-    session = Engine().bind(step).session(frame, params)
+    session = InterpretedEngine().bind(step).session(frame, params)
     if forces:
         steer(session, ir, forces)
     error = None

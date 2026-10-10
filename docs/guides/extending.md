@@ -1,13 +1,13 @@
 # Extending the decider toolkit
 
-The decider toolkit has a small number of extension points, and each is an ordinary Python class you subclass. A step type of your own loads from JSON like a tree or a table. A check runs in `decikit check` beside the built-in ones. A dataset provider reads records from your warehouse. A trace adapter sends decision evidence where your audit store wants it. A config store keeps versions in a database instead of a folder. Each of them can live in your project, or ship in an installed package that decider toolkit finds without anyone importing it.
+The decider toolkit has a small number of extension points, and each is an ordinary Python class you subclass. A step type of your own loads from JSON like a tree or a table. A check runs in `decikit check` beside the built-in ones. A dataset provider reads records from your warehouse. A trace adapter sends decision evidence where your audit store wants it. A config store keeps versions in a database instead of a folder. An engine decides how a pipeline runs. Each of them can live in your project, or ship in an installed package that decider toolkit finds without anyone importing it.
 
 ## How config finds your classes
 
-Configurable steps, checks, dataset providers, config stores, experiment metrics, plots and report blocks are each a registry root. A subclass registers itself when its class is defined, under its import path (`"credit_steps.steps:CappedMarkup"`) and under the short alias it declares as `type: Literal["capped_markup"] = "capped_markup"`. A document names the class by either spelling in its `type` field.
+Configurable steps, checks, dataset providers, config stores, engines, experiment metrics, plots and report blocks are each a registry root. A subclass registers itself when its class is defined, under its import path (`"credit_steps.steps:CappedMarkup"`) and under the short alias it declares as `type: Literal["capped_markup"] = "capped_markup"`. A document names the class by either spelling in its `type` field.
 
 <div class="diagram" markdown>
-![The registry roots: ConfigurableStep, Check, DatasetProvider, ConfigStore and the experiment Metric, Plot and Block, each with its entry-point group (decikit.steps, decikit.checks, decikit.datasets, decikit.config_stores, decikit.metrics, decikit.plots, decikit.blocks) and the documents that name types by them; trace adapters, callbacks, request handlers and field metadata are plain Python hooks instead](../assets/diagrams/guide-extending-roots.svg)
+![The registry roots: ConfigurableStep, Check, DatasetProvider, ConfigStore and the experiment Metric, Plot and Block, each with its entry-point group (decikit.steps, decikit.checks, decikit.datasets, decikit.config_stores, decikit.engines, decikit.metrics, decikit.plots, decikit.blocks) and the documents that name types by them; trace adapters, callbacks, request handlers and field metadata are plain Python hooks instead](../assets/diagrams/guide-extending-roots.svg)
 
 *Every registry root resolves a `type` tag the same way.*
 </div>
@@ -175,7 +175,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 ```
 
-The groups are `decikit.steps`, `decikit.checks`, `decikit.datasets`, `decikit.config_stores`, `decikit.metrics`, `decikit.plots` and `decikit.blocks`. On a registry miss, `resolve` loads the entry point of that name, which imports the module and registers the class. An entry point that names a class not registered under the root is still refused.
+The groups are `decikit.steps`, `decikit.checks`, `decikit.datasets`, `decikit.config_stores`, `decikit.engines`, `decikit.metrics`, `decikit.plots` and `decikit.blocks`. An engine is a settings document (`FusedEngine(strict_compile=True)`), so a third-party engine ships as an `Engine` subclass with a `type` tag and an entry point in `decikit.engines`; `pipeline.compile("mine")` and `DECIKIT_API__ENGINE__TYPE=mine` then find it. On a registry miss, `resolve` loads the entry point of that name, which imports the module and registers the class. An entry point that names a class not registered under the root is still refused.
 
 With the package installed (here into a throwaway environment with `uv run --with ./credit_steps python use_plugin.py`), a document loads the type before anything imports `credit_steps`:
 

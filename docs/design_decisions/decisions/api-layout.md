@@ -80,6 +80,6 @@ The rules that shape the public surface (layers, private names, checks, diff, th
 ## Extension points are registry roots plus entry points
 
 - Seven roots (`ConfigurableStep`, `ConfigStore`, `DatasetProvider`, `Check`, `Metric`, `Plot`, `Block`) resolve a tag by registry, then by `importlib.metadata` entry points in group `decikit.<group>`, and only ever return registered subclasses so config cannot name arbitrary code.
-- Closed on purpose: execution modes (`RUNNERS`) and IR node types. `Callback` is a plain class because callbacks are not saved with an experiment definition.
+- Closed on purpose: IR node types. Engines are a registry root (`Engine`; see `engine.md`). `Callback` is a plain class because callbacks are not saved with an experiment definition.
 - Custom step types build IR with `ctx.call` / `ctx.expand` from `decikit.ir`; relax `ctx.call` before adding a constructor.
 - See: [Package layout](../../architecture/package-layout.md) (extension points), [extending guide](../../guides/extending.md)

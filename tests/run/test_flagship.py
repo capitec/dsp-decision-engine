@@ -5,7 +5,8 @@ import polars as pl
 import pytest
 
 from decikit import flow, param
-from decikit._engine import Engine
+from decikit._engine import InterpretedEngine
+from decikit.exceptions import RegistryError
 from decikit._engine.params import ParamsError
 
 
@@ -45,12 +46,12 @@ def test_every_mode_gives_the_flagship_answer(bind):
 
 
 def test_step_run_is_the_interpreted_engine():
-    assert pipeline.run(FRAME).equals(Engine().bind(pipeline).run(FRAME))
+    assert pipeline.run(FRAME).equals(InterpretedEngine().bind(pipeline).run(FRAME))
 
 
-def test_an_unknown_mode_is_an_error_listing_the_modes():
-    with pytest.raises(ValueError, match="unknown mode 'jit'.*fused.*interpreted.*stepped"):
-        Engine().bind(pipeline, mode="jit")
+def test_an_unknown_engine_is_an_error_suggesting_the_closest_tag():
+    with pytest.raises(RegistryError, match="Did you mean 'fused'"):
+        pipeline.compile("fsued")
 
 
 def test_output_is_additive(bind):

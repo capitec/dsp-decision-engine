@@ -88,7 +88,7 @@ Named members give every step a path, such as `afford/affordable` or `offer/by_e
 
 `run` takes either shape. `run(df)` takes a polars frame and returns a frame: the input columns plus every value nothing else reads. `run(record)` takes one dict and returns a dict. A service passes a dict; analysis, back-testing and experiments pass a frame.
 
-`pipeline.run(df)` is a shortcut that runs in interpreted mode. For repeated calls, compile once with `pipeline.compile(mode)`, which returns an `Executable`, and call `run` on it as often as you like from as many threads as you like. There are three modes:
+`pipeline.run(df)` is a shortcut that runs in interpreted mode. For repeated calls, compile once with `pipeline.compile(engine)`, which returns an `Executable`, and call `run` on it as often as you like from as many threads as you like. There are three built-in engines:
 
 <div class="diagram" markdown>
 ![Three run modes over a four-step pipeline: interpreted calls every step in Python, stepped compiles each step into its own kernel with a Python driver between, fused compiles consecutive steps into one kernel; a step reading a date runs in Python in both compiled modes and splits the fused kernel](assets/diagrams/concepts-run-modes.svg)
@@ -150,7 +150,7 @@ A pipeline on its own is a Python object. These pieces turn it into something yo
 | path | A step's position in the tree, such as `credit/approved`. Keys params, errors, breakpoints and traces. |
 | run | Run a pipeline over a polars frame; returns a frame. |
 | score | Run a pipeline on one record given as a dict; returns a dict. |
-| [executable](guides/compile-and-fallback.md) | What `compile(mode)` or `Engine().bind(step, mode)` returns: a bound pipeline with `run`, `fallbacks` and `session`. |
+| [executable](guides/compile-and-fallback.md) | What `compile(mode)` or `Engine.resolve(mode)().bind(step)` returns: a bound pipeline with `run`, `fallbacks` and `session`. |
 | [interpreted, stepped, fused](guides/compile-and-fallback.md) | The three run modes: plain Python, one kernel per step, one kernel per run of steps. |
 | [fallback](guides/compile-and-fallback.md) | A step a compiled mode runs in Python because numba cannot hold its types or compile its body. Reported once by a `FallbackWarning`. |
 | [ConfigurableStep](guides/trees-tables-scorecards.md) | A step type loaded from a JSON document with a `type` tag; trees, decision tables and scorecards are the built-in ones. Your own types: [Extending the decider toolkit](guides/extending.md). |

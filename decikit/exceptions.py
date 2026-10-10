@@ -138,12 +138,12 @@ class NotIntegralError(DecikitError, ValueError):
 
 
 class EngineError(DecikitError, ValueError):
-    """An `Engine` can't run as asked: an unknown mode or validation setting, or an input frame
-    holding a column the pipeline itself produces.
+    """An `Engine` can't run as asked: an input frame holding a column the pipeline itself produces,
+    or a step reading a hidden object under `strict_compile`.
 
     Example::
 
-        Engine().bind(pipeline, mode="jit")   # EngineError: unknown mode 'jit'; expected one of [...]
+        flow(ratio).run(df_with_a_ratio_column)   # EngineError: 'ratio' is produced by this pipeline ...
     """
 
 

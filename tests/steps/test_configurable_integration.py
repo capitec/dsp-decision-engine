@@ -9,7 +9,7 @@ import pytest
 from polars.testing import assert_frame_equal
 from pydantic import TypeAdapter
 
-from decikit import ConfigurableStep, Engine, ParamRef, Value, flow, step
+from decikit import ConfigurableStep, InterpretedEngine, ParamRef, Value, flow, step
 from decikit import _engine as engine
 from decikit.config import JsonFileStore
 from decikit._engine.ir import ParamDecl
@@ -114,7 +114,7 @@ def test_retuning_a_param_ref_changes_the_output_without_rebuilding_ir():
     risk, bands = configs(ParamRef(param="cut", default=0.5))
     p = pipeline(risk, bands)
     ir = engine.to_ir(p)
-    exe = Engine().bind(p)
+    exe = InterpretedEngine().bind(p)
     at_defaults = exe.run(DF)["score"].to_list()
     retuned = exe.run(DF, params={"risk": {"cut": 0.1}, "bands": {"hi": {"hi_cut": 0.1}}, "shared": {"bonus": 5.0}})
     assert retuned["score"].to_list() != at_defaults

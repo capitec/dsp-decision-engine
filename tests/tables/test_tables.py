@@ -3,7 +3,7 @@ import polars as pl
 import pytest
 
 from decikit import flow
-from decikit._engine import Engine
+from decikit._engine import Engine, InterpretedEngine
 from decikit.steps.tables import DecisionTableConfig
 from decikit.steps.tables.schema import BoundMode
 from decikit.steps.trees.schema import RangeEndLogic
@@ -70,7 +70,7 @@ def test_eq_on_a_string_column(run):
 
 @pytest.mark.parametrize("mode", ["interpreted", "stepped", "fused"])
 def test_a_record_run_takes_a_string_input(mode):
-    exe = Engine().bind(_bureau(), mode=mode)
+    exe = Engine.resolve(mode)().bind(_bureau())
     assert exe.run({"BureauKey": "experian"})["pts"] == 10
     assert exe.run({"BureauKey": "equifax"})["pts"] == 0
 
@@ -143,7 +143,7 @@ def test_a_table_composes_with_ordinary_steps(run):
 
 
 def test_the_python_matcher_visits_each_row_it_tries():
-    exe = Engine().bind(bands())
+    exe = InterpretedEngine().bind(bands())
     seen = []
     exe.runner.visit = seen.append
     exe.run({"score": 50.0})

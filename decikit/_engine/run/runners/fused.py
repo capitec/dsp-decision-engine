@@ -28,7 +28,7 @@ class FusedRunner(SteppedRunner):
 
     Example::
 
-        exe = Engine().bind(pipeline, mode="fused")
+        exe = FusedEngine().bind(pipeline)
         exe.run(df)
     """
 

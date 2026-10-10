@@ -2,7 +2,7 @@ import copy
 from datetime import date
 
 import pytest
-from decikit import Engine, dag
+from decikit import InterpretedEngine, dag
 
 from collections_treatment import matrix, vocab as v
 from collections_treatment.overlays import in_dag
@@ -54,7 +54,7 @@ def test_the_cell_not_in_the_matrix_falls_back_to_no_action(decide):
 def dial(stacks):
     unit = dag(in_dag(stacks["intensity_dial"], "intensity_dial_adjustments_applied"), matrix.treatment_intensity_step,
                name="dial")
-    return lambda on, bucket=3, intensity=2, enabled=True: Engine().bind(unit).run(
+    return lambda on, bucket=3, intensity=2, enabled=True: InterpretedEngine().bind(unit).run(
         {"matrix_treatment_intensity": intensity, "decision_date": on, "arrears_bucket_code": bucket},
         {"dial": {"intensity_dial": {"adjustment_stack_enabled": enabled}}})
 

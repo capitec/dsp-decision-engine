@@ -132,7 +132,7 @@ from decikit.trace import Kind, TraceSink
 from loan import pipeline, df
 
 for mode in ("interpreted", "stepped", "fused"):
-    exe = Engine().bind(pipeline, mode=mode)
+    exe = Engine.resolve(mode)().bind(pipeline)
     sink = TraceSink()
     exe.run(df, trace=sink)
     ev = sink.events()
@@ -298,7 +298,7 @@ A tree, a decision table and a scorecard are each one row node, one call (a `mod
 ```python
 for mode in ("interpreted", "fused"):
     sink = TraceSink()
-    Engine().bind(p, mode=mode).run(df, trace=sink)
+    Engine.resolve(mode)().bind(p).run(df, trace=sink)
     print(mode, [(e.kind.name, e.origin.path, e.record) for e in sink.events()])
 ```
 

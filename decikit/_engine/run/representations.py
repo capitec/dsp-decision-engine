@@ -1,5 +1,5 @@
 """Compiled-value representations shared by every runner, so `Text`/`Columnar[Item]`
-give the same value regardless of `mode=`.
+give the same value on every engine.
 """
 from __future__ import annotations
 

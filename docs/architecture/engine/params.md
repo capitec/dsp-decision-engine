@@ -261,7 +261,7 @@ RunReport(validated=[], invalid=[], warnings=[])
 
 ## Eager and lazy validation
 
-`Engine(params_validation=...)` decides when nodes are validated:
+`FusedEngine(params_validation=...)` decides when nodes are validated:
 
 | Mode | When a new document arrives | When a node runs |
 |---|---|---|
@@ -330,7 +330,7 @@ def fee(rate: float,
         cap: float = param(0.15, le=0.2, on_invalid="warn")) -> float:
     return min(rate, cap)
 
-exe = Engine().bind(flow(rate, fee, name="pricing"), "fused")
+exe = FusedEngine().bind(flow(rate, fee, name="pricing"))
 df = pl.DataFrame({"score": [550, 640, 720]})
 rows = [{"floor": 0, "rate": 0.18}, {"floor": 700, "rate": 0.09}]
 doc = {"pricing": {"rate": {"rates": rows},

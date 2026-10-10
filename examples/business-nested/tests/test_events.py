@@ -2,14 +2,14 @@
 from datetime import date
 
 import pytest
-from decikit import Engine
+from decikit import InterpretedEngine
 
 from business_nested import events, vocab
 
 SECTOR_ONE, CONSTRUCTION = 100, 412
 IMMATERIAL, MINOR, MATERIAL, DISQUALIFYING = 1, 2, 3, 4
 
-classify = Engine().bind(events.event_unit(), mode="interpreted")
+classify = InterpretedEngine().bind(events.event_unit())
 
 
 def classified(amount=1_000.0, event_type_code=1, criticality_class=vocab.CRITICAL, sector_code=SECTOR_ONE,

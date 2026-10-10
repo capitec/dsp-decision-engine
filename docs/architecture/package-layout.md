@@ -235,7 +235,8 @@ See [Config store](config-store.md).
 | `wiring/interface.py` | the names a node reads and writes |
 | `wiring/plan.py` | `NodeVersion`, `Call`, `Sequence`, `Branch`, `Loop`, `ScatterGather`, `Plan` |
 | `wiring/resolve.py` | `resolve()`: binding reads to versions, scope and typo checks |
-| `run/engine.py` | `Engine`, `Executable`, `RUNNERS` |
+| `run/engine.py` | `Executable` |
+| `run/engines.py` | `Engine` (registry root), `NumbaEngine`, `InterpretedEngine`, `SteppedEngine`, `FusedEngine` |
 | `run/state.py` | `State`: versioned arrays with validity masks; record loading |
 | `run/params.py` | `RunParams`, `RunReport` |
 | `run/representations.py` | compiled-value representations shared by every runner |
@@ -344,7 +345,7 @@ an import of the module `decikit.x.y` when that file exists, so an allowlist key
 
 ## Extension points and entry-point groups
 
-Seven pydantic base classes are registry roots (`BaseRegistryModule, root=True`). A subclass registers itself by
+Eight pydantic base classes are registry roots (`BaseRegistryModule, root=True`). A subclass registers itself by
 import path and by its `type: Literal[...]` alias, a document names it by either, and an installed package can ship
 one without the user importing it, by declaring an entry point in the group `decikit.<group>`:
 
@@ -354,6 +355,7 @@ one without the user importing it, by declaring an entry point in the group `dec
 | `ConfigStore` | `config/_store.py` | `decikit.config_stores` | |
 | `DatasetProvider` | `lab/data/_providers/base.py` | `decikit.datasets` | `file`, `folder` |
 | `Check` | `lab/checks/_base.py` | `decikit.checks` | the `_builtin/` catalogue, by alias |
+| `Engine` | `_engine/run/engines.py` | `decikit.engines` | `interpreted`, `stepped`, `fused` |
 | `Metric` | `lab/experiments/metrics/_base.py` | `decikit.metrics` | |
 | `Plot` | `lab/experiments/plots/_base.py` | `decikit.plots` | |
 | `Block` | `lab/experiments/report/_blocks.py` | `decikit.blocks` | |
@@ -378,7 +380,7 @@ Other extension points take a plain subclass or a decorator:
   an experiment definition.
 - A trace `Adapter` receives decoded trace events from a `TraceSink`.
 
-Execution modes are a closed set (`RUNNERS` in `_engine/run/engine.py`), and so are the IR node types.
+Engines are a registry root (`Engine`), so a package can add one; the IR node types are a closed set.
 
 ## Where a new feature goes
 
@@ -409,7 +411,7 @@ flowchart TB
 | a new check | `lab/checks/_builtin/<family>.py` and an alias in the lazy table in `_base.py` | checks are registry modules with stable codes |
 | a new experiment metric, plot or report block | `lab/experiments/metrics/`, `plots/` or `report/` | each is a registry root that experiment JSON names |
 | a new CLI command | `_tooling/cli/_<command>.py`, added to the group in `cli/__init__.py` | launched, never imported |
-| a new execution mode | `_engine/run/runners/` and `RUNNERS` | modes are engine internals, a closed list |
+| a new engine | a subclass of `Engine` (a numba one supplies a runner from `_engine/run/runners/`), or an entry point in `decikit.engines` | engines are a registry root; the tag in `type` is all a document or `DECIKIT_API__ENGINE__TYPE` needs |
 
 A file that grows past 500 lines splits into a package: `foo.py` becomes `foo/__init__.py` plus files, the shape
 `lab/checks/_builtin/numeric/` has.

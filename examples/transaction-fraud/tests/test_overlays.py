@@ -1,14 +1,14 @@
 from datetime import date
 
 import pytest
-from decikit import Engine, flow
+from decikit import InterpretedEngine, flow
 
 from fraud_interdiction.vocab import Action
 
 
 @pytest.fixture(scope="module")
 def multiplier(documents):
-    executable = Engine().bind(flow(documents["amount_overlays"], name="overlays"))
+    executable = InterpretedEngine().bind(flow(documents["amount_overlays"], name="overlays"))
 
     def run(on, enabled=True):
         out = executable.run({"decision_date": on, "adjustment_stack_enabled": enabled})

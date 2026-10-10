@@ -362,7 +362,7 @@ FallbackWarning: rx runs in Python, row by row: TypingError: Failed in nopython 
 Untyped global name 'indexed': Cannot determine Numba type of <class 'function'>
 ```
 
-The answers are the same in every mode; only the speed differs. `Engine(strict_compile=True)` turns this into an error. The [compile and fallback guide](../../guides/compile-and-fallback.md) and the [compile page](../engine/compile.md) cover fallback in general.
+The answers are the same in every mode; only the speed differs. `FusedEngine(strict_compile=True)` turns this into an error. The [compile and fallback guide](../../guides/compile-and-fallback.md) and the [compile page](../engine/compile.md) cover fallback in general.
 
 ### String outputs are `Literal` indices
 

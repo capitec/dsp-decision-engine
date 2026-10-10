@@ -129,11 +129,11 @@ class CheckContext:
         `None` when the run crashes, with the exception in `crash`; the run-error check reports it,
         so checks that need outputs stay quiet.
         """
-        from decikit import Engine
+        from decikit import InterpretedEngine
 
         producers = {o.name: n for n in self.nodes if isinstance(n, CallNode) for o in n.outputs or ()}
         try:
-            return Engine().bind(self.pipeline).run(self.frame, self.params), producers
+            return InterpretedEngine().bind(self.pipeline).run(self.frame, self.params), producers
         except Exception as e:
             self.crash = e
             return None

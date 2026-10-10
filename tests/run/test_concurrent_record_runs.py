@@ -3,7 +3,7 @@ import threading
 
 import polars as pl
 
-from decikit import Engine, flow, missing_as, param
+from decikit import FusedEngine, flow, missing_as, param
 
 
 def heavy(weight: float = missing_as(0.0), heavy_kg: float = param(20.0)) -> bool:
@@ -17,7 +17,7 @@ def pipeline():
 
 
 def test_concurrent_record_runs_are_correct():
-    exe = Engine().bind(pipeline(), mode="fused")
+    exe = FusedEngine().bind(pipeline())
     errors = []
 
     def score():
