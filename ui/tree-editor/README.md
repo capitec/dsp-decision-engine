@@ -38,6 +38,19 @@ earlier messages it contains so one applied while the editor reconnected is skip
 the batch is not applied again. A batch is not kept across a
 page reload.
 
+The socket checks the session and access on every message and every 15 s. A live edit near the session's expiry
+renews it by the same rule as an HTTP request (a ping does not, so an idle open tab still expires), and the server
+sends the new status cookie for the page to set. Signing out (on any node), an expired session or removed access
+closes the socket with 1008 and a reason, also at the handshake; the editor stops reconnecting, shows "Not live" and a
+toast, and keeps unsent edits in the editor (Export saves them); signing in again through the session dialog
+reconnects and sends them as an offline batch. A message Postgres or the merge core would refuse
+every time (NUL, a lone surrogate, a non-finite number, nesting past 64 levels) is rejected up front. Other drops
+right after the editor sent its edits, with none answered (over 4 MiB, a server error, not JSON), count against them:
+after three in a row the editor gives them up and shows the offline banner with Download my version. Drops the
+server marks transient (1013, a database or network outage; 1001 and 1012) are not counted. The fan-out sends to a
+project's sockets at once, each with a 5 s limit; a socket that stops reading is dropped, closed with 1013 and
+catches up when it reconnects.
+
 ## merge-core
 
 The live-editing ops (diff, apply, conflict checks) are written once, in Rust, in `merge-core/`: the backend runs it as
