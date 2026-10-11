@@ -12,6 +12,7 @@ import asyncio
 
 import json
 import logging
+import math
 import time
 import typing as t
 import uuid
@@ -28,6 +29,8 @@ from dsp_decikit.services.live_ops import apply, conflicts, diff, rebase_orders,
 
 CHANNEL = "project_ops"
 MAX_OPS = 5000
+# The merge core parses at most 128 levels; real documents nest about a dozen.
+MAX_DEPTH = 64
 logger = logging.getLogger("uvicorn.error").getChild("live")
 
 
@@ -75,17 +78,31 @@ def check_message(message: t.Any) -> None:
             isinstance(p, list) and len(p) == 2 and isinstance(p[0], str) and isinstance(p[1], int)
             and not isinstance(p[1], bool) and p[1] >= 0 for p in parts) or sum(p[1] for p in parts) > len(ops):
         raise Rejected("parts must be [message id, op count] pairs covering the ops")
-    if _has_nul(ops):
-        # Postgres JSON cannot hold one: the write would fail and the client would send it again and again.
-        raise Rejected("text cannot contain a NUL character")
+    reason = _unstorable([message["id"], parts], 0) or next(
+        filter(None, (_unstorable(op, op["path"].count("/")) for op in ops)), None)
+    if reason:
+        # Postgres or the merge core would refuse it on every try, and the client would send it again and again.
+        raise Rejected(reason)
 
 
-def _has_nul(value: t.Any) -> bool:
+def _unstorable(value: t.Any, depth: int) -> t.Optional[str]:
+    if depth > MAX_DEPTH:
+        return f"edits cannot nest deeper than {MAX_DEPTH} levels"
     if isinstance(value, str):
-        return "\x00" in value
-    if isinstance(value, dict):
-        return any(_has_nul(k) or _has_nul(v) for k, v in value.items())
-    return isinstance(value, list) and any(_has_nul(v) for v in value)
+        if "\x00" in value:
+            return "text cannot contain a NUL character"
+        try:
+            value.encode()
+        except UnicodeEncodeError:
+            return "text cannot contain a lone surrogate (broken Unicode)"
+    elif isinstance(value, float) and not math.isfinite(value):
+        return "numbers must be finite"
+    elif isinstance(value, (dict, list)):
+        for item in [*value, *value.values()] if isinstance(value, dict) else value:
+            reason = _unstorable(item, depth + 1)
+            if reason:
+                return reason
+    return None
 
 
 def _stamp(node: t.Any) -> None:
