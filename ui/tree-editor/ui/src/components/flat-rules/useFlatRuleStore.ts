@@ -8,10 +8,9 @@ import { parseFlatRuleValidationErrors, groupErrorsByRule, getSectionErrors, for
 import { subscribeToStoreActivity } from '@/lib/background-token-refresh';
 import { toast } from '@/hooks/use-toast';
 import { isStaleSave, staleSaveToast } from '@/lib/stale-save';
-import { apiErrorMessage } from '@/lib/utils';
+import { apiErrorMessage, sameJson } from '@/lib/utils';
 import { collectParamRefs } from '@/utils/param-refs';
 import type { LiveStatus } from '@/lib/live-sync';
-import { diff } from '@/lib/live-ops';
 
 interface FlatRuleState {
   // Core data
@@ -259,7 +258,7 @@ function treesFromRules(rules: any[] | undefined, previous: PrioritizedTree[] = 
       rootNode,
       description: root.meta?.description || ''
     };
-    return old && diff(old as any, tree as any).length === 0 ? old : tree;
+    return old && sameJson(old, tree) ? old : tree;
   });
 }
 
@@ -664,7 +663,7 @@ const store = create<FlatRuleState>()(
       set((state) => {
         const trees = treesFromRules(doc.rules, state.trees);
         const data = withEditorDefaults(doc);
-        const same = diff({ ...state.project.project_data, rules: null } as any, { ...data, rules: null }).length === 0;
+        const same = sameJson({ ...state.project.project_data, rules: null }, { ...data, rules: null });
         const known = new Set(state.trees.map(tree => tree.id));
         return {
           trees,
