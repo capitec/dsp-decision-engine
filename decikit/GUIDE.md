@@ -720,7 +720,8 @@ step instead.
 Python — allows it. `fallbacks()` still reports it, marked `@allow_fallback`,
 so it stays visible when you are chasing latency. Put it on a function a step
 *calls* and the step falls back rather than compiling it: an intentional
-Python boundary.
+Python boundary. Prefer a step that compiles; use `@allow_fallback` only for
+that.
 
 ```python
 import warnings
