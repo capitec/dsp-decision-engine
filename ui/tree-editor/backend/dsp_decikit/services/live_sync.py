@@ -22,7 +22,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import delete, func, insert, or_, select, update
+from sqlalchemy import delete, func, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from dsp_decikit.db.models.projects import Project, ProjectOp
@@ -177,9 +177,14 @@ def _whole(project_id: uuid.UUID):
 async def _trim(session: AsyncSession, project_id: uuid.UUID, version: int) -> None:
     # Under the project's row lock, so no write, catch-up check or offline replay of this project runs meanwhile on
     # the server path; a reader outside the lock (a joining client) sees a gap and gets a snapshot.
-    oldest = select(func.max(ProjectOp.version)).where(_whole(project_id), or_(
-        ProjectOp.version <= version - settings.live_log_keep_versions,
-        ProjectOp.created_at < func.now() - timedelta(days=settings.live_log_keep_days))).scalar_subquery()
+    # Bounded by version first, so only the rows from the bound back are read for being whole: that reads their ops,
+    # a whole document on every REST save.
+    aged = select(func.max(ProjectOp.version)).where(
+        ProjectOp.project_id == project_id,
+        ProjectOp.created_at < func.now() - timedelta(days=settings.live_log_keep_days)).scalar_subquery()
+    oldest = select(func.max(ProjectOp.version)).where(
+        _whole(project_id), ProjectOp.version <= func.greatest(version - settings.live_log_keep_versions, aged)
+    ).scalar_subquery()
     await session.execute(delete(ProjectOp).where(ProjectOp.project_id == project_id, ProjectOp.version < oldest))
 
 
