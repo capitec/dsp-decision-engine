@@ -7,7 +7,7 @@
  * is applied the editor's un-diffed edits are pushed first, so a remote change never overwrites a local one unseen.
  * After a disconnect (a closed socket, or no answer to a ping for ~10 s) the edits made meanwhile, and the messages
  * the catch-up did not show applied, go back as one offline batch the server merges whole or rejects whole. A
- * close for policy (signed out, or access removed) ends it for good: unsent edits stay in the editor.
+ * close for policy (signed out, or access removed) ends it until `resume()`: unsent edits stay in the editor.
  *
  * @example
  * const sync = new LiveSync(liveUrl(projectId), project.project_data, project.version, {
@@ -43,7 +43,8 @@ export interface LiveHooks {
   validation?: (errors: unknown[], version: number) => void
   /** Every edit is on the server (nothing pending). */
   settled?: (version: number) => void
-  /** The server ended live editing (`reason`: signed out, or access removed); edits it does not have stay unsent. */
+  /** The server ended live editing (`reason`: signed out, or access removed); edits it does not have wait for
+   * `resume()`. */
   ended?: (reason: string) => void
 }
 
@@ -129,7 +130,6 @@ export class LiveSync {
   settle(timeoutMs = 15000): Promise<boolean> {
     this.flush()
     if (this.idle()) return Promise.resolve(true)
-    if (this.stopped) return Promise.resolve(false)
     return new Promise((resolve) => {
       const timeout = setTimeout(() => resolve(false), timeoutMs)
       this.waiters.push(() => {
@@ -137,6 +137,13 @@ export class LiveSync {
         resolve(true)
       })
     })
+  }
+
+  /** Connect again after the server ended live editing (the user signed in again); unsent edits go then. */
+  resume() {
+    if (this.socket || this.stopped) return
+    this.hooks.status?.('reconnecting')
+    this.connect()
   }
 
   stop() {
@@ -165,12 +172,12 @@ export class LiveSync {
     socket.close()
     const sent = this.ready && this.pending.length > 0
     this.ready = false
+    this.offlineBase ??= { version: this.version, doc: this.confirmed }
     if (closed?.code === POLICY_VIOLATION) {
-      this.stop()
+      // No reconnecting until `resume()`: the server would refuse every try.
       this.hooks.status?.('ended')
       return this.hooks.ended?.(closed.reason || 'live editing ended')
     }
-    this.offlineBase ??= { version: this.version, doc: this.confirmed }
     // A drop right after my edits went out, with none of them answered: one the server fails on every time (too
     // big, or a server error) would otherwise be resent on every reconnect for ever.
     if (sent && !TRANSIENT.includes(closed?.code ?? 0) && ++this.failures >= MAX_FAILURES) this.handBack()

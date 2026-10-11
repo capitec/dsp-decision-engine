@@ -42,6 +42,7 @@ export function useFlatRuleLive(project: FlatRuleProjectDetail | null) {
       store.setState({ savedTrees: trees, savedProjectData: project.project_data });
     };
 
+    let ended: ReturnType<typeof toast> | undefined;
     const sync: LiveSync = new LiveSync(liveUrl(project.id), project.project_data as unknown as Json, project.version, {
       read: () => {
         const doc = buildDocument(store.getState());
@@ -76,13 +77,21 @@ export function useFlatRuleLive(project: FlatRuleProjectDetail | null) {
       },
       validation: (errors) => store.getState().setValidationErrors(errors),
       settled: markSavedIfIdle,
-      ended: (reason) => toast({
-        title: "Live Editing Stopped",
-        description: `${reason[0].toUpperCase()}${reason.slice(1)}. Edits not saved yet stay in this editor until you leave it; Export keeps a copy.`,
-        variant: "destructive",
-        duration: Infinity,
-      }),
+      ended: (reason) => {
+        ended = toast({
+          title: "Live Editing Stopped",
+          description: `${reason[0].toUpperCase()}${reason.slice(1)}. Edits not saved yet stay in this editor until you leave it; Export keeps a copy.`,
+          variant: "destructive",
+          duration: Infinity,
+        });
+      },
     });
+    // Signing in again through the session dialog picks live editing up where it stopped.
+    const resume = () => {
+      ended?.dismiss();
+      sync.resume();
+    };
+    window.addEventListener('session-refreshed', resume);
 
     store.setState({ live: 'connecting', liveSettle: () => sync.settle() });
     const unsubscribe = store.subscribe(
@@ -91,6 +100,7 @@ export function useFlatRuleLive(project: FlatRuleProjectDetail | null) {
       { equalityFn: (a, b) => a[0] === b[0] && a[1] === b[1] },
     );
     return () => {
+      window.removeEventListener('session-refreshed', resume);
       setConflict(null);
       unsubscribe();
       sync.stop();
