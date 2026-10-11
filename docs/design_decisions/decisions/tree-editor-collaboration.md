@@ -52,6 +52,17 @@ Read this before changing how the tree editor saves, syncs or merges a project d
   their version as a download.
 - Not an automatic CRDT-style merge: it would accept every combination, including merged states that are invalid
   or that nobody intended, and nobody is told.
+- Validation runs on a snapshot without the row lock and commits only if no version came in meanwhile (the third
+  attempt holds the lock). Why: validating 521 rules under the lock took 0.35 to 0.5 s and held other editors' round
+  trips at 1.5 s under ten batches; now the lock is held about 23 ms (`tree-editor-offline-merge-lock.md`).
+- Errors are counted by (type, message), not compared as a set: one more copy of an existing error is new.
+
+## The op log is bounded
+
+- Every 100th version stores the whole document; the log keeps a project's latest 5000 versions and 30 days, trimmed
+  back to a whole row under the row lock. A rebuild replays at most 100 versions; an editor reconnecting from a
+  trimmed version gets a snapshot; an offline batch on one is refused (downloadable).
+- The 5000/30-day defaults are not settled (`known-limitations.md`).
 
 ## What it costs
 
@@ -59,4 +70,5 @@ Read this before changing how the tree editor saves, syncs or merges a project d
   publishes the wheel and `pkg/` (CI only builds and tests them today).
 - The image builds `merge-core` in a Rust stage: about 8 minutes on a cold build, 16 s warm.
 - The UI cannot sync live without the wasm (+88 KB gzip); if it fails to load, the editors fall back to saves.
-- One LISTEN connection and one validator process per backend process.
+- One LISTEN connection and one validator process per backend process; ten simultaneous offline batches on a
+  busily edited 521-rule tree finish in about 7 s.
