@@ -124,7 +124,7 @@ record returned as a tuple under `Struct[Item]`, or a list of such tuples under
 `Columnar[Item]`, compiles ("Nested columns"), and so does a tuple under
 `@step(outputs=(...))`. The warning names the form that compiles for what the step
 returns; a `list[float]` compiles only as a one-field `Columnar[Item]`, and a `date`,
-`datetime`, `bytes` or `set` output has no compiled form.
+`datetime`, `bytes` or `set` output, or one holding a `str`, has no compiled form.
 
 An input with neither `missing_as(fill)` nor a `T | None` annotation is required:
 a null value or an absent column raises `MissingInputError`. To default it for a

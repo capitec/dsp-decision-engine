@@ -20,6 +20,11 @@ class Amount(TypedDict):
     v: float
 
 
+class Banded(TypedDict):
+    band: str
+    limit: float
+
+
 def offer(x: float) -> dict:
     return {"rate": x, "limit": x * 2}
 
@@ -48,6 +53,14 @@ def tags(x: float) -> set:
     return {x}
 
 
+def banded(x: float) -> Banded:
+    return {"band": "A", "limit": x}
+
+
+def names(x: float) -> list[str]:
+    return ["a", "b"]
+
+
 def due(x: float) -> date | None:
     return None  # a body numba compiles, so only the declared type decides
 
@@ -69,6 +82,8 @@ ADVICE = [
     (as_array, "ndarray", MANY_ROWS.format(item="Item")),
     (tags, "set", NO_FORM),
     (due, "date", NO_FORM),
+    (banded, "Banded", NO_FORM),
+    (names, "list[str]", NO_FORM),
 ]
 
 
