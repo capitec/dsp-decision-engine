@@ -184,7 +184,7 @@ async def _trim(session: AsyncSession, project_id: uuid.UUID, version: int) -> N
 
 
 def _unreachable(base: int) -> Rejected:
-    return Rejected(f"the server no longer keeps version {base}, which these edits were made on; reload the project")
+    return Rejected(f"the log no longer reaches back to version {base}; reload the project")
 
 
 async def _since(session: AsyncSession, project: Project, base: int) -> list:
