@@ -379,7 +379,7 @@ def test_sessions_on_node_one_and_node_two_see_each_others_edits(signed_in: Page
 
 
 @two_nodes
-def test_signing_out_on_node_two_ends_live_editing_on_node_one_and_keeps_the_unsent_edit(signed_in: Page):
+def test_signing_out_on_node_two_ends_live_editing_on_node_one_until_i_sign_in_again(signed_in: Page, email: str):
     project = two_rules(signed_in)
     held = open_live(signed_in, project, hold=True)
     held.holding = True
@@ -397,3 +397,12 @@ def test_signing_out_on_node_two_ends_live_editing_on_node_one_and_keeps_the_uns
     opened = held.opened
     signed_in.wait_for_timeout(3000)
     assert held.opened == opened  # it stopped instead of reconnecting
+
+    held.holding = False
+    expect(signed_in.get_by_role("dialog").get_by_text("Session Expired")).to_be_visible(timeout=30_000)
+    with signed_in.expect_popup() as popup:
+        signed_in.get_by_role("button", name="Refresh Session").click()
+    sign_in(popup.value, email)
+    expect(toast(signed_in, "Your offline edits were merged")).to_be_visible()
+    expect(signed_in.get_by_test_id("live-status")).to_have_text("Live")
+    stored(signed_in, project, lambda d: names(d) == ["Not sent yet", "Rule 2"])
