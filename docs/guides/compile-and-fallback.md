@@ -117,7 +117,8 @@ In detail:
 | reads `Text`, compares with literals, constants or `str` params | compiles |
 | reads `Struct[Item]`, or returns one as a tuple | compiles |
 | reads `Columnar[Item]` | compiles into the shared kernel; `Columnar[Item] | None` runs compiled but one call per row |
-| reads or writes `str`, `date`, `dict`, `list[...]`, a `TypedDict` | Python, row by row |
+| returns `Columnar[Item]` as a list of tuples, or a tuple under `@step(outputs=(...))` | compiles |
+| reads or writes `str`, `date`, `dict`, `list[...]`, a `TypedDict` | Python, row by row; for an output, the reason names the declared form that compiles (`Struct`, `Columnar`, `outputs=`), or says none does (a `date`, `bytes`, `set`) |
 | writes `Struct[Item] | None`, or returns a dict for a `Struct[Item]` | Python, row by row |
 | calls a function without `@helper` that numba cannot compile | Python, with the callee named in the reason |
 | has a body numba refuses (`import` inside, unsupported methods) | Python, with numba's error as the reason |
