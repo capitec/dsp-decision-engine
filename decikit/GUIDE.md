@@ -556,7 +556,7 @@ projects on one path never shadow each other):
 
 JSON dates (`"2026-01-15"`) arrive as the declared `date` inputs, but only through
 the handler: `Executable.run` takes typed values (`date` objects), and a
-string date reaches the step as a string. In-process, `handler.score` takes the
+string date reaches the step as a string. In-process, `handler.run` takes the
 parsed record (or a frame) and converts dates exactly as `decikit serve` does;
 `handler.process_fn` takes raw bytes. Both are plain calls, and the `*_fn` hooks are
 synchronous: an `async def` override is rejected when the class is created.
@@ -570,7 +570,7 @@ handler = RequestHandler(JsonFileStore(basepath="configs"), "credit_risk.pipelin
 handler.stage()
 handler.activate()
 record = {"income": 1000, "debt": 250, "applied_on": "2026-01-15"}
-assert handler.score(record)["approved"] is True
+assert handler.run(record)["approved"] is True
 body = json.dumps(record).encode()
 response = handler.process_fn(body, "application/json", "application/json")
 assert json.loads(response.content)["approved"] is True

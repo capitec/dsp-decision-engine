@@ -28,9 +28,10 @@ Read this before changing how a request is parsed, scored or transported, or how
 - Not: treating null as absent for every key (it would hide a null in a required field).
 - See: `tests/serving/test_frame_requests.py`, [serving](../../architecture/serving.md) (Dates from JSON)
 
-## The handler hooks are synchronous, and `score` is the in-process entry
+## The handler hooks are synchronous, and `run` is the in-process entry
 
-- `init_fn`, `input_fn`, `process_fn` and `shutdown_fn` are plain methods; a subclass that defines one with `async def` gets a `TypeError` when the class is created. `score(record_or_frame)` is `process_fn` without the bytes. `score` is not a hook: `process_fn` calls `RequestHandler.score` itself, so a subclass's own `score` (a replay service's, say) never changes what a request does.
+- `init_fn`, `input_fn`, `process_fn` and `shutdown_fn` are plain methods; a subclass that defines one with `async def` gets a `TypeError` when the class is created. `run(record_or_frame)` is `process_fn` without the bytes. `run` is not a hook: `process_fn` calls `RequestHandler.run` itself, so a subclass's own `run` (a replay service's, say) never changes what a request does.
+- It is named `run`, like `Executable.run` and `Step.run`, with no `score` alias: one name for running a record or a frame (owner, 2026-10-11).
 - Why: nothing in the default path awaits, a coroutine cost a frame and an event loop per in-process call, and in-process code should not go through the HTTP layer's bytes machinery.
 - The Starlette and Sanic endpoints stay `async def` and call the hooks directly, with no thread hop: single-record latency comes first.
 - See: `decikit/serving/_handler.py`

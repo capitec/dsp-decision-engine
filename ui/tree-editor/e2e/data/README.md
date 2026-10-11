@@ -114,7 +114,7 @@ rest exactly (as sorted-key JSON lines, so a failure shows the differing lines):
   (8650) to +3) with `DECIKIT_API__CODE_PATH`, `DECIKIT_API__PIPELINE` and `DECIKIT_CONFIG__BASEPATH` set, and
   every record POSTed as raw JSON to `/invocations` must get the in-process answer. The server is stopped by its
   process when the test ends, or when the run is stopped by its PID. Only the first of those records is null:
-  compiled, `score()` compiles again for every new set of null inputs (about 30 s each for the 200-rule set, 2.5 s
+  compiled, `run(record)` compiles again for every new set of null inputs (about 30 s each for the 200-rule set, 2.5 s
   for 32 rules; a pattern seen before costs nothing), so 50 records with scattered nulls take over 20 minutes.
 
 ## Size and time
