@@ -19,8 +19,6 @@ export const XFAIL = {
   'an added integer-like key goes last': 'JavaScript objects list integer-like keys first, whatever the insertion order',
   'diff orders keys by code point':
     'Array.prototype.sort orders by UTF-16 code unit, so an astral character sorts before U+E000..U+FFFF',
-  'an Arabic-Indic digit under their replace counts as an index':
-    'conflicts tests index segments with /^\\d+$/ (ASCII); Python\'s str.isdigit also takes other scripts\' digits',
   'touched of an op without a path raises': 'touched does not check ops; it returns undefined for the path',
   'touched of an op that is not an object raises': 'touched does not check ops; it returns undefined for the path',
 }
