@@ -3,7 +3,7 @@ import time
 import bcrypt
 import secrets
 from datetime import datetime, timezone
-from fastapi import Depends, status as http_status
+from fastapi import Depends, Request, status as http_status
 from fastapi.exceptions import HTTPException
 from fastapi.security import APIKeyCookie, HTTPBearer
 from dsp_decikit.settings import settings
@@ -57,10 +57,13 @@ def generate_api_token() -> t.Tuple[str, str, bytes]:
     return raw_token, token_prefix, token_hash
 
 
-async def handle_session_auth(session_token: str):
+async def handle_session_auth(session_token: str, request: Request):
     if not session_token:
         return None
-    session_info = await sessions.get_session(session_token)
+    # The rolling-session middleware has usually read this session for this request already.
+    seen_token, session_info = getattr(request.state, "session", (None, None))
+    if seen_token != session_token:
+        session_info = await sessions.get_session(session_token)
     if session_info is None:
         raise HTTPException(
             status_code=http_status.HTTP_401_UNAUTHORIZED, detail="Invalid Session"
@@ -160,11 +163,12 @@ async def update_user_and_get_session_with_team_roles(
 
 # This is the function that will be used to authenticate all requests and get the session info
 async def security(
+    request: Request,
     session_token: str | None = Depends(session_token_auth),
     bearer_token: str | None = Depends(bearer_token_auth),
 ):
     # Authentication priority: session tokens (web UI) -> API tokens (Bearer) -> legacy API key
-    session_info = (await handle_session_auth(session_token)) or (
+    session_info = (await handle_session_auth(session_token, request)) or (
         await handle_bearer_token_auth(
             bearer_token.credentials if bearer_token else None
         )
