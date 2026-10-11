@@ -66,8 +66,11 @@ def op_level(ref):
         _diff(ref, "a __proto__ key is diffed as data", "proto-key", {"__proto__": {"a": 1}}, {"__proto__": {"a": 2}}),
         _apply(ref, "a non-ASCII digit is not a list index", "nonascii-digit-index", {"l": [1, 2]},
                [_replace("/l/١", 9), _replace("/l/１", 9), _replace("/l/1", 9)]),
-        _conflicts(ref, "an Arabic-Indic digit under their replace counts as an index", "nonascii-digit-index",
-                   {"a": {"١": 0}}, [_replace("/a/١", 5)], [_replace("/a", {"١": 5})]),
+        # Deliberate: only ASCII digits are index segments, as in apply, so these merge (str.isdigit reports a conflict for the first).
+        {**_conflicts(ref, "an Arabic-Indic digit under their replace is a key, not an index", "nonascii-digit-index",
+                      {"a": {"١": 0}}, [_replace("/a/١", 5)], [_replace("/a", {"١": 5})]), "conflicts": []},
+        {**_conflicts(ref, "a vulgar fraction under their replace is a key, not an index", "nonascii-digit-index",
+                      {"a": {"½": 0}}, [_replace("/a/½", 5)], [_replace("/a", {"½": 5})]), "conflicts": []},
         _conflicts(ref, "an ASCII digit under their replace counts as an index", "nonascii-digit-index",
                    {"a": {"1": 0}}, [_replace("/a/1", 5)], [_replace("/a", {"1": 5})]),
         _conflicts(ref, "a key that is not a digit under their replace with the same value merges",

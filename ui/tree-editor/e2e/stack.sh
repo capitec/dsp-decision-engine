@@ -35,7 +35,8 @@ start_node() {
              PATH="$PATH")
   # Two nodes need logins both can read: the in-memory cache is per process.
   [ "$nodes" -gt 1 ] && env+=(DSP_CACHE='{"provider": "persisted-cache", "cache": {"provider": "in-memory"}}')
-  local cmd=(uv run --no-project --with-requirements requirements.txt --with-editable "$repo"
+  # merge-core is built from source (cargo and maturin on PATH) and cached until its Rust sources change.
+  local cmd=(uv run --no-project --with-requirements requirements.txt --with-editable "$repo" --with "$here/../merge-core"
              sh -c "alembic upgrade head && exec uvicorn dsp_decikit.asgi:app --host 127.0.0.1 --port $p")
   cd "$here/../backend"
   if command -v systemd-run >/dev/null; then
@@ -72,7 +73,7 @@ start_backend() {
 }
 
 up() {
-  [ -f "$here/../ui/build/index.html" ] || (cd "$here/../ui" && pnpm install --frozen-lockfile && pnpm build:skip-check)
+  [ -f "$here/../ui/build/index.html" ] || (cd "$here/../ui" && pnpm install --frozen-lockfile && pnpm build:wasm && pnpm build:skip-check)
   "$runtime" run -d --replace --name "$pg" --memory=512m -e POSTGRES_PASSWORD=postgres \
     -p "127.0.0.1:$pg_port:5432" -v "$pg:/var/lib/postgresql/data" docker.io/library/postgres:17 >/dev/null
   until "$runtime" exec "$pg" pg_isready -U postgres -q; do sleep 1; done

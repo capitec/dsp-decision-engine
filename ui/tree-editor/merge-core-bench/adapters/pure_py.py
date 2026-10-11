@@ -11,7 +11,9 @@ diff, apply, stale_ops, conflicts = _ops.diff, _ops.apply, _ops.stale_ops, _ops.
 rebase_orders, is_related, touched, reconcile = _ops.rebase_orders, _ops.is_related, _ops.touched, _ops.reconcile
 
 # Cases where the pure Python copy is the one that differs from the expected result.
-XFAIL = {}
+XFAIL = {
+    "an Arabic-Indic digit under their replace is a key, not an index": "deliberate: ASCII digits only, as apply's index rule",
+}
 
 
 def roundtrip(old, new):

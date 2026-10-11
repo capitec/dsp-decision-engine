@@ -19,20 +19,5 @@ fn to_py(e: Error) -> PyErr {
 
 #[pymodule]
 fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    #[cfg(feature = "direct-python")]
-    m.add_function(wrap_pyfunction!(direct::call_direct, m)?)?;
     m.add_function(wrap_pyfunction!(call, m)?)
-}
-
-#[cfg(feature = "direct-python")]
-mod direct {
-    use super::*;
-    use pyo3::types::PyAny;
-
-    #[pyfunction]
-    pub fn call_direct<'py>(py: Python<'py>, name: &str, args: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
-        let args: Vec<serde_json::Value> = pythonize::depythonize(args)?;
-        let out = crate::call_value(name, args).map_err(super::to_py)?;
-        Ok(pythonize::pythonize(py, &out)?)
-    }
 }

@@ -29,9 +29,9 @@ def same(a, b):
     return type(a) is type(b) and a == b
 
 
-def load_cases():
+def load_cases(pattern="*.json"):
     cases = []
-    for path in sorted((HERE / "vectors").glob("*.json")):
+    for path in sorted((HERE / "vectors").glob(pattern)):
         data = json.loads(path.read_text())
         docs = data.get("docs", {})
         cases += [_resolve(c, docs) for c in data["cases"]]

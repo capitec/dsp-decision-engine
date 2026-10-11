@@ -7,13 +7,13 @@ from pathlib import Path
 
 import pytest
 
-from dsp_decikit.services.live_ops import apply, conflicts, diff, is_related, rebase_orders, stale_ops
+from dsp_decikit.services import live_ops
+from dsp_decikit.services.live_ops import apply, diff, rebase_orders
 
-# The vitest suite runs the same cases against the TypeScript twin.
-CASES = json.loads((Path(__file__).parent / "data/live_ops_cases.json").read_text())
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "e2e"))
+TREE_EDITOR = Path(__file__).resolve().parents[2]
+sys.path[:0] = [str(TREE_EDITOR / "e2e"), str(TREE_EDITOR / "merge-core-bench")]
 from real_trees import TREES  # noqa: E402
+from run_vectors import load_cases, run_case  # noqa: E402
 
 
 def same(a, b):
@@ -21,29 +21,13 @@ def same(a, b):
     return json.dumps(a, sort_keys=True) == json.dumps(b, sort_keys=True)
 
 
+# The vitest suite runs the same vectors through the WebAssembly build.
+CASES = load_cases("op_level.json")
+
+
 @pytest.mark.parametrize("case", CASES, ids=[c["name"] for c in CASES])
 def test_shared_case(case):
-    kind = case["kind"]
-    if kind == "diff":
-        ops = diff(case["old"], case["new"])
-        assert same(ops, case["ops"])
-        doc, dropped = apply(case["old"], ops)
-        assert same(doc, case["new"]) and dropped == []
-    elif kind == "apply":
-        before = copy.deepcopy(case["doc"])
-        doc, dropped = apply(case["doc"], case["ops"])
-        assert same(doc, case["expected"])
-        assert same(dropped, case["dropped"])
-        assert same(case["doc"], before)
-    elif kind == "stale":
-        assert same(stale_ops(case["mine"], case["concurrent"]), case["dropped"])
-    elif kind == "related":
-        assert is_related(case["a"], case["b"]) is case["related"]
-        assert is_related(case["b"], case["a"]) is case["related"]
-    elif kind == "conflicts":
-        assert conflicts(case["mine"], case["theirs"], case["base"]) == case["conflicts"]
-    else:
-        raise AssertionError(f"unknown case kind {kind}")
+    run_case(live_ops, case)
 
 
 def test_apply_result_does_not_share_values_with_the_ops():
