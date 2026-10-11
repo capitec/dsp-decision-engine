@@ -7,9 +7,9 @@ from fastapi import Depends, status as http_status
 from fastapi.exceptions import HTTPException
 from fastapi.security import APIKeyCookie, HTTPBearer
 from dsp_decikit.settings import settings
-from dsp_decikit.cache import get_cache, CacheProtocol, CacheKeys
 from dsp_decikit.db.session import db_session
 import logging
+from . import sessions
 from .models import SessionInfo, UserInfo, BearerTokenSessionInfo
 from .db_service import (
     find_user_by_email,
@@ -57,25 +57,15 @@ def generate_api_token() -> t.Tuple[str, str, bytes]:
     return raw_token, token_prefix, token_hash
 
 
-async def handle_session_auth(session_token: str, cache: CacheProtocol):
+async def handle_session_auth(session_token: str):
     if not session_token:
         return None
-    cache_key = CacheKeys.auth_session(session_token)
-    session_info = await cache.get(cache_key, None)
+    session_info = await sessions.get_session(session_token)
     if session_info is None:
         raise HTTPException(
             status_code=http_status.HTTP_401_UNAUTHORIZED, detail="Invalid Session"
         )
-    try:
-        session_info_model = SessionInfo.model_validate(session_info)
-    except ValueError as e:
-        logger.error(e)
-        await cache.delete(cache_key)
-        raise HTTPException(
-            status_code=http_status.HTTP_401_UNAUTHORIZED,
-            detail="Unknown issue with Session",
-        )
-    return session_info_model
+    return session_info
 
 
 async def handle_bearer_token_auth(bearer_token: str) -> SessionInfo | None:
@@ -154,70 +144,27 @@ async def _upsert_user_with_team_roles(
 
 async def update_user_and_get_session(
     user_info: UserInfo,
-    cache: CacheProtocol,
     roles: t.List[str] | None = None,
 ):
     user = await _upsert_user(user_info, roles)
-
-    # Create new session
-    session_id = secrets.token_urlsafe(auth_settings.session_token_len)
-
-    # Use timezone-aware datetime for session creation
-    current_time = datetime.now(timezone.utc)
-    current_timestamp = int(current_time.timestamp())
-
-    session_info = SessionInfo(
-        created_at=current_timestamp,
-        last_activity=current_timestamp,
-        user_id=user.user_id,
-    )
-
-    await cache.put(
-        CacheKeys.auth_session(session_id),
-        session_info.model_dump(mode="json"),
-        expire_seconds=auth_settings.session_max_duration_s,  # Use max duration for cache TTL
-    )
-
-    return session_id, session_info
+    return await sessions.create_session(user.user_id)
 
 
 async def update_user_and_get_session_with_team_roles(
     user_info: UserInfo,
-    cache: CacheProtocol,
     team_roles: t.List[t.Tuple[str, TeamRole]] | None = None,
 ):
     user = await _upsert_user_with_team_roles(user_info, team_roles)
-
-    # Create new session
-    session_id = secrets.token_urlsafe(auth_settings.session_token_len)
-
-    # Use timezone-aware datetime for session creation
-    current_time = datetime.now(timezone.utc)
-    current_timestamp = int(current_time.timestamp())
-
-    session_info = SessionInfo(
-        created_at=current_timestamp,
-        last_activity=current_timestamp,
-        user_id=user.user_id,
-    )
-
-    await cache.put(
-        CacheKeys.auth_session(session_id),
-        session_info.model_dump(mode="json"),
-        expire_seconds=auth_settings.session_max_duration_s,  # Use max duration for cache TTL
-    )
-
-    return session_id, session_info
+    return await sessions.create_session(user.user_id)
 
 
 # This is the function that will be used to authenticate all requests and get the session info
 async def security(
     session_token: str | None = Depends(session_token_auth),
     bearer_token: str | None = Depends(bearer_token_auth),
-    cache: CacheProtocol = Depends(get_cache),
 ):
     # Authentication priority: session tokens (web UI) -> API tokens (Bearer) -> legacy API key
-    session_info = (await handle_session_auth(session_token, cache)) or (
+    session_info = (await handle_session_auth(session_token)) or (
         await handle_bearer_token_auth(
             bearer_token.credentials if bearer_token else None
         )
