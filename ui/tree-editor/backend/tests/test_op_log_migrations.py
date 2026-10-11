@@ -28,9 +28,9 @@ def alembic(database, *args):
     assert done.returncode == 0, done.stdout + done.stderr
 
 
-@pytest_asyncio.fixture
-async def step_1():
-    """A scratch database migrated to the step-1 schema; yields its engine and name."""
+@asynccontextmanager
+async def scratch(revision):
+    """A scratch database migrated to `revision`; yields its engine and name."""
     from sqlalchemy import text
     from sqlalchemy.engine import make_url
     from sqlalchemy.ext.asyncio import create_async_engine
@@ -39,14 +39,22 @@ async def step_1():
     server = create_async_engine(settings.db.database_url, isolation_level="AUTOCOMMIT")
     async with server.connect() as conn:
         await conn.execute(text(f'CREATE DATABASE "{database}"'))
-    alembic(database, "upgrade", STEP_1)
     engine = create_async_engine(make_url(settings.db.database_url).set(database=database),
                                  execution_options=settings.db.get_execution_options())
-    yield engine, database
-    await engine.dispose()
-    async with server.connect() as conn:
-        await conn.execute(text(f'DROP DATABASE "{database}" WITH (FORCE)'))
-    await server.dispose()
+    try:
+        alembic(database, "upgrade", revision)
+        yield engine, database
+    finally:
+        await engine.dispose()
+        async with server.connect() as conn:
+            await conn.execute(text(f'DROP DATABASE "{database}" WITH (FORCE)'))
+        await server.dispose()
+
+
+@pytest_asyncio.fixture
+async def step_1():
+    async with scratch(STEP_1) as made:
+        yield made
 
 
 async def new_project(engine, doc, version) -> uuid.UUID:
@@ -170,3 +178,28 @@ async def test_the_op_log_migrations_go_down_to_step_1_and_up_again(step_1):
     alembic(database, "upgrade", "head")
 
     assert [v for v, *_ in await logged(engine, project_id)] == [2, 3]
+
+
+@pytest.mark.asyncio
+async def test_a_database_from_before_project_versions_upgrades_with_every_project_accepting_an_offline_batch(on):
+    # A deployed database is at the last schema before project versions: no version column, no log.
+    from sqlalchemy import text
+    from dsp_decikit.services.live_sync import apply_message
+    async with scratch("31bb7952b593") as (engine, database):
+        user, project_id, schema = uuid.uuid4(), uuid.uuid4(), settings.db.pg_schema
+        async with engine.begin() as conn:
+            await conn.execute(text(f"INSERT INTO {schema}.users (id, email, is_active) VALUES (:u, :e, true)"),
+                               {"u": user, "e": f"{user.hex[:10]}@example.com"})
+            await conn.execute(text(f"INSERT INTO {schema}.projects (id, name, project_type, project_data, "
+                                    "created_by) VALUES (:p, 'old', 'flat_rule', CAST(:d AS jsonb), :u)"),
+                               {"p": project_id, "d": json.dumps(flat(RULE_A, RULE_B)), "u": user})
+
+        alembic(database, "upgrade", "head")
+        on(engine)
+        await apply_message(project_id, "online", "m1", 1, [name("a", "Online")])
+        applied = await apply_message(project_id, "offline", "batch", 1, [name("b", "Offline")], offline=True)
+
+        row = await stored(engine, project_id)
+        assert applied.version == row.version == 3
+        assert [r["meta"]["name"] for r in row.project_data["rules"]] == ["Online", "Offline"]
+        assert [v for v, *_ in await logged(engine, project_id)] == [1, 2, 3]
