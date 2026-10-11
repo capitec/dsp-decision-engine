@@ -39,6 +39,7 @@ RECHECK_S = 15
 POLICY_VIOLATION = 1008
 NOT_JSON = 1007
 TRY_AGAIN = 1013
+SERVER_ERROR = 1011
 SIGNED_OUT = "signed out: sign in again to keep editing"
 NO_ACCESS = "your access to this project was removed"
 
@@ -149,12 +150,15 @@ async def live(ws: WebSocket, project_id: uuid.UUID):
     except WebSocketDisconnect:
         pass
     except Exception as e:
-        # Anything else drops the socket (1011), which the client counts against the message it sent.
-        if not _transient(e):
-            raise
-        logger.warning("live socket project=%s closed on a transient error: %s", project_id, e)
+        # Closed with a code, as uvicorn would drop it without one, like a lost connection: the client counts a
+        # server error against the message it sent, and resends as is after a transient one.
+        transient = _transient(e)
+        if transient:
+            logger.warning("live socket project=%s closed on a transient error: %s", project_id, e)
+        else:
+            logger.exception("live socket project=%s failed", project_id)
         with contextlib.suppress(Exception):
-            await ws.close(TRY_AGAIN)
+            await ws.close(TRY_AGAIN if transient else SERVER_ERROR)
     finally:
         if client is not None:
             hub.leave(project_id, client)
