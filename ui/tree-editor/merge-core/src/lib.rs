@@ -370,8 +370,7 @@ pub fn conflicts(mine: &[Value], theirs: &[Value], base: &Value) -> Res<Vec<Stri
                 _ => false,
             };
             // Under something they replaced, an index can name another item on their side than on mine.
-            // ponytail: is_numeric is a superset of Python's str.isdigit (it also takes 1/2 and Roman numerals): errs to a conflict.
-            let indexed = hits.iter().any(|t| t.len() < s.len() && s[t.len()..].iter().any(|x| x.chars().next().is_some() && x.chars().all(char::is_numeric)));
+            let indexed = hits.iter().any(|t| t.len() < s.len() && s[t.len()..].iter().any(|x| !x.is_empty() && x.bytes().all(|b| b.is_ascii_digit())));
             if same_end && !indexed {
                 continue;
             }
