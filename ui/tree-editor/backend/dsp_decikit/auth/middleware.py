@@ -100,7 +100,8 @@ class RollingSessionMiddleware(BaseHTTPMiddleware):
         # Update session info - only last_activity changes (expires_at is calculated dynamically)
         session_info.last_activity = current_time
 
-        await renew_session(session_token, session_info)
+        if not await renew_session(session_token, session_info):
+            return
 
         # Update status cookie with new expiry timestamp (calculated from new last_activity)
         new_expires_at = (
