@@ -74,13 +74,19 @@ message id); "same value is no conflict" accepted a lost edit; a second disconne
   project, because the merge validates while holding the row lock.
 - Websocket traffic does not renew the rolling session. A revoked session reconnects forever without being told why.
 - One slow socket holds up its project's fan-out.
-- The op log has no retention, and offline merges replay it from the last whole-document row, so replay time grows
-  with the log.
-- Offline batches on projects created before step 2 are always refused.
 - Validation errors are compared as a set of (type, message), so a new error that repeats an existing one passes.
   Dangling parameter references are not reported at all.
 - `result_idx` points at output rows by index, so a merge can keep two edits that are each valid but point at the
   wrong row together.
+
+Closed since, on `collab/ship`: the op log snapshots the document every 100 versions and is trimmed by count and age
+(a rebuild replays at most 100 versions), and a migration logs the current version of projects created before step
+2, so their offline batches merge. On the 521-rule set (123 KB) rebuilding a version takes 19 ms from its snapshot
+and 29 ms 99 versions after it (loading the snapshot dominates; a version replays in about 0.1 ms); a write that
+stores a snapshot and trims takes 53 to 55 ms against 39 ms (p50) for one that does not; the trim of a 6,200-version
+log to 5,001 rows takes 18 ms. The trim looks for its whole row only below the count or age bound: on a log of
+5,100 REST saves of 521 rules (1.2 GB, every row a whole document) filtering every row for being whole took 4.3 s
+under the row lock, the bounded lookup 17 ms.
 
 ## Recommendation
 

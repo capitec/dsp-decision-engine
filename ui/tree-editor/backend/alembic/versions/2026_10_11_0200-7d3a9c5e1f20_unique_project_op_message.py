@@ -20,6 +20,14 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Upgrade schema: a client's message is logged at most once."""
+    schema = settings.db.pg_schema
+    # A resend applied twice before this index keeps both versions (the log must stay contiguous); the later rows
+    # get their version appended to the message id.
+    op.execute(f"""
+        UPDATE {schema}.project_ops o SET msg_id = o.msg_id || '#' || o.version
+        WHERE EXISTS (SELECT 1 FROM {schema}.project_ops e WHERE e.project_id = o.project_id
+                      AND e.client_id = o.client_id AND e.msg_id = o.msg_id AND e.version < o.version)
+    """)
     op.create_index("uq_project_ops_message", "project_ops", ["project_id", "client_id", "msg_id"], unique=True,
                     schema=settings.db.pg_schema)
 

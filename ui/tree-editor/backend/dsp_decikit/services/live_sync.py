@@ -6,6 +6,10 @@ message's base is dropped, the rest apply, and the last writer wins per field. A
 disconnected, sent as one batch) merges whole only when none of its paths overlaps what others changed since its base
 and it brings no new validation error; otherwise it is rejected whole. A REST save (`save_version`) is one
 root-replace op; only document changes make versions.
+
+Every `SNAPSHOT_EVERY` versions a log row also stores the whole document, and the log is trimmed to the versions
+`settings.live_log_keep_versions` and `live_log_keep_days` keep, from a row holding a whole document on, so any
+kept version is rebuilt by replaying at most `SNAPSHOT_EVERY` versions.
 """
 
 import asyncio
@@ -16,18 +20,21 @@ import time
 import typing as t
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import func, insert, select, update
+from sqlalchemy import delete, func, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from dsp_decikit.db.models.projects import Project, ProjectOp
 from dsp_decikit.db.session import db_session
 from dsp_decikit.services.documents import check_document, validation_errors
 from dsp_decikit.services.live_ops import apply, conflicts, diff, rebase_orders, stale_ops
+from dsp_decikit.settings import settings
 
 CHANNEL = "project_ops"
 MAX_OPS = 5000
+# A rebuild replays at most this many versions; each snapshot is a whole document (120 to 190 KB on 521 rules).
+SNAPSHOT_EVERY = 100
 logger = logging.getLogger("uvicorn.error").getChild("live")
 
 
@@ -131,11 +138,14 @@ async def _locked(session: AsyncSession, project_id: uuid.UUID) -> Project:
 async def _commit_version(session: AsyncSession, project: Project, ops: list, client_id: str, msg_id: str,
                           parts: t.Sequence[str] = (), **values) -> int:
     version = project.version + 1
+    snapshot = values["project_data"] if version % SNAPSHOT_EVERY == 0 else None
     await session.execute(update(Project).where(Project.id == project.id)
                           .values(**values, version=version, updated_at=datetime.now(timezone.utc))
                           .execution_options(synchronize_session=False))
     await session.execute(insert(ProjectOp).values(project_id=project.id, version=version, client_id=client_id,
-                                                   msg_id=msg_id, ops=ops, parts=list(parts)))
+                                                   msg_id=msg_id, ops=ops, parts=list(parts), snapshot=snapshot))
+    if snapshot is not None:
+        await _trim(session, project.id, version)
     # Delivered only when the transaction commits, so a listener never fetches a row it cannot see yet.
     await session.execute(select(func.pg_notify(CHANNEL, json.dumps({"p": str(project.id), "v": version}))))
     return version
@@ -158,6 +168,26 @@ async def save_version(session: AsyncSession, project_id: uuid.UUID, base_versio
     return await _commit_version(session, project, ops, client_id, msg_id, **changes)
 
 
+def _whole(project_id: uuid.UUID):
+    # The rows a document can be rebuilt from without the rows before them.
+    return (ProjectOp.project_id == project_id) & (ProjectOp.snapshot.is_not(None)
+                                                   | (ProjectOp.ops[0]["path"].astext == ""))
+
+
+async def _trim(session: AsyncSession, project_id: uuid.UUID, version: int) -> None:
+    # Under the project's row lock, so no write, catch-up check or offline replay of this project runs meanwhile on
+    # the server path; a reader outside the lock (a joining client) sees a gap and gets a snapshot.
+    # Bounded by version first, so only the rows from the bound back are read for being whole: that reads their ops,
+    # a whole document on every REST save.
+    aged = select(func.max(ProjectOp.version)).where(
+        ProjectOp.project_id == project_id,
+        ProjectOp.created_at < func.now() - timedelta(days=settings.live_log_keep_days)).scalar_subquery()
+    oldest = select(func.max(ProjectOp.version)).where(
+        _whole(project_id), ProjectOp.version <= func.greatest(version - settings.live_log_keep_versions, aged)
+    ).scalar_subquery()
+    await session.execute(delete(ProjectOp).where(ProjectOp.project_id == project_id, ProjectOp.version < oldest))
+
+
 def _unreachable(base: int) -> Rejected:
     return Rejected(f"the log no longer reaches back to version {base}; reload the project")
 
@@ -175,16 +205,18 @@ async def _since(session: AsyncSession, project: Project, base: int) -> list:
 
 
 async def _document_at(session: AsyncSession, project_id: uuid.UUID, version: int) -> dict:
-    # Replayed from the last whole-document write at or before `version` (a new project's first version is one).
-    # ponytail: replays every version since that write; store a snapshot every N versions if replays get long.
-    start = await session.scalar(select(func.max(ProjectOp.version)).where(
-        ProjectOp.project_id == project_id, ProjectOp.version <= version, ProjectOp.ops[0]["path"].astext == ""))
+    # Replayed from the last whole document at or before `version` (a new project's first version is one).
+    start = (await session.execute(select(ProjectOp.version, ProjectOp.snapshot).where(
+        _whole(project_id), ProjectOp.version <= version).order_by(ProjectOp.version.desc()).limit(1))).first()
     if start is None:
         raise _unreachable(version)
+    first = start.version + (start.snapshot is not None)
     rows = (await session.scalars(select(ProjectOp.ops).where(
-        ProjectOp.project_id == project_id, ProjectOp.version.between(start, version))
+        ProjectOp.project_id == project_id, ProjectOp.version.between(first, version))
         .order_by(ProjectOp.version))).all()
-    return apply({}, [op for ops in rows for op in ops])[0]
+    if len(rows) != version - first + 1:
+        raise _unreachable(version)  # a write that was not logged
+    return apply(start.snapshot or {}, [op for ops in rows for op in ops])[0]
 
 
 def _error_keys(errors: list) -> set:
