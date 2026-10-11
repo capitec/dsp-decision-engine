@@ -110,7 +110,7 @@ A phase is done when all of these hold:
 ### P4, the polars host
 
 - Every test in [09-polars-host-design.md](09-polars-host-design.md) exists.
-- The spike in 09 still passes against the installed polars.
+- The spike in 09 still passes against the installed polars. (As built: the spike uses the removed `Engine().bind(pipe, "fused")`; its facts are covered by `tests/polars_engine/test_polars_host.py`.)
 - `PolarsExecutable` is in the no-per-call-state convention test.
 - `test_every_example_flow_equals_fused` runs over every `examples/*` flow; skips name their reason.
 - The refusals (`trace`, `session`, qualified emit, frame step without a schema) each have a test and a
