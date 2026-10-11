@@ -12,7 +12,11 @@ Postgres, migrations and `decikit` (editable, from this checkout) are handled by
 
 Regenerate the UI's API client against the running backend with `./generate-tsx-api-client.sh`.
 
-Every project has a `version` that each save of its document bumps (a rename or move leaves it). The editors send the version they loaded as `base_version` when they save; if someone else saved first, the server answers 409 (`detail.current_version`) and the editor keeps the edits and tells the user to reload. An API caller that omits `base_version` still overwrites.
+Every project has a `version` that each save of its document bumps (a rename or move leaves it). `PUT /api/v1/projects/{id}` with `project_data` must also send `base_version`, the version the caller loaded (`GET` returns it as `version`):
+
+- without it the server answers 422 and names the field;
+- if someone else saved first, it answers 409 (`detail.code` is `stale_version`, `detail.current_version` the version now stored), and the editor keeps the edits, shows "Save Refused" and asks the user to reload;
+- an update of only `name`, `description` or `folder_id` needs no `base_version` and ignores one.
 
 ## Tests
 
