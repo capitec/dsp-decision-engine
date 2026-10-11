@@ -66,6 +66,35 @@ def test_an_ops_message_with_a_nul_character_is_rejected_as_the_database_cannot_
         check_message({"type": "ops", "id": "m1", "base": 1, "ops": [op]})
 
 
+def nested(depth):
+    value = 1
+    for _ in range(depth):
+        value = {"k": value}
+    return value
+
+
+@pytest.mark.parametrize("message", [
+    {"ops": [{"op": "replace", "path": "/rules/a/meta/name", "value": "lone \ud800 surrogate"}]},
+    {"ops": [{"op": "add", "path": "/parameters/p", "value": {"lone \udc00 key": 1}}]},
+    {"ops": [{"op": "remove", "path": "/parameters/\ud800"}]},
+    {"ops": [{"op": "replace", "path": "/output/default/x", "value": float("nan")}]},
+    {"ops": [{"op": "replace", "path": "/output/default/x", "value": float("inf")}]},
+    {"ops": [{"op": "add", "path": "/parameters/deep", "value": nested(200)}]},
+    {"ops": [{"op": "remove", "path": "/a" * 200}]},
+    {"id": "nul \u0000 id", "ops": []},
+    {"ops": [], "parts": [["lone \ud800", 0]]},
+])
+def test_an_ops_message_the_database_or_the_merge_core_cannot_take_is_rejected_up_front(message):
+    # A write that fails the same way every time would drop the socket and the client would resend it for ever.
+    with pytest.raises(Rejected):
+        check_message({"type": "ops", "id": "m1", "base": 1, **message})
+
+
+def test_an_ops_message_nested_as_deep_as_a_large_real_tree_passes():
+    check_message({"type": "ops", "id": "m1", "base": 1,
+                   "ops": [{"op": "add", "path": "/rules/a/rule/then/then", "value": nested(40)}]})
+
+
 def test_a_well_formed_ops_message_passes():
     check_message({"type": "ops", "id": "m1", "base": 3, "ops": [
         {"op": "replace", "path": "/rules/a/meta/name", "value": "x"},
