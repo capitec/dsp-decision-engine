@@ -22,7 +22,7 @@ class Engine(BaseRegistryModule, root=True, group="engines"):
     `Engine.resolve(tag)` gives the class, and `pipeline.compile(tag)` or
     `pipeline.compile(instance)` binds one.
 
-    Args:
+    Attributes:
         params_validation: `"eager"` validates every node's params when a
             params document is first seen and raises on any invalid one;
             `"lazy"` validates a node the first time it runs, so an invalid
