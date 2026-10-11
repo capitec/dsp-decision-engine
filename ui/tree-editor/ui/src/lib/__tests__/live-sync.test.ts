@@ -247,7 +247,7 @@ describe('LiveSync', () => {
     expect(isAuthenticated()).toBe(true)
   })
 
-  it('stops and says why when the server ends my session or my access, instead of reconnecting', async () => {
+  it('stops and says why when the server ends my session or my access, instead of reconnecting', () => {
     const { sync, hooks, socket, sockets, shown, type } = setup()
     type(doc('Unsent'))
     vi.advanceTimersByTime(150)
@@ -261,7 +261,20 @@ describe('LiveSync', () => {
     expect(hooks.ended).toHaveBeenCalledWith('signed out: sign in again to keep editing')
     expect(shown).toHaveLength(before)  // my edit stays in the editor
     expect(sync.idle()).toBe(false)
-    await expect(sync.settle()).resolves.toBe(false)
+  })
+
+  it('after signing in again connects and sends the edits kept meanwhile as an offline batch', () => {
+    const { sync, socket, sockets, type } = setup()
+    type(doc('Kept'))
+    vi.advanceTimersByTime(150)
+    socket().close(1008, 'signed out: sign in again to keep editing')
+
+    sync.resume()
+    socket().onopen()
+    socket().receive({ type: 'ready', version: 1 })
+
+    expect(sockets).toHaveLength(2)
+    expect(socket().ops()).toMatchObject([{ offline: true, base: 1, ops: [{ path: '/rules/a/meta/name', value: 'Kept' }] }])
   })
 
   function failOn(socket: () => FakeSocket, code: number, times: number) {
