@@ -4,8 +4,8 @@ the new version in `project_ops` and notifies the `project_ops` channel in the s
 A live message (`apply_message`) follows the online rule: an op inside something another client changed since the
 message's base is dropped, the rest apply, and the last writer wins per field. An offline message (edits made while
 disconnected, sent as one batch) merges whole only when none of its paths overlaps what others changed since its base
-and it brings no new validation error; otherwise it is rejected whole. A REST save (`save_version`) is one
-root-replace op; only document changes make versions.
+and it brings no new validation error; otherwise it is rejected whole. Its validation runs without the row lock where
+it can (see `_merge`). A REST save (`save_version`) is one root-replace op; only document changes make versions.
 """
 
 import asyncio
@@ -14,6 +14,7 @@ import logging
 import time
 import typing as t
 import uuid
+import weakref
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -28,7 +29,9 @@ from dsp_decikit.services.live_ops import apply, conflicts, diff, rebase_orders,
 
 CHANNEL = "project_ops"
 MAX_OPS = 5000
+ATTEMPTS = 3
 logger = logging.getLogger("uvicorn.error").getChild("live")
+_merging: "weakref.WeakValueDictionary[uuid.UUID, asyncio.Lock]" = weakref.WeakValueDictionary()
 
 
 class Rejected(Exception):
@@ -121,8 +124,9 @@ def stamp_ids(doc: t.Dict[str, t.Any]) -> list:
     return diff({"rules": rules}, {"rules": stamped})
 
 
-async def _locked(session: AsyncSession, project_id: uuid.UUID) -> Project:
-    project = (await session.execute(select(Project).where(Project.id == project_id).with_for_update())).scalar_one_or_none()
+async def _locked(session: AsyncSession, project_id: uuid.UUID, lock: bool = True) -> Project:
+    query = select(Project).where(Project.id == project_id)
+    project = (await session.execute(query.with_for_update() if lock else query)).scalar_one_or_none()
     if project is None:
         raise Rejected("the project no longer exists")
     return project
@@ -192,15 +196,14 @@ def _error_key(error: dict) -> tuple:
     return error.get("type"), error.get("msg")
 
 
-async def _new_errors(merged: dict, current: dict, own: t.Callable[[], dict], base: dict, executor) -> list:
+async def _new_errors(merged: dict, current: dict, own: t.Callable[[], dict], base: dict, validate) -> list:
     """The validation errors of `merged` beyond what one side had, or both sides added on their own, counted per
     (type, message); each document is validated only when still needed: validating a large one takes a few hundred
     ms."""
     async def counted(doc):
-        return Counter(map(_error_key, await loop.run_in_executor(executor, validation_errors, doc)))
+        return Counter(map(_error_key, await validate(doc)))
 
-    loop = asyncio.get_running_loop()
-    errors = await loop.run_in_executor(executor, validation_errors, merged)
+    errors = await validate(merged)
     excess = Counter(map(_error_key, errors))
     if excess:
         theirs = await counted(current)
@@ -218,69 +221,133 @@ async def _new_errors(merged: dict, current: dict, own: t.Callable[[], dict], ba
     return new
 
 
+async def _validate_here(doc: dict) -> list:
+    return await asyncio.to_thread(validation_errors, doc)
+
+
 async def apply_message(project_id: uuid.UUID, client_id: str, msg_id: str, base: int, ops: list,
-                        offline: bool = False, executor=None, parts: t.Sequence = ()) -> Applied:
+                        offline: bool = False, validate: t.Optional[t.Callable[[dict], t.Awaitable[list]]] = None,
+                        parts: t.Sequence = ()) -> Applied:
     """Apply one live message and commit it as the next version; a message already in the log is not applied again.
 
     Online, an op inside something another client changed since `base` is dropped. `offline` merges the batch whole
-    or not at all (Rejected names the conflicting paths); `executor` runs its validation. `parts` (`[msg_id, op
-    count]` in order) names earlier messages of this client the batch contains; the ops of one already logged are
-    skipped. Raises Rejected (nothing stored) when the base is unknown or the result is not a document of the
-    project's type.
+    or not at all (Rejected names the conflicting paths); `validate` (document to validation errors) checks the
+    merge, in a thread when left out. `parts` (`[msg_id, op count]` in order) names earlier messages of this client
+    the batch contains; the ops of one already logged are skipped. Raises Rejected (nothing stored) when the base is
+    unknown or the result is not a document of the project's type.
     """
+    if offline:
+        return await _merge(project_id, client_id, msg_id, base, ops, parts, validate or _validate_here)
     started = time.perf_counter()
     async with db_session() as session:
         project = await _locked(session, project_id)
         locked = time.perf_counter()
         rows = await _since(session, project, base)
-        # A message still in flight when its client reconnected can be logged on its own or inside a batch, and
-        # arrive again either way: inside a later batch, or late on the socket that dropped.
-        for row in rows:
-            if row.client_id == client_id and (row.msg_id == msg_id or msg_id in row.parts):
-                return Applied(row.version, row.ops)
-        logged = {i for row in rows if row.client_id == client_id for i in [row.msg_id, *row.parts]}
-        ops = _unlogged(ops, parts, logged)
-        theirs = [op for row in rows if row.client_id != client_id for op in row.ops]
-        stale, base_doc, replayed, compared = [], None, locked, locked
-        if offline:
-            base_doc = await _document_at(session, project_id, base)
-            replayed = time.perf_counter()
-            found = conflicts(ops, theirs, base_doc)
-            compared = time.perf_counter()
-            if found:
-                raise Rejected("someone else changed what your offline edits change", found)
-            ops = rebase_orders(ops, base_doc, project.project_data)
-        else:
-            stale = stale_ops(ops, theirs)
+        logged = _logged(rows, client_id, msg_id)
+        if logged:
+            return logged
+        ops = _unlogged(ops, parts, _logged_ids(rows, client_id))
+        stale = stale_ops(ops, [op for row in rows if row.client_id != client_id for op in row.ops])
         fresh = [op for op in ops if not any(op is s for s in stale)]
         doc, failed = apply(project.project_data, fresh)
         applied = [op for op in fresh if not any(op is f for f in failed)]
         applying = time.perf_counter()
-        try:
-            check_document(doc, project.project_type)
-        except ValueError as e:
-            raise Rejected(str(e))
+        _check(doc, project.project_type)
         checked = time.perf_counter()
-        if offline:
-            mine = [op for row in rows if row.client_id == client_id for op in row.ops] + ops
-            # ponytail: validates under the row lock (other writers wait); validate first and re-check the
-            # version if offline batches on large trees make that wait show.
-            new = await _new_errors(doc, project.project_data, lambda: apply(base_doc, mine)[0], base_doc, executor)
-            if new:
-                raise Rejected("merging your offline edits would add these errors: "
-                               + "; ".join(sorted({e["msg"] for e in new})))
-        validated = time.perf_counter()
-        version = await _commit_version(session, project, applied, client_id, msg_id, [p[0] for p in parts],
-                                        project_data=doc)
-        await session.commit()
+        version = await _commit(session, project, doc, applied, client_id, msg_id, parts)
     done = time.perf_counter()
-    logger.info("live apply project=%s version=%d offline=%s ops=%d dropped=%d lock_ms=%.1f replay_ms=%.1f "
-                "conflicts_ms=%.1f apply_ms=%.1f check_ms=%.1f validate_ms=%.1f persist_ms=%.1f total_ms=%.1f",
-                project_id, version, offline, len(ops), len(stale) + len(failed), (locked - started) * 1e3,
-                (replayed - locked) * 1e3, (compared - replayed) * 1e3, (applying - compared) * 1e3,
-                (checked - applying) * 1e3, (validated - checked) * 1e3, (done - validated) * 1e3,
-                (done - started) * 1e3)
+    logger.info("live apply project=%s version=%d offline=False ops=%d dropped=%d lock_ms=%.1f apply_ms=%.1f "
+                "check_ms=%.1f persist_ms=%.1f total_ms=%.1f", project_id, version, len(ops), len(stale) + len(failed),
+                (locked - started) * 1e3, (applying - locked) * 1e3, (checked - applying) * 1e3,
+                (done - checked) * 1e3, (done - started) * 1e3)
     return Applied(version, applied, stale + failed)
+
+
+async def _merge(project_id: uuid.UUID, client_id: str, msg_id: str, base: int, ops: list, parts: t.Sequence,
+                 validate) -> Applied:
+    # Validating a large document takes a few hundred ms, too long to hold the row lock: each attempt but the last
+    # merges and validates from one snapshot without it, then commits only if no version came in meanwhile. The
+    # last attempt holds the lock throughout, so a busy project still merges, and what is committed was validated.
+    # Batches of one project wait for each other here, so they do not keep overtaking each other's attempts.
+    started = time.perf_counter()
+    async with _merging.setdefault(project_id, asyncio.Lock()):
+        waited, base_doc = time.perf_counter(), None
+        for attempt in range(1, ATTEMPTS + 1):
+            last = attempt == ATTEMPTS
+            async with db_session() as session:
+                if not last:
+                    await session.connection(execution_options={"isolation_level": "REPEATABLE READ"})
+                project = await _locked(session, project_id, lock=last)
+                read = locked = time.perf_counter()
+                rows = await _since(session, project, base)
+                logged = _logged(rows, client_id, msg_id)
+                if logged:
+                    return logged
+                if base_doc is None:
+                    base_doc = await _document_at(session, project_id, base)
+                replayed = time.perf_counter()
+                doc, applied, failed = await _merged(project, rows, base_doc, client_id, ops, parts, validate)
+                validated = time.perf_counter()
+                if last:
+                    version = await _commit(session, project, doc, applied, client_id, msg_id, parts)
+                    break
+            async with db_session() as session:
+                current = await _locked(session, project_id)
+                locked = time.perf_counter()
+                if current.version == project.version:
+                    version = await _commit(session, current, doc, applied, client_id, msg_id, parts)
+                    break
+    done = time.perf_counter()
+    logger.info("live apply project=%s version=%d offline=True ops=%d dropped=%d attempts=%d wait_ms=%.1f "
+                "replay_ms=%.1f validate_ms=%.1f held_ms=%.1f total_ms=%.1f", project_id, version, len(applied),
+                len(failed), attempt, (waited - started) * 1e3, (replayed - read) * 1e3, (validated - replayed) * 1e3,
+                (done - locked) * 1e3, (done - started) * 1e3)
+    return Applied(version, applied, failed)
+
+
+async def _merged(project: Project, rows: list, base_doc: dict, client_id: str, ops: list, parts: t.Sequence,
+                  validate) -> tuple:
+    ops = _unlogged(ops, parts, _logged_ids(rows, client_id))
+    found = conflicts(ops, [op for row in rows if row.client_id != client_id for op in row.ops], base_doc)
+    if found:
+        raise Rejected("someone else changed what your offline edits change", found)
+    ops = rebase_orders(ops, base_doc, project.project_data)
+    doc, failed = apply(project.project_data, ops)
+    _check(doc, project.project_type)
+    mine = [op for row in rows if row.client_id == client_id for op in row.ops] + ops
+    new = await _new_errors(doc, project.project_data, lambda: apply(base_doc, mine)[0], base_doc, validate)
+    if new:
+        raise Rejected("merging your offline edits would add these errors: "
+                       + "; ".join(sorted({e["msg"] for e in new})))
+    return doc, [op for op in ops if not any(op is f for f in failed)], failed
+
+
+def _logged(rows: list, client_id: str, msg_id: str) -> t.Optional[Applied]:
+    # A message still in flight when its client reconnected can be logged on its own or inside a batch, and arrive
+    # again either way: inside a later batch, or late on the socket that dropped.
+    for row in rows:
+        if row.client_id == client_id and (row.msg_id == msg_id or msg_id in row.parts):
+            return Applied(row.version, row.ops)
+    return None
+
+
+def _logged_ids(rows: list, client_id: str) -> set:
+    return {i for row in rows if row.client_id == client_id for i in [row.msg_id, *row.parts]}
+
+
+def _check(doc: dict, project_type) -> None:
+    try:
+        check_document(doc, project_type)
+    except ValueError as e:
+        raise Rejected(str(e))
+
+
+async def _commit(session: AsyncSession, project: Project, doc: dict, ops: list, client_id: str, msg_id: str,
+                  parts: t.Sequence) -> int:
+    version = await _commit_version(session, project, ops, client_id, msg_id, [p[0] for p in parts],
+                                    project_data=doc)
+    await session.commit()
+    return version
 
 
 def _unlogged(ops: list, parts: t.Sequence, logged: set) -> list:
