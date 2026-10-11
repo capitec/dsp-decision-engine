@@ -53,6 +53,9 @@ collapses `score` into `run`, and leaves room for optional polars-native step bo
 | 2026-10-10 | `assert_equivalent` compares each record with a one-row frame when the pipeline has a frame step (manager, pending owner confirmation) |
 | 2026-10-10 | P6 (polars bodies, native segments, `impl`) is not built: E2 no-go (manager, pending owner confirmation) |
 | 2026-10-10 | Unannotated/`Any` outputs and untyped container rendering left as they are and documented as known limitations (manager, pending owner confirmation) |
+| 2026-10-10 | Every example runs on every engine: the five that returned untyped `dict`/`list[dict]` outputs declare them (owner) |
+| 2026-10-10 | Every engine types an `each`'s gathered list from its item and body declarations (one derivation), so a frame's schema is a function of the pipeline; a cast that would change a value is refused (manager; the owner's rule below) |
+| 2026-10-10 | A declared type fixes the batch schema: every declared optional key in every row, null when unset; per-record responses unchanged (owner) |
 
 ## Deviations from the plan
 
