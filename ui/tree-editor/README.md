@@ -19,19 +19,22 @@ Every project has a `version` that each save of its document bumps (a rename or 
 - an update of only `name`, `description` or `folder_id` needs no `base_version` and ignores one.
 
 Every document save is also logged as a version in `project_ops` (the ops that made it) and announced on the Postgres
-channel `project_ops`. With `DSP_LIVE_COLLAB=true` the flat-rule editor edits live over `WS
+channel `project_ops`. With `DSP_LIVE_COLLAB=true` both editors edit live over `WS
 /api/v1/projects/{id}/live`: it pushes each edit about 150 ms after typing pauses, every open editor receives every
 version in order, two edits to different fields are both kept, the last writer wins on the same field, and an edit
-inside a rule someone else changed or deleted is discarded and its author told. A header badge shows Live or
+inside a rule or node someone else changed or deleted is discarded and its author told. A header badge shows Live or
 Offline; Save waits until the server has every edit. READ access receives, WRITE sends. A REST save reaches open
-editors as one whole-document replace. The node editor still saves over REST. The log is never trimmed yet.
+editors as one whole-document replace. The node editor's nodes, edges (key `id`, else `source:target`) and subtrees
+are addressed by id; node positions are part of the document and sync, selection and measured sizes do not. A
+browser that cannot load the merge-core wasm still opens both editors, says live editing is unavailable there, and
+saves with Save over REST (a 409 when someone saved since). The log is never trimmed yet.
 
 Edits made while disconnected (a closed socket, or no answer to a ping for about 10 seconds) go back on reconnect as
 one offline batch, after the editor has caught up. The server merges it whole only when none of its paths is equal to,
 inside or above a path someone else changed since the disconnect (unless both left the same value there; two reorders of the rules conflict only when both
 changed the order of the same rules differently) and the merged document has no validation error that neither the
 stored document nor the offline editor's own had. Otherwise it refuses the whole batch: the editor shows the stored
-document and a banner naming the rules that collided, with Download my version (the offline document, shaped like an
+document and a banner naming the rules (or nodes) that collided, with Download my version (the offline document, shaped like an
 Export). The base document is rebuilt from the log (a new project logs its first version), so a batch older than the
 log is refused. A message is logged at most once per client: a resend is not applied again, and a batch names the
 earlier messages it contains so one applied while the editor reconnected is skipped, and one delivered late after
@@ -101,8 +104,9 @@ stacks run side by side; temp files and browser profiles go to `E2E_TMPDIR` (`/v
 The team tests insert their teams with `psql` in the stack's container and skip without it.
 
 `E2E_NODES=2` starts a second backend on `E2E_PORT+1` (same Postgres, so sessions are shared), `DSP_LIVE_COLLAB=true`
-turns live editing on, and `./stack.sh restart` restarts the backends but keeps Postgres. `test_live_collab.py` runs only
-on such a stack (`E2E_NODES=2 DSP_LIVE_COLLAB=true ./stack.sh up`); the rest of the suite expects live editing off.
+turns live editing on, and `./stack.sh restart` restarts the backends but keeps Postgres. `test_live_collab.py`, `test_live_offline.py` and
+`test_live_node_editor.py` run only on such a stack (`E2E_NODES=2 DSP_LIVE_COLLAB=true ./stack.sh up`); the rest of the suite expects live editing off
+(`test_live_ops_unavailable.py` runs either way).
 
 With docker compose, `docker compose --profile e2e run --rm e2e` runs the whole suite against the dev stack;
 `-e PYTEST_ADDOPTS="-m smoke"` picks a subset. The suite was run under podman with `stack.sh`; the compose route is
