@@ -9,22 +9,14 @@ name = "merge_core"
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = ["bigint"]
-# Integers past 2**64 and number text as written; incompatible with the direct (no JSON text) conversions below.
-bigint = ["serde_json/arbitrary_precision"]
 python = ["dep:pyo3"]
 wasm = ["dep:wasm-bindgen"]
-# Measured alternatives to crossing as JSON text: pythonize, serde-wasm-bindgen.
-direct-python = ["python", "dep:pythonize"]
-direct-wasm = ["wasm", "dep:serde-wasm-bindgen", "dep:serde"]
 
 [dependencies]
-serde_json = { version = "1", features = ["preserve_order"] }
+# arbitrary_precision keeps integers past 2**64 and number text as written.
+serde_json = { version = "1", features = ["preserve_order", "arbitrary_precision"] }
 pyo3 = { version = "0.25", features = ["abi3-py310", "extension-module"], optional = true }
 wasm-bindgen = { version = "0.2", optional = true }
-pythonize = { version = "0.25", optional = true }
-serde-wasm-bindgen = { version = "0.6", optional = true }
-serde = { version = "1", optional = true }
 
 [profile.release]
 opt-level = 3
