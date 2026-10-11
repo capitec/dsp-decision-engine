@@ -57,8 +57,9 @@ class Hub:
             async with db_session() as session:
                 version, doc = (await session.execute(select(Project.version, Project.project_data)
                                                       .where(Project.id == project_id))).one()
+                # Up to `version` only: a write committed since then may have trimmed a version this client needs.
                 logged = await session.scalar(select(func.count()).select_from(ProjectOp).where(
-                    ProjectOp.project_id == project_id, ProjectOp.version > since))
+                    ProjectOp.project_id == project_id, ProjectOp.version.between(since + 1, version)))
             if since == 0 or since > version or logged != version - since:
                 await client.ws.send_text(json.dumps({"type": "snapshot", "version": version, "doc": doc}))
                 client.last = version

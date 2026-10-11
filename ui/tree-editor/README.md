@@ -24,7 +24,7 @@ channel `project_ops`. With `DSP_LIVE_COLLAB=true` the flat-rule editor edits li
 version in order, two edits to different fields are both kept, the last writer wins on the same field, and an edit
 inside a rule someone else changed or deleted is discarded and its author told. A header badge shows Live or
 Offline; Save waits until the server has every edit. READ access receives, WRITE sends. A REST save reaches open
-editors as one whole-document replace. The node editor still saves over REST. The log is never trimmed yet.
+editors as one whole-document replace. The node editor still saves over REST. Every 100th version's log row also holds the whole document, and the log keeps a project's latest 5000 versions and none older than 30 days (`DSP_LIVE_LOG_KEEP_VERSIONS`, `DSP_LIVE_LOG_KEEP_DAYS`), trimmed back to a row holding a whole document, so any kept version is rebuilt by replaying at most 100 versions. An editor reconnecting from a version the log no longer keeps gets the whole document.
 
 Edits made while disconnected (a closed socket, or no answer to a ping for about 10 seconds) go back on reconnect as
 one offline batch, after the editor has caught up. The server merges it whole only when none of its paths is equal to,
@@ -32,8 +32,9 @@ inside or above a path someone else changed since the disconnect (unless both le
 changed the order of the same rules differently) and the merged document has no validation error that neither the
 stored document nor the offline editor's own had. Otherwise it refuses the whole batch: the editor shows the stored
 document and a banner naming the rules that collided, with Download my version (the offline document, shaped like an
-Export). The base document is rebuilt from the log (a new project logs its first version), so a batch older than the
-log is refused. A message is logged at most once per client: a resend is not applied again, and a batch names the
+Export). The base document is rebuilt from the log (a new project logs its first version, and the migration that adds
+snapshots logs the current version of every project older than that), so a batch made on a version the log no
+longer keeps is refused and stays downloadable. A message is logged at most once per client: a resend is not applied again, and a batch names the
 earlier messages it contains so one applied while the editor reconnected is skipped, and one delivered late after
 the batch is not applied again. A batch is not kept across a
 page reload.

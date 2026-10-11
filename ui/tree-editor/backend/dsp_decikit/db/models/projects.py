@@ -123,6 +123,11 @@ class ProjectOp(SQLModel, table=True):
     ops: t.List[t.Dict[str, t.Any]] = Field(sa_column=Column(JSONB, nullable=False))
     # The ids of the earlier messages an offline batch contains: one of them delivered late is not applied again.
     parts: t.List[str] = Field(default_factory=list, sa_column=Column(JSONB, nullable=False, server_default="[]"))
+    # The whole document at this version, stored every few versions so a rebuild replays only the ones after it
+    # (SQL NULL otherwise: JSON null would make every row look like one).
+    snapshot: t.Optional[t.Dict[str, t.Any]] = Field(
+        default=None, sa_column=Column(JSONB(none_as_null=True), nullable=True)
+    )
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
         sa_column=Column(TIMESTAMP(timezone=True), nullable=False),
