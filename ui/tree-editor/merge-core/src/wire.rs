@@ -23,13 +23,17 @@ fn arg(args: &[Value], i: usize) -> Res<&Value> {
 
 /// Call `name` (`diff`, `apply`, `stale_ops`, `conflicts`, `rebase_orders`, `is_related`, `touched`, `reconcile`)
 /// with `args`; `apply` and `stale_ops` answer with indices into the ops that were passed.
-pub fn call_value(name: &str, args: &[Value]) -> Res<Value> {
+pub fn call_value(name: &str, mut owned: Vec<Value>) -> Res<Value> {
+    if name == "apply" {
+        // The document is the caller's own parse, so it is edited in place rather than copied.
+        let [doc, ops] = owned.as_mut_slice() else { return Err(Error::Type("apply takes a document and ops".into())) };
+        let Value::Array(ops) = &*ops else { return Err(Error::Type(format!("ops is not a list: {ops}"))) };
+        let dropped = crate::apply_in_place(doc, ops);
+        return Ok(Value::Array(vec![std::mem::take(doc), dropped.into()]));
+    }
+    let args = &owned[..];
     Ok(match name {
         "diff" => crate::diff(arg(args, 0)?, arg(args, 1)?).into(),
-        "apply" => {
-            let (doc, dropped) = crate::apply(arg(args, 0)?, list(args, 1)?);
-            Value::Array(vec![doc, dropped.into()])
-        }
         "stale_ops" => crate::stale_ops(list(args, 0)?, list(args, 1)?)?.into(),
         "conflicts" => crate::conflicts(list(args, 0)?, list(args, 1)?, arg(args, 2)?)?.into(),
         "rebase_orders" => crate::rebase_orders(list(args, 0)?, arg(args, 1)?, arg(args, 2)?)?.into(),
@@ -45,5 +49,5 @@ pub fn call(name: &str, args: &str) -> Res<String> {
     let Value::Array(args) = serde_json::from_str(args).map_err(|e| Error::Value(e.to_string()))? else {
         return Err(Error::Type("args is not a JSON array".into()));
     };
-    Ok(call_value(name, &args)?.to_string())
+    Ok(call_value(name, args)?.to_string())
 }

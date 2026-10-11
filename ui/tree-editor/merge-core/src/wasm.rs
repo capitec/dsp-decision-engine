@@ -18,6 +18,6 @@ pub fn call(name: &str, args: &str) -> Result<String, JsError> {
 #[wasm_bindgen(js_name = callDirect)]
 pub fn call_direct(name: &str, args: JsValue) -> Result<JsValue, JsError> {
     let args: Vec<serde_json::Value> = serde_wasm_bindgen::from_value(args)?;
-    let out = crate::call_value(name, &args).map_err(|e| JsError::new(&format!("{e:?}")))?;
+    let out = crate::call_value(name, args).map_err(|e| JsError::new(&format!("{e:?}")))?;
     Ok(out.serialize(&serde_wasm_bindgen::Serializer::json_compatible())?)
 }

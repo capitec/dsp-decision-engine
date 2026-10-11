@@ -8,6 +8,7 @@
 //! Ops that a function reports back (dropped, stale) are returned as indices into the slice that was passed in.
 
 use serde_json::{Map, Value};
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 
 mod wire;
@@ -41,14 +42,14 @@ fn keyed_list(at: &Seg) -> Option<&str> {
     }
 }
 
-fn item_key(list: &str, item: &Value) -> Option<String> {
+fn item_key<'a>(list: &str, item: &'a Value) -> Option<Cow<'a, str>> {
     let item = item.as_object()?;
-    let text = |v: Option<&Value>| v.and_then(Value::as_str).map(String::from);
+    let text = |v: Option<&'a Value>| v.and_then(Value::as_str).map(Cow::Borrowed);
     match list {
         "rules" => text(item.get("rule")?.as_object()?.get("id")),
         "edges" => match item.get("id") {
             None | Some(Value::Null) => {
-                Some(format!("{}:{}", item.get("source")?.as_str()?, item.get("target")?.as_str()?))
+                Some(Cow::Owned(format!("{}:{}", item.get("source")?.as_str()?, item.get("target")?.as_str()?)))
             }
             id => text(id),
         },
@@ -57,10 +58,14 @@ fn item_key(list: &str, item: &Value) -> Option<String> {
 }
 
 /// The item keys of `items` at `at` when it is a keyed list with every key present and unique.
-fn keys(at: &Seg, items: &[Value]) -> Option<Vec<String>> {
+fn valid_keys<'a>(at: &Seg, items: &'a [Value]) -> Option<Vec<Cow<'a, str>>> {
     let list = keyed_list(at)?;
-    let keys: Vec<String> = items.iter().map(|i| item_key(list, i)).collect::<Option<_>>()?;
-    (keys.iter().collect::<HashSet<_>>().len() == keys.len()).then_some(keys)
+    let keys: Vec<Cow<str>> = items.iter().map(|i| item_key(list, i)).collect::<Option<_>>()?;
+    (keys.iter().map(|k| k.as_ref()).collect::<HashSet<_>>().len() == keys.len()).then_some(keys)
+}
+
+fn keys(at: &Seg, items: &[Value]) -> Option<Vec<String>> {
+    Some(valid_keys(at, items)?.into_iter().map(Cow::into_owned).collect())
 }
 
 fn keys_of(at: &Seg, value: &Value) -> Option<Vec<String>> {
@@ -106,29 +111,27 @@ fn op(kind: &str, at: &Seg, value: Option<&Value>) -> Value {
     Value::Object(o)
 }
 
-fn child(at: &Seg, segment: &str) -> Vec<String> {
-    [at, &[segment.to_string()]].concat()
-}
-
 /// The ops that turn `old` into `new` (none when they are equal; object key order is ignored).
 pub fn diff(old: &Value, new: &Value) -> Vec<Value> {
     let mut ops = vec![];
-    diff_into(old, new, &[], &mut ops);
+    diff_into(old, new, &mut vec![], &mut ops);
     ops
 }
 
-fn diff_into(old: &Value, new: &Value, at: &Seg, ops: &mut Vec<Value>) {
+fn diff_into(old: &Value, new: &Value, at: &mut Vec<String>, ops: &mut Vec<Value>) {
     match (old, new) {
         (Value::Object(o), Value::Object(n)) => {
             let mut all: Vec<&String> = o.keys().chain(n.keys().filter(|k| !o.contains_key(*k))).collect();
             all.sort();
             for k in all {
+                at.push(k.clone());
                 match (o.get(k), n.get(k)) {
-                    (Some(_), None) => ops.push(op("remove", &child(at, k), None)),
-                    (None, Some(v)) => ops.push(op("add", &child(at, k), Some(v))),
-                    (Some(a), Some(b)) => diff_into(a, b, &child(at, k), ops),
+                    (Some(_), None) => ops.push(op("remove", at, None)),
+                    (None, Some(v)) => ops.push(op("add", at, Some(v))),
+                    (Some(a), Some(b)) => diff_into(a, b, at, ops),
                     (None, None) => unreachable!(),
                 }
+                at.pop();
             }
         }
         (Value::Array(o), Value::Array(n)) => {
@@ -137,7 +140,9 @@ fn diff_into(old: &Value, new: &Value, at: &Seg, ops: &mut Vec<Value>) {
             } else if o.len() == n.len() {
                 let mut changes = vec![];
                 for (i, (a, b)) in o.iter().zip(n).enumerate() {
-                    diff_into(a, b, &child(at, &i.to_string()), &mut changes);
+                    at.push(i.to_string());
+                    diff_into(a, b, at, &mut changes);
+                    at.pop();
                 }
                 // Under a keyed path an index would be read as a key, so there a change replaces the whole list.
                 if !changes.is_empty() && keyed_list(at).is_some() {
@@ -154,15 +159,21 @@ fn diff_into(old: &Value, new: &Value, at: &Seg, ops: &mut Vec<Value>) {
     }
 }
 
-fn diff_keyed(old: &[Value], new: &[Value], old_keys: &[String], new_keys: &[String], at: &Seg, ops: &mut Vec<Value>) {
+fn diff_keyed(old: &[Value], new: &[Value], old_keys: &[String], new_keys: &[String], at: &mut Vec<String>, ops: &mut Vec<Value>) {
     let old_items: HashMap<&String, &Value> = old_keys.iter().zip(old).collect();
     let kept: HashSet<&String> = new_keys.iter().collect();
-    ops.extend(old_keys.iter().filter(|k| !kept.contains(k)).map(|k| op("remove", &child(at, k), None)));
+    for k in old_keys.iter().filter(|k| !kept.contains(k)) {
+        at.push(k.clone());
+        ops.push(op("remove", at, None));
+        at.pop();
+    }
     for (k, item) in new_keys.iter().zip(new) {
+        at.push(k.clone());
         match old_items.get(k) {
-            Some(prev) => diff_into(prev, item, &child(at, k), ops),
-            None => ops.push(op("add", &child(at, k), Some(item))),
+            Some(prev) => diff_into(prev, item, at, ops),
+            None => ops.push(op("add", at, Some(item))),
         }
+        at.pop();
     }
     // Apply appends new items, so an order op is needed only when that does not already give the new order.
     let appended = old_keys.iter().filter(|k| kept.contains(k)).chain(new_keys.iter().filter(|k| !old_items.contains_key(k)));
@@ -190,7 +201,7 @@ pub fn reconcile(current: &[String], given: &[String]) -> Vec<String> {
 
 fn index(items: &[Value], at: &Seg, segment: &str) -> Option<usize> {
     if keyed_list(at).is_some() {
-        return keys(at, items)?.iter().position(|k| k == segment);
+        return valid_keys(at, items)?.iter().position(|k| k == segment);
     }
     let digits = !segment.is_empty() && segment.bytes().all(|b| b.is_ascii_digit());
     let plain = segment == "0" || !segment.starts_with('0');
@@ -230,8 +241,13 @@ fn walk_mut<'a>(doc: &'a mut Value, at: &Seg) -> Result<&'a mut Value, Dropped> 
 /// add/replace set (a new keyed item goes at the end), remove deletes if present, order reconciles.
 pub fn apply(doc: &Value, ops: &[Value]) -> (Value, Vec<usize>) {
     let mut doc = doc.clone();
-    let dropped = (0..ops.len()).filter(|&i| apply_one(&mut doc, &ops[i]).is_err()).collect();
+    let dropped = apply_in_place(&mut doc, ops);
     (doc, dropped)
+}
+
+/// `apply` on `doc` itself, for a caller that owns it already.
+pub fn apply_in_place(doc: &mut Value, ops: &[Value]) -> Vec<usize> {
+    (0..ops.len()).filter(|&i| apply_one(doc, &ops[i]).is_err()).collect()
 }
 
 fn apply_one(doc: &mut Value, op: &Value) -> Result<(), Dropped> {
@@ -274,7 +290,7 @@ fn apply_one(doc: &mut Value, op: &Value) -> Result<(), Dropped> {
             }
             (Some(i), Some(v)) => l[i] = v.clone(),
             (None, None) => {}
-            (None, Some(v)) if keys(parent_at, l).is_some() => l.push(v.clone()),
+            (None, Some(v)) if valid_keys(parent_at, l).is_some() => l.push(v.clone()),
             _ => return Err(Dropped),
         },
         _ => return Err(Dropped),
@@ -333,7 +349,7 @@ pub fn stale_ops(mine: &[Value], concurrent: &[Value]) -> Res<Vec<usize>> {
 /// keys common to base, mine and theirs, and changed it differently.
 pub fn conflicts(mine: &[Value], theirs: &[Value], base: &Value) -> Res<Vec<String>> {
     let their_paths = touched_split(theirs)?;
-    let mut docs: Option<[Value; 3]> = None;
+    let mut docs: Option<[Value; 2]> = None;
     let mut found = vec![];
     for p in touched(mine)? {
         let s = split(&Value::from(p.as_str()))?;
@@ -341,13 +357,14 @@ pub fn conflicts(mine: &[Value], theirs: &[Value], base: &Value) -> Res<Vec<Stri
         if hits.is_empty() {
             continue;
         }
-        let docs = docs.get_or_insert_with(|| [base.clone(), apply(base, mine).0, apply(base, theirs).0]);
+        let docs = docs.get_or_insert_with(|| [apply(base, mine).0, apply(base, theirs).0]);
+        let docs = [base, &docs[0], &docs[1]];
         if s.last().is_some_and(|l| l == ORDER) {
-            if hits.len() == 1 && *hits[0] == s && !orders_disagree(docs, &s[..s.len() - 1]) {
+            if hits.len() == 1 && *hits[0] == s && !orders_disagree(&docs, &s[..s.len() - 1]) {
                 continue;
             }
         } else {
-            let same_end = match (walk(&docs[1], &s), walk(&docs[2], &s)) {
+            let same_end = match (walk(docs[1], &s), walk(docs[2], &s)) {
                 (Ok(a), Ok(b)) => same(a, b),
                 (Err(_), Err(_)) => true,
                 _ => false,
@@ -364,7 +381,7 @@ pub fn conflicts(mine: &[Value], theirs: &[Value], base: &Value) -> Res<Vec<Stri
     Ok(found)
 }
 
-fn orders_disagree(docs: &[Value; 3], at: &Seg) -> bool {
+fn orders_disagree(docs: &[&Value; 3], at: &Seg) -> bool {
     let mut all = vec![];
     for doc in docs {
         match walk(doc, at).ok().and_then(|l| keys_of(at, l)) {
