@@ -2,8 +2,9 @@
  * Live-sync ops on tree documents: diff, lenient apply, and the online (stale) and offline (conflict) checks.
  *
  * The Rust crate `merge-core` compiled to WebAssembly, the same code the backend runs as a Python extension.
- * Call `loadLiveOps()` once before the first use (the app does it before rendering). Documents cross the boundary
- * as JSON text; `apply` and `staleOps` return the caller's own op objects.
+ * Call `loadLiveOps()` once before the first use (the app does it before rendering); it resolves to the load error
+ * (null when loaded), and `liveOpsLoaded()` says whether the ops can be called. Documents cross the boundary as JSON
+ * text; `apply` and `staleOps` return the caller's own op objects.
  *
  * @example
  * await loadLiveOps()
@@ -17,7 +18,13 @@ export type Json = null | boolean | number | string | Json[] | { [key: string]: 
 /** `add` | `replace` | `remove` (no value) | `order` (value: the list's keys in the new order). */
 export type Op = { op: string; path: string; value?: Json }
 
-export const loadLiveOps = () => init({ module_or_path: wasmUrl }).then(() => undefined)
+let loaded = false
+export const liveOpsLoaded = () => loaded
+export const loadLiveOps = (): Promise<string | null> =>
+  init({ module_or_path: wasmUrl }).then(
+    () => { loaded = true; return null },
+    (error) => String(error?.message ?? error),
+  )
 
 const run = <T>(name: string, ...args: unknown[]): T => JSON.parse(call(name, JSON.stringify(args)))
 const pick = (ops: Op[], indices: number[]) => indices.map((i) => ops[i])

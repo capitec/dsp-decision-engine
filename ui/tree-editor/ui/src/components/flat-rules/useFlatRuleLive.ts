@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { toast } from '@/hooks/use-toast';
 import { LiveSync, liveUrl } from '@/lib/live-sync';
-import type { Json, Op } from '@/lib/live-ops';
+import { liveOpsLoaded, type Json, type Op } from '@/lib/live-ops';
 import { buildDocument, useFlatRuleStore } from './useFlatRuleStore';
 import type { FlatRuleProjectDetail } from './types';
 
@@ -17,7 +17,8 @@ export interface OfflineConflict {
  * Returns the last refused offline batch (null when none) and a function that dismisses it.
  */
 export function useFlatRuleLive(project: FlatRuleProjectDetail | null) {
-  const enabled = !!project?.live_collab;
+  // Without the wasm this browser saves over REST.
+  const enabled = !!project?.live_collab && liveOpsLoaded();
   const projectId = project?.id;
   const [conflict, setConflict] = useState<OfflineConflict | null>(null);
 
