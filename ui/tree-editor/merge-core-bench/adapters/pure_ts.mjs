@@ -14,6 +14,7 @@ const NO_REBASE = 'the TypeScript copy has no rebaseOrders, so its offline merge
 export const XFAIL = {
   'offline: their reorder against my insert merges (only they changed the common keys\' order)': NO_REBASE,
   'offline: my insert onto their reorder keeps their order': NO_REBASE,
+  'offline: fraud-overlay-base (rule ids stamped) pair 1': NO_REBASE,
   'integers past 2**53 that differ by one differ': 'a JavaScript number holds integers exactly only up to 2**53',
   'an added integer-like key goes last': 'JavaScript objects list integer-like keys first, whatever the insertion order',
   'diff orders keys by code point':
