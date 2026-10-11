@@ -15,6 +15,7 @@ import { toast } from '@/hooks/use-toast';
 import { isStaleSave, staleSaveToast } from '@/lib/stale-save';
 import { apiErrorMessage } from '@/lib/utils';
 import { subscribeToStoreActivity } from '@/lib/background-token-refresh';
+import type { LiveStatus } from '@/lib/live-sync';
 
 // Map decikit's validation_errors onto node highlighting and section flags
 const applyValidationErrors = (errors: ValidationError[], nodes: Array<{ id: string }>) => {
@@ -63,6 +64,12 @@ interface EditorStoreState {
   hasParameterErrors: boolean;
   hasSubtreeErrors: boolean;
 
+  // The project as loaded (the live sync starts from it), the connection, and Save's wait for the server
+  // (null when the project is saved over REST)
+  loaded: ProjectDetailResponse | null;
+  live: LiveStatus | null;
+  liveSettle: (() => Promise<boolean>) | null;
+
   // Actions
   setInputSchema: (schema: PolarsSchema | ((prev: PolarsSchema) => PolarsSchema)) => void;
   setNodes: (nodes: Node[] | ((prev: Node[]) => Node[]), dirty?: boolean) => void;
@@ -98,6 +105,9 @@ interface EditorStoreState {
 
   // Initialization
   initializeFromProject: (response: ProjectDetailResponse) => void;
+  // Show a document from the server, keeping the canvas state of the nodes and edges it still has
+  applyDocument: (doc: any, version: number) => void;
+  setValidationErrors: (errors: ValidationError[]) => void;
   reset: () => void;
 }
 
@@ -132,6 +142,9 @@ const editorStore = create<EditorStoreState>()(
     hasOutputErrors: false,
     hasParameterErrors: false,
     hasSubtreeErrors: false,
+    loaded: null,
+    live: null,
+    liveSettle: null,
 
     // Basic setters with dirty flag
     setInputSchema: (schema) => set((state) => ({
@@ -289,7 +302,7 @@ const editorStore = create<EditorStoreState>()(
     // Project management
     loadProject: async (projectId) => {
       try {
-        set({ loading: true, error: null, projectId });
+        set({ loading: true, error: null, projectId, loaded: null });
 
         const response = await getProjectApiV1ProjectsProjectIdGet({
           path: { project_id: projectId }
@@ -310,6 +323,19 @@ const editorStore = create<EditorStoreState>()(
     saveProject: async () => {
       const state = get();
       if (!state.projectId || state.saving) return;
+
+      if (state.liveSettle) {
+        set({ saving: true });
+        const settled = await state.liveSettle();
+        set({ saving: false, ...(settled && { isDirty: false }) });
+        const errors = get().validationErrors;
+        toast(!settled
+          ? { title: "Save Failed", description: "The server has not confirmed your edits yet; they are kept and will be sent when it answers.", variant: "destructive" }
+          : errors.length === 0
+            ? { title: "Project Saved", description: "Your changes have been saved successfully." }
+            : { title: "Saved with validation issues", description: applyValidationErrors(errors, get().nodes).message, duration: 10000 });
+        return;
+      }
 
       try {
         set({ saving: true, error: null });
@@ -376,6 +402,7 @@ const editorStore = create<EditorStoreState>()(
         projectName: response.name,
         projectDescription: response.description,
         version: response.version,
+        loaded: response,
         ...fromDocument(projectData),
         ...((projectData.nodes || []).some((n: any) => !n.position) && { autoRearrange: true }),
         isDirty: false,
@@ -386,6 +413,10 @@ const editorStore = create<EditorStoreState>()(
         ).state
       });
     },
+
+    applyDocument: (doc, version) => set((state) => ({ ...fromDocument(doc, state), version })),
+
+    setValidationErrors: (errors) => set((state) => applyValidationErrors(errors, state.nodes).state),
 
     reset: () => {
       set({
@@ -415,6 +446,9 @@ const editorStore = create<EditorStoreState>()(
         hasOutputErrors: false,
         hasParameterErrors: false,
         hasSubtreeErrors: false,
+        loaded: null,
+        live: null,
+        liveSettle: null,
       });
     }
   }))
