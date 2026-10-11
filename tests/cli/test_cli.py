@@ -162,6 +162,13 @@ def test_serve_refuses_an_unknown_engine_before_starting_any_worker(project, uvi
     assert uvicorn_calls == []
 
 
+def test_serve_and_build_refuse_the_polars_engine_before_any_worker_starts(project, uvicorn_calls):
+    result = CliRunner().invoke(cli, ["serve", "--engine", "polars"])
+    assert result.exit_code == 1 and "numba engine" in result.output and uvicorn_calls == []
+    result = CliRunner().invoke(cli, ["build"], env={"DECIKIT_API__ENGINE__TYPE": "polars"})
+    assert result.exit_code == 1 and "numba engine" in result.output
+
+
 def test_serve_warns_when_the_build_ran_on_another_cpu(project, uvicorn_calls):
     triple, _, features = cpu_target()
     (project / CPU_TARGET_FILE).write_text(json.dumps([triple, "some-other-cpu", features]))

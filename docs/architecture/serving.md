@@ -393,7 +393,7 @@ numba caches compiled kernels on disk for the CPU it compiled on. `decikit build
 | `api.code_path` | `DECIKIT_API__CODE_PATH` | `.` |
 | `api.pipeline` | `DECIKIT_API__PIPELINE` | `pipeline:build` |
 | `api.handler` | `DECIKIT_API__HANDLER` | `inference:Handler` |
-| `api.engine.type` and the engine's fields | `DECIKIT_API__ENGINE__TYPE`, `DECIKIT_API__ENGINE__STRICT_COMPILE`, `DECIKIT_API__ENGINE__PARAMS_VALIDATION` | `fused`, `false`, `eager` |
+| `api.engine.type` and the engine's fields | `DECIKIT_API__ENGINE__TYPE`, `DECIKIT_API__ENGINE__STRICT_COMPILE`, `DECIKIT_API__ENGINE__PARAMS_VALIDATION` | `fused`, `false`, `eager` (a numba engine; `polars` is refused) |
 | `config.type` and the store's fields | `DECIKIT_CONFIG__TYPE`, `DECIKIT_CONFIG__BASEPATH` | `file:json`, `configs` |
 | `serve.host`, `serve.port`, `serve.workers`, `serve.server` | `DECIKIT_SERVE__*` | `0.0.0.0`, `8080`, `2 * CPUs + 1`, `starlette` |
 
