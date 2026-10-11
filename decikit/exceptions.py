@@ -5,7 +5,8 @@ from contextlib import contextmanager
 
 __all__ = [
     "DecikitError", "DecikitMissingDependencyError", "EngineError", "ExprError", "FallbackWarning", "HiddenStateWarning",
-    "IRError", "MissingInputError", "NotIntegralError", "ParamsError", "RegistryError", "ShadowedTableWarning", "WiringError",
+    "IRError", "MissingInputError", "NotIntegralError", "ParamsError", "RegistryError", "ShadowedTableWarning",
+    "StrictCompileError", "WiringError",
 ]
 
 
@@ -148,7 +149,15 @@ class EngineError(DecikitError, ValueError):
 
 
 class StrictCompileError(EngineError):
-    """A step `strict_compile=True` refuses to run in Python."""
+    """A step that would run in Python, refused by `strict_compile=True`.
+
+    Example::
+
+        try:
+            FusedEngine(strict_compile=True).bind(pipeline).run(df)
+        except StrictCompileError as e:   # 'p/label runs in Python, row by row: ...'
+            ...
+    """
 
 
 class RegistryError(DecikitError, LookupError):
