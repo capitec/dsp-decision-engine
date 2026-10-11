@@ -246,7 +246,11 @@ export function conflicts(mine: Op[], theirs: Op[], base: Json): string[] {
     if (s[s.length - 1] === ORDER) {
       const onlyOrder = hits.length === 1 && hits[0].length === s.length && isPrefix(s, hits[0])
       if (onlyOrder && !ordersDisagree(docs, s.slice(0, -1))) continue
-    } else if (!diff(valueAt(docs[1], s), valueAt(docs[2], s)).length) continue
+    } else if (
+      !diff(valueAt(docs[1], s), valueAt(docs[2], s)).length &&
+      // Under something they replaced, an index can name another item on their side than on mine.
+      !hits.some((t) => t.length < s.length && s.slice(t.length).some((x) => /^\d+$/.test(x)))
+    ) continue
     found.push(path)
   }
   return found

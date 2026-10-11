@@ -259,7 +259,9 @@ def conflicts(mine, theirs, base):
         if s[-1:] == [ORDER]:
             if s in hits and len(hits) == 1 and not _orders_disagree(docs, s[:-1]):
                 continue
-        elif not diff(_at(docs[1], s), _at(docs[2], s)):
+        elif not diff(_at(docs[1], s), _at(docs[2], s)) and not any(
+                len(t) < len(s) and any(x.isdigit() for x in s[len(t):]) for t in hits):
+            # Under something they replaced, an index can name another item on their side than on mine.
             continue
         found.append(path)
     return found
