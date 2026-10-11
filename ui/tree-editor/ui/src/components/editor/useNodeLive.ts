@@ -76,7 +76,9 @@ export function useNodeLive() {
     store.setState({ live: 'connecting', liveSettle: () => sync.settle() });
     const unsubscribe = store.subscribe(
       (s) => [s.nodes, s.edges, s.subtrees, s.input_schema, s.output, s.parameters] as const,
-      () => { if (!showing) sync.edit(); },
+      // Measuring and selecting nodes change them too, but only an edit sends: the editor's own form of a stored
+      // document (one subtree per root, edge ids) would otherwise be pushed by merely opening it.
+      () => { if (!showing && store.getState().isDirty) sync.edit(); },
       { equalityFn: (a, b) => a.every((part, i) => part === b[i]) },
     );
     return () => {
