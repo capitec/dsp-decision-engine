@@ -9,7 +9,8 @@ import time
 import warnings
 
 import polars as pl
-from decikit import Engine, flow, param
+from decikit import FusedEngine, flow, param
+from decikit.exceptions import EngineError
 
 def disposable(income: float, expenses: float) -> float:
     return income - expenses
@@ -24,8 +25,8 @@ pipeline = flow(disposable, ratio, affordable, name="afford")
 record = {"income": 1000.0, "expenses": 300.0, "debt": 200.0}
 
 for mode in ("interpreted", "stepped", "fused"):
-    exe = pipeline.compile(mode)          # same as Engine().bind(pipeline, mode)
-    print(mode, exe.score(record))
+    exe = pipeline.compile(mode)          # same as Engine.resolve(mode)().bind(pipeline)
+    print(mode, exe.run(record))
 ```
 
 ```text
@@ -34,23 +35,25 @@ stepped {'income': 1000.0, 'expenses': 300.0, 'debt': 200.0, 'affordable': True}
 fused {'income': 1000.0, 'expenses': 300.0, 'debt': 200.0, 'affordable': True}
 ```
 
-| Mode | What runs | A session pauses at | Use it for |
+| Engine | What runs | A session pauses at | Use it for |
 |---|---|---|---|
 | `"interpreted"` | each step as a Python function, row by row | every step, and inside trees | debugging, the reference answer, pipelines that barely run |
 | `"stepped"` | each step as its own numba kernel over all rows, with a Python driver between steps | every step | debugging compiled behaviour, finding which step of a kernel raised |
 | `"fused"` | one kernel per run of consecutive compilable steps; branches and loops of plain scalar steps packed into one kernel | kernel boundaries only | serving (`decikit serve`'s default), batch runs |
 
-`pipeline.run(df)` is interpreted. `Engine(...).bind(pipeline, mode)` does what `compile` does and takes the engine options (`strict_compile=`, `params_validation=`). An unknown mode is refused: `EngineError: unknown mode 'jit'; expected one of ['fused', 'interpreted', 'stepped']`.
+`pipeline.run(df)` and `pipeline.compile()` follow the default engine, which is fused when nothing sets another. Set one for a block with `with decikit.engine("interpreted"):`, or for one call with `run(df, engine="interpreted")`; `session` opens interpreted whatever the default, and `decikit serve` reads its engine from its own document, not from this default. A fused `run` binds and builds on every call (no numba compile after the first), so repeating it on a small frame costs two to three times the interpreted run, about 2 to 3 ms more on a small flow and about 35 ms on a large one: compile once with `compile()` and call the executable, or switch to interpreted while you iterate.
 
-Measured on a flagship pipeline at 1M rows through `run` and 20k `score` calls (CPython 3.14, dev box):
+An engine is a settings document named by its tag: `pipeline.compile(FusedEngine(strict_compile=True))` takes the engine options (`strict_compile=`, `params_validation=`), and `Engine.registered()` lists the tags. An unknown tag is refused: `RegistryError: 'fsued' is not a registered Engine type. Did you mean 'fused'?`.
 
-| Mode | Batch rows/s | `score` p50 | `score` p99 |
+Measured on a flagship pipeline at 1M rows through `run` and 20k single-record `run` calls (CPython 3.14, dev box):
+
+| Engine | Batch rows/s | record p50 | record p99 |
 |---|---|---|---|
 | interpreted | 0.25M | 59.1 µs | 84.5 µs |
 | stepped | 12.9M | 37.1 µs | 47.6 µs |
 | fused | 12.5M | 27.7 µs | 34.7 µs |
 
-On branches and loops the gap is wider, because fused mode packs the whole control flow into one kernel. A branch measured 41.6 to 44.3M rows/s fused against 14.8M stepped (1M rows), and a loop of up to 360 iterations at 6.33M rows/s fused against 0.81M stepped (200k rows); `score()` through the branch had a p50 of 23 µs fused and 66 µs stepped.
+On branches and loops the gap is wider, because fused mode packs the whole control flow into one kernel. A branch measured 41.6 to 44.3M rows/s fused against 14.8M stepped (1M rows), and a loop of up to 360 iterations at 6.33M rows/s fused against 0.81M stepped (200k rows); `run(record)` through the branch had a p50 of 23 µs fused and 66 µs stepped.
 
 ## Kernel boundaries in fused mode
 
@@ -67,7 +70,7 @@ def affordable_now(ratio: float, disposable: float, month_end: bool, limit: floa
 
 warnings.simplefilter("ignore")
 dated = flow(disposable, ratio, month_end, affordable_now, name="afford").compile("fused")
-dated.score({**record, "applied_on": date(2026, 1, 5)})
+dated.run({**record, "applied_on": date(2026, 1, 5)})
 
 groups = {}
 for call_id, unit in dated.runner.units.items():
@@ -127,7 +130,7 @@ Branches and loops pack into one fused kernel when every step inside is a plain 
 
 ## Fallback and the FallbackWarning
 
-A step that cannot compile still runs. The compiled modes run it in Python, row by row, and keep the steps before and after it compiled. Each fallback is announced once per executable with a `FallbackWarning`, and `fallbacks()` lists every one with its reason:
+A step that cannot compile still runs. The compiled modes run it in Python, row by row, and keep the steps before and after it compiled. Fused mode announces each fallback once per executable with a `FallbackWarning` (stepped mode, which exists to inspect one step at a time, does not), and `fallbacks()` lists every one with its reason:
 
 ```python
 from decikit import FallbackWarning, allow_fallback
@@ -191,7 +194,7 @@ Reading the report:
 - `flagged` has an `import` in its body. numba refused it with `UnsupportedBytecodeError`, one of the compile-time errors that trigger a fallback.
 - `via_legacy` calls a function marked `@allow_fallback`, which makes the call an intentional Python boundary: no warning, but still listed with `@allow_fallback:` in front.
 
-Interpreted mode never falls back, so its `fallbacks()` is always empty. The warning text is `FallbackWarning: <path> runs in Python, row by row: <reason>`. Python-row speed is below 1M rows/s in a batch against a kernel's hundreds of millions, and under 10 µs extra on a single `score()` (the figures the guide gives).
+Interpreted mode never falls back, so its `fallbacks()` is always empty. Because `run` is fused by default, a `run` over such a step prints the warning too: put `@allow_fallback` on the function if you mean it, or run interpreted. The warning text is `FallbackWarning: <path> runs in Python, row by row: <reason>`. Python-row speed is below 1M rows/s in a batch against a kernel's hundreds of millions, and under 10 µs extra on a single `run(record)` (the figures the guide gives).
 
 Only compile-time failures fall back, because catching every exception would turn a real bug, such as a `ZeroDivisionError`, into a silent "needed a fallback". A runtime error always propagates, with a note naming the step:
 
@@ -211,7 +214,7 @@ for mode in ("interpreted", "stepped", "fused"):
 ```text
 interpreted division by zero ['in step z/per_income, row 1']
 stepped division by zero ['in step z/per_income']
-fused division by zero ["in one of the steps ['z/disposable', 'z/per_income'], fused into one kernel; run in mode='stepped' to see which"]
+fused division by zero ["in one of the steps ['z/disposable', 'z/per_income'], fused into one kernel; run in engine='stepped' to see which"]
 ```
 
 Division by zero raises in every mode, as it does in Python. A fused kernel cannot tell which of its steps raised, so its note lists them all and suggests stepped mode. The notes need Python 3.11 or newer.
@@ -241,30 +244,30 @@ except TypeError as e:
 
 ### Strict compile
 
-`Engine(strict_compile=True)` raises at the first run instead of warning, for any step that would run in Python without `@allow_fallback`. Use it in CI or at service start-up to keep a fallback from slipping in:
+`FusedEngine(strict_compile=True)` raises at the first run instead of warning, for any step that would run in Python without `@allow_fallback`. Use it in CI or at service start-up to keep a fallback from slipping in:
 
 ```python
 try:
-    Engine(strict_compile=True).bind(mixed, mode="fused").run(data)
-except ValueError as e:
+    FusedEngine(strict_compile=True).bind(mixed).run(data)
+except EngineError as e:
     print(e)
 
-accepted = Engine(strict_compile=True).bind(flow(legacy_score, name="q"), mode="fused")
-print(accepted.score({"code": 4}))
+accepted = FusedEngine(strict_compile=True).bind(flow(legacy_score, name="q"))
+print(accepted.run({"code": 4}))
 ```
 
 ```text
-mixed/applied_month runs in Python, row by row: reads 'applied_on' as <class 'datetime.date'>, which no kernel takes; accept it with @allow_fallback, or run mode='interpreted'
+mixed/applied_month runs in Python, row by row: reads 'applied_on' as <class 'datetime.date'>, which no kernel takes; accept it with @allow_fallback, or run engine='interpreted'
 {'code': 4, 'legacy_score': 8.0}
 ```
 
-The strict error is a plain `ValueError`, not a `DecikitError`.
+The strict error is an `EngineError` (a `DecikitError` and a `ValueError`).
 
-`strict_compile=True` also refuses hidden state, in every mode: a step that reads a module-level object (a `HiddenStateWarning` otherwise) makes `bind` raise `EngineError`, so a CI build with one fails.
+`strict_compile=True` also refuses hidden state, in every engine: a step that reads a module-level object (a `HiddenStateWarning` otherwise) makes `bind` raise `EngineError`, so a CI build with one fails.
 
 ## The first call and the numba cache
 
-Binding is cheap. The first `run` or `score` of a compiled executable compiles: numba types each step from its annotations and builds the kernels, which takes a large fraction of a second for a small pipeline. Later calls reuse the kernels, and so does a second executable built from the same steps in the same process:
+Binding is cheap. The first `run` of a compiled executable compiles: numba types each step from its annotations and builds the kernels, which takes a large fraction of a second for a small pipeline. Later calls reuse the kernels, and so does a second executable built from the same steps in the same process:
 
 ```python
 def surplus(income: float, expenses: float, buffer: float = param(250.0)) -> float:
@@ -272,7 +275,7 @@ def surplus(income: float, expenses: float, buffer: float = param(250.0)) -> flo
 
 def timed(exe):
     t = time.perf_counter()
-    exe.score(record)
+    exe.run(record)
     return time.perf_counter() - t
 
 fresh = flow(surplus, name="s").compile("fused")
@@ -298,7 +301,7 @@ What is cached where:
 - The disk cache records the CPU it was built on. A cache built on one machine type misses silently on another and recompiles at start-up.
 - Each git worktree has its own `__pycache__`, so the first run in a fresh worktree is slow.
 
-To keep compiling off the request path, `decikit build` scores `sample_request.json` through every kernel, and a server worker stages its config version (which warms it the same way) before it answers `/ping`. In your own service, call `score` once with a representative record at start-up.
+To keep compiling off the request path, `decikit build` scores `sample_request.json` through every kernel, and a server worker stages its config version (which warms it the same way) before it answers `/ping`. In your own service, call `run` once with a representative record at start-up.
 
 ## Threads and nogil
 
@@ -310,18 +313,18 @@ Every compiled kernel is built with `nogil=True`, so it releases the GIL while i
 
 ## Measuring your own pipeline
 
-Measure with warm kernels and a params document object you reuse, since `score` caches the validated and converted params by the document's identity:
+Measure with warm kernels and a params document object you reuse, since `run` caches the validated and converted params by the document's identity:
 
 ```python
 import statistics
 
 exe = pipeline.compile("fused")
 params = pipeline.parameters().defaults()
-exe.score(record, params)                                   # compile and warm
+exe.run(record, params)                                     # compile and warm
 samples = []
 for _ in range(2000):
     t = time.perf_counter_ns()
-    exe.score(record, params)
+    exe.run(record, params)
     samples.append(time.perf_counter_ns() - t)
 p50 = statistics.median(samples) / 1000
 print(p50 < 1000)                                          # microseconds, well under a millisecond
@@ -341,12 +344,12 @@ True
 Things that skew a measurement:
 
 - Timing the first call measures numba, not your pipeline.
-- Scoring one record through `run(one_row_frame)` adds the frame round trip; the guide puts that at about five times the cost of `score`.
+- Scoring one record through `run(one_row_frame)` adds the frame round trip; the guide puts that at about five times the cost of passing the dict.
 - A new params dict per call is hashed and validated every time. Converting a 50-module params document measured 170.6 µs against 0.22 µs for a cached bundle.
-- A frame step anywhere in the pipeline makes `score` build a one-row polars frame.
+- A frame step anywhere in the pipeline makes `run` on a record build a one-row polars frame.
 - Fallback steps run at Python speed; check `fallbacks()` first.
 
-The repository's `benchmarks/` folder holds plain scripts that measure the engine itself, for example `uv run python benchmarks/modes.py` (batch throughput and `score` latency per mode) and `benchmarks/control_flow.py` (packed branches and loops).
+The repository's `benchmarks/` folder holds plain scripts that measure the engine itself, for example `uv run python benchmarks/modes.py` (batch throughput and single-record latency per mode) and `benchmarks/control_flow.py` (packed branches and loops).
 
 ## Where to go next
 

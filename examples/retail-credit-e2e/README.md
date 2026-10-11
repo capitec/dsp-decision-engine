@@ -81,7 +81,7 @@ below is the order a reader follows, not a call sequence anyone maintains.
 | `credit_core`'s steps and tables reused on this flow's columns | [pipeline.py](retail_credit/pipeline.py), [pricing.py](retail_credit/pricing.py) |
 | Four overlay stacks (`AdjustmentStack` documents), one per overlaid value, each resolved once per decision, recorded beside the value, switchable with a param | [documents.py](retail_credit/documents.py), [configs/0.1.0/](configs/0.1.0), [tests/test_affordability.py](tests/test_affordability.py) |
 | Config documents passed to `build` (`pd_overlays`, `amount_cap_overlays`, `buffer_overlays`, `rate_addon_overlays`, `reason_codes`, `appetite_by_grade`), and a flow of one step per rule so a diff names the rule that changed | [pipeline.py](retail_credit/pipeline.py), [caps.py](retail_credit/caps.py), [tests/test_hidden_state.py](tests/test_hidden_state.py) |
-| `Struct[...]` and `list[dict]` outputs: the winning quote and the cap chain | [pricing.py](retail_credit/pricing.py), [caps.py](retail_credit/caps.py) |
+| `Struct[...]` and `list[TypedDict]` outputs: the winning quote and the cap chain (`ChainLink`) | [pricing.py](retail_credit/pricing.py), [caps.py](retail_credit/caps.py) |
 | Steps that are Python on purpose, marked `@allow_fallback` | [intake.py](retail_credit/intake.py), [caps.py](retail_credit/caps.py), [tests/test_serving.py](tests/test_serving.py) |
 | Warm-up from `sample_request.json`, and serving the raw request bytes with JSON date strings | [sample_request.json](sample_request.json), [tests/test_serving.py](tests/test_serving.py) |
 
@@ -100,7 +100,7 @@ fresh checkout takes a minute or two while numba compiles):
 
 ```bash
 uv run decikit build
-# built config version 0.1.0 (pipeline retail_credit.pipeline:build, mode fused)
+# built config version 0.1.0 (pipeline retail_credit.pipeline:build, engine fused)
 ```
 
 Serve, and decide the sample application. Its dates are plain JSON strings. A decision takes a few milliseconds:

@@ -92,7 +92,7 @@ The stages, in the order the decision takes them:
 | `reason_codes` documents twice: why a scenario was rejected (read by the search) and why a client was declined or referred (a step in the flow) | [reasons.py](consolidation/reasons.py), [`configs/0.1.0/`](configs/0.1.0) |
 | `each` over the products the search can price, reading the assessment's own buffer grid | [capacity.py](consolidation/capacity.py) |
 | `TypedDict` account lists: JSON date strings arrive as `date`s | [inventory.py](consolidation/inventory.py) |
-| `@allow_fallback` for steps that are Python on purpose, checked by `Engine(strict_compile=True)` | [tests/test_serving.py](tests/test_serving.py) |
+| `@allow_fallback` for steps that are Python on purpose, checked by `FusedEngine(strict_compile=True)` | [tests/test_serving.py](tests/test_serving.py) |
 | Warm-up from `sample_request.json`, and serving the raw request bytes | [sample_request.json](sample_request.json), [tests/test_serving.py](tests/test_serving.py) |
 
 ## Run it
@@ -111,7 +111,7 @@ checkout takes a minute while numba compiles):
 
 ```bash
 uv run decikit build
-# built config version 0.1.0 (pipeline consolidation.pipeline:build, mode fused)
+# built config version 0.1.0 (pipeline consolidation.pipeline:build, engine fused)
 ```
 
 Serve, and assess the sample client. Her dates are plain JSON strings. The 178 scenarios the search evaluates take a
@@ -232,6 +232,7 @@ consolidation/          the package
   objective.py          the weights per channel, the re-weight overlay, ranking and selection
   outcome.py            the decision, conditions, validity, before and after, execution package
   products.py           the Quote every product returns, and the gathered product policies
+  records.py            the `TypedDict` of every record a step writes: the baseline, the settlements, the scenarios, the offer
   flex_loan.py          product 11: a consolidation loan priced from its own card
   everyday_card.py      product 20: a balance transfer with a promotional rate that reverts
   reasons.py vocab.py   the codes this example declares
@@ -298,6 +299,11 @@ Inputs it reads that the caller owns: `decision_id`, `decision_date`, `channel_c
 - **Left out.** Products 30 and 40 (they need collateral data), the restructure variant and batch identification, the
   consolidation-specific scorecard (the grade comes in with the request), joint applicants, a time budget, rate add-on
   overlays, and the persistence and replay of the record. `hardship_declared` and an assessment mode are not read.
+- **Every record output is a declared `TypedDict`** (`records.py`), so each column has a polars dtype before the first row.
+  A key a record may leave out is in a `total=False` class, and a batch row holds it as null. The two `each` gathers
+  (`classified_accounts`, `scenario_buffers`) are typed by every engine from `PreparedAccount` and the body's outputs:
+  a batch row holds every declared account field in the declared order, null where an account left it out, so the
+  polars engine runs this pipeline too.
 - **One workaround for what the decider toolkit lacks**, marked `# workaround`: the product policies are keyed by text because a `dict`
   with integer keys becomes a column that a JSON or CSV batch response cannot write, and `product_policies` is one of
   the pipeline's outputs.

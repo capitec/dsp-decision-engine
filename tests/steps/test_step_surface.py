@@ -18,10 +18,10 @@ pipeline = flow(ratio, affordable, name="afford")
 df = pl.DataFrame({"income": [1000.0], "debt": [200.0]})
 
 
-def test_compile_returns_an_executable_that_scores_a_record():
+def test_compile_returns_an_executable_that_runs_a_record():
     exe = pipeline.compile("fused")
     assert isinstance(exe, Executable)
-    assert exe.score({"income": 1000.0, "debt": 200.0})["affordable"] is True
+    assert exe.run({"income": 1000.0, "debt": 200.0})["affordable"] is True
 
 
 def test_run_accepts_a_trace_sink():
@@ -47,5 +47,5 @@ def test_validate_reports_unknown_step_and_bad_value_without_running():
 
 def test_function_step_compiles_and_bind_still_redefaults_params():
     one = step(affordable)
-    assert one.compile("fused").score({"ratio": 0.5})["affordable"] is False
-    assert one.bind(limit=0.9).compile().score({"ratio": 0.5})["affordable"] is True
+    assert one.compile("fused").run({"ratio": 0.5})["affordable"] is False
+    assert one.bind(limit=0.9).compile().run({"ratio": 0.5})["affordable"] is True

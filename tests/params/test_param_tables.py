@@ -3,7 +3,7 @@ import numpy as np
 import polars as pl
 import pytest
 
-from decikit import Engine, ParamRef, ParamTable, flow, param, param_table
+from decikit import Engine, FusedEngine, ParamRef, ParamTable, flow, param, param_table
 from decikit.exceptions import ParamsError
 from decikit.steps._values import TableRef
 from decikit.lab.testing import no_recompile
@@ -137,14 +137,14 @@ def test_a_non_identifier_param_name_is_refused_with_a_suggestion(ref):
 
 @pytest.mark.parametrize("mode", ["interpreted", "stepped", "fused"])
 def test_rows_are_retuned_in_every_mode_without_recompiling(mode):
-    exe = Engine(strict_compile=True).bind(flow(rate, name="p"), mode=mode)
+    exe = Engine.resolve(mode)(strict_compile=True).bind(flow(rate, name="p"))
     assert exe.run(FRAME)["rate"].to_list() == [0.2, 0.1]
-    assert exe.score({"score": 700})["rate"] == 0.1
+    assert exe.run({"score": 700})["rate"] == 0.1
     with no_recompile():
         more = [{"floor": 0, "rate": 0.3}, {"floor": 50, "rate": 0.25}, {"floor": 650, "rate": 0.05}]
         assert exe.run(FRAME, params=doc(more))["rate"].to_list() == [0.25, 0.05]
-        assert exe.score({"score": 60}, doc(more))["rate"] == 0.25
-        assert exe.score({"score": 60}, doc([]))["rate"] == 0.0
+        assert exe.run({"score": 60}, doc(more))["rate"] == 0.25
+        assert exe.run({"score": 60}, doc([]))["rate"] == 0.0
 
 
 def capped(score: int, rates: ParamTable = param_table({"floor": int, "rate": float}, default=ROWS),
@@ -157,5 +157,5 @@ def capped(score: int, rates: ParamTable = param_table({"floor": int, "rate": fl
 
 
 def test_a_table_and_a_plain_param_mix_in_a_fused_kernel():
-    exe = Engine(strict_compile=True).bind(flow(capped, name="p"), mode="fused")
+    exe = FusedEngine(strict_compile=True).bind(flow(capped, name="p"))
     assert exe.run(FRAME)["capped"].to_list() == [0.15, 0.1]

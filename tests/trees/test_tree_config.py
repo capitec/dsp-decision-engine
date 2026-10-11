@@ -11,7 +11,7 @@ import pytest
 from decikit import flow
 from decikit.steps.trees.schema import load_document
 from decikit import _engine as engine
-from decikit._engine import Engine
+from decikit._engine import Engine, FusedEngine, InterpretedEngine, SteppedEngine
 from decikit._engine.compile import kernel
 from decikit._engine.debug import NodeVisited
 from decikit.steps import ConfigurableStep
@@ -85,7 +85,7 @@ def test_nodes_map_each_locator_to_its_node():
 
 
 def test_a_node_breakpoint_pauses_after_the_tree_and_counts_rows_per_node():
-    s = Engine().bind(_risk()).session(FRAME)
+    s = InterpretedEngine().bind(_risk()).session(FRAME)
     s.break_at("risk_tree#high")
     at = s.resume()
     assert (at.origin.path, at.when) == ("risk_tree", "after")
@@ -95,13 +95,13 @@ def test_a_node_breakpoint_pauses_after_the_tree_and_counts_rows_per_node():
 
 def test_retuning_a_param_or_editing_a_literal_never_recompiles():
     df = pl.DataFrame({"ratio": [0.5, 0.9]})
-    Engine().bind(_risk(), mode="fused").run(df)
+    FusedEngine().bind(_risk()).run(df)
     before = (len(walker.walk.signatures), len(kernel._KERNELS))
     for thresh in (0.1, 0.6, 5.0):
-        Engine().bind(_risk(), mode="fused").run(df, params={"risk_tree": {"hi_thresh": thresh}})
+        FusedEngine().bind(_risk()).run(df, params={"risk_tree": {"hi_thresh": thresh}})
     edited = json.loads(json.dumps(RISK).replace('"pts": 10', '"pts": 99'))
     edited["nodes"][0]["data"]["condition"]["threshold"] = {"param": "hi_thresh", "default": 0.2}
-    assert Engine().bind(_risk(**edited), mode="fused").run(df)["pts"].to_list() == [99, 99]
+    assert FusedEngine().bind(_risk(**edited)).run(df)["pts"].to_list() == [99, 99]
     assert (len(walker.walk.signatures), len(kernel._KERNELS)) == before
 
 
@@ -122,7 +122,7 @@ def test_an_int_feature_written_as_float_by_a_step_is_refused():
 
     tree = TreeConfig(name="risk_tree", tree=RISK, feature_types={"ratio": "int"})
     with pytest.raises(ValueError, match="p/risk_tree reads 'ratio' as int, but p/ratio writes it as float"):
-        Engine().bind(flow(ratio, tree, name="p"))
+        InterpretedEngine().bind(flow(ratio, tree, name="p"))
 
 
 # A corpus of random trees: flat rules, the same trees as v3 documents, and
@@ -295,7 +295,7 @@ def test_a_tree_reports_the_leaf_that_answered_in_every_mode():
     assert out["risk_leaf"].to_list() == ["low", "also_low", None, "low"]   # a null x takes the otherwise branch
     assert out["pts"].to_list() == [1, 1, 0, 1]
     assert out.schema["risk_leaf"] == pl.String
-    assert Engine().bind(_two_leaves_one_row(), mode="fused").score({"x": 7.0})["risk_leaf"] == "also_low"
+    assert FusedEngine().bind(_two_leaves_one_row()).run({"x": 7.0})["risk_leaf"] == "also_low"
 
 
 def test_the_path_column_survives_an_explicit_emit_and_a_drop():
@@ -326,13 +326,13 @@ def test_a_path_output_named_like_an_output_column_is_refused():
 _CHILD = """
 import contextlib, io, json
 import polars as pl
-from decikit._engine import Engine
+from decikit._engine import Engine, FusedEngine, InterpretedEngine, SteppedEngine
 from decikit.steps.trees import TreeConfig
 
 tree = TreeConfig(name="t", tree=json.loads(%r))
 log = io.StringIO()
 with contextlib.redirect_stdout(log):  # NUMBA_DEBUG_CACHE prints to stdout
-    out = Engine().bind(tree, mode="stepped").run(pl.DataFrame({"ratio": [0.5, 0.9], "s": ["ab", "cd"]}))
+    out = SteppedEngine().bind(tree).run(pl.DataFrame({"ratio": [0.5, 0.9], "s": ["ab", "cd"]}))
 lines = [l for l in log.getvalue().splitlines() if "walk" in l]
 print(json.dumps({"pts": out["pts"].to_list(), "saved": sum("data saved" in l for l in lines),
                   "loaded": sum("data loaded" in l for l in lines)}))
@@ -369,4 +369,4 @@ def test_a_string_feature_given_a_number_is_a_type_error_naming_it():
     })
     for mode in ("interpreted", "stepped", "fused"):
         with pytest.raises(TypeError, match="'s' is a string input"):
-            Engine().bind(cfg, mode=mode).score({"s": 1})
+            Engine.resolve(mode)().bind(cfg).run({"s": 1})

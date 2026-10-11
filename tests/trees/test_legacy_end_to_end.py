@@ -4,7 +4,7 @@ import polars as pl
 import pydantic
 import pytest
 
-from decikit._engine import Engine
+from decikit._engine import Engine, InterpretedEngine
 from decikit.exceptions import MissingInputError
 from decikit.steps.trees import TreeConfig
 
@@ -149,10 +149,10 @@ def test_all_mode_with_a_hundred_rules_compiles_and_agrees_across_modes(run):
 
 
 def _visits(tree, record):
-    exe = Engine().bind(tree)
+    exe = InterpretedEngine().bind(tree)
     seen = []
     exe.runner.visit = seen.append
-    exe.score(record)
+    exe.run(record)
     return seen
 
 
@@ -176,7 +176,7 @@ def test_a_missing_numeric_input_is_an_error_under_strict_null_handling():
         "output": output("low", default="other")})
     for mode in ("interpreted", "stepped", "fused"):
         with pytest.raises(MissingInputError):
-            Engine().bind(tree, mode=mode).run(pl.DataFrame({"v": pl.Series([30.0, None], dtype=pl.Float64)}))
+            Engine.resolve(mode)().bind(tree).run(pl.DataFrame({"v": pl.Series([30.0, None], dtype=pl.Float64)}))
 
 
 # --- multi-column outputs -----------------------------------------------------------------------

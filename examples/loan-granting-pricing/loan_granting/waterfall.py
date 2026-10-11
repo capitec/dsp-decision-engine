@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, TypedDict
 
 from decikit import ParamTable, allow_fallback, missing_as, param, param_table, step
 
@@ -57,6 +57,24 @@ def _band_rows() -> list[dict]:
 DEFAULT_BANDS = _band_rows()
 CAP_BANDS = param_table({"rule": int, "lo": float, "hi": float, AMOUNT: float, TERM: float, GRADE: float,
                          "decline": bool}, default=DEFAULT_BANDS)
+
+
+class ChainLink(TypedDict):
+    rule_id: str
+    value: float
+
+
+class Changes(TypedDict, total=False):  # field order is the order a frame row serves them in
+    amount: list[float]
+    grade: list[float]
+    term: list[float]
+
+
+class RuleEntry(TypedDict):
+    rule_id: str
+    owner: str
+    status: str
+    changes: Changes
 
 
 @dataclass(frozen=True)
@@ -236,8 +254,8 @@ def cap_waterfall(
     cap_bands: ParamTable = CAP_BANDS, uplift_max_pct: float = param(0.25, ge=0.0, le=1.0),
     uplift_authority_ceiling: float = param(250_000.0, ge=0.0),
     uplift_authority_reference: str = param("CC-2026-14"),
-) -> tuple[float, float, float, str | None, str | None, str | None, list[dict], list[dict], list[dict], list[dict],
-           list[int], str | None, str | None]:
+) -> tuple[float, float, float, str | None, str | None, str | None, list[ChainLink], list[ChainLink],
+           list[ChainLink], list[RuleEntry], list[int], str | None, str | None]:
     """The waterfall as a step: it reads the inputs by name and writes `OUTPUTS`."""
     app = dict(locals())
     rows = [dict(zip(cap_bands._fields, values)) for values in zip(*cap_bands)]

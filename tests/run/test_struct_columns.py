@@ -8,7 +8,7 @@ import numpy as np
 import polars as pl
 import pytest
 
-from decikit import Engine, branch, flow, frame_step, missing_as, step
+from decikit import Engine, FusedEngine, branch, flow, frame_step, missing_as, step
 from decikit.ops import Struct
 from decikit.exceptions import MissingInputError, WiringError
 from decikit.lab.testing import assert_equivalent
@@ -68,13 +68,13 @@ def test_two_fields_of_a_struct_agree_across_every_mode():
 
 @pytest.mark.parametrize("mode", COMPILED)
 def test_a_struct_input_joins_the_shared_array_kernel(mode):
-    exe = Engine().bind(flow(afford, name="p"), mode=mode)
+    exe = Engine.resolve(mode)().bind(flow(afford, name="p"))
     exe.run(FRAME)
     assert exe.fallbacks() == {}
 
 
 def test_a_plain_dict_input_keeps_running_in_python():
-    exe = Engine().bind(flow(afford_dict, name="p"), mode="fused")
+    exe = FusedEngine().bind(flow(afford_dict, name="p"))
     assert exe.run(FRAME)["afford_dict"].to_list() == [230.0, 440.0]
     assert "no kernel takes" in exe.fallbacks()["p/afford_dict"]
 
@@ -96,7 +96,7 @@ def test_two_steps_must_declare_the_same_fields_of_one_column():
         return applicant["income"] / 2.0
 
     with pytest.raises(WiringError, match="an input column has one type"):
-        Engine().bind(flow(half, afford, name="p"), mode="fused")
+        FusedEngine().bind(flow(half, afford, name="p"))
 
 
 def test_two_steps_sharing_one_item_read_the_same_column():
@@ -118,39 +118,39 @@ def test_a_field_the_step_does_not_declare_is_ignored():
 
 @pytest.mark.parametrize("mode", COMPILED)
 def test_a_null_struct_names_the_column(mode):
-    exe = Engine().bind(flow(afford, name="p"), mode=mode)
+    exe = Engine.resolve(mode)().bind(flow(afford, name="p"))
     with pytest.raises(MissingInputError, match="input 'applicant' of step 'p/afford'"):
         exe.run(frame([{"income": 100.0, "age": 30}, None]))
     with pytest.raises(MissingInputError, match="input 'applicant'"):
-        exe.score({"applicant": None})
+        exe.run({"applicant": None})
 
 
 @pytest.mark.parametrize("mode", COMPILED)
 def test_a_null_field_names_the_field(mode):
-    exe = Engine().bind(flow(afford, name="p"), mode=mode)
+    exe = Engine.resolve(mode)().bind(flow(afford, name="p"))
     with pytest.raises(MissingInputError, match=r"input 'applicant\.age'"):
         exe.run(frame([{"income": 100.0, "age": None}]))
     with pytest.raises(MissingInputError, match=r"input 'applicant\.age'"):
-        exe.score({"applicant": {"income": 100.0, "age": None}})
+        exe.run({"applicant": {"income": 100.0, "age": None}})
 
 
 @pytest.mark.parametrize("mode", MODES)
 def test_an_absent_struct_column_says_it_is_absent(mode):
-    exe = Engine().bind(flow(afford, name="p"), mode=mode)
+    exe = Engine.resolve(mode)().bind(flow(afford, name="p"))
     with pytest.raises(MissingInputError, match="is not in the input frame or record"):
-        exe.score({})
+        exe.run({})
     with pytest.raises(MissingInputError, match="is not in the input frame or record"):
         exe.run(pl.DataFrame({"other": [1.0]}))
 
 
 def test_a_record_without_a_declared_field_names_the_field():
-    exe = Engine().bind(flow(afford, name="p"), mode="fused")
+    exe = FusedEngine().bind(flow(afford, name="p"))
     with pytest.raises(ValueError, match="has no field 'age' on row 0"):
-        exe.score({"applicant": {"income": 100.0}})
+        exe.run({"applicant": {"income": 100.0}})
 
 
 def test_a_column_without_a_declared_field_names_the_field():
-    exe = Engine().bind(flow(afford, name="p"), mode="fused")
+    exe = FusedEngine().bind(flow(afford, name="p"))
     narrow = pl.DataFrame({"applicant": [{"income": 100.0}]},
                           schema={"applicant": pl.Struct({"income": pl.Float64})})
     with pytest.raises(ValueError, match=r"declares field\(s\) \['age'\]"):
@@ -158,7 +158,7 @@ def test_a_column_without_a_declared_field_names_the_field():
 
 
 def test_a_column_that_is_not_a_struct_says_so():
-    exe = Engine().bind(flow(afford, name="p"), mode="fused")
+    exe = FusedEngine().bind(flow(afford, name="p"))
     with pytest.raises(TypeError, match="holds float64 values, not structs"):
         exe.run(pl.DataFrame({"applicant": [1.0]}))
 
@@ -169,7 +169,7 @@ def test_a_field_type_no_record_holds_keeps_the_step_in_python():
 
     df = pl.DataFrame({"applicant": [{"income": 100.0, "name": "a"}]},
                       schema={"applicant": pl.Struct({"income": pl.Float64, "name": pl.String})})
-    exe = Engine().bind(flow(afford_str, name="p"), mode="fused")
+    exe = FusedEngine().bind(flow(afford_str, name="p"))
     with pytest.warns(UserWarning, match=r"reads field 'applicant\.name' as <class 'str'>"):
         assert exe.run(df)["afford_str"].to_list() == [200.0]
 
@@ -179,7 +179,7 @@ def test_a_nested_field_is_refused_at_bind_and_points_at_dict():
         return applicant["income"] + sum(applicant["amounts"])
 
     with pytest.raises(TypeError, match=r"field 'amounts' is list\[float\].*as dict"):
-        Engine().bind(flow(afford_list, name="p"), mode="fused")
+        FusedEngine().bind(flow(afford_list, name="p"))
 
 
 def test_a_struct_reaches_a_step_that_runs_one_compiled_call_per_row():
@@ -197,7 +197,7 @@ def test_dividing_by_zero_still_raises_on_the_per_row_path(mode):
     def label(applicant: Struct[Applicant]) -> str:
         return "hi" if applicant["income"] / applicant["age"] > 1.0 else "lo"
 
-    exe = Engine().bind(flow(label, name="p"), mode=mode)
+    exe = Engine.resolve(mode)().bind(flow(label, name="p"))
     with pytest.raises(ZeroDivisionError):
         exe.run(frame([{"income": 1.0, "age": 0}]))
 
@@ -206,7 +206,7 @@ def test_a_fill_keeps_the_step_in_python():
     def afford_fill(applicant: Struct[Applicant] = missing_as({"income": 0.0, "age": 0})) -> float:
         return applicant["income"] * 2.0 + applicant["age"]
 
-    exe = Engine().bind(flow(afford_fill, name="p"), mode="fused")
+    exe = FusedEngine().bind(flow(afford_fill, name="p"))
     with pytest.warns(UserWarning, match="which a kernel record can't hold"):
         assert exe.run(frame([{"income": 100.0, "age": 30}, None]))["afford_fill"].to_list() == [230.0, 0.0]
 
@@ -258,7 +258,7 @@ def test_records_stay_valid_after_the_arrow_export_is_released():
     df = _big(n)
     expected = (df["applicant"].struct.field("income").to_numpy() * 2.0
                 + df["applicant"].struct.field("age").to_numpy())
-    exe = Engine().bind(flow(afford, name="p"), mode="fused")
+    exe = FusedEngine().bind(flow(afford, name="p"))
     state, params = exe.prepare(df)
     del df
     for _ in exe.runner.iterate(exe.plan, state, params):
@@ -275,12 +275,12 @@ def test_a_struct_reaches_the_kernel_through_the_frame_path_too():
     def mark(df):
         return df.with_columns(seen=pl.lit(1.0))
 
-    exe = Engine().bind(flow(mark, afford, name="p"), mode="fused")
-    assert exe.score({"applicant": {"income": 100.0, "age": 30}})["afford"] == 230.0
+    exe = FusedEngine().bind(flow(mark, afford, name="p"))
+    assert exe.run({"applicant": {"income": 100.0, "age": 30}})["afford"] == 230.0
 
 
 def test_an_overridden_struct_column_is_read_from_the_new_values():
-    exe = Engine().bind(flow(afford, name="p"), mode="fused")
+    exe = FusedEngine().bind(flow(afford, name="p"))
     session = exe.session(FRAME)
     session.set("applicant", [{"income": 1.0, "age": 2}, {"income": 3.0, "age": 4}])
     session.resume()

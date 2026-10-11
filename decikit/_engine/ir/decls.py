@@ -78,18 +78,26 @@ def feature_kind(annotation: Any) -> FeatureKind:
 
 @annotation_cache
 def base_annotation(annotation: Any) -> Any:
-    """`T` for an optional `T | None`, else the annotation itself.
+    """`T` for an optional `T | None`, else the annotation itself; a numpy number is the Python number of its kind.
 
-    >>> base_annotation(int | None)
-    <class 'int'>
+    >>> base_annotation(int | None), base_annotation(np.int32)
+    (<class 'int'>, <class 'int'>)
     """
     if is_raw(annotation):
         return raw_base(annotation)
     if typing.get_origin(annotation) in (typing.Union, types.UnionType):
         args = [a for a in typing.get_args(annotation) if a is not type(None)]
         if len(args) == 1:
-            return plain_annotation(args[0])
-    return annotation
+            return _builtin(plain_annotation(args[0]))
+    return _builtin(annotation)
+
+
+def _builtin(t: Any) -> Any:
+    # A kernel stores a number as float64, int64 or bool; a numpy number is stored the same by every engine.
+    # A timedelta64 is a numpy integer by class, but a duration.
+    if isinstance(t, type) and issubclass(t, np.generic) and not issubclass(t, np.timedelta64):
+        return next((b for n, b in ((np.bool_, bool), (np.integer, int), (np.floating, float)) if issubclass(t, n)), t)
+    return t
 
 
 def nullable(annotation: Any) -> bool:

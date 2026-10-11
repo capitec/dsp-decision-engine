@@ -18,7 +18,7 @@ from decikit.ops import Columnar, Currency, Decimal, Duration, FieldMetadata, Pe
 | a date, a dict, a list of anything | `date`, `dict`, `list[dict]` | no | runs in Python, same answers |
 | a rate or a term, for display | `Annotated[float, Percent()]`, `Annotated[int, Duration("months")]` | yes | the engine runs the plain type |
 
-The plain type always works. A `str`, `date` or `list[dict]` step runs in every mode and gives the same answer; in a compiled mode it runs row by row in Python and says so once. [Compiled modes and fallback](compile-and-fallback.md) has the details. The examples below build on each other; run them top to bottom.
+The plain type always works. A `str`, `date` or `list[dict]` step runs in every mode and gives the same answer; in a compiled mode it runs row by row in Python, and fused mode says so once. [Compiled modes and fallback](compile-and-fallback.md) has the details. The examples below build on each other; run them top to bottom.
 
 ## Text: strings a kernel can test
 
@@ -183,8 +183,8 @@ def fee(instalment: Currency["R"], floor: Currency = param(Currency(5, 5000))) -
 
 loan = flow(instalment, fee, name="loan")
 priced = loan.compile("fused")
-print(priced.score({"principal": "1000.50"}))
-print(priced.score({"principal": 10}, {"loan": {"fee": {"floor": "20"}}}))
+print(priced.run({"principal": "1000.50"}))
+print(priced.run({"principal": 10}, {"loan": {"fee": {"floor": "20"}}}))
 print(loan.parameters().defaults())
 print(priced.fallbacks())
 ```
@@ -228,7 +228,7 @@ Returning a decimal into an annotation of a coarser scale rounds half-even, and 
 def as_cents(amount: Currency) -> Decimal[18, 2]:
     return amount
 
-print(flow(as_cents, name="c").compile("fused").score({"amount": "1.2350"}))
+print(flow(as_cents, name="c").compile("fused").run({"amount": "1.2350"}))
 ```
 
 ```text
@@ -320,7 +320,7 @@ def good_bureau(bureau: Annotated[float, BureauScore()]) -> bool:
     return bureau > 600
 
 print(BureauScore().to_json(), Percent().to_json(), Duration("days").to_json())
-print(flow(good_bureau, name="m").compile("fused").score({"bureau": 700.0}))
+print(flow(good_bureau, name="m").compile("fused").run({"bureau": 700.0}))
 ```
 
 ```text
@@ -350,7 +350,7 @@ def adult_income(applicant: Struct[Applicant]) -> float:
 
 adults = flow(adult_income, name="s").compile("fused")
 print(adults.run(pl.DataFrame({"applicant": [{"income": 1000.0, "age": 30}, {"income": 500.0, "age": 16}]})))
-print(adults.fallbacks(), adults.score({"applicant": {"income": 1000.0, "age": 30}}))
+print(adults.fallbacks(), adults.run({"applicant": {"income": 1000.0, "age": 30}}))
 ```
 
 ```text
@@ -390,7 +390,7 @@ print(baskets.fallbacks())
 {}
 ```
 
-Building the arrays costs about 20 µs per `score()` call (the figure the `Columnar` docstring gives), so a short list with a one-line body can be faster left as a plain `list[dict]` step. Reach for `Columnar` when the per-item work is heavy or the lists are long.
+Building the arrays costs about 20 µs per single-record `run()` call (the figure the `Columnar` docstring gives), so a short list with a one-line body can be faster left as a plain `list[dict]` step. Reach for `Columnar` when the per-item work is heavy or the lists are long.
 
 A field that is itself a list or struct is nested data, which neither shape holds, and binding the step raises a `TypeError` naming the field:
 
@@ -441,7 +441,7 @@ order = flow(each("items", flow(heavy, surcharge, name="item"), name="items"), t
 shipped = order.compile("fused")
 orders = pl.DataFrame({"order_id": [1, 2, 3], "items": [[{"weight": 5.0}, {"weight": 25.0}], [], None]})
 print(shipped.run(orders))
-print(shipped.score({"order_id": 1, "items": [{"weight": 5.0}, {"weight": 25.0}]}))
+print(shipped.run({"order_id": 1, "items": [{"weight": 5.0}, {"weight": 25.0}]}))
 ```
 
 ```text
@@ -586,7 +586,7 @@ shape: (3, 3)
 ## Where to go next
 
 - [Compiled modes and fallback](compile-and-fallback.md): what compiles, what falls back and how to accept it.
-- [Steps, params, run and score](steps-and-params.md): rounding floats and the params document.
+- [Steps, params and run](steps-and-params.md): rounding floats and the params document.
 - [Checks](checks.md): `int64_overflow` and the other numeric checks.
 - [Branches, loops and frame steps](branches-loops-frames.md): the control flow `optimise` is built from.
 - [Trees, tables and scorecards](trees-tables-scorecards.md): string rules inside kernels.

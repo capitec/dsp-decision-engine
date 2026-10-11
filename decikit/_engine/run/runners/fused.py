@@ -22,13 +22,18 @@ class FusedRunner(SteppedRunner):
     kernels of their own, and frame steps, other branches and loops run in
     Python, as in stepped mode.
 
+    Unlike stepped mode, every step that runs outside a shared kernel warns
+    once with a `FallbackWarning`, a kernel that splits at its first launch
+    included, unless it is `@allow_fallback`.
+
     Example::
 
-        exe = Engine().bind(pipeline, mode="fused")
+        exe = FusedEngine().bind(pipeline)
         exe.run(df)
     """
 
     fuse = True
+    loud = True
 
     def _build(self, plan: Plan, lazy: bool) -> Compiled:
         compiled = super()._build(plan, lazy)

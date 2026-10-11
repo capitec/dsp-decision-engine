@@ -27,7 +27,7 @@ def test_known_disagreeing_halves_round_like_cpython_in_every_mode():
     frame = pl.DataFrame({"amount": HALVES})
     want = [round(x, 2) for x in HALVES]
     for mode in ("interpreted", "stepped", "fused"):
-        assert Engine().bind(flow(cents), mode=mode).run(frame)["cents"].to_list() == want, mode
+        assert Engine.resolve(mode)().bind(flow(cents)).run(frame)["cents"].to_list() == want, mode
 
 
 def test_kernel_round_matches_cpython_on_random_values_and_digits():
@@ -64,4 +64,4 @@ def test_float_to_an_int_power_matches_cpython_in_every_mode():
     frame = pl.DataFrame({"monthly": [0.3 / 12, 0.2675 / 12, 0.0123]})
     want = [annual_rate(x) for x in frame["monthly"]]
     for mode in ("interpreted", "stepped", "fused"):
-        assert Engine().bind(flow(annual_rate), mode=mode).run(frame)["annual_rate"].to_list() == want, mode
+        assert Engine.resolve(mode)().bind(flow(annual_rate)).run(frame)["annual_rate"].to_list() == want, mode

@@ -7,7 +7,7 @@
   <rect x="0" y="0" width="1000" height="330" fill="#ffffff"/>
   <rect x="20" y="30" width="200" height="80" rx="10" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
   <text x="120" y="62" font-size="15" font-weight="600" fill="#7c2d00" text-anchor="middle">run(df, trace=sink)</text>
-  <text x="120" y="86" font-size="14" fill="#7c2d00" text-anchor="middle">score(record, trace=sink)</text>
+  <text x="120" y="86" font-size="14" fill="#7c2d00" text-anchor="middle">run(record, trace=sink)</text>
 
   <rect x="270" y="30" width="200" height="80" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
   <text x="370" y="58" font-size="15" font-weight="600" fill="#134e4a" text-anchor="middle">runner emits</text>

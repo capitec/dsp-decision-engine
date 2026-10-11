@@ -4,9 +4,10 @@ from __future__ import annotations
 import numpy as np
 import polars as pl
 import pytest
+from numba.core.errors import TypingError
 
 from decikit import branch, dag, flow, frame_step, loop, param, step
-from decikit._engine import Engine
+from decikit._engine import Engine, FusedEngine, InterpretedEngine
 from decikit._engine.ir.origin import Origin
 from decikit._engine.trace import (Kind, PassThroughAdapter, StepTable, TraceEvent, TraceLossError, TraceSink,
                                   decode, pack, unpack)
@@ -76,9 +77,9 @@ def step_shapes(events):
 
 
 def test_tracing_does_not_change_the_output():
-    expected = Engine().bind(PIPELINE, mode="interpreted").run(FRAME)
+    expected = InterpretedEngine().bind(PIPELINE).run(FRAME)
     for mode in MODES:
-        exe = Engine().bind(PIPELINE, mode=mode)
+        exe = Engine.resolve(mode)().bind(PIPELINE)
         sink = TraceSink()
         out = exe.run(FRAME, trace=sink)
         assert out.equals(expected)
@@ -86,12 +87,12 @@ def test_tracing_does_not_change_the_output():
 
 def test_tracing_is_off_by_default():
     # No sink passed: `run` captures nothing and returns the same result.
-    exe = Engine().bind(PIPELINE, mode="fused")
-    assert exe.run(FRAME).equals(Engine().bind(PIPELINE, mode="interpreted").run(FRAME))
+    exe = FusedEngine().bind(PIPELINE)
+    assert exe.run(FRAME).equals(InterpretedEngine().bind(PIPELINE).run(FRAME))
 
 
 def test_every_step_event_resolves_to_a_durable_origin():
-    exe = Engine().bind(PIPELINE, mode="fused")
+    exe = FusedEngine().bind(PIPELINE)
     sink = step_events(exe)
     ref = {c.id + 1: c.node.origin for c in exe.plan.calls}
     steps = [e for e in sink.events() if e.kind is Kind.STEP]
@@ -103,15 +104,30 @@ def test_every_step_event_resolves_to_a_durable_origin():
 
 
 def test_step_evidence_is_equivalent_across_modes():
-    shapes = {mode: step_shapes(step_events(Engine().bind(PIPELINE, mode=mode)).events()) for mode in MODES}
+    shapes = {mode: step_shapes(step_events(Engine.resolve(mode)().bind(PIPELINE)).events()) for mode in MODES}
     assert shapes["stepped"] == shapes["interpreted"]
     assert shapes["fused"] == shapes["interpreted"]
+
+
+def refused(*args):
+    raise TypingError("a type the build did not see")
+
+
+@pytest.mark.parametrize("engine", ["stepped", "fused"])
+def test_a_kernel_that_splits_at_launch_still_traces_every_step(engine):
+    expected = step_shapes(step_events(InterpretedEngine().bind(AFFORDABILITY)).events())
+    exe = Engine.resolve(engine)().bind(AFFORDABILITY)
+    exe.fallbacks()
+    kernel = exe.runner.units[exe.plan.calls[0].id]
+    kernel.fn = kernel._trace_fn = refused  # its traced build too
+    assert step_shapes(step_events(exe).events()) == expected  # the launch that splits
+    assert step_shapes(step_events(exe).events()) == expected  # and every launch after it
 
 
 def test_per_record_order_within_a_stream():
     # Within one record, STEP events are in step order (by `step`), whatever
     # the cross-record order (which is left unspecified).
-    exe = Engine().bind(PIPELINE, mode="fused")
+    exe = FusedEngine().bind(PIPELINE)
     sink = step_events(exe)
     by_record: dict[int, list[int]] = {}
     for e in sink.events():
@@ -123,7 +139,7 @@ def test_per_record_order_within_a_stream():
 
 
 def test_branch_arms_carry_the_taken_arm():
-    exe = Engine().bind(PIPELINE, mode="interpreted")
+    exe = InterpretedEngine().bind(PIPELINE)
     sink = step_events(exe)
     private = [e for e in sink.events() if e.kind is Kind.STEP and e.origin.path.endswith("cap_private")]
     public = [e for e in sink.events() if e.kind is Kind.STEP and e.origin.path.endswith("cap_public")]
@@ -134,17 +150,17 @@ def test_branch_arms_carry_the_taken_arm():
 
 
 def test_frame_steps_emit_a_frame_event_per_row():
-    exe = Engine().bind(PIPELINE, mode="fused")
+    exe = FusedEngine().bind(PIPELINE)
     sink = step_events(exe)
     frames = [e for e in sink.events() if e.kind is Kind.FRAME]
     assert [e.record for e in frames] == [0, 1, 2]
     assert all(e.origin.path.endswith("join_bureau") for e in frames)
 
 
-def test_score_captures_one_records_evidence():
-    exe = Engine().bind(AFFORDABILITY, mode="fused")
+def test_a_record_run_captures_one_records_evidence():
+    exe = FusedEngine().bind(AFFORDABILITY)
     sink = TraceSink()
-    exe.score({"net_income": 4100.0, "expenses": 3700.0, "instalment": 800.0}, trace=sink)
+    exe.run({"net_income": 4100.0, "expenses": 3700.0, "instalment": 800.0}, trace=sink)
     steps = [e for e in sink.events() if e.kind is Kind.STEP]
     assert [e.origin.path for e in steps] == [
         "affordability/disposable_income", "affordability/ratio", "affordability/affordable",
@@ -200,7 +216,7 @@ def test_a_custom_adapter_receives_events_and_failure_is_reported():
 
 
 def test_batch_capture_is_bounded_and_loss_is_reported():
-    exe = Engine().bind(AFFORDABILITY, mode="fused")
+    exe = FusedEngine().bind(AFFORDABILITY)
     sink = TraceSink(max_events=5)
     exe.run(FRAME, trace=sink)
     assert sink.status()["delivered"] == 5

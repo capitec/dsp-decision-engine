@@ -53,7 +53,7 @@ TERM_FRAME = pl.DataFrame({"requested_term": [72.0, 50.0, 84.0], "sector_code": 
 
 @pytest.mark.parametrize("mode", MODES)
 def test_break_set_resume_gives_the_same_output_in_every_mode(mode):
-    s = pipeline.session(FRAME, mode=mode)
+    s = pipeline.session(FRAME, engine=mode)
     s.break_at("affordability_ratio")
     assert s.resume().when == "before"
     s.set("instalment", 100.0)
@@ -64,7 +64,7 @@ def test_break_set_resume_gives_the_same_output_in_every_mode(mode):
 
 @pytest.mark.parametrize("mode", MODES)
 def test_an_override_reaches_the_kernels_after_it(mode):
-    s = term.session(TERM_FRAME, mode=mode)
+    s = term.session(TERM_FRAME, engine=mode)
     s.break_at("term/by_sector")
     assert s.resume().origin.path == "term/by_sector"
     s.set("term_cap", 10.0)
@@ -74,14 +74,14 @@ def test_an_override_reaches_the_kernels_after_it(mode):
 
 @pytest.mark.parametrize("mode", MODES)
 def test_an_untouched_session_outputs_what_run_does(mode):
-    s = term.session(TERM_FRAME, mode=mode)
+    s = term.session(TERM_FRAME, engine=mode)
     s.resume()
     assert s.output().equals(term.run(TERM_FRAME))
 
 
 @pytest.mark.parametrize("mode", MODES)
 def test_pause_and_rewind_work_in_every_mode(mode):
-    s = term.session(TERM_FRAME, mode=mode)
+    s = term.session(TERM_FRAME, engine=mode)
     s.pause()
     assert (s.resume().origin.path, s.current.when) == ("term", "before")
     s.resume()
@@ -94,7 +94,7 @@ def test_pause_and_rewind_work_in_every_mode(mode):
 
 @pytest.mark.parametrize("mode", ("interpreted", "stepped"))
 def test_stepped_mode_pauses_at_every_node_like_interpreted(mode):
-    s = term.session(TERM_FRAME, mode=mode)
+    s = term.session(TERM_FRAME, engine=mode)
     s.break_at("term/by_sector")
     s.resume()
     seen = []
@@ -105,7 +105,7 @@ def test_stepped_mode_pauses_at_every_node_like_interpreted(mode):
 
 
 def test_a_breakpoint_inside_a_fused_kernel_pauses_before_the_kernel_and_says_so():
-    s = pipeline.session(FRAME, mode="fused")
+    s = pipeline.session(FRAME, engine="fused")
     s.break_at("affordability_ratio")
     at = s.resume()
     assert (at.origin.path, at.when) == ("disposable_income", "before")
@@ -115,7 +115,7 @@ def test_a_breakpoint_inside_a_fused_kernel_pauses_before_the_kernel_and_says_so
 
 
 def test_step_runs_a_whole_fused_kernel_and_reports_what_it_stores():
-    s = pipeline.session(FRAME, mode="fused")
+    s = pipeline.session(FRAME, engine="fused")
     s.step_into()                                     # the flow
     assert s.step_into().origin.path == "disposable_income"
     at = s.step()
@@ -125,7 +125,7 @@ def test_step_runs_a_whole_fused_kernel_and_reports_what_it_stores():
 
 
 def test_rewind_to_a_step_inside_a_fused_kernel_rewinds_to_the_kernel():
-    s = pipeline.session(FRAME, mode="fused")
+    s = pipeline.session(FRAME, engine="fused")
     s.resume()
     s.set("instalment", 100.0)
     at = s.rewind("headroom")
@@ -135,11 +135,11 @@ def test_rewind_to_a_step_inside_a_fused_kernel_rewinds_to_the_kernel():
 
 
 def test_a_value_inside_a_fused_kernel_is_an_error_suggesting_stepped_mode():
-    s = pipeline.session(FRAME, mode="fused")
+    s = pipeline.session(FRAME, engine="fused")
     s.resume()
     assert s.value("headroom").to_list() == pipeline.run(FRAME)["headroom"].to_list()
     for spec in ("affordability_ratio", "affordability_ratio@affordability_ratio"):
-        with pytest.raises(KeyError, match="fused kernel.*mode='stepped'"):
+        with pytest.raises(KeyError, match="fused kernel.*engine='stepped'"):
             s.value(spec)
-    with pytest.raises(KeyError, match="mode='stepped'"):
+    with pytest.raises(KeyError, match="engine='stepped'"):
         s.set("disposable_income", 1.0)

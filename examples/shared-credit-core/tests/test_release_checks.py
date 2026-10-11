@@ -2,7 +2,7 @@
 import json
 import warnings
 
-from decikit import ConfigurableStep, Engine, HiddenStateWarning
+from decikit import ConfigurableStep, HiddenStateWarning, InterpretedEngine
 from decikit.lab import diff
 
 from credit_core.pipeline import build
@@ -22,7 +22,7 @@ def rebuilt(rate_card, configs, adjustments=lambda doc: None, reasons=lambda doc
 def test_the_quote_pipeline_reads_no_hidden_objects(quote_pipeline):
     with warnings.catch_warnings():
         warnings.simplefilter("error", HiddenStateWarning)
-        Engine().bind(quote_pipeline, mode="interpreted")
+        InterpretedEngine().bind(quote_pipeline)
 
 
 def test_the_same_documents_build_an_unchanged_pipeline(quote_pipeline, rate_card, configs):

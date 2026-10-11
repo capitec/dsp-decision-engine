@@ -7,7 +7,7 @@ events to an adapter. An adapter can transform, redact, enrich, enqueue or
 export events off the request path; conservation runs *before* the adapter, so
 redaction or deletion downstream can never hide that evidence went missing.
 
-Tracing is off by default: `Engine.run`/`score` capture nothing unless a
+Tracing is off by default: `Executable.run` captures nothing unless a
 caller passes a `TraceSink`. Building one is the explicit opt-in that turns
 PII-bearing capture on.
 """

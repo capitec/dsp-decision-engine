@@ -3,17 +3,17 @@ import random
 from datetime import date
 
 import pytest
-from decikit import Engine, flow
+from decikit import InterpretedEngine, flow
 
 from business_nested import structure, vocab
 from business_nested.records import entity, event
 
-resolve = Engine().bind(flow(structure.resolved_entities), mode="interpreted")
+resolve = InterpretedEngine().bind(flow(structure.resolved_entities))
 
 
 def resolved(entities, **context):
     record = {"entities": entities, "decision_date": date(2026, 9, 24), "sector_code": 100, "requested_amount": 1e6, **context}
-    return resolve.score(record)["resolved_entities"]
+    return resolve.run(record)["resolved_entities"]
 
 
 def test_a_person_reached_by_two_paths_is_one_entity_with_summed_ownership_and_the_most_senior_role():
@@ -79,11 +79,11 @@ def test_criticality_follows_control_surety_ownership_and_role(fields, pct, role
 
 
 def test_the_ownership_thresholds_of_criticality_are_params():
-    exe = Engine().bind(flow(structure.resolved_entities, name="s"), mode="interpreted")
+    exe = InterpretedEngine().bind(flow(structure.resolved_entities, name="s"))
     record = {"entities": [entity(1, 5, 15.0)], "decision_date": date(2026, 9, 24), "sector_code": 1, "requested_amount": 1.0}
-    assert exe.score(record)["resolved_entities"][0]["criticality_class"] == vocab.SIGNIFICANT
+    assert exe.run(record)["resolved_entities"][0]["criticality_class"] == vocab.SIGNIFICANT
     strict = {"s": {"resolved_entities": {"significant_ownership_pct": 20.0}}}
-    assert exe.score(record, strict)["resolved_entities"][0]["criticality_class"] == vocab.PERIPHERAL
+    assert exe.run(record, strict)["resolved_entities"][0]["criticality_class"] == vocab.PERIPHERAL
 
 
 @pytest.mark.parametrize("owned, count, unresolved", [

@@ -2,7 +2,7 @@
 import warnings
 
 import pytest
-from decikit import Engine, HiddenStateWarning, flow
+from decikit import HiddenStateWarning, InterpretedEngine, flow
 
 from loan_granting import eligibility, waterfall
 from loan_granting.pipeline import build
@@ -12,13 +12,13 @@ from loan_granting.pipeline import build
 def test_a_step_reads_no_hidden_objects(step):
     with warnings.catch_warnings():
         warnings.simplefilter("error", HiddenStateWarning)
-        Engine().bind(flow(step, name="t"), mode="interpreted")
+        InterpretedEngine().bind(flow(step, name="t"))
 
 
 def test_the_pipeline_reads_no_hidden_objects_of_its_own(documents):
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        Engine().bind(build(**documents), mode="interpreted")
+        InterpretedEngine().bind(build(**documents))
     # the embedded affordability assessment is that example's to fix
     own = [str(w.message) for w in caught if issubclass(w.category, HiddenStateWarning)
            and "/affordability_assessment/" not in str(w.message)]

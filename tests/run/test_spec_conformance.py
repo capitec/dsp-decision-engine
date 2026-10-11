@@ -1,6 +1,8 @@
 """Shapes beyond the flagship, interpreted: waterfalls, version chains, dtypes, strings, shadowing."""
 from __future__ import annotations
 
+from contextlib import nullcontext
+
 import polars as pl
 import pytest
 
@@ -96,16 +98,19 @@ def is_private(sector: str) -> float:
 
 
 def test_a_string_input_reaches_an_interpreted_step_as_a_string():
-    out = flow(is_private).run(pl.DataFrame({"sector": ["private", "public", "private"]}))
+    # interpreted: the default fused engine would run this step as a warned fallback, not the case under test
+    out = flow(is_private).run(pl.DataFrame({"sector": ["private", "public", "private"]}), engine="interpreted")
     assert out["is_private"].to_list() == [1.0, 0.0, 1.0]
 
 
 @pytest.mark.parametrize("mode", ["stepped", "fused"])
 def test_a_string_compared_with_a_literal_in_the_body_is_right_when_compiled(mode):
     # A `str` step runs in Python, row by row, on the real strings, so a body literal matches.
-    exe = Engine().bind(flow(is_private), mode=mode)
-    with pytest.warns(UserWarning, match="runs in Python, row by row.*reads 'sector' as str"):
+    exe = Engine.resolve(mode)().bind(flow(is_private))
+    warned = pytest.warns(UserWarning, match="runs in Python, row by row.*reads 'sector' as str")
+    with warned if mode == "fused" else nullcontext():
         assert exe.run(pl.DataFrame({"sector": ["private", "public"]}))["is_private"].to_list() == [1.0, 0.0]
+    assert "reads 'sector' as str" in exe.fallbacks()["is_private"]
 
 
 def test_a_misspelled_param_is_rejected(bind):
