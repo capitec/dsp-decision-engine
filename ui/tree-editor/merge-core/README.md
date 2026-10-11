@@ -6,11 +6,11 @@ is_related, touched, reconcile) written once in Rust on `serde_json::Value` (`pr
 
 | path | what |
 |---|---|
-| `src/lib.rs` | the core (429 lines) |
+| `src/lib.rs` | the core (439 lines) |
 | `src/wire.rs` | one entry point, `call(name, args_json) -> result_json`, shared by both bindings (53) |
 | `src/python.rs`, `src/wasm.rs` | the bindings |
 | `python/merge_core/__init__.py`, `js/merge-core.mjs` | glue: one wrapper per function, JSON in and out (46, 23) |
-| `tests/vectors.rs` | `cargo test` runs the 124 op-level vectors of `../merge-core-bench` |
+| `tests/vectors.rs` | `cargo test` runs the 127 op-level vectors of `../merge-core-bench` |
 | `examples/prof.rs` | native timings |
 
 Build: `maturin build --release` (wheel), `wasm-pack build --target web --release --no-pack -- --features wasm` (`pkg/`, not committed; `pnpm build:wasm` in `ui/tree-editor/ui` runs it).
@@ -37,10 +37,15 @@ The direct variants below were measured with `bench/boundary.*` and `direct-pyth
 
 ## Vectors
 
-`run_vectors.py adapters/rust_py.py` (wheel): 446 passed. `run_vectors.mjs adapters/rust_wasm.mjs` (wasm): 444 passed,
-2 xfail that JavaScript itself cannot hold (integers past 2**53 that differ by one: JSON.parse rounds them; an
-integer-like key added last is listed first by the engine), as in the TypeScript reference. `cargo test`: 124 op-level
-cases passed. Direct variants: Python 443 passed, 3 large-int failed; JS 440 passed, 4 proto-key failed, 2 xfail.
+`run_vectors.py adapters/rust_py.py` (wheel): 449 passed. `run_vectors.mjs adapters/rust_wasm.mjs` (wasm): 445 passed,
+4 xfail that JavaScript itself cannot hold (integers past 2**53: JSON.parse rounds them; an integer-like key added last
+is listed first by the engine), as in the TypeScript reference. `cargo test`: 127 op-level cases passed.
+
+`../merge-core-bench/fuzz.py` compares every function with the frozen Python reference on seeded random edit pairs of
+the real trees (with traps) as exact JSON text, and `fuzz.mjs` replays them in wasm. It found one hole, now fixed and
+pinned by two vectors: an integer past 2**53 was compared with a float after rounding it, so `diff` missed a change to
+the float it rounds to and the same-value rule merged it. After the fix, 9,687 cases (wasm: 4,735) differ only in the
+ASCII index rule below and in error classes on malformed ops. Direct variants: Python 443 passed, 3 large-int failed; JS 440 passed, 4 proto-key failed, 2 xfail.
 
 Deviations from the Python twin (none pinned by a vector):
 - `conflicts` takes a key segment as an index only when it is ASCII digits, as `apply` does (the TypeScript copy
