@@ -262,7 +262,7 @@ mixed/applied_month runs in Python, row by row: reads 'applied_on' as <class 'da
 {'code': 4, 'legacy_score': 8.0}
 ```
 
-The strict error is an `EngineError` (a `DecikitError` and a `ValueError`).
+The strict error is a `StrictCompileError` (`from decikit import StrictCompileError`), an `EngineError` (a `DecikitError` and a `ValueError`).
 
 `strict_compile=True` also refuses hidden state, in every engine: a step that reads a module-level object (a `HiddenStateWarning` otherwise) makes `bind` raise `EngineError`, so a CI build with one fails.
 

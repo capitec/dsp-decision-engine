@@ -719,8 +719,8 @@ JSON, CSV or Arrow response can carry it. Declare a TypedDict to have the fields
 step instead.
 
 `@allow_fallback` says you accept that: the warning stops, and
-`FusedEngine(strict_compile=True)` — which otherwise raises on a step that runs in
-Python — allows it. `fallbacks()` still reports it, marked `@allow_fallback`,
+`FusedEngine(strict_compile=True)` — which otherwise raises `StrictCompileError` (an
+`EngineError`, `from decikit import StrictCompileError`) on a step that runs in Python — allows it. `fallbacks()` still reports it, marked `@allow_fallback`,
 so it stays visible when you are chasing latency. Put it on a function a step
 *calls* and the step falls back rather than compiling it: an intentional
 Python boundary. Prefer a step that compiles; use `@allow_fallback` only for
