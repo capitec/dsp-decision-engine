@@ -132,14 +132,12 @@ class Hub:
                                                       .where(Project.id == project_id))).one()
             if version == room.validated:
                 return
-            started, pool = time.perf_counter(), self.validator
+            started = time.perf_counter()
             try:
-                errors = await asyncio.get_running_loop().run_in_executor(pool, validation_errors, doc)
+                errors = await self.validate(doc)
             except BrokenProcessPool:
                 # The process was killed (out of memory, say); a new one validates the next version.
                 logger.warning("live validator died on project=%s version=%d", project_id, version)
-                if self.validator is pool:
-                    self.validator = _validator()
                 return
             logger.info("live validation project=%s version=%d errors=%d ms=%.1f", project_id, version, len(errors),
                         (time.perf_counter() - started) * 1e3)
@@ -147,6 +145,16 @@ class Hub:
             room.validated = version
             for client in list(room.clients):
                 await _send(client, room.validation)
+
+    async def validate(self, doc: dict) -> list:
+        """The validation errors of `doc`, from the validator process; a new process takes over when it died."""
+        pool = self.validator
+        try:
+            return await asyncio.get_running_loop().run_in_executor(pool, validation_errors, doc)
+        except BrokenProcessPool:
+            if pool is not None and self.validator is pool:
+                self.validator = _validator()
+            raise
 
     def start(self) -> None:
         self.validator = _validator()
