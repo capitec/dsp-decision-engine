@@ -4,13 +4,14 @@ Runs only against a stack started with E2E_NODES=2 DSP_LIVE_COLLAB=true, like `t
 """
 
 import os
+import re
 
 import pytest
 from playwright.sync_api import Page, expect
 
-from node_ui import document, edge, fit_view, leaf, node, select_node, set_threshold, unary
+from node_ui import document, drag_node, edge, fit_view, leaf, node, select_node, set_threshold, unary
 from platform_ui import press_save, toast
-from seed import create_project
+from seed import create_project, get_project
 from test_live_collab import OFFLINE, Held, session, stored, two_nodes  # noqa: F401
 from test_live_offline import Line
 
@@ -159,3 +160,21 @@ def test_save_waits_for_the_server_and_the_edit_is_stored(signed_in: Page, tree:
     expect(toast(signed_in, "Project Saved")).to_be_visible()
     expect(signed_in.get_by_text("Unsaved changes")).to_be_hidden()
     assert thresholds(stored(signed_in, tree, lambda d: True))["root"] == 250
+
+
+def positions(data: dict) -> dict:
+    return {n["id"]: n["position"] for n in data["nodes"]}
+
+
+def test_opening_a_tree_the_editor_writes_differently_stores_nothing_until_an_edit(signed_in: Page):
+    raw = chain()
+    raw["subtrees"] = []  # the editor holds one subtree per root, so its copy differs from the stored one
+    project = create_project(signed_in, "Raw tree", raw, project_type="tree")["id"]
+    opened = get_project(signed_in, project)["version"]
+    open_live(signed_in, project)
+
+    threshold(signed_in, "root", "250")
+
+    stored(signed_in, project, lambda d: thresholds(d)["root"] == 250)
+    assert get_project(signed_in, project)["version"] == opened + 1
+
