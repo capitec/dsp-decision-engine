@@ -146,6 +146,25 @@ describe('LiveSync', () => {
     return s
   }
 
+  it('bases edits made in a second drop on their own version when the catch-up shows the first batch merged', () => {
+    const { sync, socket, type } = offline(doc('Offline'))
+    socket().receive({ type: 'applied', version: 2, client_id: 'other', msg_id: 'x', ops: [{ op: 'add', path: '/mode', value: 'all' }] })
+    socket().receive({ type: 'ready', version: 2 })
+    const [batch] = socket().ops()
+    socket().close()
+    type(doc('Offline', 'Second drop'))
+    vi.advanceTimersByTime(500)
+    socket().onopen()
+
+    // Someone renames the rule my second-drop edit renames, before my first batch lands.
+    socket().receive({ type: 'applied', version: 3, client_id: 'other', msg_id: 'y', ops: [{ op: 'replace', path: '/rules/b/meta/name', value: 'Theirs' }] })
+    socket().receive({ type: 'applied', version: 4, client_id: sync.clientId, msg_id: batch.id, ops: batch.ops })
+    socket().receive({ type: 'ready', version: 4 })
+
+    const [second] = socket().ops()
+    expect(second).toMatchObject({ offline: true, base: 2 })
+  })
+
   it('sends the edits made while disconnected as one offline batch based on the version at the drop', () => {
     const { sync, socket, type } = offline(doc('Offline'))
     type(doc('Offline', 'Also offline'))
