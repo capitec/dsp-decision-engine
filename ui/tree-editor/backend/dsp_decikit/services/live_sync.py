@@ -16,6 +16,7 @@ import typing as t
 import uuid
 import weakref
 from collections import Counter
+from concurrent.futures.process import BrokenProcessPool
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -315,7 +316,10 @@ async def _merged(project: Project, rows: list, base_doc: dict, client_id: str, 
     doc, failed = apply(project.project_data, ops)
     _check(doc, project.project_type)
     mine = [op for row in rows if row.client_id == client_id for op in row.ops] + ops
-    new = await _new_errors(doc, project.project_data, lambda: apply(base_doc, mine)[0], base_doc, validate)
+    try:
+        new = await _new_errors(doc, project.project_data, lambda: apply(base_doc, mine)[0], base_doc, validate)
+    except (asyncio.TimeoutError, BrokenProcessPool):
+        raise Rejected("the server could not check your offline edits for errors in time, so they were not merged")
     if new:
         raise Rejected("merging your offline edits would add these errors: "
                        + "; ".join(sorted({e["msg"] for e in new})))
