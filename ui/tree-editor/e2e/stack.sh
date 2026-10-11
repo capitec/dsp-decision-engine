@@ -73,7 +73,7 @@ start_backend() {
 }
 
 up() {
-  [ -f "$here/../ui/build/index.html" ] || (cd "$here/../ui" && pnpm install --frozen-lockfile && pnpm build:skip-check)
+  [ -f "$here/../ui/build/index.html" ] || (cd "$here/../ui" && pnpm install --frozen-lockfile && pnpm build:wasm && pnpm build:skip-check)
   "$runtime" run -d --replace --name "$pg" --memory=512m -e POSTGRES_PASSWORD=postgres \
     -p "127.0.0.1:$pg_port:5432" -v "$pg:/var/lib/postgresql/data" docker.io/library/postgres:17 >/dev/null
   until "$runtime" exec "$pg" pg_isready -U postgres -q; do sleep 1; done
