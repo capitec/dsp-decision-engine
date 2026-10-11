@@ -74,8 +74,8 @@ Read an area's decision file before changing that area. `docs/design_specs/`
 - Kernels use CPython-equal `round(x, n)` and `x ** n`; int64 still wraps silently. Money
   is `Currency` / `Decimal[p, s]`: an int64 mantissa with the scale in the type, half-even
   operators, `decikit.ops.decimal.round` for other modes. Running totals accumulate in float64.
-- Compile-time failures and steps compiled modes refuse fall back to Python per
-  step (with a warning; `Engine(strict_compile=True)` raises). Runtime errors
+- Compile-time failures and steps compiled engines refuse fall back to Python per
+  step (with a warning; `FusedEngine(strict_compile=True)` raises). Runtime errors
   always propagate.
 - Nested polymorphic pydantic fields need `SerializeAsAny`, or subclass fields
   are silently dropped on dump.

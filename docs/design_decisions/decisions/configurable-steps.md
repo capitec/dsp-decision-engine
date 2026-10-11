@@ -88,6 +88,13 @@ Measured by the part-size sweep, median over ten rule shapes (`run(record)` agai
 - Not built: a matched-row output (the table's `path_output`); needs a new output kind in `pick` and the reference.
 - See: `docs/architecture/configurable-steps/tables.md`
 
+## A table variable is a float unless the document declares it `int`
+
+- `variable_types: {"channel": "int"}` makes the variable an int64 input compared exactly (`eq`, `in`, `between`, integer columns only; null is `-2**63`); a step that writes it must write an `int`. Without it every numeric variable is a float, exact up to 2**53, and a document without `variable_types` compiles as before.
+- Why: a code above 2**53 (an identifier, `2**60`) cannot be told from its neighbour as a float.
+- Not: inferring it from the columns (an input read only by `eq`/`in` over integer columns): it silently changed which type a step had to write for a document already in use, and a float input was then truncated. Built and reverted.
+- See: `tests/tables/test_table_int_variables.py`, `docs/architecture/configurable-steps/tables.md`
+
 ## Flow files are a front end to `flow` / `branch` / `loop`
 
 - `decikit.steps.flowfile.load_flow` builds the same `Step` objects written by hand, so the engine and tooling change nothing; `flow: name` loads `flows/name.*` by reference and conditions are a column, a component or the closed `{expr: ...}` grammar.
