@@ -9,12 +9,12 @@ root-replace op; only document changes make versions.
 """
 
 import asyncio
-
 import json
 import logging
 import time
 import typing as t
 import uuid
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -187,21 +187,35 @@ async def _document_at(session: AsyncSession, project_id: uuid.UUID, version: in
     return apply({}, [op for ops in rows for op in ops])[0]
 
 
-def _error_keys(errors: list) -> set:
-    return {(e.get("type"), e.get("msg")) for e in errors}
+def _error_key(error: dict) -> tuple:
+    # Not `loc`: it holds rule positions, which a merge shifts. Not `input`: the value, which either side may edit.
+    return error.get("type"), error.get("msg")
 
 
-async def _new_errors(merged: dict, current: dict, own: t.Callable[[], dict], executor) -> list:
-    """The validation errors of `merged` that neither `current` nor my own document has (each computed only when
-    still needed: validating a large document takes a few hundred ms)."""
+async def _new_errors(merged: dict, current: dict, own: t.Callable[[], dict], base: dict, executor) -> list:
+    """The validation errors of `merged` beyond what one side had, or both sides added on their own, counted per
+    (type, message); each document is validated only when still needed: validating a large one takes a few hundred
+    ms."""
+    async def counted(doc):
+        return Counter(map(_error_key, await loop.run_in_executor(executor, validation_errors, doc)))
+
     loop = asyncio.get_running_loop()
     errors = await loop.run_in_executor(executor, validation_errors, merged)
-    for other in (lambda: current, own):
-        if not errors:
-            break
-        known = _error_keys(await loop.run_in_executor(executor, validation_errors, other()))
-        errors = [e for e in errors if (e.get("type"), e.get("msg")) not in known]
-    return errors
+    excess = Counter(map(_error_key, errors))
+    if excess:
+        theirs = await counted(current)
+        excess -= theirs
+    if excess:
+        mine = await counted(own())
+        excess -= mine - theirs
+    if excess:
+        excess -= (theirs + mine - await counted(base)) - (theirs | mine)
+    new = []
+    for error in errors:
+        if excess[_error_key(error)] > 0:
+            excess[_error_key(error)] -= 1
+            new.append(error)
+    return new
 
 
 async def apply_message(project_id: uuid.UUID, client_id: str, msg_id: str, base: int, ops: list,
@@ -251,7 +265,7 @@ async def apply_message(project_id: uuid.UUID, client_id: str, msg_id: str, base
             mine = [op for row in rows if row.client_id == client_id for op in row.ops] + ops
             # ponytail: validates under the row lock (other writers wait); validate first and re-check the
             # version if offline batches on large trees make that wait show.
-            new = await _new_errors(doc, project.project_data, lambda: apply(base_doc, mine)[0], executor)
+            new = await _new_errors(doc, project.project_data, lambda: apply(base_doc, mine)[0], base_doc, executor)
             if new:
                 raise Rejected("merging your offline edits would add these errors: "
                                + "; ".join(sorted({e["msg"] for e in new})))
