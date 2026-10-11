@@ -111,6 +111,23 @@ describe('the node editor live', () => {
     expect(state().isDirty).toBe(true);
   });
 
+  it('sends nothing on opening a document the editor writes differently, until I edit it', () => {
+    state().reset();
+    useEditorStore.setState({ projectId: 'p' });
+    state().initializeFromProject({ id: 'p', name: 'P', version: 3, project_data: { ...doc(), subtrees: [] },
+                                    validation_errors: [], live_collab: true } as any);
+    renderHook(() => useNodeLive());
+    const socket = connected();
+
+    act(() => state().setNodes((nodes) => nodes.map((n) => ({ ...n, measured: { width: 9, height: 9 } })), false));
+    act(() => { vi.advanceTimersByTime(500); });
+    expect(socket.ops()).toEqual([]);
+
+    act(() => state().updateNodeData('a', { condition: { op: '<=', feature: 'amount', threshold: 7 } }));
+    act(() => { vi.advanceTimersByTime(150); });
+    expect(socket.ops()[0].ops).toContainEqual({ op: 'replace', path: '/nodes/a/data/condition/threshold', value: 7 });
+  });
+
   it('tells me when my edit to a node someone else deleted was discarded', () => {
     open();
     renderHook(() => useNodeLive());
