@@ -53,7 +53,7 @@ async def new_project(engine, doc, version) -> uuid.UUID:
     from sqlalchemy.ext.asyncio import AsyncSession
     from dsp_decikit.db.models import Project, ProjectType, User
 
-    async with AsyncSession(engine) as session:
+    async with AsyncSession(engine, expire_on_commit=False) as session:
         user = User(email=f"{uuid.uuid4().hex[:10]}@example.com")
         session.add(user)
         await session.flush()
