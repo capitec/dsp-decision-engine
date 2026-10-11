@@ -13,6 +13,7 @@ import { ParameterMap, TreeEdge, V2Subtree, PolarsSchema } from '@/types/tree-ty
 import { normalizeTreeOutput } from '@/utils/normalize-dtypes';
 import { ValidationError, parseValidationErrors, formatValidationErrors, getInvalidNodeIds, getSectionErrors } from '@/utils/validation-error-parser';
 import { toast } from '@/hooks/use-toast';
+import { isStaleSave, staleSaveToast } from '@/lib/stale-save';
 import { apiErrorMessage } from '@/lib/utils';
 import { subscribeToStoreActivity } from '@/lib/background-token-refresh';
 
@@ -91,6 +92,8 @@ interface EditorStoreState {
   projectId: string | null;
   projectName: string;
   projectDescription: string | null;
+  // The server version this editor last loaded or saved; sent with a save so a stale one is refused
+  version: number | null;
   autoRearrange: boolean;
   formatVersion: number;
   // The document's keys the editor does not edit (metadata, name, ...), written back unchanged on save
@@ -161,6 +164,7 @@ const editorStore = create<EditorStoreState>()(
     projectId: null,
     projectName: '',
     projectDescription: null,
+    version: null,
     autoRearrange: false,
     formatVersion: 3,
     documentRest: {},
@@ -399,7 +403,7 @@ const editorStore = create<EditorStoreState>()(
 
         const response = await updateProjectApiV1ProjectsProjectIdPut({
           path: { project_id: state.projectId },
-          body: { project_data: projectData }
+          body: { project_data: projectData, base_version: state.version }
         });
 
         // Validation never blocks a save: the server returns what decikit found
@@ -407,6 +411,7 @@ const editorStore = create<EditorStoreState>()(
         const formatted = applyValidationErrors(errors, state.nodes);
         // An edit made while the save was in flight replaced one of these and is not in what was saved
         set((now) => ({
+          version: response.data?.version ?? now.version,
           isDirty: (['nodes', 'edges', 'subtrees', 'output', 'parameters', 'input_schema'] as const)
             .some((key) => now[key] !== state[key]),
           ...formatted.state,
@@ -422,7 +427,8 @@ const editorStore = create<EditorStoreState>()(
 
       } catch (error: any) {
         console.error('Failed to save project:', error);
-        toast({
+        if (isStaleSave(error)) staleSaveToast();
+        else toast({
           title: "Save Failed",
           description: apiErrorMessage(error, "Failed to save project. Please try again."),
           variant: "destructive",
@@ -473,6 +479,7 @@ const editorStore = create<EditorStoreState>()(
       set({
         projectName: response.name,
         projectDescription: response.description,
+        version: response.version,
         input_schema: inputSchema,
         nodes: normalizedNodes,
         edges,
@@ -514,6 +521,7 @@ const editorStore = create<EditorStoreState>()(
         projectId: null,
         projectName: '',
         projectDescription: null,
+        version: null,
         autoRearrange: false,
         formatVersion: 3,
     documentRest: {},
