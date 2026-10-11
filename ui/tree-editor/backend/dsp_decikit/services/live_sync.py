@@ -33,7 +33,7 @@ from dsp_decikit.settings import settings
 
 CHANNEL = "project_ops"
 MAX_OPS = 5000
-# A snapshot of a 521-rule document is about 190 KB; replaying a version costs about 1 ms.
+# A rebuild replays at most this many versions; each snapshot is a whole document (120 to 190 KB on 521 rules).
 SNAPSHOT_EVERY = 100
 logger = logging.getLogger("uvicorn.error").getChild("live")
 
