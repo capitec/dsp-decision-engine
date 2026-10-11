@@ -76,7 +76,7 @@ Fused `run(df)` on each request set cycled to K rows, rows/s, median of 3 (sprea
 | Host versus native polars decides P6 (06, E2) | No-go | streamed within noise to 26% of native; tree only the host fits at 50M; frame-step rewrite closes 82-93% of the fallback gap |
 | P4 exit: 50M rows streamed well under the frame size | Held only with polars configured | 0.68 GB against a 2.0 GB frame at 4 threads and 100k row groups; 2.5-4.0 GB at defaults (the same for hand-written polars) |
 | `Engine` as a pydantic model: drift into runtime state (04) | Guarded | the no-per-call-state convention test walks the engines and the polars executable |
-| Removing `score` breaks every caller (04) | Held, done | one rename; `RequestHandler.score` kept (the in-process request entry) |
+| Removing `score` breaks every caller (04) | Held, done | one rename; `RequestHandler.score` kept then, renamed `run` by the owner on 2026-10-11 |
 | Fused batch rows/s and record p50/p99 stay in the noise band (06 regression guard) | Held | record p50 geomean +1.5% and `process_fn` +1.2% against a ±2.8% base-against-base band; fused frames -0.7% to +7.0%; `benchmarks/modes.py`'s explicit numbers unchanged at P3 (not re-run on the final tip) |
 
 ### Alternatives

@@ -57,7 +57,7 @@ def unwind_estimate(evidences: list[Evidence]) -> dict:
     moves = {}
     for e in evidences:
         flow = FLOWS[e.flow]
-        off = flow.replayer(e.config_version, e.mode, params=switched_off(e.params)).score(e.request)
+        off = flow.replayer(e.config_version, e.mode, params=switched_off(e.params)).run(e.request)
         if off[flow.outcome] != e.response[flow.outcome]:
             moves[e.decision_id] = (e.response[flow.outcome], off[flow.outcome])
     return {"decisions": len(evidences), "changed": len(moves), "moves": moves}

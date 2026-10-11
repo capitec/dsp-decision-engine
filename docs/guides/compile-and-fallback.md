@@ -117,7 +117,8 @@ In detail:
 | reads `Text`, compares with literals, constants or `str` params | compiles |
 | reads `Struct[Item]`, or returns one as a tuple | compiles |
 | reads `Columnar[Item]` | compiles into the shared kernel; `Columnar[Item] | None` runs compiled but one call per row |
-| reads or writes `str`, `date`, `dict`, `list[...]`, a `TypedDict` | Python, row by row |
+| returns `Columnar[Item]` as a list of tuples, or a tuple under `@step(outputs=(...))` | compiles |
+| reads or writes `str`, `date`, `dict`, `list[...]`, a `TypedDict` | Python, row by row; for an output, the reason names the declared form that compiles (`Struct`, `Columnar`, `outputs=`), or says none does (a `date`, `bytes`, `set`, or a container holding a `str`) |
 | writes `Struct[Item] | None`, or returns a dict for a `Struct[Item]` | Python, row by row |
 | calls a function without `@helper` that numba cannot compile | Python, with the callee named in the reason |
 | has a body numba refuses (`import` inside, unsupported methods) | Python, with numba's error as the reason |
@@ -261,7 +262,7 @@ mixed/applied_month runs in Python, row by row: reads 'applied_on' as <class 'da
 {'code': 4, 'legacy_score': 8.0}
 ```
 
-The strict error is an `EngineError` (a `DecikitError` and a `ValueError`).
+The strict error is a `StrictCompileError` (`from decikit import StrictCompileError`), an `EngineError` (a `DecikitError` and a `ValueError`).
 
 `strict_compile=True` also refuses hidden state, in every engine: a step that reads a module-level object (a `HiddenStateWarning` otherwise) makes `bind` raise `EngineError`, so a CI build with one fails.
 

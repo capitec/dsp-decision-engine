@@ -41,25 +41,27 @@ collapses `score` into `run`, and leaves room for optional polars-native step bo
 | 2026-10-09 | `Step.session()` opens interpreted unless given an engine; it does not follow the default |
 | 2026-10-09 | `stepped` stays as an engine |
 | 2026-10-09 | Loudness is per engine: fused warns about every step that does not run compiled, kernels that split at first launch included (today nothing reports those); stepped and interpreted never warn; `strict_compile=True` still raises wherever it is set; `@allow_fallback` is discouraged in the guide |
-| 2026-10-10 | `Executable.run` checks `dict` first, then `LazyFrame`, `DataFrame`, `Mapping` (spec order cost 0.46-0.51 µs per record call against 0.06 µs) (manager, pending owner confirmation) |
-| 2026-10-10 | `RequestHandler.score` keeps its name; only `Executable.score` goes (manager, pending owner confirmation) |
-| 2026-10-10 | A scalar step writing a container, `bytes` or a time falls back at build, so its kernel splits around it; replaces the zero-row probe (manager, pending owner confirmation) |
-| 2026-10-10 | An all-null typed output takes its declared dtype on every numba engine (manager, pending owner confirmation) |
-| 2026-10-10 | `RequestHandler(engine=...)` also takes a tag; a strict refusal is `EngineError`; `stage()` builds kernels before warm-up (manager, pending owner confirmation) |
-| 2026-10-10 | `Step.run` caches no executable; the repeated small-frame cost is recorded (manager, pending owner confirmation) |
-| 2026-10-10 | The polars host refuses an output with no polars dtype crossing a segment or reaching the output (5 of 12 examples), rather than typing it from data (manager, pending owner confirmation) |
-| 2026-10-10 | Host segments emit only what later segments read, split at a read-then-rewrite, declare every pipeline name as input (manager, pending owner confirmation) |
-| 2026-10-10 | `PolarsEngine.params_validation` must equal its segments'; `run(DataFrame)` keeps plain `collect()`; a `PolarsEngine` default keeps its settings for `run(LazyFrame)` (manager, pending owner confirmation) |
-| 2026-10-10 | `assert_equivalent` compares each record with a one-row frame when the pipeline has a frame step (manager, pending owner confirmation) |
-| 2026-10-10 | P6 (polars bodies, native segments, `impl`) is not built: E2 no-go (manager, pending owner confirmation) |
+| 2026-10-10 | `Executable.run` checks `dict` first, then `LazyFrame`, `DataFrame`, `Mapping` (spec order cost 0.46-0.51 µs per record call against 0.06 µs); kept: 0.06 µs of a ~1,600 µs record (manager; decided by the owner 2026-10-11) |
+| 2026-10-10 | `RequestHandler.score` keeps its name; only `Executable.score` goes (manager; superseded by the owner's decision of 2026-10-11 below) |
+| 2026-10-10 | A scalar step writing a container, `bytes` or a time falls back at build, so its kernel splits around it; replaces the zero-row probe (manager; decided by the owner 2026-10-11) |
+| 2026-10-10 | An all-null typed output takes its declared dtype on every numba engine (manager; decided by the owner 2026-10-11) |
+| 2026-10-10 | `RequestHandler(engine=...)` also takes a tag; a strict refusal is `EngineError` (`StrictCompileError`); `stage()` builds kernels before warm-up (manager; decided by the owner 2026-10-11) |
+| 2026-10-10 | `Step.run` caches no executable; the repeated small-frame cost is recorded (manager; decided by the owner 2026-10-11) |
+| 2026-10-10 | The polars host refuses an output with no polars dtype crossing a segment or reaching the output (5 of 12 examples), rather than typing it from data (manager; decided by the owner 2026-10-11) |
+| 2026-10-10 | Host segments emit only what later segments read (pipeline outputs and `.emit` values are always kept), split at a read-then-rewrite, declare every pipeline name as input (manager; decided by the owner 2026-10-11) |
+| 2026-10-10 | `PolarsEngine.params_validation` must equal its segments'; `run(DataFrame)` keeps plain `collect()`; a `PolarsEngine` default keeps its settings for `run(LazyFrame)` (manager; decided by the owner 2026-10-11) |
+| 2026-10-10 | `assert_equivalent` compares each record with a one-row frame when the pipeline has a frame step (manager; decided by the owner 2026-10-11) |
+| 2026-10-10 | P6 (polars bodies, native segments, `impl`) is not built: E2 no-go (manager; decided by the owner 2026-10-11) |
 | 2026-10-10 | Unannotated/`Any` outputs and untyped container rendering left as they are and documented as known limitations (manager, pending owner confirmation) |
 | 2026-10-10 | Every example runs on every engine: the five that returned untyped `dict`/`list[dict]` outputs declare them (owner) |
 | 2026-10-10 | Every engine types an `each`'s gathered list from its item and body declarations (one derivation), so a frame's schema is a function of the pipeline; a cast that would change a value is refused (manager; the owner's rule below) |
 | 2026-10-10 | A declared type fixes the batch schema: every declared optional key in every row, null when unset; per-record responses unchanged (owner) |
+| 2026-10-11 | `RequestHandler.score` is renamed `run`, with no alias: one `run` everywhere (owner) |
+| 2026-10-11 | A step that falls back for what it returns is told the declared form that compiles (`Struct`, `Columnar`, `outputs=`), or that none does; `StrictCompileError` is exported from `decikit` (owner) |
 
 ## Deviations from the plan
 
-- P1: the `dict` check comes first (measured above); `RequestHandler.score` stays.
+- P1: the `dict` check comes first (measured above); `RequestHandler.score` stayed, then the owner renamed it `run` (2026-10-11).
 - P2: no zero-row probe (built, verified, then replaced by the static build-time rule; 4 example steps that ran in
   Python inside split kernels now run compiled); `NumbaEngine` has no `mode`, subclasses return `_runner()`;
   `registered()` does not load entry points; `decikit serve` validates the engine document before starting workers.
