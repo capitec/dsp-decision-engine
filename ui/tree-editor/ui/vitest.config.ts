@@ -1,6 +1,9 @@
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import { fileURLToPath, URL } from 'node:url'
+import { requireMergeCorePkg } from './merge-core-pkg'
+
+requireMergeCorePkg()
 
 export default defineConfig({
   plugins: [react()],

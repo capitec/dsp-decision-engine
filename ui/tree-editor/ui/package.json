@@ -67,7 +67,7 @@
     "zustand": "^5.0.12"
   },
   "scripts": {
-    "build:wasm": "wasm-pack build ../merge-core --target web --release --no-pack -- --features wasm",
+    "build:wasm": "command -v wasm-pack >/dev/null || { echo 'build:wasm needs Rust: install rustup, then `rustup target add wasm32-unknown-unknown` and `cargo install --locked wasm-pack` (ui/tree-editor/README.md, merge-core)' >&2; exit 1; } && wasm-pack build ../merge-core --target web --release --no-pack -- --features wasm",
     "dev": "vite",
     "build": "tsc && vite build",
     "build:skip-check": "vite build",
