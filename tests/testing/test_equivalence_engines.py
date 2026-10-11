@@ -1,6 +1,6 @@
 """assert_equivalent across engines: polars by default, refusals skipped, frame steps compared one row at a time."""
 from datetime import date
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 import polars as pl
 import pytest
@@ -82,3 +82,43 @@ def test_polars_may_type_a_column_the_numba_engines_leave_null_but_nothing_else(
                         run(self, data, params).with_columns(pl.col("scaled").cast(pl.Int64)))
     with pytest.raises(AssertionError, match="polars engine differs"):
         assert_equivalent(pipe, FRAME, engines=("fused", "polars"))
+
+
+class Inner(TypedDict):
+    x: float
+    y: NotRequired[float]
+
+
+class Tagged(TypedDict):
+    v: float
+    note: NotRequired[str]
+    inner: Inner
+    items: list[Inner]
+
+
+def tagged(a: float) -> Tagged:
+    out: Tagged = {"v": a, "inner": {"x": a}, "items": [{"x": a}, {"x": a, "y": 1.0}]}
+    if a > 1:
+        out["note"] = "big"
+        out["inner"]["y"] = 2.0
+    return out
+
+
+def test_a_declared_optional_key_the_record_omits_equals_null_in_the_row_at_any_depth():
+    out = assert_equivalent(flow(tagged), FRAME)
+    assert out["tagged"].struct.field("note").to_list() == ["big", None, "big"]
+
+
+def test_a_real_difference_in_a_present_nested_key_still_fails(monkeypatch):
+    run = PolarsExecutable.run
+
+    def shifted(self, data, params=None, trace=None):
+        out = run(self, data, params, trace)
+        if not isinstance(out, pl.LazyFrame):
+            return out
+        return out.with_columns(pl.col("tagged").map_batches(lambda s: s.map_elements(
+            lambda r: {**r, "inner": {**r["inner"], "x": r["inner"]["x"] + 1}}, return_dtype=s.dtype)))
+
+    monkeypatch.setattr(PolarsExecutable, "run", shifted)
+    with pytest.raises(AssertionError, match=r"run\(record\) of row 0 on the polars engine differs.*'inner'"):
+        assert_equivalent(flow(tagged), FRAME, engines=("polars",))
