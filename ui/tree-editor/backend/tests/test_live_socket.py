@@ -143,6 +143,12 @@ class StalledSocket(Socket):
         self.closed = code
 
 
+class StalledFirst(set):
+    # A set's order is arbitrary; with the stalled client first, a fan-out that sends in turn makes the others wait.
+    def __iter__(self):
+        return iter(sorted(super().__iter__(), key=lambda client: not isinstance(client.ws, StalledSocket)))
+
+
 async def until(check, timeout: float = 5):
     deadline = time.monotonic() + timeout
     while not check():
@@ -163,6 +169,7 @@ async def test_a_client_that_stops_reading_does_not_hold_up_the_others_and_is_dr
     await hub.join(project_id, fast, 1)
     await hub.join(project_id, slow, 1)
     slow.ws.stalled = True
+    hub.rooms[project_id].clients = StalledFirst(hub.rooms[project_id].clients)
 
     await apply_message(project_id, "c3", "m1", 1, [name("a", "One")])
     hub.pump_soon(project_id)
