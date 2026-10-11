@@ -9,6 +9,9 @@ export const { apply, conflicts, diff, isRelated, reconcile, staleOps, touched, 
 // Cases where JavaScript itself, not the core, cannot hold the value.
 export const XFAIL = {
   'integers past 2**53 that differ by one differ': 'a JavaScript number holds integers exactly only up to 2**53',
+  'an integer past 2**53 and the float it rounds to differ': 'a JavaScript number holds integers exactly only up to 2**53',
+  'an integer past 2**53 and the float it rounds to on the two sides conflict':
+    'a JavaScript number holds integers exactly only up to 2**53',
   'an added integer-like key goes last': 'JavaScript objects list integer-like keys first, whatever the insertion order',
 }
 
