@@ -9,6 +9,8 @@
 
 **/node_modules
 **/build
+**/target
+ui/tree-editor/merge-core/pkg
 **/__pycache__
 **/*.pyc
 **/.DS_Store

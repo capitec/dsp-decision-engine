@@ -38,6 +38,7 @@ export interface FlatRuleProject {
 export interface FlatRuleProjectDetail extends FlatRuleProject {
   project_data: PEDPrioritizedTree;
   validation_errors?: any[];
+  live_collab?: boolean;
   // output_types removed - now using project_data.ui_type_defs instead
 }
 

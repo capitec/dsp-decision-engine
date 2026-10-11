@@ -1,6 +1,9 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { fileURLToPath, URL } from 'node:url'
+import { requireMergeCorePkg } from './merge-core-pkg'
+
+requireMergeCorePkg()
 
 const apiTarget = process.env.API_TARGET ?? 'http://localhost:8000'
 
@@ -22,6 +25,7 @@ export default defineConfig({
         target: apiTarget,
         changeOrigin: false,
         secure: false,
+        ws: true,
       },
       '/auth': {
         target: apiTarget,

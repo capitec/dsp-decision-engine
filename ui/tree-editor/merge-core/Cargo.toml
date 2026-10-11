@@ -1,0 +1,30 @@
+[package]
+name = "merge-core"
+version = "0.1.0"
+edition = "2021"
+description = "Live-sync diff/apply/merge core for the tree editor, shared by the Python backend and the browser"
+
+[lib]
+name = "merge_core"
+crate-type = ["cdylib", "rlib"]
+
+[features]
+python = ["dep:pyo3"]
+wasm = ["dep:wasm-bindgen"]
+
+[dependencies]
+# arbitrary_precision keeps integers past 2**64 and number text as written.
+serde_json = { version = "1", features = ["preserve_order", "arbitrary_precision"] }
+pyo3 = { version = "0.25", features = ["abi3-py310", "extension-module"], optional = true }
+wasm-bindgen = { version = "0.2", optional = true }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+# wasm-pack's binaryen is older than the instructions rustc emits by default.
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ["-O3", "--enable-bulk-memory", "--enable-nontrapping-float-to-int", "--enable-sign-ext", "--enable-mutable-globals", "--enable-multivalue", "--enable-reference-types"]

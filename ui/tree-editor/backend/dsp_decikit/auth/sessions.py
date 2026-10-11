@@ -63,6 +63,15 @@ async def renew_session(token: str, info: SessionInfo) -> bool:
     return result.rowcount == 1
 
 
+async def renew_if_due(token: str, info: SessionInfo) -> bool:
+    """Renew a session in use that is within the renewal threshold of its expiry; True when it was renewed."""
+    now = int(time.time())
+    if info.expires_at - now > settings.auth.session_renewal_threshold_s:
+        return False
+    info.last_activity = now
+    return await renew_session(token, info)
+
+
 async def delete_session(token: str) -> None:
     async with db_session() as session:
         await session.execute(delete(CacheEntry).where(CacheEntry.key == CacheKeys.auth_session(_hashed(token))))
