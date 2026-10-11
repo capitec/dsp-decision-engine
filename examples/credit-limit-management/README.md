@@ -303,6 +303,9 @@ and the programme excludes the account for as long as it is true.
   ranked); the short-circuit that skips scoring and affordability for an excluded account (it needs a `branch` around
   every step); the offer, consent and event-driven paths; cap overlays; a scorecard of 8 characteristics rather
   than dozens.
+- **No `sink_parquet` on the polars engine.** Three request fields no step reads (`applicant1_statement_expenses`,
+  `applicant2_declared_expenses`, `applicant2_statement_expenses`) arrive as empty structs, which parquet cannot store
+  (fused `write_parquet` fails the same). Sink to Arrow IPC, or drop those inputs.
 - **Synthetic data.** Every table, threshold, rate, curve and budget here is invented for illustration.
 
 ## Reuse
