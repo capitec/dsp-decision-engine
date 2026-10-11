@@ -41,7 +41,8 @@ function mapProjectDetailToFlatRuleDetail(project: ProjectDetailResponse): FlatR
     version: project.version,
     created_by: project.created_by,
     project_data: projectData,
-    validation_errors: project.validation_errors as any[]
+    validation_errors: project.validation_errors as any[],
+    live_collab: project.live_collab
   };
 }
 
@@ -136,15 +137,18 @@ export const flatRuleApi = {
 
   // Download export as file (an invalid document comes back as a 400 and throws)
   downloadExport: async (projectId: string, projectName: string): Promise<void> => {
-    const data = await flatRuleApi.exportProject(projectId);
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
-    link.download = `${projectName.replace(/[^a-zA-Z0-9]/g, '_')}_flat_rules_export.json`;
-
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(link.href);
+    downloadJson(await flatRuleApi.exportProject(projectId), `${projectName.replace(/[^a-zA-Z0-9]/g, '_')}_flat_rules_export.json`);
   }
 
 };
+
+export function downloadJson(data: unknown, filename: string) {
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+  link.download = filename;
+
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(link.href);
+}

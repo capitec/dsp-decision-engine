@@ -953,6 +953,12 @@ export type ProjectDetailResponse = {
      */
     is_owner: boolean;
     access_mode: AccessMode;
+    /**
+     * Live Collab
+     *
+     * Edit this project live over its websocket instead of saving it
+     */
+    live_collab?: boolean;
 };
 
 /**
