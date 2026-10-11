@@ -124,8 +124,10 @@ Measured on the shared dev box (Fedora, glibc 2.43, rustc 1.95, maturin 1.15.0);
   `cargo install --locked`, builds the wheel and `pkg/`, and hands the wheel to the runtime stage and `pkg/` to the
   node stage; nothing prebuilt is needed. Image size 774,021,459 B before, 775,254,912 B after (+1.2 MB). A cold
   build (`--no-cache`) took 14 min 30 s before and 23 min 9 s after; most of both is the network-bound `pip install`
-  of the backend requirements (about 10 min here), so the Rust stage adds roughly 8 min cold, and it is a cached
-  layer afterwards. The image starts against Postgres, `/api/health` answers, `merge_core` imports and the wasm is in
+  of the backend requirements (about 10 min here), so the Rust stage adds roughly 8 min cold. Warm, with the
+  `cargo install` layer cached: nothing changed, all steps cached; a change under `merge-core/src` 16 s (Rust stage and
+  the small wheel layer only, the big `pip install` layer is not redone); a change in `ui/src` 15 s (one other run of
+  this failed once in `pnpm install` with `ui/lib prepare: TS5058 tsconfig.build.json`, not reproduced). The image starts against Postgres, `/api/health` answers, `merge_core` imports and the wasm is in
   `build/assets/` served as `application/wasm`.
 - A contributor without Rust: `pnpm build:skip-check`, vitest and `tsc` fail at once with `Could not resolve
   '../../../merge-core/pkg/merge_core.js'` (and `TS2307` from tsc), `pnpm build:wasm` with `wasm-pack: command not
