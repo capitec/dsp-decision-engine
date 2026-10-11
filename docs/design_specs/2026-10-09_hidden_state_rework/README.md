@@ -1,12 +1,13 @@
 # Hidden state in steps
 
-Status: proposal, 2026-10-09. Nothing in this folder is built. Read it before changing how steps read data that is not an input, a param
+Status: proposal, 2026-10-09; built (the rationale now lives in `docs/design_decisions/decisions/engine.md`; this folder is history, with the
+"As built" notes below). Read it before changing how steps read data that is not an input, a param
 or a config document, or before changing `decikit/_engine/compile/fingerprint.py`.
 
 ## Purpose
 
 A step that reads a Python object it did not receive (a register in a closure, a module-level dict, an instance) cannot be compiled by numba,
-cannot be compared by `decikit.lab.diff`, and is invisible in config. The 12 shipped examples do this 113 times. This spec records what is wrong,
+cannot be compared by `decikit.lab.diff`, and is invisible in config. The 12 shipped examples do this 113 times (a review on 2026-10-10 counted 109 strict-fingerprint refusals on the same baseline; the counting differs). This spec records what is wrong,
 the owner's position, the design that replaces it, the checks the decider toolkit will add, and the order of work.
 
 ## Owner's position
@@ -52,12 +53,14 @@ Same data twice diffs identical; a changed value diffs different; the step compi
 | `ReasonCodeRegistry` | `ReasonCodes(ConfigurableStep)`: `version`, `codes` | rank, unknown-code error and a changed severity all as before |
 | `EffectiveDatedSet` | `EffectiveVersions(ConfigurableStep)`: `family`, `date_field`, `versions`; gaps and overlaps rejected at load | cut-over moved a month diffs different |
 | `retail_credit.caps` register of lambdas | one small step per rule, in flow order; thresholds are literals in each rule; the appetite dict becomes a `DecisionTableConfig` | 1500 random applications equal; swapping two rules diffs different |
-| `RateCardIndex` / `CreditLifeIndex` objects | a `param_table` read with `np.searchsorted`; compiles | 2000 lookups equal; a diff of a 63,360-row table costs about 1.9 s |
+| `RateCardIndex` / `CreditLifeIndex` objects | a `param_table` read with `np.searchsorted`; compiles (as built: `DecisionTableConfig` documents and `param_table`s with lookup classes; they compile and diff by content) | 2000 lookups equal; a diff of a 63,360-row table costs about 1.9 s |
 | dict/list module globals (`TREATMENT_MATRIX`, ...) | tuple of pairs, `param_table`, or `DecisionTableConfig` | a tuple global is seen by the diff |
 
 No clean design yet: consolidation's stateful `Capacity`/`Buffers`/`ScenarioEvaluator` (a rewrite of the search around `each`/`optimise`),
 the fraud `RuleSet` frame step (needs consts on frame nodes), and the governance harness (stays Python, takes everything as params, flows resolved
 through an entry-point group).
+As built: consolidation and the fraud `RuleSet` are clean without those redesigns; the governance harness kept its `FLOWS` registry as a declared
+Python boundary (allow-listed in `tests/examples/test_examples_hidden_state.py`).
 
 Compilation does not change: these steps take a `date` or return `str`/lists, so they stay Python. The gain is diffability, visibility in config and
 an honest warning, not speed.
@@ -67,9 +70,10 @@ an honest warning, not speed.
 1. Fingerprint fixes first: module constants keyed by value (the stale-cache bug), library callables keyed by module and qualname without
    walking into them, `**kwargs` steps fall back.
 2. `hidden_state(fn)`, built from the same walk as the cache key so the two cannot disagree, called once per step at `Engine.bind` in every mode
-   (0 to 6.5 ms for a whole pipeline; nothing per call). It emits `HiddenStateWarning`, which `@allow_fallback` does not silence.
+   (0 to 6.5 ms for a whole pipeline; nothing per call. As built: 2.7 to 13.6 ms per bind on the examples, transaction-fraud highest, measured 2026-10-10). It emits `HiddenStateWarning`, which `@allow_fallback` does not silence.
    Warning text: names the step, the object and where it is read, says why it matters (the diff cannot compare it, numba cannot compile it) and what to do.
-3. Later, once the examples are clean: raise under `strict_compile=True`; and a CI test that no example emits the warning.
+3. Later, once the examples are clean: raise under `strict_compile=True`; and a CI test that no example emits the warning. As built: both done
+   (`strict_compile` raises at bind; `tests/examples/test_examples_hidden_state.py`).
 
 Alternatives considered: warn only (chosen first), raise under `strict_compile`, raise always (every example would fail to build), do nothing
 (the two correctness bugs stay).
@@ -87,6 +91,7 @@ Alternatives considered: warn only (chosen first), raise under `strict_compile`,
 
 - `credit_core` is imported by 11 examples; its change is the largest risk, so it lands and passes the gate alone before the others start.
 - A diff of a large `param_table` default is slow; a faster digest is a separate task.
-- Whether mutable containers of literals should be flagged (the stable-fingerprint change already keys exact literal containers by value).
+- Whether mutable containers of literals should be flagged (the stable-fingerprint change already keys exact literal containers by value). Decided:
+  `list`, `dict` and `set` are flagged (`decisions/engine.md`).
 - The engine rework (`2026-10-09_flexible_engine_rework`) defines per-engine loudness for fallbacks; the hidden-state warning is a design lint and is
-  emitted in every mode. Confirm that split with the owner.
+  emitted in every mode. Confirm that split with the owner. Pending owner confirmation: the code warns in every engine and mode on that assumption.

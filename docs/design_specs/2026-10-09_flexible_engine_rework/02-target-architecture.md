@@ -126,7 +126,7 @@ flowchart TB
 The segmenter walks the root sequence's top-level children in order. A child that contains a frame call
 anywhere beneath it (a bare frame step, or a branch or loop holding one) becomes a whole-frame segment,
 `streamable=False`; consecutive children without one form a streamable segment. Every segment is a
-sub-`Executable`: a `SequenceNode` of those children emitting every name they write, bound once with
+sub-`Executable`: a `SequenceNode` of those children emitting every name they write (as built: only the names a later segment or the final select reads), bound once with
 `self.segments.bind(...)`, and emitted as `lf.map_batches(partial(sub.run, params=pruned), schema,
 streamable=...)`. Everything inside (kernels, fallbacks, trees, branches, loops) is the existing code running
 on an Arrow batch; a row-local segment is streamable by construction, and a frame-step segment sees the whole
