@@ -95,10 +95,10 @@ async def live(ws: WebSocket, project_id: uuid.UUID):
     # Accepted before the session is checked: a refused handshake reaches the page as a bare network error, and it
     # would reconnect for ever instead of telling the user why.
     await ws.accept()
-    if (await _access(project_id, ws))[0] is None:
-        return
     client = None
     try:
+        if (await _access(project_id, ws))[0] is None:
+            return
         while True:
             try:
                 text = await asyncio.wait_for(ws.receive_text(), RECHECK_S)
