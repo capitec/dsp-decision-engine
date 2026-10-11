@@ -142,8 +142,15 @@ def engine(which: str | Engine) -> Iterator[None]:
     `which` is an engine's tag (`"interpreted"`, `"stepped"`, `"fused"`) or an
     `Engine` instance. Outside any block the default is `FusedEngine()`. The
     setting is a context variable: it ends with the block (also on an
-    exception), an `asyncio` task started inside gets a copy, and a thread
-    sees it only when run under `contextvars.copy_context().run`.
+    exception) and an `asyncio` task started inside gets a copy.
+    `asyncio.to_thread` sees the block; `loop.run_in_executor` and plain threads
+    do not (unless the interpreter copies the context into new threads:
+    free-threaded CPython, or `-X thread_inherit_context=1`, where a pool
+    worker created inside the block keeps that engine after it ends); polars'
+    own threads never do. For those, pass `engine=` to `run`, or wrap each
+    task in `contextvars.copy_context().run`. Do not `yield` inside the block:
+    the setting leaks out of the paused generator, and an async generator
+    closed from another task raises `ValueError`.
     `pipeline.session(...)` opens interpreted whatever is set, and serving
     runs its own engine.
 
