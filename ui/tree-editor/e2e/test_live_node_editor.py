@@ -178,3 +178,19 @@ def test_opening_a_tree_the_editor_writes_differently_stores_nothing_until_an_ed
     stored(signed_in, project, lambda d: thresholds(d)["root"] == 250)
     assert get_project(signed_in, project)["version"] == opened + 1
 
+
+def test_a_node_moved_in_another_browser_stays_put_when_this_one_auto_arranges(signed_in: Page, session, tree: str):
+    second = session(node=2)
+    open_live(signed_in, tree)
+    open_live(second, tree)
+    auto = signed_in.get_by_label("Auto-arrange tree")
+    auto.click()
+    laid_out = positions(stored(signed_in, tree, lambda d: positions(d) != positions(chain())))
+    at = laid_out["no"]
+    expect(node(second, "no")).to_have_attribute("style", re.compile(rf"translate\({at['x']:g}px, {at['y']:g}px\)"))
+
+    drag_node(second, "no", 150, 120)
+
+    moved = positions(stored(signed_in, tree, lambda d: positions(d)["no"] != laid_out["no"]))["no"]
+    expect(auto).not_to_be_checked()
+    assert positions(get_project(signed_in, tree)["project_data"])["no"] == moved
