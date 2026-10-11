@@ -108,6 +108,12 @@ class AppSettings(BaseSettings):
     live_collab: bool = Field(
         False, description="Editors sync edits live over a websocket per project instead of saving whole documents"
     )
+    live_log_keep_versions: int = Field(
+        5000, description="The project_ops log trims a project's versions beyond about this many of the latest"
+    )
+    live_log_keep_days: int = Field(
+        30, description="The project_ops log trims a project's versions older than about this many days"
+    )
 
     @classmethod
     def settings_customise_sources(
