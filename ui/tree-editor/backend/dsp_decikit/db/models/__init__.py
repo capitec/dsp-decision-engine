@@ -1,6 +1,7 @@
 from dsp_decikit.db.models.users import User, Team, TeamMembership
 from dsp_decikit.db.models.projects import (
     Project,
+    ProjectOp,
     ProjectShare,
     ShareType,
     AccessMode,
@@ -14,6 +15,7 @@ __all__ = [
     "Team",
     "TeamMembership",
     "Project",
+    "ProjectOp",
     "ProjectShare",
     "Folder",
     "FolderShare",

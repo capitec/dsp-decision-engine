@@ -138,3 +138,30 @@ Workaround: set `serve.workers` explicitly in restricted containers.
 
 **Arrow request bodies reach the kernels without a full validation pass.** `serving/_parse.py` reads Arrow IPC with polars, and the boundary shim reads string views with nanoarrow's unchecked accessor, so a malformed view that polars accepts could crash the worker. Whether polars rejects such views was not tested.
 Workaround: accept Arrow bodies only from trusted callers, or serve JSON.
+
+## Tree editor live editing (`DSP_LIVE_COLLAB`)
+
+**The node editor does not handle a socket the server ended.** The flat-rule editor stops and says why when its
+socket is closed for a sign-out, expiry or lost access, resumes after the session dialog, and hands back edits the
+server fails on three times; the node editor's live hook (`components/editor/useNodeLive.ts`) was written before
+those `LiveSync` hooks and does not pass them, so it stops syncing without a message.
+Workaround: reload the page; unsaved node edits stay in the editor until then (Export keeps a copy). The fix is one
+live hook shared by both editors.
+
+**The log keeps 5000 versions and 30 days per project** (`DSP_LIVE_LOG_KEEP_VERSIONS`, `DSP_LIVE_LOG_KEEP_DAYS`): an
+owner decision still open. A busy project can write 5000 live versions in about an hour, and an offline batch made on
+an older version is refused (it stays downloadable). The count also caps REST saves, each a whole document (about
+240 KB on 521 rules, so about 1.2 GB per heavily saved project).
+
+**The e2e suite with the flag on is not green.** The smoke set and `test_sessions.py` wait for the REST PUT that a
+live editor never sends (or test REST-only flows); with `DSP_LIVE_COLLAB=true` 8 to 14 smoke tests fail for that
+reason. The suite is run with the flag off; the live stories are in `test_live_*.py`.
+
+**Smaller gaps.** Leaving a page within 150 ms of an edit (after confirming the unsaved-changes prompt) drops that
+edit. Clicking a subtree in the node editor leaves "Unsaved changes" showing while live, and a remote version clears
+the subtree list's highlight. A deadlock or serialization failure (SQLSTATE 40) closes the socket as an error the
+client counts, not as transient. Two browsers connecting nodes at once can make a cycle (validation reports it).
+`lib/background-token-refresh.ts` pings `/api/auth/config`, a public path, so it never renews a session (only edits
+and other API calls do). `result_idx` points at output rows by index, so a merge can keep two edits that point at
+the wrong row together. The offline merge falls back to validating under the row lock when a project is edited
+faster than a validation (every ~170 ms on 521 rules), so ten simultaneous offline batches finish in about 7 s.

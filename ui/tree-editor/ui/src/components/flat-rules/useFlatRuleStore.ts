@@ -8,8 +8,9 @@ import { parseFlatRuleValidationErrors, groupErrorsByRule, getSectionErrors, for
 import { subscribeToStoreActivity } from '@/lib/background-token-refresh';
 import { toast } from '@/hooks/use-toast';
 import { isStaleSave, staleSaveToast } from '@/lib/stale-save';
-import { apiErrorMessage } from '@/lib/utils';
+import { apiErrorMessage, sameJson } from '@/lib/utils';
 import { collectParamRefs } from '@/utils/param-refs';
+import type { LiveStatus } from '@/lib/live-sync';
 
 interface FlatRuleState {
   // Core data
@@ -43,6 +44,11 @@ interface FlatRuleState {
   hasInputSchemaErrors: boolean;
   hasOutputErrors: boolean;
   hasParameterErrors: boolean;
+  errorCount: number;
+
+  // Live editing: the connection, and Save's wait for the server (null when the project is saved over REST)
+  live: LiveStatus | null;
+  liveSettle: (() => Promise<boolean>) | null;
   
   // Actions
   setTrees: (trees: PrioritizedTree[] | ((prev: PrioritizedTree[]) => PrioritizedTree[])) => void;
@@ -72,6 +78,9 @@ interface FlatRuleState {
   
   // Initialization
   initializeFromProject: (project: FlatRuleProjectDetail) => void;
+  // Show a document from the server, keeping each rule's client id, expansion and unchanged objects
+  applyDocument: (doc: any, version: number) => void;
+  setValidationErrors: (errors: any[]) => void;
   
   // Internal helpers
   updateProjectData: (updates: any) => void;
@@ -110,6 +119,7 @@ function buildErrorState(rawErrors: any[] | undefined, trees: PrioritizedTree[])
     ruleErrors,
     validationErrors,
     sectionErrors: parsed.filter(e => e.ruleIndex === undefined),
+    errorCount: rawErrors?.length ?? 0,
     ...getSectionErrors(parsed),
   };
 }
@@ -189,6 +199,97 @@ const computeOutputOptions = (projectData: any): Array<{ id: number; name: strin
   return options;
 };
 
+// Helper to ensure all nodes have IDs (recursively)
+const ensureNodeIds = (node: any): RuleTableRow => {
+  if (!node) return node;
+
+  const nodeWithId = {
+    ...node,
+    id: node.id || crypto.randomUUID()
+  };
+  // Legacy documents stored the ranges strictness as `strict_mode`
+  if ('strict_mode' in nodeWithId) {
+    nodeWithId.strict = nodeWithId.strict ?? nodeWithId.strict_mode;
+    delete nodeWithId.strict_mode;
+  }
+
+  // Recursively process child nodes based on type
+  if (nodeWithId.type === 'unary' || nodeWithId.type === 'composite') {
+    return {
+      ...nodeWithId,
+      then: nodeWithId.then ? ensureNodeIds(nodeWithId.then) : nodeWithId.then,
+      otherwise: nodeWithId.otherwise ? ensureNodeIds(nodeWithId.otherwise) : nodeWithId.otherwise,
+      // Also ensure nested composite conditions have IDs
+      conditions: nodeWithId.type === 'composite' && nodeWithId.conditions
+        ? nodeWithId.conditions.map((cond: any) => {
+            if (cond.type === 'composite') {
+              return ensureNodeIds(cond);
+            }
+            return cond;
+          })
+        : nodeWithId.conditions
+    } as RuleTableRow;
+  }
+
+  if (nodeWithId.type === 'cases') {
+    return {
+      ...nodeWithId,
+      branches: nodeWithId.branches?.map((branch: any) => ensureNodeIds(branch))
+    } as RuleTableRow;
+  }
+
+  return nodeWithId as RuleTableRow;
+};
+
+// One tree per rule; a rule whose root id matches a previous tree keeps that tree's client id, and the previous
+// tree object itself when nothing in it changed (so its editors keep their state).
+function treesFromRules(rules: any[] | undefined, previous: PrioritizedTree[] = []): PrioritizedTree[] {
+  if (!rules || rules.length === 0) {
+    return [{ id: crypto.randomUUID(), name: 'Rule 1', priority: 1, rootNode: createDefaultLeafNode(), description: '' }];
+  }
+  const byRoot = new Map(previous.map(tree => [tree.rootNode?.id, tree]));
+  return rules.map((root, index) => {
+    const rootNode = ensureNodeIds(root.rule) || createDefaultLeafNode();
+    const old = byRoot.get(rootNode.id);
+    const tree = {
+      id: old?.id ?? crypto.randomUUID(),
+      name: root.meta?.name || `Rule ${index + 1}`,
+      priority: index + 1,
+      rootNode,
+      description: root.meta?.description || ''
+    };
+    return old && sameJson(old, tree) ? old : tree;
+  });
+}
+
+// Initialize with empty parameters if none exist and normalize dtypes
+const withEditorDefaults = (projectData: any) => ({
+  ...projectData,
+  parameters: projectData?.parameters || {},
+  output: projectData?.output ? {
+    ...projectData.output,
+    dtypes: normalizeDtypes(projectData.output.dtypes || [])
+  } : {
+    data: [],
+    default: null,
+    dtypes: [],
+    type_defs: {}
+  }
+});
+
+/** The document the editor holds: the project's data with the rules rebuilt from the trees, in order. */
+export const buildDocument = (state: Pick<FlatRuleState, 'project' | 'trees'>) => ({
+  ...state.project.project_data,
+  rules: state.trees.map(tree => ({
+    meta: {
+      name: tree.name,
+      ...(tree.description && { description: tree.description }),
+      position: { x: 0, y: 0 }
+    },
+    rule: tree.rootNode
+  }))
+});
+
 const store = create<FlatRuleState>()(
   subscribeWithSelector((set, get) => ({
     // Initial state
@@ -211,6 +312,9 @@ const store = create<FlatRuleState>()(
     hasInputSchemaErrors: false,
     hasOutputErrors: false,
     hasParameterErrors: false,
+    errorCount: 0,
+    live: null,
+    liveSettle: null,
 
     // Actions
     setTrees: (trees) => set((state) => ({
@@ -469,6 +573,19 @@ const store = create<FlatRuleState>()(
       const state = get();
       if (state.saving) return false;
 
+      if (state.liveSettle) {
+        set({ saving: true });
+        const settled = await state.liveSettle();
+        set({ saving: false });
+        const errors = get().errorCount;
+        toast(!settled
+          ? { title: "Save Failed", description: "The server has not confirmed your edits yet; they are kept and will be sent when it answers.", variant: "destructive" }
+          : errors === 0
+            ? { title: "Project Saved", description: "Your changes have been saved successfully." }
+            : { title: "Saved with validation issues", description: `${errors} issue(s) found. Affected rules are highlighted.`, duration: 10000 });
+        return settled;
+      }
+
       try {
         set({
           saving: true,
@@ -481,17 +598,7 @@ const store = create<FlatRuleState>()(
           hasParameterErrors: false
         });
 
-        const updatedProjectData = {
-          ...state.project.project_data,
-          rules: state.trees.map(tree => ({
-            meta: {
-              name: tree.name,
-              ...(tree.description && { description: tree.description }),
-              position: { x: 0, y: 0 }
-            },
-            rule: tree.rootNode
-          }))
-        };
+        const updatedProjectData = buildDocument(state);
 
         // Validation never blocks a save: the server returns what decikit found
         const saved = await flatRuleApi.updateProject(state.project.id, {
@@ -530,83 +637,8 @@ const store = create<FlatRuleState>()(
 
     // Initialization
     initializeFromProject: (project) => {
-      // Helper to ensure all nodes have IDs (recursively)
-      const ensureNodeIds = (node: any): RuleTableRow => {
-        if (!node) return node;
-
-        const nodeWithId = {
-          ...node,
-          id: node.id || crypto.randomUUID()
-        };
-        // Legacy documents stored the ranges strictness as `strict_mode`
-        if ('strict_mode' in nodeWithId) {
-          nodeWithId.strict = nodeWithId.strict ?? nodeWithId.strict_mode;
-          delete nodeWithId.strict_mode;
-        }
-
-        // Recursively process child nodes based on type
-        if (nodeWithId.type === 'unary' || nodeWithId.type === 'composite') {
-          return {
-            ...nodeWithId,
-            then: nodeWithId.then ? ensureNodeIds(nodeWithId.then) : nodeWithId.then,
-            otherwise: nodeWithId.otherwise ? ensureNodeIds(nodeWithId.otherwise) : nodeWithId.otherwise,
-            // Also ensure nested composite conditions have IDs
-            conditions: nodeWithId.type === 'composite' && nodeWithId.conditions
-              ? nodeWithId.conditions.map((cond: any) => {
-                  if (cond.type === 'composite') {
-                    return ensureNodeIds(cond);
-                  }
-                  return cond;
-                })
-              : nodeWithId.conditions
-          } as RuleTableRow;
-        }
-
-        if (nodeWithId.type === 'cases') {
-          return {
-            ...nodeWithId,
-            branches: nodeWithId.branches?.map((branch: any) => ensureNodeIds(branch))
-          } as RuleTableRow;
-        }
-
-        return nodeWithId as RuleTableRow;
-      };
-
-      // Initialize trees directly from PED format - NO CONVERSION!
-      const trees: PrioritizedTree[] =
-        project.project_data?.rules && project.project_data.rules.length > 0
-          ? project.project_data.rules.map((root, index) => ({
-              id: crypto.randomUUID(),
-              name: root.meta?.name || `Rule ${index + 1}`,
-              priority: index + 1,
-              rootNode: ensureNodeIds(root.rule) || createDefaultLeafNode(),
-              description: root.meta?.description || ''
-            }))
-          : [{
-              id: crypto.randomUUID(),
-              name: 'Rule 1',
-              priority: 1,
-              rootNode: createDefaultLeafNode(),
-              description: ''
-            }];
-
-      // Initialize with empty parameters if none exist and normalize dtypes
-      const enhancedProject = {
-        ...project,
-        project_data: {
-          ...project.project_data,
-          parameters: project.project_data?.parameters || {},
-          output: project.project_data?.output ? {
-            ...project.project_data.output,
-            dtypes: normalizeDtypes(project.project_data.output.dtypes || [])
-          } : {
-            data: [],
-            default: null,
-            dtypes: [],
-            type_defs: {}
-          }
-        }
-      };
+      const trees = treesFromRules(project.project_data?.rules);
+      const enhancedProject = { ...project, project_data: withEditorDefaults(project.project_data) };
 
       set({
         project: enhancedProject,
@@ -626,6 +658,23 @@ const store = create<FlatRuleState>()(
         ...buildErrorState(project.validation_errors, trees)
       });
     },
+
+    applyDocument: (doc, version) => {
+      set((state) => {
+        const trees = treesFromRules(doc.rules, state.trees);
+        const data = withEditorDefaults(doc);
+        const same = sameJson({ ...state.project.project_data, rules: null }, { ...data, rules: null });
+        const known = new Set(state.trees.map(tree => tree.id));
+        return {
+          trees,
+          project: { ...state.project, version, ...(same ? {} : { project_data: data }) },
+          expandedTrees: new Set([...state.expandedTrees, ...trees.filter(tree => !known.has(tree.id)).map(tree => tree.id)]),
+          ...(same ? {} : { availableFields: computeAvailableFields(data), outputOptions: computeOutputOptions(data) }),
+        };
+      });
+    },
+
+    setValidationErrors: (errors) => set((state) => buildErrorState(errors, state.trees)),
 
     // Internal helpers
     updateProjectData: (updates) => {

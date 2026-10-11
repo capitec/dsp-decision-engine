@@ -8,7 +8,7 @@ Web editor for decision trees: a FastAPI backend (`backend/`), a React UI (`ui/`
 docker compose up        # UI on :3000, API on :8000, live reload for ui/, backend/ and decikit/
 ```
 
-Postgres, migrations and `decikit` (editable, from this checkout) are handled by the compose file. Sign up on the login page; the first run installs dependencies, so give it a minute.
+Postgres, migrations and `decikit` (editable, from this checkout) are handled by the compose file. Sign up on the login page; the first run installs dependencies and builds `merge-core` (below), so give it a few minutes. After editing `merge-core/`, rerun `docker compose run --rm merge-core` and restart the backend.
 
 Regenerate the UI's API client against the running backend with `./generate-tsx-api-client.sh`.
 
@@ -18,13 +18,87 @@ Every project has a `version` that each save of its document bumps (a rename or 
 - if someone else saved first, it answers 409 (`detail.code` is `stale_version`, `detail.current_version` the version now stored), and the editor keeps the edits, shows "Save Refused" and asks the user to reload;
 - an update of only `name`, `description` or `folder_id` needs no `base_version` and ignores one.
 
+Every document save is also logged as a version in `project_ops` (the ops that made it) and announced on the Postgres
+channel `project_ops`. With `DSP_LIVE_COLLAB=true` both editors edit live over `WS
+/api/v1/projects/{id}/live`: it pushes each edit about 150 ms after typing pauses, every open editor receives every
+version in order, two edits to different fields are both kept, the last writer wins on the same field, and an edit
+inside a rule or node someone else changed or deleted is discarded and its author told. A header badge shows Live or
+Offline; Save waits until the server has every edit. READ access receives, WRITE sends. A REST save reaches open
+editors as one whole-document replace. The node editor's nodes, edges (key `id`, else `source:target`) and subtrees
+are addressed by id; node positions are part of the document and sync, selection and measured sizes do not.
+Opening a tree sends nothing until an edit (the editor's own form of a stored document goes with the first edit), and
+a version from someone else that moves a node turns Auto-arrange off in this browser, so it does not lay their move
+out again. Two browsers connecting nodes at once can make a cycle; the validation errors show it. A
+browser that cannot load the merge-core wasm still opens both editors, says live editing is unavailable there, and
+saves with Save over REST (a 409 when someone saved since). Every 100th version's log row also holds the whole
+document, and the log keeps a project's latest 5000 versions and none older than 30 days
+(`DSP_LIVE_LOG_KEEP_VERSIONS`, `DSP_LIVE_LOG_KEEP_DAYS`), trimmed back to a row holding a whole document, so any kept
+version is rebuilt by replaying at most 100 versions. An editor reconnecting from a version the log no longer keeps
+gets the whole document.
+
+Edits made while disconnected (a closed socket, or no answer to a ping for about 10 seconds) go back on reconnect as
+one offline batch, after the editor has caught up. The server merges it whole only when none of its paths is equal to,
+inside or above a path someone else changed since the disconnect (unless both left the same value there; two reorders of the rules conflict only when both
+changed the order of the same rules differently) and the merged document has no validation error beyond those the
+stored document or the offline editor's own had (counted by type and message: one more copy of an existing error is
+new; the same error added by each side on its own is not). Otherwise it refuses the whole batch: the editor shows the
+stored document and a banner naming the rules (or nodes) that collided, with Download my version (the offline
+document, shaped like an Export). The merge is validated without holding the project's row lock and committed only if
+no other version came in meanwhile; the third attempt holds the lock throughout. A validator that does not answer
+within 30 s is replaced by a new process, and a batch it was checking is refused (still downloadable). The base
+document is rebuilt from the log (a new project logs its first version, and the migration that adds snapshots logs
+the current version of every project older than that), so a batch made on a version the log no longer keeps is
+refused and stays downloadable. A message is logged at most once per client: a resend is not applied again, and a
+batch names the
+earlier messages it contains so one applied while the editor reconnected is skipped, and one delivered late after
+the batch is not applied again. A batch is not kept across a
+page reload.
+
+The socket checks the session and access on every message and every 15 s. A live edit near the session's expiry
+renews it by the same rule as an HTTP request (a ping does not, so an idle open tab still expires), and the server
+sends the new status cookie for the page to set. Signing out (on any node), an expired session or removed access
+closes the socket with 1008 and a reason, also at the handshake; the editor stops reconnecting, shows "Not live" and a
+toast, and keeps unsent edits in the editor (Export saves them); signing in again through the session dialog
+reconnects and sends them as an offline batch. A message Postgres or the merge core would refuse
+every time (NUL, a lone surrogate, a non-finite number, nesting past 64 levels) is rejected up front. A close the
+server reports as its failure on what the editor sent (1009 over 4 MiB, 1011 a server error, 1007 not JSON), right
+after the editor sent its edits and with none answered, counts against them: after three in a row the editor gives
+them up and shows the offline banner with Download my version. Any other drop (1013 for a database outage, a lost
+connection, a missed ping, a restart) is never counted, so an outage never hands edits back. The fan-out sends to a
+project's sockets at once, each with a 5 s limit; a socket that stops reading is dropped, closed with 1013 and
+catches up when it reconnects.
+
+## merge-core
+
+The live-editing ops (diff, apply, conflict checks) are written once, in Rust, in `merge-core/`: the backend runs it as
+a Python extension (`dsp_decikit.services.live_ops` re-exports it) and the browser as WebAssembly
+(`ui/src/lib/live-ops.ts` wraps it). `merge-core-bench/` holds the vectors every build runs, the frozen reference
+implementations and the measurements behind this choice.
+
+Nothing built from it is committed or published, so every contributor who runs the backend or the UI needs:
+
+- Rust 1.95 or newer through rustup, and the wasm target: `rustup target add wasm32-unknown-unknown`;
+- wasm-pack: `cargo install --locked wasm-pack@0.15.0`;
+- a C linker (`cc`, e.g. `gcc`), which maturin needs to link the extension;
+- maturin needs no install: uv fetches it when it builds `--with ../merge-core` (and rebuilds when a Rust file
+  changes). zig is needed only for the portable wheel the image and CI build (`uvx --from 'maturin[zig]==1.15.0'
+  maturin build --release --zig --compatibility manylinux_2_28`, run in `merge-core/`; uv fetches zig too).
+
+Then `pnpm build:wasm` (in `ui/`) writes `merge-core/pkg/`: run it before `pnpm test`, `pnpm build:skip-check`,
+`pnpm dev` or `tsc`, and again after editing the Rust. Without Rust each step stops with a message naming what to
+install (`build:wasm`, the vite and vitest configs, and the backend's import of `merge_core`); `tsc` alone reports
+only the missing module. `cargo test` in `merge-core/` runs the vectors in Rust;
+`.github/workflows/tree-editor-merge-core.yml` runs them against the wheel and the wasm on every pull request that
+changes the crate.
+
 ## Tests
 
 Unit tests:
 
 ```bash
-cd backend && uv run --with-requirements requirements.txt --with ../../.. --with pytest --with pytest-asyncio pytest
-cd ui && pnpm test
+cd backend && uv run --with-requirements requirements.txt --with ../../.. --with ../merge-core --with pytest --with pytest-asyncio pytest
+cd ui && pnpm build:wasm && pnpm test
+cd merge-core && cargo test
 ```
 
 `backend/tests/test_sessions_across_nodes.py` starts two backend processes on one Postgres and runs only with
@@ -58,7 +132,7 @@ With podman, `e2e/stack.sh` runs Postgres in a memory-capped container and the b
 on one port; no compose file is needed:
 
 ```bash
-cd ui && pnpm install --frozen-lockfile --filter dsp-re-ui && cd tree-editor/ui && pnpm build:skip-check
+cd ui && pnpm install --frozen-lockfile --filter dsp-re-ui && cd tree-editor/ui && pnpm build:wasm && pnpm build:skip-check
 cd ../e2e && ./stack.sh up            # Postgres on 55432, backend and UI on http://localhost:8600
 ./stack.sh test -m smoke              # or -m serve, -m "not serve", test_flat_rule_params.py, -k ...
 ./stack.sh down                       # stops the backend, removes the container and its volume
@@ -67,6 +141,11 @@ cd ../e2e && ./stack.sh up            # Postgres on 55432, backend and UI on htt
 `E2E_PORT`, `E2E_PG_PORT`, `E2E_RUNTIME=docker` and `E2E_SERVE_PORT` (the first `decikit serve` port, 8650) let
 stacks run side by side; temp files and browser profiles go to `E2E_TMPDIR` (`/var/tmp/dtmp-ui-e2e`), not `/tmp`.
 The team tests insert their teams with `psql` in the stack's container and skip without it.
+
+`E2E_NODES=2` starts a second backend on `E2E_PORT+1` (same Postgres, so sessions are shared), `DSP_LIVE_COLLAB=true`
+turns live editing on, and `./stack.sh restart` restarts the backends but keeps Postgres. `test_live_collab.py`, `test_live_offline.py` and
+`test_live_node_editor.py` run only on such a stack (`E2E_NODES=2 DSP_LIVE_COLLAB=true ./stack.sh up`); the rest of the suite expects live editing off
+(`test_live_ops_unavailable.py` runs either way).
 
 With docker compose, `docker compose --profile e2e run --rm e2e` runs the whole suite against the dev stack;
 `-e PYTEST_ADDOPTS="-m smoke"` picks a subset. The suite was run under podman with `stack.sh`; the compose route is
@@ -89,7 +168,7 @@ reason. The 521-rule sets are
 
 ## Image
 
-The image installs `decikit` from the wheel in `dist/`, so build the wheel first and run docker from the repo root:
+The image installs `decikit` from the wheel in `dist/`, so build the wheel first and run docker from the repo root. It builds `merge-core` itself, in a Rust stage (the extension wheel for the runtime, the wasm for the UI stage):
 
 ```bash
 uv build

@@ -23,6 +23,7 @@ New rationale goes into the decision file for its area; a new measurement become
 | Request path, transports, Arrow boundary | [serving](decisions/serving.md) |
 | Debug session, editor bridge, VS Code, flow UI | [debugger-and-editors](decisions/debugger-and-editors.md) |
 | Tracing, step ids, datasets, experiments, MCP | [lab-and-mcp](decisions/lab-and-mcp.md) |
+| Tree editor saves, live editing, offline merge, `merge-core` | [tree-editor-collaboration](decisions/tree-editor-collaboration.md) |
 
 ## Experiments
 
@@ -66,3 +67,6 @@ New rationale goes into the decision file for its area; a new measurement become
 | [How fast can a debug session pick up an edit?](experiments/hot-reload-edit-latency.md) | spike |
 | [Which layout keeps a 10,000-call flow interactive?](experiments/flow-layout-scale.md) | `ui/lib` `pnpm bench` |
 | [Can screenshot-scored user stories steer the editor UI?](experiments/ui-judge-loop.md) | spike |
+| **Tree editor** | |
+| [What does live multi-session editing cost?](experiments/tree-editor-live-collab.md) | `tree_editor_live_*.py` |
+| [A CRDT library, a JSON-patch crate or a Rust core for the merge logic?](experiments/tree-editor-merge-core.md) | `ui/tree-editor/merge-core-bench/` |
