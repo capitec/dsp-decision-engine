@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LiveSync } from '../live-sync'
+import { isAuthenticated } from '../auth'
 import type { Json } from '../live-ops'
 
 class FakeSocket {
@@ -233,5 +234,16 @@ describe('LiveSync', () => {
     vi.advanceTimersByTime(250)
 
     expect(sockets).toHaveLength(2)
+  })
+
+  it('keeps the session expiry the server renewed on an edit, so the page does not take me for signed out', () => {
+    const { socket } = setup()
+    document.cookie = 'session_status=1; Path=/'
+    expect(isAuthenticated()).toBe(false)
+
+    const renewed = Math.floor(Date.now() / 1000) + 3600
+    socket().receive({ type: 'session', cookie: `session_status=${renewed}; Max-Age=86400; Path=/; SameSite=strict` })
+
+    expect(isAuthenticated()).toBe(true)
   })
 })
