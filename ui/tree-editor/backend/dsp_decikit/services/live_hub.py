@@ -110,9 +110,10 @@ class Hub:
         if not room.clients:
             return
         async with db_session() as session:
-            rows = (await session.execute(select(ProjectOp).where(
-                ProjectOp.project_id == project_id, ProjectOp.version > min(c.last for c in room.clients))
-                .order_by(ProjectOp.version))).scalars().all()
+            # Not the snapshot column: a whole document every 100 versions that the fan-out never sends.
+            rows = (await session.execute(select(ProjectOp.version, ProjectOp.client_id, ProjectOp.msg_id, ProjectOp.ops)
+                .where(ProjectOp.project_id == project_id, ProjectOp.version > min(c.last for c in room.clients))
+                .order_by(ProjectOp.version))).all()
         for row in rows:
             text = json.dumps({"type": "applied", "version": row.version, "client_id": row.client_id,
                                "msg_id": row.msg_id, "ops": row.ops})
