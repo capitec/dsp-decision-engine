@@ -15,6 +15,12 @@ Read this before changing how a request is parsed, scored or transported, or how
 - Why: `strict_compile` and `params_validation` could not be set for a served project before, and a worker that cannot build its engine dies and is restarted forever. Warming first blamed a strict refusal on the sample request.
 - See: [engine](engine.md) ("An engine is a registry document"), `decikit/serving/_handler.py`, `decikit/_tooling/cli/__init__.py`
 
+## A declared output fixes the batch response's shape
+
+- A batch response (a JSON array, JSONL, Parquet, Arrow) is a frame, so each row of a declared `TypedDict` or `list[TypedDict]` output carries every declared key, `null` where the step left an optional key out, in the declared order; a one-record response returns the value as the step built it. Decided by the owner, 2026-10-10.
+- Why: before, a batch's struct fields were whichever keys some row in that batch happened to hold, so the same request answered differently depending on its neighbours, and the polars engine could not equal the numba engines. Cost: consolidation's served batch gained null keys (`unpriced_reason`, unused rejection codes) when its outputs were declared; no per-record response changed.
+- See: [engine](engine.md) (the `each` bullet), [flexible engine comparison](../experiments/flexible-engine-comparison.md)
+
 ## The handler hooks are synchronous, and `score` is the in-process entry
 
 - `init_fn`, `input_fn`, `process_fn` and `shutdown_fn` are plain methods; a subclass that defines one with `async def` gets a `TypeError` when the class is created. `score(record_or_frame)` is `process_fn` without the bytes. `score` is not a hook: `process_fn` calls `RequestHandler.score` itself, so a subclass's own `score` (a replay service's, say) never changes what a request does.

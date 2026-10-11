@@ -56,6 +56,12 @@ Workaround: round in a step (`int(x)`, `round(x)`), or declare the column `float
 
 ## Steps and flows
 
+**A declared TypedDict that polars cannot name is typed by inference.** When a field is a `Decimal`, `Currency` or a date, a TypedDict output's frame column is built by polars inference: a `float` field holding only ints comes out `Int64`, and a `dict[str, float]` returning `{"a": 1}` gives an `Int64` field. A `numpy.bool_` passes the declared check for a `float` field (a Python `True` does not) and is stored as `1.0`. An int beyond int64 in an `int` field passes the check and then fails `run(frame)` with a polars `ComputeError`.
+Workaround: return floats for float fields, and keep values inside int64.
+
+**A `Currency` or `Decimal` output inside `each` is a float in a frame.** `run(record)` returns the `Currency` the body built; a frame's gathered list holds it as `Float64`, and the polars engine refuses an `each` with a `Decimal` or `Currency` item field or body output.
+Workaround: run such a pipeline on the numba engines, and read money from records, or keep it outside the `each`.
+
 **Frame-step `writes` dtypes are not verified or cast.** A declared dtype is kept when the step returns it, but a different dtype is accepted as-is (only missing columns and row-count changes raise).
 Impact: a wrong dtype surfaces later, at the reader; declare `writes={"col": pl.Float64}` and return exactly that.
 
