@@ -1,4 +1,4 @@
-"""Saving when the server or the network misbehaves, slow saves, two tabs, and leaving an editor with unsaved edits."""
+"""Saving when the server or the network misbehaves, slow saves, two tabs (a stale save is refused), and leaving an editor with unsaved edits."""
 
 import json
 import re
@@ -9,11 +9,10 @@ from playwright.sync_api import Page, expect
 import node_ui
 from flat_rules_ui import add_parameter, open_flat_rules
 from platform_ui import edit_is_stored, first_held, open_projects, open_with_edit, press_save, project_card, toast
-from seed import create_project, get_project
+from seed import create_folder, create_project, get_project
 from test_flat_rule_params import flat_document
 
 SAVE_URL = re.compile(r"/api/v1/projects/[0-9a-f-]{36}$")
-NO_CONFLICT_DETECTION = "no conflict detection: the second tab's save replaces the first tab's saved edit without a warning"
 
 
 def on_saves(page: Page, handler) -> None:
@@ -140,42 +139,187 @@ def test_double_clicking_export_downloads_the_same_file_once_or_twice(signed_in:
 
 # ---- two tabs ---------------------------------------------------------------------------------------------------------------
 
-@pytest.mark.xfail(strict=True, reason=NO_CONFLICT_DETECTION)
-def test_two_tabs_saving_different_edits_keep_both_edits(signed_in: Page):
-    project = create_project(signed_in, "Two tabs", flat_document())["id"]
+def node_position(page: Page, node_id: str) -> dict:
+    """Where the canvas shows node `node_id`, from its transform."""
+    transform = node_ui.node(page, node_id).evaluate("el => el.style.transform")
+    x, y = (float(v) for v in re.findall(r"-?\d+(?:\.\d+)?", transform)[:2])
+    return {"x": x, "y": y}
+
+
+def stale_tab(signed_in: Page, kind: str) -> tuple[str, Page]:
+    """Two tabs on one project; the first tab saves an edit, then the second tab makes a different one. (project, second)"""
     first = signed_in
-    open_flat_rules(first, project)
-    second = signed_in.context.new_page()
-    open_flat_rules(second, project)
+    if kind == "flat":
+        project = create_project(first, "Two tabs", flat_document())["id"]
+        open_flat_rules(first, project)
+        second = first.context.new_page()
+        open_flat_rules(second, project)
+        for _ in range(2):
+            first.get_by_role("button", name="Add Rule").click()
+        press_save(first)
+        expect(toast(first, "Project Saved")).to_be_visible()
+        second.get_by_role("button", name="Add Rule").click()
+        expect(second.get_by_test_id("rule-card")).to_have_count(2)
+    else:
+        project = node_ui.open_tree(first, node_ui.loan_document(), "Two tabs")
+        second = first.context.new_page()
+        second.goto(f"/projects/{project}")
+        expect(second.locator(".react-flow__node")).to_have_count(3, timeout=20_000)
+        node_ui.fit_view(second)
+        node_ui.nudge(first, "root")
+        node_ui.save(first)
+        node_ui.nudge(second, "yes")
+        expect(second.get_by_text("Unsaved changes")).to_be_visible()
+    return project, second
 
-    add_parameter(first, "from_first", "Float64", "1")
-    press_save(first)
-    expect(toast(first, "Project Saved")).to_be_visible()
-    second.get_by_role("button", name="Add Rule").click()
-    expect(second.get_by_test_id("rule-card")).to_have_count(2)
+
+@pytest.mark.smoke
+@pytest.mark.parametrize("kind", ["flat", "tree"])
+def test_a_stale_save_from_a_second_tab_is_refused_and_its_edit_stays(signed_in: Page, kind: str):
+    project, second = stale_tab(signed_in, kind)
+
     press_save(second)
-    expect(toast(second, "Project Saved")).to_be_visible()
 
+    expect(toast(second, "Someone else saved this project")).to_be_visible()
+    expect(toast(second, "Project Saved")).to_have_count(0)
+    expect(second.get_by_text("Unsaved changes")).to_be_visible()
     stored = get_project(signed_in, project)["project_data"]
-    assert "from_first" in stored["parameters"] and len(stored["rules"]) == 2
+    if kind == "flat":
+        expect(second.get_by_test_id("rule-card")).to_have_count(2)
+        assert len(stored["rules"]) == 3
+    else:
+        positions = {n["id"]: n["position"] for n in stored["nodes"]}
+        original = {n["id"]: n["position"] for n in node_ui.loan_document()["nodes"]}
+        assert positions["root"] != original["root"] and positions["yes"] == original["yes"]
 
 
-def test_two_tabs_saving_the_same_project_end_with_the_last_save_stored(signed_in: Page):
-    project = create_project(signed_in, "Two tabs", flat_document())["id"]
-    first = signed_in
-    open_flat_rules(first, project)
-    second = signed_in.context.new_page()
-    open_flat_rules(second, project)
-    first.get_by_role("button", name="Add Rule").click()
-    press_save(first)
-    expect(toast(first, "Project Saved")).to_be_visible()
+@pytest.mark.parametrize("kind", ["flat", "tree"])
+def test_after_a_reload_the_second_tab_sees_the_first_tabs_edit_and_can_save(signed_in: Page, kind: str):
+    project, second = stale_tab(signed_in, kind)
+    press_save(second)
+    expect(toast(second, "Someone else saved this project")).to_be_visible()
 
-    second.get_by_role("button", name="Add Rule").click()
-    second.get_by_role("button", name="Add Rule").click()
+    second.once("dialog", lambda dialog: dialog.accept())
+    second.reload()
+
+    if kind == "flat":
+        expect(second.get_by_test_id("rule-card")).to_have_count(3)
+    else:
+        expect(second.locator(".react-flow__node")).to_have_count(3, timeout=20_000)
+        stored = next(n for n in get_project(signed_in, project)["project_data"]["nodes"] if n["id"] == "root")
+        assert node_position(second, "root") == pytest.approx(stored["position"], abs=0.01)  # the transform is rounded
+    expect(second.get_by_text("Unsaved changes")).to_be_hidden()
+    if kind == "flat":
+        second.get_by_role("button", name="Add Rule").click()
+    else:
+        node_ui.nudge(second, "yes")
     press_save(second)
     expect(toast(second, "Project Saved")).to_be_visible()
+    stored = get_project(signed_in, project)["project_data"]
+    if kind == "flat":
+        assert len(stored["rules"]) == 4
+    else:
+        original = {n["id"]: n["position"] for n in node_ui.loan_document()["nodes"]}
+        assert all(n["position"] != original[n["id"]] for n in stored["nodes"] if n["id"] in ("root", "yes"))
 
-    assert len(get_project(signed_in, project)["project_data"]["rules"]) == 3
+
+def put_project(page: Page, project: str, **body):
+    return page.request.put(f"/api/v1/projects/{project}", data=body)
+
+
+def test_a_save_with_a_stale_base_version_is_refused_with_the_current_version(signed_in: Page):
+    project = create_project(signed_in, "Versioned", flat_document())
+    assert project["version"] == 1
+
+    saved = put_project(signed_in, project["id"], project_data=flat_document(), name="Saved", base_version=1)
+    stale = put_project(signed_in, project["id"], project_data=flat_document(), name="Stale", base_version=1)
+
+    assert saved.ok and saved.json()["version"] == 2
+    assert stale.status == 409
+    assert stale.json()["detail"]["current_version"] == 2
+    stored = get_project(signed_in, project["id"])
+    assert (stored["name"], stored["version"]) == ("Saved", 2)
+
+
+def test_concurrent_saves_of_one_base_version_let_exactly_one_through(signed_in: Page):
+    project = create_project(signed_in, "Raced", flat_document())["id"]
+
+    statuses = signed_in.evaluate(
+        """([project, doc]) => Promise.all([...Array(6).keys()].map(i => fetch(`/api/v1/projects/${project}`, {
+            method: 'PUT', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({name: `Racer ${i}`, project_data: doc, base_version: 1}),
+        }).then(r => r.status)))""",
+        [project, flat_document()],
+    )
+
+    assert sorted(statuses) == [200] + [409] * 5
+    assert get_project(signed_in, project)["version"] == 2
+
+
+def test_a_document_save_without_a_base_version_is_refused_with_422_and_changes_nothing(signed_in: Page):
+    project = create_project(signed_in, "Unversioned", flat_document())["id"]
+
+    refused = put_project(signed_in, project, project_data=flat_document(), name="Overwritten")
+
+    assert refused.status == 422
+    assert "base_version" in refused.json()["validation_errors"][0]["msg"]
+    stored = get_project(signed_in, project)
+    assert (stored["name"], stored["version"]) == ("Unversioned", 1)
+
+
+def test_renaming_or_moving_a_project_leaves_its_version(signed_in: Page):
+    project = create_project(signed_in, "Moved", flat_document())["id"]
+    folder = create_folder(signed_in, "Target")["id"]
+
+    renamed = put_project(signed_in, project, name="Renamed", base_version=99)
+    moved = signed_in.request.post(f"/api/v1/projects/{project}/move", data={"new_folder_id": folder})
+
+    assert renamed.ok and renamed.json()["version"] == 1
+    assert moved.ok and moved.json()["version"] == 1
+    assert get_project(signed_in, project)["version"] == 1
+
+
+@pytest.mark.parametrize("change", ["rename", "move"])
+@pytest.mark.parametrize("kind", ["flat", "tree"])
+def test_a_rename_or_move_elsewhere_does_not_make_an_open_editors_save_stale(signed_in: Page, kind: str, change: str):
+    project = open_with_edit(signed_in, kind)
+
+    # the project list's rename and move dialogs send these requests
+    if change == "rename":
+        reply = put_project(signed_in, project, name="Renamed in the list")
+    else:
+        folder = create_folder(signed_in, "Elsewhere")["id"]
+        reply = signed_in.request.post(f"/api/v1/projects/{project}/move", data={"new_folder_id": folder})
+    assert reply.ok
+    press_save(signed_in)
+
+    expect(toast(signed_in, "Project Saved")).to_be_visible()
+    assert edit_is_stored(signed_in, project, kind)
+
+
+@pytest.mark.parametrize("kind", ["flat", "tree"])
+def test_renaming_in_an_editor_does_not_make_its_next_save_stale(signed_in: Page, kind: str):
+    if kind == "flat":
+        project = create_project(signed_in, "Rename me", flat_document())["id"]
+        open_flat_rules(signed_in, project)
+        signed_in.locator("h1").locator("xpath=following-sibling::button").click()
+    else:
+        project = node_ui.open_tree(signed_in, node_ui.loan_document(), "Rename me")
+        node_ui.open_menu(signed_in)
+        signed_in.get_by_role("menuitem", name="Edit Project Details").click()
+    signed_in.get_by_placeholder("Enter project name").fill("Renamed here")
+    signed_in.get_by_role("button", name="Save Changes").click()
+    expect(signed_in.get_by_role("dialog")).to_be_hidden()
+    expect(toast(signed_in, "Project Updated" if kind == "flat" else "Project updated")).to_be_visible()
+
+    if kind == "flat":
+        signed_in.get_by_role("button", name="Add Rule").click()
+    else:
+        node_ui.nudge(signed_in, "root")
+    press_save(signed_in)
+
+    expect(toast(signed_in, "Project Saved")).to_be_visible()
+    assert edit_is_stored(signed_in, project, kind)
 
 
 # ---- leaving the editor ---------------------------------------------------------------------------------------------------------

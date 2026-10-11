@@ -12,6 +12,12 @@ Postgres, migrations and `decikit` (editable, from this checkout) are handled by
 
 Regenerate the UI's API client against the running backend with `./generate-tsx-api-client.sh`.
 
+Every project has a `version` that each save of its document bumps (a rename or move leaves it). `PUT /api/v1/projects/{id}` with `project_data` must also send `base_version`, the version the caller loaded (`GET` returns it as `version`):
+
+- without it the server answers 422 and names the field;
+- if someone else saved first, it answers 409 (`detail.code` is `stale_version`, `detail.current_version` the version now stored), and the editor keeps the edits, shows "Save Refused" and asks the user to reload;
+- an update of only `name`, `description` or `folder_id` needs no `base_version` and ignores one.
+
 ## Tests
 
 Unit tests:
@@ -72,7 +78,7 @@ rule reads is not reported; deleting a custom type a column uses gives only a ge
 flat rules are renamed `Rule N`, which renames their output columns; the node editor draws a refused (cyclic)
 connection, ignores a stray node silently, binds only Backspace (not Delete), has a dead Add Subtree button, a Clear
 Workspace dialog that promises an undo it lacks and a canvas 80px taller than the page; a 150-character rule name
-widens the page; two tabs saving one project: the last save wins without a warning; the folder and project move
+widens the page; the folder and project move
 dialogs, Create Subfolder's parent, folder-create and team-create messages, Delete all contents (it moves subfolders
 to the root), folder shares not listing the folder's projects and subfolders and the refresh popup closed without a
 reason. The 521-rule sets are
