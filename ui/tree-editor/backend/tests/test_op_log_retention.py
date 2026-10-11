@@ -205,3 +205,31 @@ async def test_an_online_message_on_a_trimmed_base_is_refused_not_silently_lost(
         await apply_message(project_id, "c2", "late", 2, [name("b", "Online")])
 
     assert (await stored()).version == 9
+
+
+@db
+@pytest.mark.asyncio
+async def test_concurrent_writes_and_offline_merges_while_trimming_keep_the_log_rebuilding_the_stored_document(
+        small_log, monkeypatch):
+    import asyncio
+    from dsp_decikit.services.live_sync import apply_message
+    monkeypatch.setattr(settings, "live_log_keep_versions", 6)
+    project_id, stored = small_log
+    await write_until(project_id, stored, 4)
+
+    async def write(i):
+        base = (await stored()).version - i % 3
+        try:
+            await apply_message(project_id, f"c{i % 4}", f"w{i}", base, [name("abc"[i % 3], f"v{i}")],
+                                offline=i % 4 == 0)
+        except Rejected:
+            pass  # a conflict, or a base trimmed meanwhile: refused whole, nothing stored
+
+    await asyncio.gather(*(write(i) for i in range(60)))
+
+    head = await stored()
+    versions = [v for v, *_ in await log(project_id)]
+    assert versions == list(range(versions[0], head.version + 1)) and head.version > 10
+    for version in versions[:-1]:
+        await document_at(project_id, version)
+    assert await document_at(project_id, head.version) == head.project_data
