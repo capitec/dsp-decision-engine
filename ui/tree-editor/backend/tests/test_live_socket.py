@@ -173,3 +173,80 @@ async def test_a_client_that_stops_reading_does_not_hold_up_the_others_and_is_dr
     await apply_message(project_id, "c3", "m2", 2, [name("b", "Two")])
     hub.pump_soon(project_id)
     await until(lambda: fast.ws.versions() == [2, 3], timeout=0.5)
+
+
+# ---- why a socket closes, without a database -----------------------------------------------------------------------
+
+@pytest.fixture
+def auth(monkeypatch, live_on):
+    """A signed-in user with write access, as the socket checks them; change `session` or `access` to end either."""
+    from dsp_decikit.api.v1.project import live
+    from dsp_decikit.auth.models import SessionInfo
+    from dsp_decikit.db.models.projects import AccessMode
+
+    now = int(time.time())
+    state = {"session": SessionInfo(created_at=now, last_activity=now, user_id=uuid.uuid4()),
+             "access": AccessMode.WRITE, "error": None}
+
+    async def get_session(token):
+        if state["error"]:
+            raise state["error"]
+        return state["session"]
+
+    async def permissions(session, project_id, user):
+        if state["access"] is None:
+            raise PermissionError("no access")
+        return False, state["access"], []
+
+    monkeypatch.setattr(live.sessions, "get_session", get_session)
+    monkeypatch.setattr(live, "get_effective_project_permissions", permissions)
+    return state
+
+
+def closed(ws) -> WebSocketDisconnect:
+    with pytest.raises(WebSocketDisconnect) as e:
+        while True:
+            ws.receive_text()
+    return e.value
+
+
+def ping(ws):
+    ws.send_text(json.dumps({"type": "ping"}))
+    assert json.loads(ws.receive_text()) == {"type": "pong"}
+
+
+@pytest.mark.parametrize("ended, reason", [("session", "sign in"), ("access", "access")])
+def test_a_socket_whose_session_or_access_ends_is_closed_saying_which(auth, ended, reason):
+    with connect("token", uuid.uuid4()) as ws:
+        ping(ws)
+        auth[ended] = None  # signed out on another node, or the share removed
+        ws.send_text(json.dumps({"type": "ping"}))
+        end = closed(ws)
+
+    assert end.code == 1008 and reason in end.reason
+
+
+def test_a_socket_opened_without_a_session_is_told_to_sign_in_rather_than_refused_unexplained(auth):
+    # A refused handshake reaches the page as a bare network error, and it would reconnect for ever.
+    auth["session"] = None
+
+    with connect("token", uuid.uuid4()) as ws:
+        end = closed(ws)
+
+    assert end.code == 1008 and "sign in" in end.reason
+
+
+def test_a_message_that_is_not_json_closes_the_socket_so_the_client_counts_it_as_failing(auth):
+    with connect("token", uuid.uuid4()) as ws:
+        ws.send_text('{"type": "ops", "id": "m1", "base": 1, "ops": [' * 2000)
+
+        assert closed(ws).code == 1007
+
+
+def test_a_database_outage_closes_the_socket_as_try_again_so_the_client_retries_without_counting(auth):
+    with connect("token", uuid.uuid4()) as ws:
+        ping(ws)
+        auth["error"] = ConnectionRefusedError("the database is restarting")
+        ws.send_text(json.dumps({"type": "ping"}))
+
+        assert closed(ws).code == 1013
