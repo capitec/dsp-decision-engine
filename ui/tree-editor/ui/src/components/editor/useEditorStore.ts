@@ -13,7 +13,7 @@ import { defaultOutput, fromDocument, toDocument } from './document';
 import { ValidationError, parseValidationErrors, formatValidationErrors, getInvalidNodeIds, getSectionErrors } from '@/utils/validation-error-parser';
 import { toast } from '@/hooks/use-toast';
 import { isStaleSave, staleSaveToast } from '@/lib/stale-save';
-import { apiErrorMessage } from '@/lib/utils';
+import { apiErrorMessage, sameJson } from '@/lib/utils';
 import { subscribeToStoreActivity } from '@/lib/background-token-refresh';
 import type { LiveStatus } from '@/lib/live-sync';
 
@@ -414,7 +414,13 @@ const editorStore = create<EditorStoreState>()(
       });
     },
 
-    applyDocument: (doc, version) => set((state) => ({ ...fromDocument(doc, state), version })),
+    applyDocument: (doc, version) => set((state) => {
+      const next = fromDocument(doc, state);
+      const at = new Map(state.nodes.map((n) => [n.id, n.position]));
+      // Someone else placed nodes by hand: laying the tree out here again would push over their move.
+      const moved = next.nodes.some((n) => at.has(n.id) && !sameJson(at.get(n.id), n.position));
+      return { ...next, version, ...(moved && { autoRearrange: false }) };
+    }),
 
     setValidationErrors: (errors) => set((state) => applyValidationErrors(errors, state.nodes).state),
 
