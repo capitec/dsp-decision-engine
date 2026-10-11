@@ -205,8 +205,7 @@ def auth(monkeypatch, live_on):
 
 def closed(ws) -> WebSocketDisconnect:
     with pytest.raises(WebSocketDisconnect) as e:
-        while True:
-            ws.receive_text()
+        ws.receive_text()  # once: a socket left open would block here for good
     return e.value
 
 
