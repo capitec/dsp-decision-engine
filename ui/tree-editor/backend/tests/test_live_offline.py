@@ -8,7 +8,7 @@ import pytest
 import pytest_asyncio
 
 from dsp_decikit.services.live_sync import Rejected, check_message
-from tests.test_live_sync import RULE_A, RULE_B, db, flat, log, name, project  # noqa: F401
+from tests.test_live_sync import RULE_A, RULE_B, db, flat, hanging_hub, log, name, project  # noqa: F401
 
 
 # ---- the offline rule, against Postgres ---------------------------------------------------------------------------
@@ -165,6 +165,45 @@ async def test_a_validation_error_my_own_document_already_had_does_not_block_the
     assert (await stored()).version == 3
 
 
+def between(key, **bounds):
+    # Either bound alone is valid; a `between` with neither is an error whose message names no rule.
+    return {"op": "replace", "path": f"/rules/{key}/rule", "value": {
+        "id": key, "type": "unary", "then": {"id": f"{key}t", "type": "leaf", "result_idx": -1},
+        "condition": {"op": "between", "feature": "amount", **bounds}}}
+
+
+def unbound(key, bound):
+    return {"op": "remove", "path": f"/rules/{key}/rule/condition/{bound}"}
+
+
+@db
+@pytest.mark.asyncio
+async def test_a_merge_that_repeats_an_error_the_document_already_has_is_rejected(offline):
+    # Rule c already has the error; their edit and mine each leave rule a valid, together they leave it without bounds.
+    from dsp_decikit.services.live_sync import apply_message
+    project_id, stored = offline
+    await apply_message(project_id, "setup", "m1", 1, [between("a", min=1, max=10), between("c")])
+    await apply_message(project_id, "online", "m2", 2, [unbound("a", "min")])
+
+    error = await refused(project_id, [unbound("a", "max")], base=2)
+
+    assert error.conflicts == [] and "min or max" in str(error)
+    assert (await stored()).version == 3
+
+
+@db
+@pytest.mark.asyncio
+async def test_the_same_error_brought_by_each_side_on_its_own_does_not_block_the_merge(offline):
+    from dsp_decikit.services.live_sync import apply_message
+    project_id, stored = offline
+    await apply_message(project_id, "setup", "m1", 1, [between("a", min=1), between("b", min=1)])
+    await apply_message(project_id, "online", "m2", 2, [unbound("a", "min")])
+
+    await merge(project_id, [unbound("b", "min")], base=2)
+
+    assert (await stored()).version == 4
+
+
 @db
 @pytest.mark.asyncio
 async def test_an_offline_base_the_log_no_longer_reaches_is_rejected(project):
@@ -294,3 +333,145 @@ def test_offline_parts_that_do_not_describe_the_ops_are_rejected(parts):
     with pytest.raises(Rejected):
         check_message({"type": "ops", "id": "b", "base": 1, "offline": True, "parts": parts,
                        "ops": [name("a", "x"), name("b", "y")]})
+
+
+# ---- the row lock while a batch is validated ---------------------------------------------------------------------
+
+async def row_locked(project_id) -> bool:
+    from sqlalchemy import select
+    from dsp_decikit.db.session import db_session
+    from dsp_decikit.db.models import Project
+    async with db_session() as session:
+        free = await session.scalar(select(Project.id).where(Project.id == project_id).with_for_update(skip_locked=True))
+    return free is None
+
+
+@db
+@pytest.mark.asyncio
+async def test_an_edit_saved_while_an_offline_batch_is_validated_is_validated_with_it(offline):
+    from dsp_decikit.services.documents import validation_errors
+    from dsp_decikit.services.live_sync import apply_message
+    project_id, stored = offline
+    saved = []
+
+    async def validate(doc):
+        if not saved:
+            assert not await row_locked(project_id)
+            saved.append(await apply_message(project_id, "online", "m1", 1, [LIMIT_TEXT]))
+        return validation_errors(doc)
+
+    with pytest.raises(Rejected) as error:
+        await apply_message(project_id, "offline", "batch", 1, [USES_LIMIT], offline=True, validate=validate)
+
+    assert "limit" in str(error.value) and saved[0].version == 2
+    assert (await stored()).version == 2
+
+
+@db
+@pytest.mark.asyncio
+async def test_an_offline_batch_overtaken_by_an_edit_while_it_was_validated_merges_on_top_of_it(offline):
+    from dsp_decikit.services.documents import validation_errors
+    from dsp_decikit.services.live_sync import apply_message
+    project_id, stored = offline
+    validated = []
+
+    async def validate(doc):
+        if not validated:  # it would wait for ever if the merge held the row lock
+            await asyncio.wait_for(apply_message(project_id, "online", "m1", 1, [name("a", "Online")]), 5)
+        validated.append(doc)
+        return validation_errors(doc)
+
+    applied = await apply_message(project_id, "offline", "batch", 1, [name("b", "Offline")], offline=True,
+                                  validate=validate)
+
+    row = await stored()
+    assert applied.version == row.version == 3 and names(row) == ["Online", "Offline", "C"]
+    assert row.project_data == validated[-1]
+
+
+@db
+@pytest.mark.asyncio
+async def test_an_offline_batch_overtaken_on_every_attempt_merges_under_the_row_lock(offline):
+    from dsp_decikit.services.documents import validation_errors
+    from dsp_decikit.services.live_sync import apply_message
+    project_id, stored = offline
+    validated = []
+
+    async def validate(doc):
+        validated.append(doc)
+        if not await row_locked(project_id):
+            await apply_message(project_id, "online", f"m{len(validated)}", 1, [name("a", f"Online {len(validated)}")])
+        return validation_errors(doc)
+
+    applied = await apply_message(project_id, "offline", "batch", 1, [name("b", "Offline")], offline=True,
+                                  validate=validate)
+
+    row = await stored()
+    assert applied.version == row.version and row.project_data == validated[-1]
+    assert names(row)[1] == "Offline"
+
+
+# ---- a validator that never answers ------------------------------------------------------------------------------
+
+@db
+@pytest.mark.asyncio
+async def test_an_offline_batch_whose_validation_hangs_is_refused_without_blocking_other_writes(offline, hanging_hub):
+    from dsp_decikit.services.live_sync import apply_message
+    project_id, stored = offline
+    validating = asyncio.Event()
+
+    async def validate(doc):
+        validating.set()
+        return await hanging_hub.validate(doc)
+
+    batch = asyncio.create_task(apply_message(project_id, "offline", "batch", 1, [name("b", "Offline")],
+                                              offline=True, validate=validate))
+    await asyncio.wait_for(validating.wait(), 5)
+    online = await asyncio.wait_for(apply_message(project_id, "online", "m1", 1, [name("a", "Online")]), 2)
+    with pytest.raises(Rejected) as error:
+        await asyncio.wait_for(batch, 10)
+
+    assert online.version == (await stored()).version == 2
+    assert "in time" in str(error.value)
+
+
+@db
+@pytest.mark.asyncio
+async def test_an_offline_batch_another_node_logged_while_it_was_validated_is_not_applied_again(offline):
+    # The client resent the batch to another node after a reconnect; that node's copy commits first.
+    from dsp_decikit.services.documents import validation_errors
+    from dsp_decikit.services.live_sync import apply_message
+    project_id, stored = offline
+    other = []
+
+    async def validate(doc):
+        if not other:
+            other.append(await apply_message(project_id, "c1", "batch", 1, [name("b", "Offline")]))
+        return validation_errors(doc)
+
+    applied = await apply_message(project_id, "c1", "batch", 1, [name("b", "Offline")], offline=True,
+                                  validate=validate)
+
+    assert applied.version == other[0].version == (await stored()).version == 2
+    assert [msg for _, _, msg, _ in await log(project_id)] == ["created", "batch"]
+
+
+@db
+@pytest.mark.asyncio
+async def test_a_message_of_the_batch_logged_while_it_was_validated_is_not_applied_again(offline):
+    # m1 was sent on the socket that dropped and is delivered late, while the batch resending it is validated.
+    from dsp_decikit.services.documents import validation_errors
+    from dsp_decikit.services.live_sync import apply_message
+    project_id, stored = offline
+
+    async def validate(doc):
+        if len(await log(project_id)) == 1:
+            await apply_message(project_id, "c1", "m1", 1, [name("a", "Mine")])
+        return validation_errors(doc)
+
+    await apply_message(project_id, "c1", "batch", 1, [name("a", "Mine"), name("b", "Offline")], offline=True,
+                        parts=[["m1", 1], ["m2", 1]], validate=validate)
+
+    assert [(msg, ops) for _, _, msg, ops in await log(project_id)][1:] == [
+        ("m1", [name("a", "Mine")]), ("batch", [name("b", "Offline")])]
+    assert names(await stored()) == ["Mine", "Offline", "C"]
