@@ -38,6 +38,9 @@ def allow_fallback(fn: Any) -> Any:
     `@allow_fallback`. On a function a step calls it marks an intentional
     Python boundary, so the step runs in Python rather than compiling it.
 
+    Prefer a step that compiles; use this only for an intentional Python
+    boundary.
+
     Example::
 
         @allow_fallback
