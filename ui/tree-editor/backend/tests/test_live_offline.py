@@ -245,6 +245,38 @@ async def test_an_offline_batch_skips_the_messages_it_contains_that_were_applied
 
 @db
 @pytest.mark.asyncio
+async def test_a_message_that_arrives_after_the_offline_batch_containing_it_is_not_applied_again(offline):
+    # Sent on the old socket before the drop and delivered late, after the batch that resent it was merged.
+    from dsp_decikit.services.live_sync import apply_message
+    project_id, stored = offline
+    await apply_message(project_id, "c1", "batch", 1, [name("a", "Mine"), name("b", "Offline")], offline=True,
+                        parts=[["m1", 1], ["m2", 1]])
+    await apply_message(project_id, "c2", "m3", 2, [name("a", "Theirs")])
+
+    late = await apply_message(project_id, "c1", "m1", 1, [name("a", "Mine")])
+
+    assert late.version == 2 and names(await stored())[0] == "Theirs"
+    assert [v for v, *_ in await log(project_id)] == [1, 2, 3]
+
+
+@db
+@pytest.mark.asyncio
+async def test_a_batch_folded_into_a_later_batch_is_applied_once_whichever_arrives_first(offline):
+    from dsp_decikit.services.live_sync import apply_message
+    project_id, stored = offline
+    first = [name("a", "Mine")]
+    await apply_message(project_id, "c1", "batch1", 1, first, offline=True, parts=[["m1", 1]])
+    await apply_message(project_id, "c2", "m3", 2, [name("a", "Theirs")])
+
+    # The second batch resends the first one's message (its ack was lost) plus a newer edit.
+    await apply_message(project_id, "c1", "batch2", 1, first + [name("b", "Later")], offline=True,
+                        parts=[["m1", 1], ["m2", 1]])
+
+    assert names(await stored())[:2] == ["Theirs", "Later"]
+
+
+@db
+@pytest.mark.asyncio
 async def test_the_log_refuses_a_second_row_for_the_same_message(offline):
     from sqlalchemy.exc import IntegrityError
     from dsp_decikit.db.session import db_session
