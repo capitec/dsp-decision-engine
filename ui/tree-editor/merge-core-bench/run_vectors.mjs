@@ -1,8 +1,8 @@
 // Run every vector in vectors/*.json against a JS adapter and print the failures and a per-semantics summary.
 //
-//   node run_vectors.mjs adapters/pure_ts.mjs [--json results.json]
+//   node run_vectors.mjs adapters/pure_ts.mjs [--json results.json] [--strict]
 //
-// Exits 0 whatever fails. Values compare as JSON (JavaScript has one number type, so 1 and 1.0 are one value),
+// Exits 0 whatever fails, unless --strict: then 1 when a case failed, passed unexpectedly or is not implemented. Values compare as JSON (JavaScript has one number type, so 1 and 1.0 are one value),
 // object key order is ignored except where a case lists the `keys` its result must have in order.
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -180,3 +180,4 @@ for (const semantics of Object.keys(counts).sort()) {
 }
 console.log(`${'TOTAL'.padEnd(28)} ${line(total)}`)
 if (jsonOut) writeFileSync(jsonOut, JSON.stringify(results, null, 1))
+if (args.includes('--strict') && Object.keys(total).some((s) => s !== 'passed' && s !== 'xfail')) process.exit(1)

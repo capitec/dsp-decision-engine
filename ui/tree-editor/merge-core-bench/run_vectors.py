@@ -1,8 +1,8 @@
 """Run every vector in vectors/*.json against a Python adapter and print the failures and a per-semantics summary.
 
-    python run_vectors.py adapters/pure_py.py [--json results.json]
+    python run_vectors.py adapters/pure_py.py [--json results.json] [--strict]
 
-Exits 0 whatever fails. Values compare as JSON: 1 equals 1.0, true is not 1, object key order is ignored except
+Exits 0 whatever fails, unless `--strict`: then 1 when a case failed, passed unexpectedly or is not implemented. Values compare as JSON: 1 equals 1.0, true is not 1, object key order is ignored except
 where a case lists the `keys` its result must have in order.
 """
 
@@ -164,6 +164,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("adapter")
     parser.add_argument("--json")
+    parser.add_argument("--strict", action="store_true")
     args = parser.parse_args()
     spec = importlib.util.spec_from_file_location("adapter", args.adapter)
     m = importlib.util.module_from_spec(spec)
@@ -195,6 +196,8 @@ def main():
     print(f"{'TOTAL':28} " + "  ".join(f"{s} {n}" for s, n in sorted(total.items())))
     if args.json:
         Path(args.json).write_text(json.dumps(results, indent=1))
+    if args.strict and set(total) - {"passed", "xfail"}:
+        sys.exit(1)
 
 
 if __name__ == "__main__":
