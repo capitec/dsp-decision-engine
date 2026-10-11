@@ -1,0 +1,204 @@
+import datetime as dt
+import warnings
+
+import polars as pl
+import pytest
+
+from decikit import FusedEngine, InterpretedEngine, flow, frame_step, missing_as, param
+
+
+def _both(pipeline, record):
+    exe = InterpretedEngine().bind(pipeline)
+    return exe.run(pl.DataFrame([record])).row(0, named=True), exe.run(record)
+
+
+def test_list_of_struct_frame_output_materialises():
+    @frame_step(reads=["x"], writes=["z"])
+    def fs(df):
+        return df.with_columns(pl.Series("z", [[{"a": 1}]] * len(df)))
+
+    run, score = _both(flow(fs, name="p"), {"x": 1.0})
+    assert run["z"] == score["z"] == [{"a": 1}]
+
+
+def test_list_of_struct_passes_from_one_frame_step_to_another():
+    @frame_step(reads=["x"], writes=["accts"])
+    def merge(df):
+        return df.with_columns(pl.Series("accts", [[{"amt": 1.0}, {"amt": 2.0}]] * len(df)))
+
+    @frame_step(reads=["accts"], writes=["total"])
+    def total(df):
+        return df.with_columns(total=pl.col("accts").list.eval(pl.element().struct.field("amt")).list.sum())
+
+    out = InterpretedEngine().bind(flow(merge, total, name="p")).run(pl.DataFrame({"x": [1.0, 2.0]}))
+    assert out["total"].to_list() == [3.0, 3.0]
+
+
+def test_all_empty_nested_frame_output_keeps_its_declared_dtype():
+    SCHEMA = pl.List(pl.Struct({"price": pl.Float64}))
+
+    @frame_step(reads=["items"], writes={"clean": SCHEMA})
+    def clean(df):
+        return df.with_columns(clean=pl.col("items").list.eval(pl.struct(price=pl.lit(0.0))).cast(SCHEMA))
+
+    @frame_step(reads=["clean"], writes=["seen"])
+    def seen(df):
+        return df.with_columns(seen=pl.lit(str(df.schema["clean"])))
+
+    exe = FusedEngine().bind(flow(clean, seen, name="p"))
+    assert exe.run({"items": []})["seen"] == "List(Struct({'price': Float64}))"
+    assert exe.run(pl.DataFrame({"items": [[]]}))["seen"][0] == "List(Struct({'price': Float64}))"
+
+
+def test_all_empty_nested_frame_output_keeps_its_dtype_without_a_declaration():
+    SCHEMA = pl.List(pl.Struct({"price": pl.Float64}))
+
+    @frame_step(reads=["items"], writes=["clean"])
+    def clean(df):
+        return df.with_columns(clean=pl.col("items").list.eval(pl.struct(price=pl.lit(0.0))).cast(SCHEMA))
+
+    @frame_step(reads=["clean"], writes=["seen"])
+    def seen(df):
+        return df.with_columns(seen=pl.lit(str(df.schema["clean"])))
+
+    out = FusedEngine().bind(flow(clean, seen, name="p")).run(pl.DataFrame({"items": [[]]}))
+    assert out["seen"][0] == "List(Struct({'price': Float64}))"
+
+
+def test_all_empty_nested_frame_output_keeps_its_dtype_in_the_final_result():
+    SCHEMA = pl.List(pl.Struct({"price": pl.Float64}))
+
+    @frame_step(reads=["items"], writes=["clean"])
+    def clean(df):
+        return df.with_columns(clean=pl.col("items").list.eval(pl.struct(price=pl.lit(0.0))).cast(SCHEMA))
+
+    out = FusedEngine().bind(flow(clean, name="p")).run(pl.DataFrame({"items": [[]]}))
+    assert out.schema["clean"] == SCHEMA
+
+
+def test_list_of_list_frame_output_stays_nested_lists():
+    @frame_step(reads=["x"], writes=["z"])
+    def fl(df):
+        return df.with_columns(pl.Series("z", [[[1, 2], [3]]] * len(df)))
+
+    out = InterpretedEngine().bind(flow(fl, name="p")).run(pl.DataFrame({"x": [1.0]}))
+    assert out.schema["z"] == pl.List(pl.List(pl.Int64))
+    assert out["z"].to_list() == [[[1, 2], [3]]]
+
+
+def test_list_of_date_stays_dates_between_frame_steps():
+    days = [dt.date(2026, 1, 1), dt.date(2025, 6, 1)]
+    seen = {}
+
+    @frame_step(reads=["x"], writes=["ev_date"])
+    def s1(df):
+        return df.with_columns(pl.Series("ev_date", [days] * len(df)))
+
+    @frame_step(reads=["ev_date"], writes=["seen"])
+    def s2(df):
+        seen["dtype"], seen["value"] = df.schema["ev_date"], df["ev_date"].to_list()[0]
+        return df.with_columns(seen=pl.lit(1))
+
+    InterpretedEngine().bind(flow(s1, s2, name="p")).run(pl.DataFrame({"x": [1.0]}))
+    assert seen == {"dtype": pl.List(pl.Date), "value": days}
+
+
+def test_list_of_str_with_empty_rows_materialises():
+    @frame_step(reads=["x"], writes=["y"])
+    def f(df):
+        return df.with_columns(pl.Series("y", [["a", "b"], [], ["c"]], dtype=pl.List(pl.Utf8)))
+
+    out = InterpretedEngine().bind(f).run(pl.DataFrame({"x": [1, 2, 3]}))
+    assert out["y"].to_list() == [["a", "b"], [], ["c"]]
+
+
+def test_list_of_struct_input_reaches_a_plain_step_as_dicts():
+    def first(accounts: list[dict]) -> str:
+        return repr(accounts[0])
+
+    @frame_step(reads=["first"], writes=["n"])
+    def f(df):
+        return df.with_columns(n=pl.col("first").str.len_chars())
+
+    account = {"opened": dt.date(2020, 1, 1), "q": 1.0}
+    run, score = _both(flow(first, f, name="p").emit("first"), {"accounts": [account]})
+    assert run["first"] == score["first"] == repr(account)
+
+
+def test_list_input_is_a_list_under_a_frame_and_a_record_run():
+    def kind(hist: list[float]) -> str:
+        return type(hist).__name__
+
+    run, score = _both(flow(kind, name="p"), {"hist": [1.0, 2.0]})
+    assert run["kind"] == score["kind"] == "list"
+
+
+@pytest.mark.parametrize("record, n", [
+    ({"hist": [1.0], "last": None, "v": 1.0}, 2),
+    ({"hist": [], "last": dt.date(2026, 1, 1), "v": None}, 1),
+])
+def test_one_record_with_empty_list_or_lone_none_runs_with_a_frame_step(record, n):
+    def count(hist: list[float], last: dt.date | None = None, v: float | None = None) -> int:
+        return len(hist) + (last is not None) + (v is not None)
+
+    @frame_step(reads=["count"], writes=["m"])
+    def fm(df):
+        return df.with_columns(m=pl.col("count") + 1)
+
+    out = InterpretedEngine().bind(flow(count, fm, name="p")).run(record)
+    assert out["m"] == n + 1
+
+
+@pytest.mark.parametrize("with_frame_step", [False, True])
+def test_missing_as_empty_list_fills_each_absent_row(with_frame_step):
+    def total(hist: list[float] = missing_as([])) -> float:
+        hist.append(1.0)  # must not leak into the declared fill or other rows
+        return float(len(hist))
+
+    @frame_step(reads=["total"], writes=["t2"])
+    def t2(df):
+        return df.with_columns(t2=pl.col("total") * 2)
+
+    exe = InterpretedEngine().bind(flow(total, t2, name="p").emit("total") if with_frame_step else flow(total, name="p"))
+    assert exe.run({"x": 1.0})["total"] == 1.0
+    out = exe.run(pl.DataFrame({"hist": [[5.0], None, None]}))
+    assert out["total"].to_list() == [2.0, 1.0, 1.0]
+
+
+def test_list_of_float_output_keeps_floats_whatever_the_first_row():
+    def rates(x: float) -> list[float]:
+        return [1, 2] if x < 2 else [1.5]
+
+    out = InterpretedEngine().bind(flow(rates, name="p")).run(pl.DataFrame({"x": [1.0, 2.0]}))
+    assert out.schema["rates"] == pl.List(pl.Float64)
+    assert out["rates"].to_list() == [[1.0, 2.0], [1.5]]
+
+
+def test_a_nested_null_field_is_not_retyped_as_string():
+    from typing import TypedDict
+
+    from decikit.ops import Columnar
+
+    class Item(TypedDict):
+        price: float
+
+    def total(items: Columnar[Item]) -> float:
+        return float(len(items.price))
+
+    # No explicit schema, so every null price makes polars infer a `Null` field. Reading it as a
+    # float must name the null, not silently read the field as a string.
+    frame = pl.DataFrame({"items": [[{"price": None}], [{"price": None}]], "v": [1.0, 2.0]})
+    with pytest.raises(ValueError, match="null in item"):
+        FusedEngine().bind(flow(total, name="p")).run(frame)
+
+
+def test_param_name_in_the_record_warns_once():
+    def intensity(base: int, stack_enabled: bool = param(True)) -> int:
+        return base + 1 if stack_enabled else base
+
+    exe = InterpretedEngine().bind(flow(intensity, name="p"))
+    with pytest.warns(UserWarning, match="'stack_enabled' is a param.*params document"):
+        exe.run({"base": 2, "stack_enabled": False})
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        exe.run({"base": 2, "stack_enabled": False})

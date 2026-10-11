@@ -1,5 +1,5 @@
 [project]
-name = "decider"
+name = "decikit"
 dynamic = ["version"]
 description = "Build, serve and inspect decision pipelines"
 readme = "README.md"
@@ -9,6 +9,8 @@ dependencies = [
     "pydantic>=2",
     "pydantic-settings",
     "click",
+    "numba>=0.67.0",
+    "packaging",
 ]
 
 [project.optional-dependencies]
@@ -16,37 +18,40 @@ serve-starlette = ["uvicorn", "starlette"]
 serve-sanic     = ["sanic"]
 visualise       = ["streamlit", "graphviz"]
 notebook        = ["ipython"]
+experiments     = ["altair", "ipython", "markdown-it-py"]
 eval            = ["simpleeval"]
+yaml            = ["pyyaml"]
+mcp             = ["fastmcp>=4.0.10"]
+prove           = ["z3-solver"]
 dev = [
     "pytest",
     "pytest-asyncio",
     "anyio",
-]
-docs = [
-    "sphinx",
-    "furo",
-    "myst-nb",
-    "sphinx-design",
-    "sphinx-sitemap",
 ]
 all = [
     "uvicorn", "starlette",
     "sanic",
     "streamlit", "graphviz",
     "ipython",
+    "altair",
     "simpleeval",
+    "pyyaml",
+    "fastmcp>=4.0.10",
+    "z3-solver",
     "pytest",
     "pytest-asyncio",
     "anyio",
-    "sphinx",
-    "furo",
-    "myst-nb",
-    "sphinx-design",
-    "sphinx-sitemap",
 ]
 
 [project.scripts]
-decider = "decider.cli:cli"
+decikit = "decikit._tooling.cli:cli"
+
+# Packages that ship types for decikit declare them in these entry-point groups,
+# named by the type tag: decikit.steps, decikit.config_stores, decikit.metrics,
+# decikit.plots, decikit.blocks, decikit.datasets, decikit.checks. For example,
+# in the package's own pyproject.toml:
+#   [project.entry-points."decikit.steps"]
+#   scaled = "credit_risk.steps:Scaled"
 
 # ── build ─────────────────────────────────────────────────────────────────────
 
@@ -62,7 +67,7 @@ source = "vcs"
 tag_regex = "^v(?P<version>[0-9]+\\.[0-9]+\\.[0-9]+.*)$"
 
 [tool.hatch.build.targets.wheel]
-packages = ["decider"]
+packages = ["decikit"]
 
 # ── uv ────────────────────────────────────────────────────────────────────────
 
@@ -75,6 +80,16 @@ dev = [
     "pytest-asyncio",
     "anyio",
     "pytest-cov>=7.1.0",
+    "starlette>=1.2.1",
+    "ipython>=8.39.0",
+    "altair",
+    "fastmcp>=4.0.10",
+    "z3-solver",
+]
+docs = [
+    "zensical>=0.0.68; python_version >= '3.11'",
+    "mkdocstrings[python]",
+    "nbconvert",
 ]
 
 # ── pytest ────────────────────────────────────────────────────────────────────

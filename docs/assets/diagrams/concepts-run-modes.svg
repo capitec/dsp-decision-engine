@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 500" font-family="system-ui, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4b5563"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1000" height="500" fill="#ffffff"/>
+
+  <!-- column headers -->
+  <g font-size="14" fill="#1f2937" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">
+    <text x="315" y="26">disposable</text>
+    <text x="505" y="26">ratio</text>
+    <text x="695" y="26">month_end</text>
+    <text x="885" y="26">affordable</text>
+  </g>
+  <text x="695" y="44" text-anchor="middle" font-size="14" fill="#7f1d1d">reads a date</text>
+
+  <!-- interpreted -->
+  <text x="20" y="88" font-size="16" font-weight="600" fill="#1f2937">interpreted</text>
+  <text x="20" y="110" font-size="14" fill="#1f2937">plain Python, row</text>
+  <text x="20" y="128" font-size="14" fill="#1f2937">by row; pipeline.run</text>
+  <rect x="230" y="64" width="170" height="80" rx="10" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <rect x="420" y="64" width="170" height="80" rx="10" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <rect x="610" y="64" width="170" height="80" rx="10" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <rect x="800" y="64" width="170" height="80" rx="10" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <g font-size="15" fill="#1f2937" text-anchor="middle">
+    <text x="315" y="100">Python</text><text x="315" y="120">function call</text>
+    <text x="505" y="100">Python</text><text x="505" y="120">function call</text>
+    <text x="695" y="100">Python</text><text x="695" y="120">function call</text>
+    <text x="885" y="100">Python</text><text x="885" y="120">function call</text>
+  </g>
+
+  <!-- stepped -->
+  <text x="20" y="208" font-size="16" font-weight="600" fill="#134e4a">stepped</text>
+  <text x="20" y="230" font-size="14" fill="#134e4a">one kernel per step,</text>
+  <text x="20" y="248" font-size="14" fill="#134e4a">Python in between</text>
+  <rect x="230" y="184" width="170" height="80" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <rect x="420" y="184" width="170" height="80" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <rect x="610" y="184" width="170" height="80" rx="10" fill="#fee2e2" stroke="#dc2626" stroke-width="1.5"/>
+  <rect x="800" y="184" width="170" height="80" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <g font-size="15" text-anchor="middle">
+    <text x="315" y="220" fill="#134e4a">kernel 1</text><text x="315" y="240" fill="#134e4a">all rows</text>
+    <text x="505" y="220" fill="#134e4a">kernel 2</text><text x="505" y="240" fill="#134e4a">all rows</text>
+    <text x="695" y="220" fill="#7f1d1d">Python fallback</text><text x="695" y="240" fill="#7f1d1d">FallbackWarning</text>
+    <text x="885" y="220" fill="#134e4a">kernel 3</text><text x="885" y="240" fill="#134e4a">all rows</text>
+  </g>
+
+  <!-- fused -->
+  <text x="20" y="328" font-size="16" font-weight="600" fill="#134e4a">fused</text>
+  <text x="20" y="350" font-size="14" fill="#134e4a">one kernel per run</text>
+  <text x="20" y="368" font-size="14" fill="#134e4a">of steps; default for</text>
+  <text x="20" y="386" font-size="14" fill="#134e4a">decikit serve</text>
+  <rect x="230" y="304" width="360" height="80" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <rect x="610" y="304" width="170" height="80" rx="10" fill="#fee2e2" stroke="#dc2626" stroke-width="1.5"/>
+  <rect x="800" y="304" width="170" height="80" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <g font-size="15" text-anchor="middle">
+    <text x="410" y="340" fill="#134e4a">kernel 1: disposable then ratio</text><text x="410" y="360" fill="#134e4a">in one loop over the rows</text>
+    <text x="695" y="340" fill="#7f1d1d">Python fallback</text><text x="695" y="360" fill="#7f1d1d">splits the kernel</text>
+    <text x="885" y="340" fill="#134e4a">kernel 2</text><text x="885" y="360" fill="#134e4a">all rows</text>
+  </g>
+
+  <!-- legend -->
+  <rect x="230" y="420" width="740" height="62" rx="10" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <rect x="250" y="440" width="22" height="22" rx="4" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="282" y="456" font-size="14" fill="#1f2937">numba machine code</text>
+  <rect x="440" y="440" width="22" height="22" rx="4" fill="#fee2e2" stroke="#dc2626" stroke-width="1.5"/>
+  <text x="472" y="456" font-size="14" fill="#1f2937">step numba cannot hold, in Python</text>
+  <rect x="700" y="440" width="22" height="22" rx="4" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="732" y="456" font-size="14" fill="#1f2937">plain Python</text>
+  <text x="20" y="446" font-size="14" fill="#1f2937">all three modes give</text>
+  <text x="20" y="466" font-size="14" fill="#1f2937">the same answers</text>
+</svg>

@@ -1,0 +1,148 @@
+[project]
+site_name = "Decider toolkit"
+site_description = "Build, serve and inspect decision pipelines"
+site_url = "https://capitec.github.io/dsp-decision-engine/"
+repo_url = "https://github.com/capitec/dsp-decision-engine"
+edit_uri = "edit/main/docs/"
+
+# tutorials/ is generated, and gitignored, from the notebooks in docs/notebooks/.
+# Outputs are not re-run; commit them in the .ipynb. Convert before building:
+#   uv run --group docs jupyter nbconvert --to markdown docs/notebooks/*.ipynb --output-dir docs/tutorials
+nav = [
+  { "Home" = "index.md" },
+  { "Getting started" = ["getting-started.md", "concepts.md"] },
+  { "User guides" = [
+      "guides/steps-and-params.md",
+      "guides/branches-loops-frames.md",
+      "guides/types-and-money.md",
+      "guides/compile-and-fallback.md",
+      "guides/polars-engine.md",
+      "guides/trees-tables-scorecards.md",
+      "guides/parameter-tables.md",
+      "guides/flow-files.md",
+      "guides/projects-and-serving.md",
+      "guides/debugging-and-testing.md",
+      "guides/tracing.md",
+      "guides/checks.md",
+      "guides/diff-and-equivalence.md",
+      "guides/experiments.md",
+      "guides/data-and-datasets.md",
+      "guides/cli-and-mcp.md",
+      "guides/extending.md",
+    ] },
+  { "Tutorials" = [
+      "tutorials/quickstart.md",
+      "walkthroughs/loan-granting-and-pricing.md",
+      "walkthroughs/compare-two-policy-versions.md",
+    ] },
+  { "Architecture" = [
+      "architecture/index.md",
+      "architecture/package-layout.md",
+      "architecture/foundation.md",
+      "architecture/steps-and-ir.md",
+      { "Engine" = [
+          "architecture/engine/index.md",
+          "architecture/engine/ir.md",
+          "architecture/engine/wiring.md",
+          "architecture/engine/params.md",
+          "architecture/engine/runners.md",
+          "architecture/engine/compile.md",
+          "architecture/engine/kernels.md",
+          "architecture/engine/cache.md",
+          "architecture/engine/boundary.md",
+          "architecture/engine/debug.md",
+          "architecture/engine/trace.md",
+          "architecture/engine/concurrency.md",
+          "architecture/engine/polars.md",
+        ] },
+      { "Configurable steps" = [
+          "architecture/configurable-steps/index.md",
+          "architecture/configurable-steps/trees.md",
+          "architecture/configurable-steps/tables.md",
+          "architecture/configurable-steps/scorecards.md",
+          "architecture/configurable-steps/expr-and-flowfile.md",
+        ] },
+      { "Lab" = [
+          "architecture/lab/index.md",
+          "architecture/lab/data.md",
+          "architecture/lab/checks.md",
+          "architecture/lab/testing.md",
+          "architecture/lab/diff.md",
+          "architecture/lab/experiments.md",
+        ] },
+      "architecture/serving.md",
+      "architecture/config-store.md",
+      "architecture/tooling.md",
+      "architecture/editor-bridge.md",
+    ] },
+  { "API reference" = "reference.md" },
+]
+
+extra_css = ["stylesheets/extra.css"]
+
+# The viewer renders .drawio files; javascripts/drawio.js feeds it.
+extra_javascript = [
+  "https://viewer.diagrams.net/js/viewer-static.min.js",
+  "javascripts/drawio.js",
+  "javascripts/version-switcher.js",
+]
+
+[project.theme]
+logo = "assets/decikit-icon.png"
+favicon = "assets/decikit-icon.png"
+features = [
+  "content.code.copy",
+  "content.tooltips",
+  "navigation.footer",
+  "navigation.indexes",
+  "navigation.path",
+  "navigation.tabs",
+  "navigation.top",
+  "search.highlight",
+]
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+scheme = "default"
+primary = "orange"
+accent = "deep-orange"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+primary = "orange"
+accent = "orange"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to light mode"
+
+[project.markdown_extensions.admonition]
+[project.markdown_extensions.attr_list]
+[project.markdown_extensions.md_in_html]
+[project.markdown_extensions.tables]
+[project.markdown_extensions.pymdownx.details]
+[project.markdown_extensions.pymdownx.highlight]
+[project.markdown_extensions.pymdownx.inlinehilite]
+
+[project.markdown_extensions.toc]
+permalink = true
+
+[project.markdown_extensions.pymdownx.superfences]
+custom_fences = [
+  { name = "mermaid", class = "mermaid", format = "pymdownx.superfences.fence_code_format" },
+]
+
+[project.markdown_extensions.pymdownx.tabbed]
+alternate_style = true
+
+[project.plugins.mkdocstrings.handlers.python.options]
+docstring_style = "google"
+show_root_heading = true
+show_root_full_path = false
+separate_signature = true
+show_source = false
+
+# docs/design_decisions/ and docs/design_specs/ are maintainer references read in the repo, not part of the site.
+[project.plugins.exclude]
+glob = ["design_decisions/*", "design_specs/*"]

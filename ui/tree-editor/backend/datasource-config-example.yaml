@@ -1,0 +1,52 @@
+# Example datasource configuration showing configurable preview limits and caching
+
+datasources:
+  # S3 datasource for large datasets - conservative limits
+  production_s3:
+    provider: s3
+    s3_path: s3://my-bucket/data/
+    display_name: "Production Data Lake"
+    description: "Main production datasets"
+    max_preview_rows: 50  # Conservative limit for large datasets
+    cache_ttl_seconds: 1800  # 30 minutes cache for preview data
+    schema_cache_ttl_seconds: 7200  # 2 hours for schema
+    auth:
+      method: default
+
+  # S3 datasource for smaller datasets - more generous limits  
+  analytics_s3:
+    provider: s3
+    s3_path: s3://analytics-bucket/processed/
+    display_name: "Analytics Datasets"
+    description: "Processed analytics data"
+    max_preview_rows: 200  # Higher limit for processed data
+    cache_ttl_seconds: 300  # 5 minutes cache (data changes more frequently)
+    schema_cache_ttl_seconds: 3600  # 1 hour for schema
+    auth:
+      method: default
+
+  # Development datasource - maximum limits for exploration
+  dev_s3:
+    provider: s3
+    s3_path: s3://dev-bucket/sandbox/
+    display_name: "Development Sandbox"  
+    description: "Development and testing datasets"
+    max_preview_rows: 1000  # Maximum allowed limit
+    cache_ttl_seconds: 0  # No caching in dev for fresh data
+    schema_cache_ttl_seconds: 0  # No schema caching in dev
+    auth:
+      method: default
+
+  # Example showing disabled preview capability
+  sensitive_data:
+    provider: s3
+    s3_path: s3://sensitive-bucket/data/
+    display_name: "Sensitive Data"
+    description: "Sensitive datasets - preview disabled"
+    max_preview_rows: 10  # Very limited preview
+    cache_ttl_seconds: 3600  # 1 hour cache
+    schema_cache_ttl_seconds: 14400  # 4 hours schema cache
+    disable_capabilities: [preview]  # Disable preview entirely
+    auth:
+      method: assume_role
+      role_arn: "arn:aws:iam::123456789012:role/SensitiveDataRole"

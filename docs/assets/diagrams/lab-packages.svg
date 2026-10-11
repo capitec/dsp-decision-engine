@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 540" font-family="system-ui, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4b5563"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1000" height="540" fill="#ffffff"/>
+
+  <!-- tooling consumers -->
+  <rect x="40" y="16" width="290" height="58" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="185" y="40" text-anchor="middle" font-size="15" font-weight="600" fill="#4c1d95">CLI</text>
+  <text x="185" y="61" text-anchor="middle" font-size="13" fill="#4c1d95">decikit check · diff · experiment</text>
+  <rect x="355" y="16" width="290" height="58" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="500" y="40" text-anchor="middle" font-size="15" font-weight="600" fill="#4c1d95">MCP tools</text>
+  <text x="500" y="61" text-anchor="middle" font-size="13" fill="#4c1d95">describe_flow · inspect_step · check_report</text>
+  <rect x="670" y="16" width="290" height="58" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="815" y="40" text-anchor="middle" font-size="15" font-weight="600" fill="#4c1d95">Editor bridge</text>
+  <text x="815" y="61" text-anchor="middle" font-size="13" fill="#4c1d95">datasets view · schema · protocol.ts</text>
+  <line x1="500" y1="74" x2="500" y2="104" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- lab frame -->
+  <rect x="20" y="106" width="960" height="330" rx="12" fill="#f9fafb" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text x="36" y="130" font-size="15" font-weight="600" fill="#1f2937">decikit.lab</text>
+
+  <!-- experiments -->
+  <rect x="380" y="140" width="240" height="56" rx="10" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="500" y="164" text-anchor="middle" font-size="15" font-weight="600" fill="#1f2937">experiments/</text>
+  <text x="500" y="184" text-anchor="middle" font-size="13" fill="#1f2937">baseline vs scenarios</text>
+
+  <!-- checks -->
+  <rect x="120" y="240" width="220" height="56" rx="10" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="230" y="264" text-anchor="middle" font-size="15" font-weight="600" fill="#1f2937">checks/</text>
+  <text x="230" y="284" text-anchor="middle" font-size="13" fill="#1f2937">Check · run · Report</text>
+
+  <!-- diff -->
+  <rect x="640" y="240" width="220" height="56" rx="10" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="750" y="264" text-anchor="middle" font-size="15" font-weight="600" fill="#1f2937">diff/</text>
+  <text x="750" y="284" text-anchor="middle" font-size="13" fill="#1f2937">structure · outputs · prove</text>
+
+  <!-- data -->
+  <rect x="40" y="350" width="200" height="56" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="140" y="374" text-anchor="middle" font-size="15" font-weight="600" fill="#14532d">data/</text>
+  <text x="140" y="394" text-anchor="middle" font-size="13" fill="#14532d">read · scan · datasets</text>
+
+  <!-- testing -->
+  <rect x="280" y="350" width="200" height="56" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="380" y="374" text-anchor="middle" font-size="15" font-weight="600" fill="#134e4a">testing/</text>
+  <text x="380" y="394" text-anchor="middle" font-size="13" fill="#134e4a">assert_equivalent · corpus</text>
+
+  <!-- refs + describe -->
+  <rect x="560" y="350" width="380" height="56" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="750" y="374" text-anchor="middle" font-size="15" font-weight="600" fill="#1e3a8a">_refs.py + _describe.py</text>
+  <text x="750" y="394" text-anchor="middle" font-size="13" fill="#1e3a8a">StepRef · FlowDescription · describe</text>
+
+  <!-- edges: importer -> imported -->
+  <line x1="420" y1="196" x2="290" y2="238" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="580" y1="196" x2="710" y2="238" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+  <polyline points="380,168 70,168 70,348" fill="none" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+  <polyline points="620,168 920,168 920,348" fill="none" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="170" y1="296" x2="150" y2="348" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="290" y1="296" x2="350" y2="348" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="340" y1="262" x2="638" y2="262" stroke="#4b5563" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arr)"/>
+  <text x="489" y="254" text-anchor="middle" font-size="13" fill="#374151">lazy: z3 solver only</text>
+  <line x1="340" y1="290" x2="600" y2="348" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="750" y1="296" x2="750" y2="348" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- core -->
+  <line x1="500" y1="436" x2="500" y2="462" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+  <rect x="20" y="464" width="960" height="56" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="500" y="488" text-anchor="middle" font-size="15" font-weight="600" fill="#134e4a">core (L1) and foundation (L0)</text>
+  <text x="500" y="508" text-anchor="middle" font-size="13" fill="#134e4a">decikit.ir · _engine.wiring · Engine · decikit.debug · _registry · _settings</text>
+</svg>

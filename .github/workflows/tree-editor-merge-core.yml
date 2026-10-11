@@ -1,0 +1,65 @@
+name: Tree editor merge core
+
+# Builds and tests ui/tree-editor/merge-core (the live-editing merge logic) as a Python wheel and as WebAssembly,
+# and runs the shared vectors against both. Publishes nothing.
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ui/tree-editor/merge-core/**
+      - ui/tree-editor/merge-core-bench/**
+      - .github/workflows/tree-editor-merge-core.yml
+
+permissions:
+  contents: read
+
+jobs:
+  merge-core:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ui/tree-editor/merge-core
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust toolchain
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal --target wasm32-unknown-unknown
+          rustup default 1.95.0
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/wasm-pack
+            ~/.cargo/registry
+            ~/.cargo/git
+            ui/tree-editor/merge-core/target
+          key: merge-core-${{ hashFiles('ui/tree-editor/merge-core/Cargo.lock') }}
+
+      - name: Install wasm-pack
+        run: command -v wasm-pack || cargo install --locked wasm-pack@0.15.0
+
+      - name: cargo test
+        run: cargo test
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Build the wheel (abi3, manylinux_2_28)
+        run: uvx --from 'maturin[zig]==1.15.0' maturin build --release --zig --compatibility manylinux_2_28 -o dist
+
+      - name: Vectors against the wheel (oldest supported Python)
+        working-directory: ui/tree-editor/merge-core-bench
+        run: uv run --no-project --python 3.10 --with ../merge-core/dist/*.whl python run_vectors.py adapters/rust_py.py --strict
+
+      - name: Build pkg/ (WebAssembly)
+        run: wasm-pack build --target web --release --no-pack -- --features wasm
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Vectors against the WebAssembly
+        working-directory: ui/tree-editor/merge-core-bench
+        run: node run_vectors.mjs adapters/rust_wasm.mjs --strict

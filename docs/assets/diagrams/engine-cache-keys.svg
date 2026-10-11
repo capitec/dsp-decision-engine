@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 520" font-family="system-ui, sans-serif">
+  <rect x="0" y="0" width="1000" height="520" fill="#ffffff"/>
+
+  <!-- column 1 -->
+  <rect x="15" y="15" width="310" height="490" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="30" y="42" font-size="15" font-weight="600" fill="#134e4a">Step dispatcher, in process</text>
+  <text x="30" y="62" font-size="13" fill="#134e4a">_DISPATCHERS[fingerprint(fn)]</text>
+  <rect x="30" y="76" width="280" height="186" rx="8" fill="#ffffff" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="42" y="98" font-size="13" font-weight="600" fill="#134e4a">fingerprint covers</text>
+  <text x="42" y="120" font-size="13" fill="#134e4a">bytecode and constants</text>
+  <text x="42" y="140" font-size="13" fill="#134e4a">argument layout</text>
+  <text x="42" y="160" font-size="13" fill="#134e4a">closure cell values</text>
+  <text x="42" y="180" font-size="13" fill="#134e4a">globals it reads: functions by</text>
+  <text x="42" y="198" font-size="13" fill="#134e4a">content, modules by name and the</text>
+  <text x="42" y="216" font-size="13" fill="#134e4a">attributes it uses, arrays and frames</text>
+  <text x="42" y="234" font-size="13" fill="#134e4a">by value, other objects by identity</text>
+  <rect x="30" y="276" width="280" height="110" rx="8" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="42" y="298" font-size="13" font-weight="600" fill="#1f2937">left out</text>
+  <text x="42" y="320" font-size="13" fill="#1f2937">the function's name, file and line</text>
+  <text x="42" y="340" font-size="13" fill="#1f2937">the node's origin path</text>
+  <text x="42" y="360" font-size="13" fill="#1f2937">param values (they are arguments)</text>
+  <text x="30" y="414" font-size="13" fill="#134e4a">Renaming or moving a step, or a</text>
+  <text x="30" y="432" font-size="13" fill="#134e4a">re-run notebook cell, reuses the</text>
+  <text x="30" y="450" font-size="13" fill="#134e4a">compiled code; editing a constant</text>
+  <text x="30" y="468" font-size="13" fill="#134e4a">or a captured value does not.</text>
+
+  <!-- column 2 -->
+  <rect x="345" y="15" width="310" height="490" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="360" y="42" font-size="15" font-weight="600" fill="#14532d">Step machine code, on disk</text>
+  <text x="360" y="62" font-size="13" fill="#14532d">numba's FunctionCache, salted</text>
+  <rect x="360" y="76" width="280" height="96" rx="8" fill="#ffffff" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="372" y="98" font-size="13" font-weight="600" fill="#14532d">where</text>
+  <text x="372" y="120" font-size="13" fill="#14532d">__pycache__/ beside the step's file:</text>
+  <text x="372" y="140" font-size="13" fill="#14532d">module.fee-9.py314.nbi (index)</text>
+  <text x="372" y="160" font-size="13" fill="#14532d">module.fee-9.py314.1.nbc (code)</text>
+  <rect x="360" y="186" width="280" height="200" rx="8" fill="#ffffff" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="372" y="208" font-size="13" font-weight="600" fill="#14532d">index key</text>
+  <text x="372" y="230" font-size="13" fill="#14532d">argument signature</text>
+  <text x="372" y="250" font-size="13" fill="#14532d">CPU target: LLVM triple, CPU name,</text>
+  <text x="372" y="268" font-size="13" fill="#14532d">CPU features</text>
+  <text x="372" y="288" font-size="13" fill="#14532d">sha256 of co_code and closure</text>
+  <text x="372" y="308" font-size="13" fill="#14532d">SALT (semantics files), added</text>
+  <text x="372" y="328" font-size="13" fill="#14532d">fingerprint(fn), added</text>
+  <text x="372" y="356" font-size="13" fill="#14532d">the index file is valid only for the</text>
+  <text x="372" y="374" font-size="13" fill="#14532d">source file's (mtime, size)</text>
+  <text x="360" y="414" font-size="13" fill="#14532d">Only functions defined in a real</text>
+  <text x="360" y="432" font-size="13" fill="#14532d">file and with no closure. A new</text>
+  <text x="360" y="450" font-size="13" fill="#14532d">process loads the code instead of</text>
+  <text x="360" y="468" font-size="13" fill="#14532d">compiling it.</text>
+
+  <!-- column 3 -->
+  <rect x="675" y="15" width="310" height="490" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="690" y="42" font-size="15" font-weight="600" fill="#1e3a8a">Fused kernel, in process only</text>
+  <text x="690" y="62" font-size="13" fill="#1e3a8a">_KERNELS in compile/kernel.py</text>
+  <rect x="690" y="76" width="280" height="186" rx="8" fill="#ffffff" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="702" y="98" font-size="13" font-weight="600" fill="#1e3a8a">key</text>
+  <text x="702" y="120" font-size="13" fill="#1e3a8a">per call: content key, sources,</text>
+  <text x="702" y="138" font-size="13" fill="#1e3a8a">dtypes, unpack, nullable,</text>
+  <text x="702" y="156" font-size="13" fill="#1e3a8a">structs, scales</text>
+  <text x="702" y="178" font-size="13" fill="#1e3a8a">Fork and Repeat structure</text>
+  <text x="702" y="198" font-size="13" fill="#1e3a8a">outputs, variables</text>
+  <text x="702" y="218" font-size="13" fill="#1e3a8a">trace flag and trace refs</text>
+  <rect x="690" y="276" width="280" height="110" rx="8" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="702" y="298" font-size="13" font-weight="600" fill="#1f2937">never written to disk</text>
+  <text x="702" y="320" font-size="13" fill="#1f2937">it closes over dispatchers, and a</text>
+  <text x="702" y="340" font-size="13" fill="#1f2937">closure over a dispatcher never</text>
+  <text x="702" y="360" font-size="13" fill="#1f2937">hits numba's disk cache</text>
+  <text x="690" y="414" font-size="13" fill="#1e3a8a">Built once per process and shape;</text>
+  <text x="690" y="432" font-size="13" fill="#1e3a8a">two pipelines with the same steps</text>
+  <text x="690" y="450" font-size="13" fill="#1e3a8a">share it. Serving builds it during</text>
+  <text x="690" y="468" font-size="13" fill="#1e3a8a">warm-up, before /ping answers.</text>
+</svg>

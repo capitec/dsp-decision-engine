@@ -1,0 +1,13 @@
+{
+  "fraud_interdiction": {
+    "degraded_mode_code": {
+      "restricted_from_sources": 2
+    },
+    "late_arrival_flag": {
+      "late_after_seconds": 300.0
+    },
+    "adjustment_stack_enabled": {
+      "adjustment_stack_enabled": true
+    }
+  }
+}

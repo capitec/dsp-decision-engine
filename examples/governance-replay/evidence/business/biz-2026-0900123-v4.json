@@ -1,0 +1,709 @@
+{
+ "config_version": "0.2.0",
+ "decision_date": "2026-09-24",
+ "decision_id": "biz-2026-0900123-v4",
+ "documents": {
+  "business_pd_adjustments": "f3b76e2fbfecd46a",
+  "entity_score_adjustments": "003d50b45c29baef",
+  "event_threshold_overlays": "37cbe36c8bdc8bb1",
+  "params": "2e131d29f5467fe7",
+  "reason_codes": "e5f9563cf6a828e7"
+ },
+ "flow": "business",
+ "mode": "fused",
+ "params": {
+  "business_credit": {
+   "decision": {
+    "business_grade": {
+     "apply_probability_of_default_adjustments": {
+      "adjustment_stack_enabled": true
+     },
+     "combined_pd_before_overlay": {
+      "financial_weight": 0.4,
+      "people_weight": 0.6
+     }
+    },
+    "outcome": {
+     "business_outcome": {
+      "decline_cutoff_grade": 11,
+      "refer_cutoff_grade": 9
+     }
+    },
+    "people": {
+     "people_blend": {
+      "control_ownership_pct": 50.0,
+      "control_weight_floor": 0.6,
+      "controller_cap_points": 30.0,
+      "controller_points": 10.0,
+      "coverage_requirement": 0.75,
+      "inclusion_floor_pct": 5.0
+     },
+     "people_grade_caps": {
+      "critical_floor_grade": 5,
+      "weak_cap_grade": 10,
+      "weak_grade": 11,
+      "weak_ownership_pct": 20.0
+     }
+    },
+    "pricing": {
+     "initiation_fee": {
+      "base_fee": 1050.0,
+      "marginal_rate": 0.1,
+      "threshold": 10000.0
+     },
+     "monthly_service_fee": {
+      "flat_fee": 69.0
+     },
+     "term_months": {
+      "default_term_months": 36
+     }
+    },
+    "sole_proprietor": {
+     "statutory": {
+      "assess": {
+       "affordability_assessment": {
+        "capacity": {
+         "overlay": {
+          "apply_max_affordable_instalment_adjustments": {
+           "adjustment_stack_enabled": true
+          }
+         },
+         "proposal_verdict": {
+          "marginal_band": 0.05
+         }
+        },
+        "evidence": {
+         "applicant1_income": {
+          "income_haircut_applied": {
+           "haircut_bureau_estimated": 0.3,
+           "haircut_declared": 0.2,
+           "haircut_payslip": 0.05,
+           "haircut_statement_high_confidence": 0.1,
+           "haircut_statement_low_confidence": 0.25,
+           "statement_confidence_threshold": 0.7
+          }
+         },
+         "applicant2_income": {
+          "income_haircut_applied": {
+           "haircut_bureau_estimated": 0.3,
+           "haircut_declared": 0.2,
+           "haircut_payslip": 0.05,
+           "haircut_statement_high_confidence": 0.1,
+           "haircut_statement_low_confidence": 0.25,
+           "statement_confidence_threshold": 0.7
+          }
+         },
+         "bureau_is_stale": {
+          "staleness_window_days": 7,
+          "staleness_window_days_mortgage": 14
+         },
+         "household_income": {
+          "minor_contribution_threshold": 0.1
+         },
+         "minimum_income_tier": {
+          "minimum_tier_arrangement": 5,
+          "minimum_tier_limit_increase": 4,
+          "minimum_tier_new_application": 3,
+          "minimum_tier_scenario": 3
+         }
+        }
+       },
+       "principal_income_evidence": {
+        "assumed_profit_margin": 0.15,
+        "statement_confidence": 0.8
+       }
+      }
+     }
+    },
+    "structure_check": {
+     "max_entities": 40,
+     "ownership_ceiling_pct": 110.0,
+     "ownership_floor_pct": 90.0
+    }
+   },
+   "entities": {
+    "entities": {
+     "adjustment_stack_enabled": true,
+     "aggregate_disqualifying_floor": 500000.0,
+     "aggregate_disqualifying_pct": 0.5,
+     "aggregate_material_floor": 150000.0,
+     "aggregate_material_pct": 0.15,
+     "bureau_high": 750.0,
+     "bureau_low": 500.0,
+     "bureau_mid": 650.0,
+     "event_overlays_enabled": true,
+     "immaterial_count": 2,
+     "minor_count": 3,
+     "recent_months": 12
+    },
+    "resolved_entities": {
+     "critical_ownership_pct": 25.0,
+     "significant_ownership_pct": 10.0
+    }
+   }
+  }
+ },
+ "request": {
+  "current_assets": 2400000.0,
+  "current_liabilities": 1500000.0,
+  "decision_date": "2026-09-24",
+  "decision_id": "biz-2026-0900123-v4",
+  "declared_annual_turnover": 9200000.0,
+  "ebitda": 1100000.0,
+  "entities": [
+   {
+    "adverse_events": [],
+    "bureau_score": 705,
+    "effective_ownership_pct": 85,
+    "entity_id": 1,
+    "entity_key": "OWNER",
+    "is_natural_person": true,
+    "months_on_record": 100,
+    "relationship_type_code": 5,
+    "worst_delinquency_months": 0
+   },
+   {
+    "adverse_events": [
+     {
+      "amount": 90000,
+      "event_date": "2024-01-01",
+      "event_id": 1,
+      "event_type_code": 1,
+      "is_disputed": true
+     },
+     {
+      "amount": 90000,
+      "event_date": "2024-02-01",
+      "event_id": 2,
+      "event_type_code": 1,
+      "is_disputed": true
+     },
+     {
+      "amount": 90000,
+      "event_date": "2024-03-01",
+      "event_id": 3,
+      "event_type_code": 1,
+      "is_disputed": false
+     },
+     {
+      "amount": 90000,
+      "event_date": "2024-04-01",
+      "event_id": 4,
+      "event_type_code": 1,
+      "is_disputed": false
+     },
+     {
+      "amount": 90000,
+      "event_date": "2024-05-01",
+      "event_id": 5,
+      "event_type_code": 1,
+      "is_disputed": false
+     },
+     {
+      "amount": 90000,
+      "event_date": "2024-06-01",
+      "event_id": 6,
+      "event_type_code": 1,
+      "is_disputed": false
+     }
+    ],
+    "bureau_score": 705,
+    "effective_ownership_pct": 15,
+    "entity_id": 2,
+    "entity_key": "HOLDER",
+    "is_natural_person": true,
+    "months_on_record": 100,
+    "relationship_type_code": 5,
+    "worst_delinquency_months": 0
+   }
+  ],
+  "finance_charges": 210000.0,
+  "interest_bearing_debt": 1800000.0,
+  "legal_form_code": 3,
+  "product_code": 50,
+  "requested_amount": 800000.0,
+  "requested_term_months": 48,
+  "sector_code": 412,
+  "security_type_code": 2,
+  "tangible_net_worth": 2600000.0
+ },
+ "response": {
+  "accounts_in_arrears_count": null,
+  "adjustment_set_id": "AS-05-BIZ-2026.09",
+  "adjustments_applied": [
+   "ADJ-05-BIZ-001"
+  ],
+  "affordability_binding_constraint_code": null,
+  "affordability_buffer_applied": null,
+  "age_months": null,
+  "amount_unknown": null,
+  "appetite_cell_id": "business_appetite@biz-rate-2026.09#6",
+  "applicant1_income_haircut_applied": null,
+  "applicant1_income_source_code": null,
+  "applicant1_tax_table_cell_id": null,
+  "applicant1_tax_table_version": null,
+  "applicant2_income_haircut_applied": null,
+  "applicant2_income_source_code": null,
+  "applicant2_tax_table_cell_id": null,
+  "applicant_income_evidence_gap": null,
+  "assessed_entities": [
+   {
+    "adverse_binding_rule": "AE-R-11",
+    "adverse_event_ids": [],
+    "adverse_events": [],
+    "adverse_verdict_code": 1,
+    "adverse_verdict_code_unadjusted": 1,
+    "adverse_verdict_code_undisputed": 1,
+    "adverse_verdict_overlay_sensitive": false,
+    "adverse_verdict_provisional": false,
+    "anchor": 600.0,
+    "bureau_score": 705.0,
+    "bureau_score_score": 20.0,
+    "calibration_cell_id": "calibration@cal-2026.09#4",
+    "calibration_version": "cal-2026.09",
+    "criticality_class": 1,
+    "decision_date": "2026-09-24",
+    "effective_ownership_pct": 85.0,
+    "effective_ownership_pct_score": 10.0,
+    "entity_grade": 5,
+    "entity_grade_cell_id": "grade_ladder@bus-rg-2026.09#4|5",
+    "entity_grade_unadjusted": 4,
+    "entity_grade_unadjusted_cell_id": "grade_ladder@bus-rg-2026.09#4|4",
+    "entity_id": 1,
+    "entity_key": "OWNER",
+    "entity_pd": 0.06199702813757677,
+    "entity_pd_unadjusted": 0.05133579311531625,
+    "entity_score": 763.0,
+    "entity_score_unadjusted": 775.0,
+    "entity_scorecard_offset": 700.0,
+    "is_controlling": false,
+    "is_natural_person": true,
+    "is_owner": true,
+    "is_required_surety": false,
+    "is_sole_principal": false,
+    "months_on_record": 100.0,
+    "months_on_record_score": 20.0,
+    "path_count": 1,
+    "relationship_type_code": 5,
+    "requested_amount": 800000.0,
+    "scale": 60.0,
+    "score_adjustment_set_id": "AS-05-ENT-2026.09",
+    "score_adjustments_applied": [
+     "ADJ-05-ENT-001"
+    ],
+    "score_before_overlay": 775.0,
+    "segment_code": 4.0,
+    "worst_delinquency_months": 0.0,
+    "worst_delinquency_months_score": 25.0
+   },
+   {
+    "adverse_binding_rule": "AE-R-07",
+    "adverse_event_ids": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6
+    ],
+    "adverse_events": [
+     {
+      "age_months": 32,
+      "amount": 90000.0,
+      "amount_unknown": false,
+      "criticality_class": 2,
+      "decision_date": "2026-09-24",
+      "disqualifying_threshold": 100000.0,
+      "disqualifying_threshold_base": 100000.0,
+      "event_date": "2024-01-01",
+      "event_id": 1,
+      "event_severity_code": 2,
+      "event_severity_code_unadjusted": 2,
+      "event_type_code": 1,
+      "is_disputed": true,
+      "is_satisfied": false,
+      "material_threshold": 12500.0,
+      "material_threshold_base": 25000.0,
+      "sector_code": 412,
+      "status_is_active": true,
+      "threshold_cell_id": "event_thresholds@ev-thresh-2026.09#1|2",
+      "threshold_overlay_ids": [
+       "ADJ-05-014"
+      ]
+     },
+     {
+      "age_months": 31,
+      "amount": 90000.0,
+      "amount_unknown": false,
+      "criticality_class": 2,
+      "decision_date": "2026-09-24",
+      "disqualifying_threshold": 100000.0,
+      "disqualifying_threshold_base": 100000.0,
+      "event_date": "2024-02-01",
+      "event_id": 2,
+      "event_severity_code": 2,
+      "event_severity_code_unadjusted": 2,
+      "event_type_code": 1,
+      "is_disputed": true,
+      "is_satisfied": false,
+      "material_threshold": 12500.0,
+      "material_threshold_base": 25000.0,
+      "sector_code": 412,
+      "status_is_active": true,
+      "threshold_cell_id": "event_thresholds@ev-thresh-2026.09#1|2",
+      "threshold_overlay_ids": [
+       "ADJ-05-014"
+      ]
+     },
+     {
+      "age_months": 30,
+      "amount": 90000.0,
+      "amount_unknown": false,
+      "criticality_class": 2,
+      "decision_date": "2026-09-24",
+      "disqualifying_threshold": 100000.0,
+      "disqualifying_threshold_base": 100000.0,
+      "event_date": "2024-03-01",
+      "event_id": 3,
+      "event_severity_code": 3,
+      "event_severity_code_unadjusted": 3,
+      "event_type_code": 1,
+      "is_disputed": false,
+      "is_satisfied": false,
+      "material_threshold": 12500.0,
+      "material_threshold_base": 25000.0,
+      "sector_code": 412,
+      "status_is_active": true,
+      "threshold_cell_id": "event_thresholds@ev-thresh-2026.09#1|2",
+      "threshold_overlay_ids": [
+       "ADJ-05-014"
+      ]
+     },
+     {
+      "age_months": 29,
+      "amount": 90000.0,
+      "amount_unknown": false,
+      "criticality_class": 2,
+      "decision_date": "2026-09-24",
+      "disqualifying_threshold": 100000.0,
+      "disqualifying_threshold_base": 100000.0,
+      "event_date": "2024-04-01",
+      "event_id": 4,
+      "event_severity_code": 3,
+      "event_severity_code_unadjusted": 3,
+      "event_type_code": 1,
+      "is_disputed": false,
+      "is_satisfied": false,
+      "material_threshold": 12500.0,
+      "material_threshold_base": 25000.0,
+      "sector_code": 412,
+      "status_is_active": true,
+      "threshold_cell_id": "event_thresholds@ev-thresh-2026.09#1|2",
+      "threshold_overlay_ids": [
+       "ADJ-05-014"
+      ]
+     },
+     {
+      "age_months": 28,
+      "amount": 90000.0,
+      "amount_unknown": false,
+      "criticality_class": 2,
+      "decision_date": "2026-09-24",
+      "disqualifying_threshold": 100000.0,
+      "disqualifying_threshold_base": 100000.0,
+      "event_date": "2024-05-01",
+      "event_id": 5,
+      "event_severity_code": 3,
+      "event_severity_code_unadjusted": 3,
+      "event_type_code": 1,
+      "is_disputed": false,
+      "is_satisfied": false,
+      "material_threshold": 12500.0,
+      "material_threshold_base": 25000.0,
+      "sector_code": 412,
+      "status_is_active": true,
+      "threshold_cell_id": "event_thresholds@ev-thresh-2026.09#1|2",
+      "threshold_overlay_ids": [
+       "ADJ-05-014"
+      ]
+     },
+     {
+      "age_months": 27,
+      "amount": 90000.0,
+      "amount_unknown": false,
+      "criticality_class": 2,
+      "decision_date": "2026-09-24",
+      "disqualifying_threshold": 100000.0,
+      "disqualifying_threshold_base": 100000.0,
+      "event_date": "2024-06-01",
+      "event_id": 6,
+      "event_severity_code": 3,
+      "event_severity_code_unadjusted": 3,
+      "event_type_code": 1,
+      "is_disputed": false,
+      "is_satisfied": false,
+      "material_threshold": 12500.0,
+      "material_threshold_base": 25000.0,
+      "sector_code": 412,
+      "status_is_active": true,
+      "threshold_cell_id": "event_thresholds@ev-thresh-2026.09#1|2",
+      "threshold_overlay_ids": [
+       "ADJ-05-014"
+      ]
+     }
+    ],
+    "adverse_verdict_code": 4,
+    "adverse_verdict_code_unadjusted": 4,
+    "adverse_verdict_code_undisputed": 3,
+    "adverse_verdict_overlay_sensitive": false,
+    "adverse_verdict_provisional": true,
+    "anchor": 600.0,
+    "bureau_score": 705.0,
+    "bureau_score_score": 20.0,
+    "calibration_cell_id": "calibration@cal-2026.09#4",
+    "calibration_version": "cal-2026.09",
+    "criticality_class": 2,
+    "decision_date": "2026-09-24",
+    "effective_ownership_pct": 15.0,
+    "effective_ownership_pct_score": 0.0,
+    "entity_grade": 5,
+    "entity_grade_cell_id": "grade_ladder@bus-rg-2026.09#4|5",
+    "entity_grade_unadjusted": 5,
+    "entity_grade_unadjusted_cell_id": "grade_ladder@bus-rg-2026.09#4|5",
+    "entity_id": 2,
+    "entity_key": "HOLDER",
+    "entity_pd": 0.07242648536151773,
+    "entity_pd_unadjusted": 0.060086650174007626,
+    "entity_score": 753.0,
+    "entity_score_unadjusted": 765.0,
+    "entity_scorecard_offset": 700.0,
+    "is_controlling": false,
+    "is_natural_person": true,
+    "is_owner": true,
+    "is_required_surety": false,
+    "is_sole_principal": false,
+    "months_on_record": 100.0,
+    "months_on_record_score": 20.0,
+    "path_count": 1,
+    "relationship_type_code": 5,
+    "requested_amount": 800000.0,
+    "scale": 60.0,
+    "score_adjustment_set_id": "AS-05-ENT-2026.09",
+    "score_adjustments_applied": [
+     "ADJ-05-ENT-001"
+    ],
+    "score_before_overlay": 765.0,
+    "segment_code": 4.0,
+    "worst_delinquency_months": 0.0,
+    "worst_delinquency_months_score": 25.0
+   }
+  ],
+  "attributing_entity_id": 2,
+  "attributing_event_ids": [
+   1,
+   2,
+   3,
+   4,
+   5,
+   6
+  ],
+  "attributing_rule_id": "AE-R-07",
+  "binding_constraint_code": 1,
+  "buffer_grid_cell_id": null,
+  "bureau_is_stale": null,
+  "bureau_score_score": null,
+  "business_decline_entity_id": 2,
+  "business_decline_from_disputed_event": true,
+  "business_decline_from_entity": true,
+  "calibration_cell_id": "calibration@cal-2026.09#5",
+  "calibration_version": "cal-2026.09",
+  "current_assets": 2400000.0,
+  "current_liabilities": 1500000.0,
+  "current_ratio": 1.6,
+  "current_ratio_score": 15.0,
+  "decision_date": "2026-09-24",
+  "decision_id": "biz-2026-0900123-v4",
+  "declared_annual_turnover": 9200000.0,
+  "decline_reason_codes": [
+   5404
+  ],
+  "dependants_count": null,
+  "discretionary_income": null,
+  "discretionary_income_after": null,
+  "disqualifying_threshold": null,
+  "disqualifying_threshold_base": null,
+  "ebitda": 1100000.0,
+  "effective_annual_rate": 0.19561817146153393,
+  "effective_ownership_pct_score": null,
+  "entities": [
+   {
+    "adverse_events": [],
+    "bureau_score": 705.0,
+    "effective_ownership_pct": 85.0,
+    "entity_id": 1,
+    "entity_key": "OWNER",
+    "is_natural_person": true,
+    "months_on_record": 100.0,
+    "relationship_type_code": 5,
+    "worst_delinquency_months": 0.0
+   },
+   {
+    "adverse_events": [
+     {
+      "amount": 90000.0,
+      "event_date": "2024-01-01",
+      "event_id": 1,
+      "event_type_code": 1,
+      "is_disputed": true
+     },
+     {
+      "amount": 90000.0,
+      "event_date": "2024-02-01",
+      "event_id": 2,
+      "event_type_code": 1,
+      "is_disputed": true
+     },
+     {
+      "amount": 90000.0,
+      "event_date": "2024-03-01",
+      "event_id": 3,
+      "event_type_code": 1,
+      "is_disputed": false
+     },
+     {
+      "amount": 90000.0,
+      "event_date": "2024-04-01",
+      "event_id": 4,
+      "event_type_code": 1,
+      "is_disputed": false
+     },
+     {
+      "amount": 90000.0,
+      "event_date": "2024-05-01",
+      "event_id": 5,
+      "event_type_code": 1,
+      "is_disputed": false
+     },
+     {
+      "amount": 90000.0,
+      "event_date": "2024-06-01",
+      "event_id": 6,
+      "event_type_code": 1,
+      "is_disputed": false
+     }
+    ],
+    "bureau_score": 705.0,
+    "effective_ownership_pct": 15.0,
+    "entity_id": 2,
+    "entity_key": "HOLDER",
+    "is_natural_person": true,
+    "months_on_record": 100.0,
+    "relationship_type_code": 5,
+    "worst_delinquency_months": 0.0
+   }
+  ],
+  "entity_grade": null,
+  "entity_grade_unadjusted": null,
+  "entity_pd": null,
+  "entity_pd_unadjusted": null,
+  "entity_score": null,
+  "entity_score_unadjusted": null,
+  "entity_scorecard_offset": null,
+  "event_severity_code": null,
+  "evidence_sufficiency_code": null,
+  "existing_obligations": null,
+  "expense_basis_code": null,
+  "finance_charges": 210000.0,
+  "financial_confidence_code": 1,
+  "financial_grade": 5,
+  "financial_grade_cell_id": "grade_ladder@bus-rg-2026.09#5|5",
+  "financial_pd": 0.06496916912866407,
+  "financial_score": 760.0,
+  "financial_scorecard_offset": 700.0,
+  "gearing": 0.6923076923076923,
+  "gearing_score": 15.0,
+  "gross_monthly_income": null,
+  "has_refer_account": null,
+  "income_haircut_applied": null,
+  "income_source_code": null,
+  "income_variability_ratio": null,
+  "income_verification_tier": null,
+  "initiation_fee": 6500.0,
+  "instalment": 23569.0,
+  "insufficient_people_coverage": false,
+  "interest_bearing_debt": 1800000.0,
+  "interest_cover": 5.238095238095238,
+  "interest_cover_score": 30.0,
+  "internal_norm_cell_id": null,
+  "legal_form_code": 3,
+  "living_expenses": null,
+  "material_threshold": null,
+  "material_threshold_base": null,
+  "max_affordable_instalment_unadjusted": null,
+  "max_amount": 5000000.0,
+  "minimum_income_tier": null,
+  "monthly_service_fee": 69.0,
+  "months_on_record_score": null,
+  "net_monthly_income": null,
+  "no_scoreable_natural_person": false,
+  "nominal_annual_rate": 0.18,
+  "norm_table_version": null,
+  "obligation_account_type_codes": null,
+  "obligation_is_internal": null,
+  "obligation_monthly_amounts": null,
+  "obligation_treatment_codes": null,
+  "obligations_external": null,
+  "obligations_internal": null,
+  "offered_amount": 800000.0,
+  "outcome_code": 3,
+  "ownership_reconciliation_pct": 100.0,
+  "people_cap_rule": "",
+  "people_grade": 5,
+  "people_grade_blended": 5,
+  "people_grade_blended_cell_id": "grade_ladder@bus-rg-2026.09#4|5",
+  "people_grade_unadjusted": 4,
+  "people_grade_unadjusted_cell_id": "grade_ladder@bus-rg-2026.09#4|4",
+  "people_pd": 0.06346688150306068,
+  "people_pd_overlay_contribution": 0.010899831253397427,
+  "people_pd_unadjusted": 0.05256705024966325,
+  "people_weights": [
+   0.85,
+   0.15000000000000002
+  ],
+  "primary_reason_code": 5404,
+  "probability_of_default": 0.08007983868669662,
+  "probability_of_default_before_overlay": 0.0640638709493573,
+  "probability_of_default_unadjusted": 0.0640638709493573,
+  "product_code": 50,
+  "rate_card_cell_id": "business_rate_card@biz-rate-2026.09#6|2",
+  "reason_registry_version": "business-nested-reasons-2026.09",
+  "requested_amount": 800000.0,
+  "requested_term_months": 48,
+  "residual_floor_amount": null,
+  "residual_floor_cell_id": null,
+  "resolved_entity_count": 2,
+  "revolving_utilisation": null,
+  "risk_grade": 6,
+  "risk_grade_cell_id": "grade_ladder@biz-rg-2026.09#50|6",
+  "risk_grade_unadjusted": 5,
+  "risk_grade_unadjusted_cell_id": "grade_ladder@biz-rg-2026.09#50|5",
+  "score_adjustments_applied": null,
+  "score_before_overlay": null,
+  "sector_code": 412,
+  "security_type_code": 2,
+  "sole_proprietor_affordability_verdict_code": 0,
+  "sole_proprietor_assessment_ran": false,
+  "sole_proprietor_max_affordable_instalment": 0.0,
+  "statutory_deductions": null,
+  "statutory_norm_cell_id": null,
+  "structure_unresolved": false,
+  "tangible_net_worth": 2600000.0,
+  "term_months": 48,
+  "threshold_cell_id": null,
+  "threshold_overlay_ids": null,
+  "total_cost_of_credit": 1137812.0,
+  "total_exposure": null,
+  "worst_arrears_months": null,
+  "worst_delinquency_months_score": null
+ }
+}

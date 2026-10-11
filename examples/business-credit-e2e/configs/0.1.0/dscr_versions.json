@@ -1,0 +1,22 @@
+{
+  "type": "effective_versions",
+  "family": "COV-DSCR",
+  "output": "covenant_definition_version",
+  "versions": [
+    {
+      "version_id": "dscr-2024.01",
+      "effective_from": "2024-01-01",
+      "effective_to": "2026-03-01"
+    },
+    {
+      "version_id": "dscr-2026.03",
+      "effective_from": "2026-03-01",
+      "effective_to": "2028-09-01"
+    },
+    {
+      "version_id": "dscr-2028.09",
+      "effective_from": "2028-09-01",
+      "effective_to": null
+    }
+  ]
+}

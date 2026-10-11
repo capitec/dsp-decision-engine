@@ -1,0 +1,59 @@
+/* decikit's theme, read from VS Code's own tokens so the flow panel matches the editor it lives in.
+   Where VS Code leaves a colour unset, so is decikit's, and the UI falls back to its own default. */
+:root {
+  color-scheme: light dark;
+  --decikit-font: var(--vscode-font-family);
+  --decikit-font-size: var(--vscode-font-size);
+  --decikit-mono: var(--vscode-editor-font-family);
+  --decikit-fg: var(--vscode-foreground);
+  --decikit-bg: var(--vscode-editor-background);
+  --decikit-muted: var(--vscode-descriptionForeground);
+  --decikit-error: var(--vscode-errorForeground);
+  --decikit-link: var(--vscode-textLink-foreground);
+  --decikit-border: var(--vscode-panel-border);
+  --decikit-focus: var(--vscode-focusBorder);
+  --decikit-widget-bg: var(--vscode-editorWidget-background);
+  --decikit-widget-border: var(--vscode-editorWidget-border);
+  --decikit-shadow: var(--vscode-widget-shadow);
+  --decikit-code-bg: var(--vscode-textCodeBlock-background);
+  --decikit-button-bg: var(--vscode-button-background);
+  --decikit-button-fg: var(--vscode-button-foreground);
+  --decikit-button2-bg: var(--vscode-button-secondaryBackground);
+  --decikit-button2-fg: var(--vscode-button-secondaryForeground);
+  --decikit-input-bg: var(--vscode-input-background);
+  --decikit-input-fg: var(--vscode-input-foreground);
+  --decikit-input-border: var(--vscode-input-border);
+  --decikit-invalid-border: var(--vscode-inputValidation-errorBorder);
+  --decikit-dropdown-bg: var(--vscode-dropdown-background);
+  --decikit-dropdown-fg: var(--vscode-dropdown-foreground);
+  --decikit-dropdown-border: var(--vscode-dropdown-border);
+  --decikit-badge-bg: var(--vscode-badge-background);
+  --decikit-badge-fg: var(--vscode-badge-foreground);
+  --decikit-hover-bg: var(--vscode-list-hoverBackground);
+  --decikit-selection-bg: var(--vscode-list-activeSelectionBackground);
+  --decikit-selection-fg: var(--vscode-list-activeSelectionForeground);
+  --decikit-inactive-selection-bg: var(--vscode-editor-inactiveSelectionBackground);
+  --decikit-match-bg: var(--vscode-editor-findMatchHighlightBackground);
+  --decikit-inserted-bg: var(--vscode-diffEditor-insertedTextBackground);
+  --decikit-added-fg: var(--vscode-gitDecoration-addedResourceForeground);
+  --decikit-deleted-fg: var(--vscode-gitDecoration-deletedResourceForeground);
+  --decikit-passed: var(--vscode-testing-iconPassed);
+  --decikit-pause-icon: var(--vscode-debugIcon-pauseForeground);
+  --decikit-breakpoint: var(--vscode-debugIcon-breakpointForeground);
+  --decikit-warning: var(--vscode-editorWarning-foreground);
+  --decikit-red: var(--vscode-charts-red);
+  --decikit-orange: var(--vscode-charts-orange);
+  --decikit-yellow: var(--vscode-charts-yellow);
+  --decikit-green: var(--vscode-charts-green);
+  --decikit-blue: var(--vscode-charts-blue);
+  --decikit-purple: var(--vscode-charts-purple);
+}
+html,
+body,
+#root {
+  height: 100%;
+}
+body {
+  margin: 0;
+  background: var(--vscode-editor-background);
+}

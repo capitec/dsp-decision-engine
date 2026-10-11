@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 470" font-family="system-ui, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4b5563"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1000" height="470" fill="#ffffff"/>
+
+  <!-- the value -->
+  <text x="30" y="34" font-size="16" font-weight="600" fill="#1f2937">One value: Currency["R"] holding 1000.50</text>
+  <rect x="30" y="50" width="280" height="90" rx="10" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+  <text x="170" y="80" text-anchor="middle" font-size="15" font-weight="600" fill="#7c2d00">in a step</text>
+  <text x="170" y="104" text-anchor="middle" font-size="15" fill="#7c2d00" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">Currency('1000.5000')</text>
+  <text x="170" y="126" text-anchor="middle" font-size="14" fill="#7c2d00">a decikit Decimal object</text>
+
+  <rect x="360" y="50" width="280" height="90" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="500" y="80" text-anchor="middle" font-size="15" font-weight="600" fill="#134e4a">in a kernel</text>
+  <text x="500" y="104" text-anchor="middle" font-size="15" fill="#134e4a" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">int64 10005000</text>
+  <text x="500" y="126" text-anchor="middle" font-size="14" fill="#134e4a">scale 4 lives in the type</text>
+
+  <rect x="690" y="50" width="280" height="90" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="830" y="80" text-anchor="middle" font-size="15" font-weight="600" fill="#4c1d95">shown</text>
+  <text x="830" y="104" text-anchor="middle" font-size="15" fill="#4c1d95" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">R 1000.5000</text>
+  <text x="830" y="126" text-anchor="middle" font-size="14" fill="#4c1d95">units are display only</text>
+  <line x1="310" y1="95" x2="356" y2="95" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="640" y1="95" x2="686" y2="95" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- frame boundary -->
+  <text x="30" y="190" font-size="16" font-weight="600" fill="#1f2937">Through a frame: run(df)</text>
+  <rect x="30" y="206" width="220" height="90" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="140" y="236" text-anchor="middle" font-size="15" font-weight="600" fill="#14532d">input column</text>
+  <text x="140" y="260" text-anchor="middle" font-size="14" fill="#14532d">Decimal(18, 2): 1000.50</text>
+  <text x="140" y="282" text-anchor="middle" font-size="14" fill="#14532d">or Int64: whole units</text>
+
+  <rect x="280" y="206" width="210" height="90" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="385" y="236" text-anchor="middle" font-size="15" font-weight="600" fill="#134e4a">read</text>
+  <text x="385" y="260" text-anchor="middle" font-size="14" fill="#134e4a">rescaled half-even to</text>
+  <text x="385" y="282" text-anchor="middle" font-size="14" fill="#134e4a">the annotation's scale</text>
+
+  <rect x="520" y="206" width="210" height="90" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="625" y="236" text-anchor="middle" font-size="15" font-weight="600" fill="#134e4a">compute</text>
+  <text x="625" y="260" text-anchor="middle" font-size="14" fill="#134e4a">int64 arithmetic, one</text>
+  <text x="625" y="282" text-anchor="middle" font-size="14" fill="#134e4a">half-even rounding per op</text>
+
+  <rect x="760" y="206" width="210" height="90" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="865" y="236" text-anchor="middle" font-size="15" font-weight="600" fill="#14532d">output column</text>
+  <text x="865" y="260" text-anchor="middle" font-size="14" fill="#14532d">Decimal(38, 4)</text>
+  <text x="865" y="282" text-anchor="middle" font-size="14" fill="#14532d">exact, at the output's scale</text>
+  <line x1="250" y1="251" x2="276" y2="251" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="490" y1="251" x2="516" y2="251" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="730" y1="251" x2="756" y2="251" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <rect x="30" y="316" width="220" height="44" rx="10" fill="#fee2e2" stroke="#dc2626" stroke-width="1.5"/>
+  <text x="140" y="343" text-anchor="middle" font-size="14" fill="#7f1d1d">Float64 column: refused</text>
+
+  <!-- ranges -->
+  <rect x="280" y="316" width="690" height="134" rx="10" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="300" y="342" font-size="15" font-weight="600" fill="#1f2937">Exact range of an int64 count of 10^-scale units</text>
+  <text x="300" y="368" font-size="14" fill="#1f2937">scale 2</text>
+  <text x="520" y="368" font-size="14" fill="#1f2937" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">±92,233,720,368,547,758.07</text>
+  <text x="300" y="392" font-size="14" fill="#1f2937">scale 4 (Currency)</text>
+  <text x="520" y="392" font-size="14" fill="#1f2937" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">±922,337,203,685,477.5807</text>
+  <text x="300" y="416" font-size="14" fill="#1f2937">scale 6</text>
+  <text x="520" y="416" font-size="14" fill="#1f2937" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">±9,223,372,036,854.775807</text>
+  <text x="300" y="440" font-size="14" fill="#7f1d1d">outside it: OverflowError in Python, silent wrap in a kernel</text>
+</svg>

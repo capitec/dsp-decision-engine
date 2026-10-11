@@ -1,0 +1,175 @@
+{
+  "type": "reason_codes",
+  "name": "rank_reasons",
+  "version": "reasons-2026.09",
+  "codes": [
+    {
+      "code": 1001,
+      "severity_rank": 10,
+      "description": "Applicant below minimum age",
+      "is_regulatory": true
+    },
+    {
+      "code": 1002,
+      "severity_rank": 15,
+      "description": "Applicant not resident",
+      "is_regulatory": true
+    },
+    {
+      "code": 1003,
+      "severity_rank": 5,
+      "description": "No contractual capacity",
+      "is_regulatory": true
+    },
+    {
+      "code": 1004,
+      "severity_rank": 40,
+      "description": "Product not available to applicant",
+      "is_regulatory": false
+    },
+    {
+      "code": 1005,
+      "severity_rank": 8,
+      "description": "On an internal exclusion list",
+      "is_regulatory": true
+    },
+    {
+      "code": 1006,
+      "severity_rank": 1,
+      "description": "Sanctioned party",
+      "is_regulatory": true
+    },
+    {
+      "code": 1007,
+      "severity_rank": 2,
+      "description": "Deceased on record",
+      "is_regulatory": true
+    },
+    {
+      "code": 1008,
+      "severity_rank": 12,
+      "description": "Under debt review",
+      "is_regulatory": true
+    },
+    {
+      "code": 1009,
+      "severity_rank": 12,
+      "description": "Under administration",
+      "is_regulatory": true
+    },
+    {
+      "code": 1101,
+      "severity_rank": 11,
+      "description": "Age at maturity exceeds the product maximum",
+      "is_regulatory": true
+    },
+    {
+      "code": 1102,
+      "severity_rank": 30,
+      "description": "A duplicate application is already in flight",
+      "is_regulatory": false
+    },
+    {
+      "code": 1103,
+      "severity_rank": 3,
+      "description": "Bureau enquiry consent not given",
+      "is_regulatory": true
+    },
+    {
+      "code": 1201,
+      "severity_rank": 41,
+      "description": "Requested amount outside the product's range",
+      "is_regulatory": false
+    },
+    {
+      "code": 1202,
+      "severity_rank": 42,
+      "description": "Requested term outside the product's range",
+      "is_regulatory": false
+    },
+    {
+      "code": 1204,
+      "severity_rank": 20,
+      "description": "Risk grade worse than the policy caps allow",
+      "is_regulatory": false
+    },
+    {
+      "code": 2011,
+      "severity_rank": 44,
+      "description": "Channel not open for this product",
+      "is_regulatory": false
+    },
+    {
+      "code": 2012,
+      "severity_rank": 21,
+      "description": "Risk grade outside the Bank's appetite",
+      "is_regulatory": false
+    },
+    {
+      "code": 2013,
+      "severity_rank": 22,
+      "description": "Bureau enquiry velocity too high",
+      "is_regulatory": false
+    },
+    {
+      "code": 2140,
+      "severity_rank": 20,
+      "description": "Proposed instalment exceeds affordable capacity",
+      "is_regulatory": true
+    },
+    {
+      "code": 2420,
+      "severity_rank": 26,
+      "description": "No amount at or above the product minimum fits the instalment ceiling",
+      "is_regulatory": false
+    },
+    {
+      "code": 2001,
+      "severity_rank": 1,
+      "description": "Application fraud verdict: decline",
+      "is_regulatory": true
+    },
+    {
+      "code": 2002,
+      "severity_rank": 6,
+      "description": "Application fraud verdict: refer",
+      "is_regulatory": true
+    },
+    {
+      "code": 2701,
+      "severity_rank": 27,
+      "description": "Offer failed final validation",
+      "is_regulatory": false
+    },
+    {
+      "code": 1701,
+      "severity_rank": 50,
+      "description": "Offer amount not on the R250 grid",
+      "is_regulatory": false
+    },
+    {
+      "code": 1702,
+      "severity_rank": 23,
+      "description": "Offer amount exceeds the cap in force",
+      "is_regulatory": false
+    },
+    {
+      "code": 1703,
+      "severity_rank": 24,
+      "description": "Offer term exceeds the cap in force",
+      "is_regulatory": false
+    },
+    {
+      "code": 1704,
+      "severity_rank": 4,
+      "description": "Rate exceeds the statutory ceiling",
+      "is_regulatory": true
+    },
+    {
+      "code": 1705,
+      "severity_rank": 20,
+      "description": "Offer instalment exceeds affordable capacity",
+      "is_regulatory": true
+    }
+  ]
+}

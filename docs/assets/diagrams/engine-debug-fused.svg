@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 400" font-family="system-ui, sans-serif">
+  <rect x="0" y="0" width="1000" height="400" fill="#ffffff"/>
+
+  <!-- lane labels -->
+  <text x="30" y="40" font-size="16" font-weight="600" fill="#1f2937">interpreted and stepped: a checkpoint pair at every node</text>
+  <text x="30" y="232" font-size="16" font-weight="600" fill="#1f2937">fused: a checkpoint pair per kernel, named after its first step</text>
+
+  <!-- lane 1 -->
+  <rect x="30" y="56" width="140" height="56" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="44" y="80" font-size="13" fill="#134e4a">disposable_income</text>
+  <text x="44" y="100" font-size="13" fill="#134e4a">before, after</text>
+  <rect x="180" y="56" width="100" height="56" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="194" y="80" font-size="13" fill="#134e4a">ratio</text>
+  <text x="194" y="100" font-size="13" fill="#134e4a">before, after</text>
+
+  <rect x="290" y="50" width="330" height="134" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="304" y="72" font-size="13" font-weight="600" fill="#1e3a8a">by_affordability (branch): before, after</text>
+  <rect x="304" y="84" width="96" height="88" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="314" y="106" font-size="13" fill="#134e4a">affordable</text>
+  <text x="314" y="126" font-size="13" fill="#134e4a">before,</text>
+  <text x="314" y="144" font-size="13" fill="#134e4a">after</text>
+  <rect x="408" y="84" width="100" height="88" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="418" y="106" font-size="13" fill="#134e4a">full_limit</text>
+  <text x="418" y="126" font-size="13" fill="#134e4a">arm=0</text>
+  <text x="418" y="144" font-size="13" fill="#134e4a">rows 0, 2</text>
+  <rect x="516" y="84" width="96" height="88" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="526" y="106" font-size="13" fill="#134e4a">no_limit</text>
+  <text x="526" y="126" font-size="13" fill="#134e4a">arm=1</text>
+  <text x="526" y="144" font-size="13" fill="#134e4a">row 1</text>
+
+  <rect x="630" y="50" width="340" height="134" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="644" y="72" font-size="13" font-weight="600" fill="#1e3a8a">repay (loop): before, after</text>
+  <rect x="644" y="84" width="96" height="88" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="654" y="106" font-size="13" fill="#134e4a">unpaid</text>
+  <text x="654" y="126" font-size="13" fill="#134e4a">iteration</text>
+  <text x="654" y="144" font-size="13" fill="#134e4a">1, 2, 3, 4</text>
+  <rect x="748" y="84" width="210" height="88" rx="8" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="758" y="106" font-size="13" fill="#1e3a8a">month: pay, tick</text>
+  <text x="758" y="126" font-size="13" fill="#1e3a8a">iteration 1, 2, 3</text>
+  <text x="758" y="144" font-size="13" fill="#1e3a8a">over the rows still looping</text>
+
+  <!-- lane 2 -->
+  <rect x="30" y="248" width="250" height="96" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="2.5"/>
+  <text x="44" y="272" font-size="13" font-weight="600" fill="#134e4a">kernel: loan/disposable_income</text>
+  <text x="44" y="294" font-size="13" fill="#134e4a">runs disposable_income + ratio</text>
+  <text x="44" y="314" font-size="13" fill="#134e4a">Paused.kernel lists both paths;</text>
+  <text x="44" y="334" font-size="13" fill="#134e4a">ratio is never stored</text>
+
+  <rect x="290" y="248" width="330" height="96" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="2.5"/>
+  <text x="304" y="272" font-size="13" font-weight="600" fill="#134e4a">packed branch: loan/by_affordability</text>
+  <text x="304" y="294" font-size="13" fill="#134e4a">each row takes its own arm inside one kernel;</text>
+  <text x="304" y="314" font-size="13" fill="#134e4a">no checkpoints inside, so no arm stepping</text>
+
+  <rect x="630" y="248" width="340" height="96" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="2.5"/>
+  <text x="644" y="272" font-size="13" font-weight="600" fill="#134e4a">packed loop: loan/repay</text>
+  <text x="644" y="294" font-size="13" fill="#134e4a">each row runs its own iterations inside the</text>
+  <text x="644" y="314" font-size="13" fill="#134e4a">kernel; a breakpoint on loan/repay/month/pay</text>
+  <text x="644" y="334" font-size="13" fill="#134e4a">stops before the whole loop</text>
+
+  <text x="30" y="378" font-size="13" fill="#1f2937">Same pipeline and rows. break_at("loan/ratio") pauses before ratio on top, before the first kernel below.</text>
+</svg>

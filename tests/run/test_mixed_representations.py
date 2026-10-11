@@ -1,0 +1,160 @@
+"""Steps that read one column different ways: which combinations compose, and which are refused."""
+from __future__ import annotations
+
+import warnings
+from typing import TypedDict
+
+import polars as pl
+import pytest
+
+from decikit import FusedEngine, InterpretedEngine, dag, flow, step
+from decikit.ops import Columnar, Struct
+from decikit.exceptions import FallbackWarning, WiringError
+from decikit.ops import Text
+from decikit.steps.trees import TreeConfig
+from decikit.lab.testing import assert_equivalent
+
+FRAME = pl.DataFrame(
+    {"sector": ["private", "public"],
+     "accounts": [[{"balance": 1.0}], [{"balance": 2.0}]],
+     "applicant": [{"income": 5.0}, {"income": 6.0}]},
+    schema_overrides={"applicant": pl.Struct({"income": pl.Float64})},
+)
+
+
+class Account(TypedDict):
+    balance: float
+
+
+class Applicant(TypedDict):
+    income: float
+
+
+def semantic(sector: str) -> float:
+    return 1.0 if sector == "private" else 0.0
+
+
+def span(sector: Text) -> float:
+    return 100.0 if sector == "private" else 0.0
+
+
+def semantic_bytes(sector: bytes) -> float:
+    return 1000.0 if sector == b"private" else 0.0
+
+
+def listed(accounts: list[dict]) -> float:
+    return sum(a["balance"] for a in accounts)
+
+
+def rowed(accounts: Columnar[Account]) -> float:
+    total = 0.0
+    for j in range(len(accounts.balance)):
+        total += accounts.balance[j]
+    return total
+
+
+def dicted(applicant: dict) -> float:
+    return applicant["income"]
+
+
+def structed(applicant: Struct[Applicant]) -> float:
+    return applicant["income"] * 2
+
+
+@pytest.fixture(autouse=True)
+def _quiet():
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", FallbackWarning)
+        yield
+
+
+# --- the same type, two representations: these compose ------------------------------------------
+
+def test_a_semantic_str_and_a_text_read_the_same_column_in_one_flow():
+    # One runs in Python and one in the kernel, over the same version of the column.
+    out = assert_equivalent(flow(semantic, span, name="p"), FRAME)
+    assert (out["semantic"].to_list(), out["span"].to_list()) == ([1.0, 0.0], [100.0, 0.0])
+
+
+def test_a_semantic_str_and_a_text_read_the_same_column_in_a_dag():
+    out = assert_equivalent(dag(step(semantic), step(span), name="p"), FRAME)
+    assert (out["semantic"].to_list(), out["span"].to_list()) == ([1.0, 0.0], [100.0, 0.0])
+
+
+def test_a_semantic_bytes_and_a_text_read_the_same_column():
+    out = assert_equivalent(flow(semantic_bytes, span, name="p"), FRAME)
+    assert (out["semantic_bytes"].to_list(), out["span"].to_list()) == ([1000.0, 0.0], [100.0, 0.0])
+
+
+def test_each_representation_of_one_column_lands_where_it_belongs():
+    exe = FusedEngine().bind(flow(semantic, span, name="p"))
+    exe.run(FRAME)
+    # The semantic reader runs in Python; the `Text` reader stays in the kernel around it.
+    assert set(exe.fallbacks()) == {"p/semantic"}
+
+
+def test_a_text_step_reads_a_semantic_str_step_s_output():
+    def label(sector: str) -> str:
+        return sector
+
+    def measure(label: Text) -> float:
+        return 10.0 if label == "private" else 0.0
+
+    out = assert_equivalent(flow(label, measure, name="p"), FRAME)
+    assert out["measure"].to_list() == [10.0, 0.0]
+
+
+# --- different types on one column: refused, naming both readers --------------------------------
+
+REFUSED = [
+    (listed, rowed, "as list", "as Columnar"),
+    (dicted, structed, "as dict", "as Struct"),
+]
+
+
+@pytest.mark.parametrize("first, second, one, other", REFUSED,
+                         ids=[f"{a.__name__}+{b.__name__}" for a, b, *_ in REFUSED])
+def test_two_readers_of_one_column_must_want_the_same_type(first, second, one, other):
+    with pytest.raises(WiringError, match=f"{one}.*{other}"):
+        FusedEngine().bind(flow(first, second, name="p"))
+
+
+@pytest.mark.parametrize("first, second, one, other", REFUSED,
+                         ids=[f"{a.__name__}+{b.__name__}" for a, b, *_ in REFUSED])
+def test_the_same_clash_is_refused_in_a_dag_and_in_interpreted_mode(first, second, one, other):
+    for maker in (lambda: flow(first, second, name="p"), lambda: dag(step(first), step(second), name="p")):
+        with pytest.raises(WiringError, match=f"{one}.*{other}"):
+            InterpretedEngine().bind(maker())
+
+
+# --- a decision tree reads its string features as bytes -----------------------------------------
+
+HIT = {"data": [{"hit": 0}, {"hit": 1}], "default": {"hit": -1}, "dtypes": [["hit", "Int64"]]}
+GATE = TreeConfig(name="gate", tree={
+    "nodes": [{"id": "root", "data": {"type": "unary", "condition": {
+                  "op": "string_match", "feature": "sector", "patterns": ["private"], "match_type": "exact"}}},
+              {"id": "yes", "data": {"type": "leaf", "result_idx": 1}},
+              {"id": "no", "data": {"type": "leaf", "result_idx": 0}}],
+    "edges": [{"source": "root", "target": "yes", "data": {"sourceIndex": 0}},
+              {"source": "root", "target": "no", "data": {"sourceIndex": 1}}],
+    "output": HIT})
+
+
+def test_a_string_gated_tree_runs_on_its_own():
+    assert assert_equivalent(flow(GATE, name="p"), FRAME)["hit"].to_list() == [1, 0]
+
+
+def test_a_tree_and_a_text_step_share_the_string_column():
+    out = assert_equivalent(flow(GATE, span, name="p"), FRAME)
+    assert (out["hit"].to_list(), out["span"].to_list()) == ([1, 0], [100.0, 0.0])
+
+
+def test_a_tree_and_a_semantic_str_step_share_the_string_column():
+    out = assert_equivalent(flow(GATE, semantic, name="p"), FRAME)
+    assert (out["hit"].to_list(), out["semantic"].to_list()) == ([1, 0], [1.0, 0.0])
+
+
+def test_every_string_read_of_one_column_composes():
+    out = assert_equivalent(flow(semantic, span, semantic_bytes, GATE, name="p"), FRAME)
+    assert [out[c].to_list() for c in ("semantic", "span", "semantic_bytes", "hit")] == [
+        [1.0, 0.0], [100.0, 0.0], [1000.0, 0.0], [1, 0]]

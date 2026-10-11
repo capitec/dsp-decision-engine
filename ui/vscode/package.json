@@ -1,0 +1,344 @@
+{
+  "name": "decikit-vscode",
+  "displayName": "decider toolkit",
+  "description": "See, edit and debug decider toolkit flows: Python pipelines and YAML flow files",
+  "version": "0.1.0",
+  "publisher": "capitec",
+  "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/capitec/dsp-decision-engine.git",
+    "directory": "ui/vscode"
+  },
+  "engines": {
+    "vscode": "^1.120.0"
+  },
+  "categories": [
+    "Debuggers",
+    "Visualization"
+  ],
+  "extensionDependencies": [
+    "ms-python.debugpy"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onLanguage:python",
+    "onLanguage:yaml",
+    "workspaceContains:**/flow.yaml"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "decikit.refreshFlows",
+        "title": "decider toolkit: Refresh flows",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "decikit.showFlow",
+        "title": "decider toolkit: Visualise flow",
+        "icon": "$(type-hierarchy)"
+      },
+      {
+        "command": "decikit.debugFlow",
+        "title": "decider toolkit: Debug flow",
+        "icon": "$(debug-alt)"
+      },
+      {
+        "command": "decikit.refreshStructure",
+        "title": "decider toolkit: Reload flow",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "decikit.openCode",
+        "title": "Go to step code",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "decikit.toggleBreakpoint",
+        "title": "Toggle breakpoint",
+        "icon": "$(debug-breakpoint-unsupported)"
+      },
+      {
+        "command": "decikit.insertBefore",
+        "title": "Insert before…",
+        "icon": "$(insert)"
+      },
+      {
+        "command": "decikit.insertAfter",
+        "title": "Insert after…",
+        "icon": "$(add)"
+      },
+      {
+        "command": "decikit.insertInside",
+        "title": "Add inside…",
+        "icon": "$(add)"
+      },
+      {
+        "command": "decikit.deleteNode",
+        "title": "Delete",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "decikit.insertFromToolbox",
+        "title": "Insert into the flow",
+        "icon": "$(add)"
+      },
+      {
+        "command": "decikit.refreshDatasets",
+        "title": "decider toolkit: Refresh datasets",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "decikit.previewDataset",
+        "title": "Preview rows"
+      },
+      {
+        "command": "decikit.debugWithDataset",
+        "title": "Debug a flow on this dataset",
+        "icon": "$(debug-alt)"
+      },
+      {
+        "command": "decikit.copyDatasetName",
+        "title": "Copy name"
+      },
+      {
+        "command": "decikit.revealDataset",
+        "title": "Reveal in Explorer"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "decikit",
+          "title": "decider toolkit",
+          "icon": "$(type-hierarchy)"
+        }
+      ]
+    },
+    "views": {
+      "decikit": [
+        {
+          "id": "decikit.flows",
+          "name": "Flows"
+        },
+        {
+          "id": "decikit.datasets",
+          "name": "Datasets"
+        },
+        {
+          "id": "decikit.structure",
+          "name": "Structure"
+        },
+        {
+          "id": "decikit.toolbox",
+          "name": "Toolbox",
+          "when": "decikit.yamlFlow"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "decikit.flows",
+        "contents": "No decider toolkit flows found.\n\nA flow is a `flow.yaml` (a top-level `flow:` and `steps:`), or a Python file that imports decikit and defines `def build()` or `pipeline = flow(...)`.\n\n[Refresh](command:decikit.refreshFlows)"
+      },
+      {
+        "view": "decikit.structure",
+        "contents": "Pick a flow under Flows, or click Visualise flow above a pipeline."
+      },
+      {
+        "view": "decikit.datasets",
+        "contents": "No datasets found.\n\nDatasets live in a `datasets/` folder beside `configs/`: `x.parquet`, `x.csv` or `x.jsonl` files, `x/` folders of part files, and `datasets/config.json` entries for client providers such as Redshift.\n\n[Refresh](command:decikit.refreshDatasets)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "decikit.refreshFlows",
+          "when": "view == decikit.flows",
+          "group": "navigation"
+        },
+        {
+          "command": "decikit.debugFlow",
+          "when": "view == decikit.structure && decikit.flowShown",
+          "group": "navigation@1"
+        },
+        {
+          "command": "decikit.showFlow",
+          "when": "view == decikit.structure && decikit.flowShown",
+          "group": "navigation@2"
+        },
+        {
+          "command": "decikit.refreshStructure",
+          "when": "view == decikit.structure && decikit.flowShown",
+          "group": "navigation@3"
+        },
+        {
+          "command": "decikit.refreshDatasets",
+          "when": "view == decikit.datasets",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "decikit.debugFlow",
+          "when": "view == decikit.flows && viewItem == flow",
+          "group": "inline"
+        },
+        {
+          "command": "decikit.toggleBreakpoint",
+          "when": "view == decikit.structure && viewItem =~ /\\bcode\\b/",
+          "group": "inline@1"
+        },
+        {
+          "command": "decikit.openCode",
+          "when": "view == decikit.structure && viewItem =~ /\\bcode\\b/",
+          "group": "inline@2"
+        },
+        {
+          "command": "decikit.insertInside",
+          "when": "view == decikit.structure && viewItem =~ /\\binto\\b/",
+          "group": "inline@3"
+        },
+        {
+          "command": "decikit.openCode",
+          "when": "view == decikit.structure && viewItem =~ /\\bcode\\b/",
+          "group": "1_open@1"
+        },
+        {
+          "command": "decikit.toggleBreakpoint",
+          "when": "view == decikit.structure && viewItem =~ /\\bcode\\b/",
+          "group": "1_open@2"
+        },
+        {
+          "command": "decikit.insertBefore",
+          "when": "view == decikit.structure && viewItem =~ /\\bedit\\b/",
+          "group": "2_edit@1"
+        },
+        {
+          "command": "decikit.insertAfter",
+          "when": "view == decikit.structure && viewItem =~ /\\bedit\\b/",
+          "group": "2_edit@2"
+        },
+        {
+          "command": "decikit.insertInside",
+          "when": "view == decikit.structure && viewItem =~ /\\binto\\b/",
+          "group": "2_edit@3"
+        },
+        {
+          "command": "decikit.deleteNode",
+          "when": "view == decikit.structure && viewItem =~ /\\bedit\\b/",
+          "group": "3_delete@1"
+        },
+        {
+          "command": "decikit.insertFromToolbox",
+          "when": "view == decikit.toolbox",
+          "group": "inline"
+        },
+        {
+          "command": "decikit.debugWithDataset",
+          "when": "view == decikit.datasets && viewItem =~ /^dataset\\b/",
+          "group": "inline"
+        },
+        {
+          "command": "decikit.previewDataset",
+          "when": "view == decikit.datasets && viewItem =~ /^dataset\\b/",
+          "group": "1_open@1"
+        },
+        {
+          "command": "decikit.revealDataset",
+          "when": "view == decikit.datasets && viewItem =~ /dataset-local/",
+          "group": "1_open@2"
+        },
+        {
+          "command": "decikit.copyDatasetName",
+          "when": "view == decikit.datasets && viewItem =~ /^dataset/",
+          "group": "2_copy"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "decikit.openCode",
+          "when": "false"
+        },
+        {
+          "command": "decikit.toggleBreakpoint",
+          "when": "false"
+        },
+        {
+          "command": "decikit.insertBefore",
+          "when": "false"
+        },
+        {
+          "command": "decikit.insertAfter",
+          "when": "false"
+        },
+        {
+          "command": "decikit.insertInside",
+          "when": "false"
+        },
+        {
+          "command": "decikit.deleteNode",
+          "when": "false"
+        },
+        {
+          "command": "decikit.insertFromToolbox",
+          "when": "false"
+        },
+        {
+          "command": "decikit.previewDataset",
+          "when": "false"
+        },
+        {
+          "command": "decikit.debugWithDataset",
+          "when": "false"
+        },
+        {
+          "command": "decikit.copyDatasetName",
+          "when": "false"
+        },
+        {
+          "command": "decikit.revealDataset",
+          "when": "false"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "decider toolkit",
+      "properties": {
+        "decikit.python": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Command that runs Python for the decider toolkit, e.g. [\"uv\", \"run\", \"python\"]. Empty: the ms-python interpreter, then python3. Debugging also uses it."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "pnpm --filter @decikit/ui build && vite build && vite build --config vite.webview.config.ts",
+    "watch": "vite build --watch",
+    "test": "vitest run",
+    "package": "pnpm build && cp ../../LICENSE . && vsce package --no-dependencies",
+    "test:vscode": "pnpm build && \"${VSCODE_EXE:-code}\" --user-data-dir .vscode-test/user --disable-workspace-trust --extensionDevelopmentPath=\"$PWD\" --extensionTestsPath=\"$PWD/test/vscode/smoke.js\" \"$PWD/examples\""
+  },
+  "dependencies": {
+    "yaml": "^2.9.1"
+  },
+  "devDependencies": {
+    "@decikit/ui": "workspace:*",
+    "@types/node": "^22.0.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@types/vscode": "~1.120.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "@vscode/vsce": "^4.0.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.9.0",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.1"
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "type": "adjustment_stack",
+  "name": "apply_calibration_scale_adjustments",
+  "target": "calibration_scale",
+  "set_id": "AS-03-2026.09",
+  "base_field": "scale",
+  "adjustments": [
+    {
+      "adjustment_id": "ADJ-03-002",
+      "kind": "scaling_change",
+      "target": "calibration_scale",
+      "effect": {
+        "op": "multiply",
+        "value": 1.1
+      },
+      "scope": {
+        "scorecard_id": 1011
+      },
+      "stack_position": 2,
+      "owner": "Model Risk",
+      "approval_reference": "MRC-2026-015",
+      "rationale": "Points to double the odds widened on the existing-client segment, flattening the tails",
+      "effective_from": "2026-01-01",
+      "effective_to": null,
+      "review_date": "2026-12-31",
+      "tighten_only": false
+    }
+  ]
+}

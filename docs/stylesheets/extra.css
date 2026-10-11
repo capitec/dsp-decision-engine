@@ -1,0 +1,51 @@
+/* draw.io diagrams sit on a white card so their dark text stays readable in dark mode */
+.drawio {
+  background: #fff;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.5rem;
+  margin: 1rem 0;
+  overflow: auto;
+  padding: 0.5rem;
+}
+
+.grid.cards a {
+  text-decoration: none;
+}
+
+.hero-icon {
+  float: right;
+  margin: 0 0 1rem 1rem;
+  width: 7rem;
+}
+
+/* Hand-written SVG diagrams sit on a white card, like the draw.io ones, so one set of colours works in both themes */
+.diagram {
+  background: #fff;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.5rem;
+  margin: 1.25rem 0;
+  overflow-x: auto;
+  padding: 0.75rem;
+  text-align: center;
+}
+
+.diagram img {
+  height: auto;
+  max-width: 100%;
+}
+
+.diagram p {
+  margin: 0;
+}
+
+.diagram em {
+  color: #57606a;
+  display: block;
+  font-size: 0.75rem;
+  margin-top: 0.4rem;
+}
+
+.mermaid {
+  margin: 1.25rem 0;
+  text-align: center;
+}

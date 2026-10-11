@@ -1,6 +1,10 @@
 import pytest
 
+from decikit._settings import get_settings
 
-# auto-mode so every async def test_* is treated as asyncio without decoration
-def pytest_configure(config):
-    config.addinivalue_line("markers", "asyncio: mark test as async")
+
+@pytest.fixture(autouse=True)
+def _fresh_settings():
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
