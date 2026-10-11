@@ -168,8 +168,10 @@ class Hub:
         self.listener = asyncio.create_task(self._listen())
 
     async def stop(self) -> None:
-        if self.validator:
-            self.validator.shutdown(cancel_futures=True)
+        # Killed, not shut down: shutdown() waits for a hung validation on the event loop, so its timeout never fires.
+        pool, self.validator = self.validator, None
+        if pool:
+            _kill(pool)
         if self.listener:
             self.listener.cancel()
             with contextlib.suppress(asyncio.CancelledError):
