@@ -3,10 +3,9 @@ import hashlib
 import secrets
 import time
 from pydantic import BaseModel, EmailStr
-from fastapi import APIRouter, Depends, status as http_status, Form
+from fastapi import APIRouter, status as http_status, Form
 from fastapi.responses import RedirectResponse
 from dsp_decikit.settings import settings
-from dsp_decikit.cache import get_cache, CacheProtocol
 from dsp_decikit.exceptions import UnauthorizedException
 from ...models import UserInfo
 from ...authorization import (
@@ -39,7 +38,6 @@ def verify_password(password: str, hashed: str) -> bool:
 async def basic_login(
     email: str = Form(...),
     password: str = Form(...),
-    cache: CacheProtocol = Depends(get_cache),
 ):
     """Login with email/password"""
     # Find user in database
@@ -53,7 +51,7 @@ async def basic_login(
         raise UnauthorizedException("Invalid credentials")
 
     # Get user teams (already handled in update_user_and_get_session)
-    session_id, session_info = await update_user_and_get_session(user, cache)
+    session_id, session_info = await update_user_and_get_session(user)
 
     response = RedirectResponse(url="/", status_code=302)
 
@@ -83,7 +81,6 @@ async def basic_register(
     email: str = Form(...),
     password: str = Form(...),
     name: str = Form(...),
-    cache: CacheProtocol = Depends(get_cache),
 ):
     """Register new user"""
     # Check if registration is enabled
@@ -121,7 +118,7 @@ async def basic_register(
         ]
 
     session_id, session_info = await update_user_and_get_session_with_team_roles(
-        user_info, cache, team_roles=default_team_roles
+        user_info, team_roles=default_team_roles
     )
 
     response = RedirectResponse(url="/", status_code=302)

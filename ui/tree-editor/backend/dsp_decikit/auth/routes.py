@@ -10,7 +10,7 @@ from fastapi import APIRouter, Response, Depends, status as http_status
 from fastapi.exceptions import HTTPException
 from fastapi.responses import RedirectResponse
 from dsp_decikit.settings import settings
-from dsp_decikit.cache import get_cache, CacheProtocol, CacheKeys
+from .sessions import delete_session
 from .authorization import session_token_auth
 
 router = APIRouter()
@@ -87,17 +87,10 @@ async def get_auth_config(response: Response):
 @router.get("/logout", name="auth_logout")
 async def logout(
     session_token: str | None = Depends(session_token_auth),
-    cache: CacheProtocol = Depends(get_cache),
 ):
-    """Logout user by clearing their session from cache and all cookies"""
-    # Clear session from cache if it exists (ignore if already expired/deleted)
+    """Logout user by deleting their session and clearing all cookies"""
     if session_token:
-        cache_key = CacheKeys.auth_session(session_token)
-        try:
-            await cache.delete(cache_key)
-        except KeyError:
-            # Session may have already expired or been deleted, which is fine
-            pass
+        await delete_session(session_token)
 
     # Create redirect response to login page
     response = RedirectResponse(url="/login", status_code=302)
