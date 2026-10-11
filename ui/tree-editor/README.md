@@ -21,6 +21,9 @@ cd backend && uv run --with-requirements requirements.txt --with ../../.. --with
 cd ui && pnpm test
 ```
 
+`backend/tests/test_sessions_across_nodes.py` starts two backend processes on one Postgres and runs only with
+`TREE_EDITOR_DB=1`: bring up the e2e stack (below) and add `TREE_EDITOR_DB=1 DSP_DB__PORT=55432` to the backend command.
+
 End to end (`e2e/`: Python, Playwright and pytest in headless Chromium) covers the user stories of both editors and
 the platform around them, every real tree in the repo through import, save, reload and export, each export run in
 `decikit`, and a handful served by a real `decikit serve`. Each test signs up a fresh user and seeds its projects
@@ -89,3 +92,17 @@ docker run -p 8000:8000 decider-tree-editor
 ```
 
 Releases push `decider-tree-editor:<version>` with the same version as the `decikit` wheel. Settings are read from environment variables and `config.yaml` (see `backend/dsp_decikit/settings.py`).
+
+### More than one backend node
+
+Any number of backend processes can share one Postgres behind a load balancer, without sticky routing. Sign-in
+sessions and OIDC login state live in Postgres (table `cache_entries`, keyed by a SHA-256 of the token, never the token
+itself), so a sign-in, renewal or sign-out on one node holds on every other node from its next request, and an OIDC
+login can return to a different node than the one it started on. Each OIDC login state works once and expires after
+`login_session_timeout_s`. Expired rows are removed whenever a session or an OIDC login starts.
+
+- Give every node the same settings: database, `auth` (cookie names, session durations, `api_key.salt_value`, OIDC
+  providers and `redirect_url_override`). Expiry is checked against each node's clock, so keep the clocks in sync.
+- The `cache` setting (`DSP_CACHE`) only caches data-source schemas and previews, never sessions. With `in-memory`, the
+  default, each node keeps its own copy, so a cached preview can differ between nodes.
+- Upgrading from a version that kept sessions in `cache` signs everyone out once.
