@@ -29,6 +29,8 @@ class EngineSettings(BaseModel):
 class APISettings(BaseModel):
     """What the server serves: `handler` is an import path; `pipeline` is an import path or a
     `.yaml`/`.yml`/`.json` flow file, both resolved from `code_path`."""
+    # Forbidden so a retired setting (`DECIKIT_API__MODE`) fails loading instead of being ignored.
+    model_config = ConfigDict(extra='forbid')
     code_path: str = "."
     pipeline: str = "pipeline:build"
     handler: str = "inference:Handler"
