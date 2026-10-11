@@ -39,6 +39,10 @@ runs anywhere but the numba engine; polars only decides how rows are batched and
 
 ## Data model
 
+As built (2026-10-10): historical. `Engine().bind(pipe, "fused")`, `Segment.nodes`, `emit.py` and "emit every written name" were replaced (segments emit only
+what a later segment or the final select reads; see `decisions/engine.md`). The facts are covered by `tests/polars_engine/test_polars_host.py`; the
+code is `decikit/_engine/polars/host.py`.
+
 ```python
 @dataclass(frozen=True)
 class Segment:
@@ -65,7 +69,7 @@ document. Nothing else; `run` writes nothing to `self`.
    correct choice). Consecutive children without one form a streamable segment.
 4. Refuse up front, with `EngineError`, what v1 does not handle: a qualified output in `full.plan.outputs`
    (`"name@path"`), because the final select works on plain names.
-5. For each group build `SequenceNode(ir.origin, nodes, emits=tuple(sorted(writes)))` and bind it. Emitting
+5. As built: segments emit only what a later segment or the final select reads (`decikit/_engine/polars/host.py`). For each group build `SequenceNode(ir.origin, nodes, emits=tuple(sorted(writes)))` and bind it. Emitting
    every written name is deliberate: no per-segment pruning, the final select trims. A name nothing later
    reads costs memory for the length of the plan and nothing else.
 
@@ -183,6 +187,9 @@ Native segments and `impl` (P6), the `REQUIRED` null UDF (only native segments n
 steps, per-segment column pruning, caching pruned params documents.
 
 ## Spike
+
+As built (2026-10-10): historical; it uses the removed `Engine().bind(pipe, "fused")`. Its facts are covered by
+`tests/polars_engine/test_polars_host.py`; do not run it.
 
 Run with `uv run python <file>`; it takes a few seconds for the numba compile.
 
