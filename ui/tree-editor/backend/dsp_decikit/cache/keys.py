@@ -11,27 +11,6 @@ class CacheKeys:
     def csrf_token(token: str) -> str:
         return f"csrf:{token}"
 
-    # Enhanced versioning session cache keys (one session per project)
-    @staticmethod
-    def edit_session(project_id: str) -> str:
-        return f"edit.session:{project_id}"
-
-    @staticmethod
-    def active_sessions() -> str:
-        return "edit.active_sessions"
-
-    @staticmethod
-    def session_owner(project_id: str) -> str:
-        return f"edit.session_owner:{project_id}"
-
-    @staticmethod
-    def instance_sessions(instance_id: str) -> str:
-        return f"edit.instance_sessions:{instance_id}"
-
-    @staticmethod
-    def instance_heartbeat(instance_id: str) -> str:
-        return f"edit.instance_heartbeat:{instance_id}"
-
     # Datasource cache keys
     @staticmethod
     def datasource_schema(datasource_name: str, table_name: str) -> str:

@@ -7,7 +7,7 @@ from fastapi import Request, Depends, status as http_status
 from fastapi.responses import RedirectResponse
 from dsp_decikit.settings import settings
 from dsp_decikit.httpx_client import httpx_client_factory
-from dsp_decikit.cache import get_cache, CacheProtocol, CacheKeys
+from dsp_decikit.auth.sessions import put_login_state, take_login_state
 from dsp_decikit.exceptions import UnauthorizedException
 from .jwks import get_jwks_manager, JWKSManager
 from dsp_decikit.auth.authorization import (
@@ -86,7 +86,6 @@ async def auth_oidc_login(
     provider: str,
     request: Request,
     jwks_manager: JWKSManager = Depends(get_jwks_manager),
-    cache: CacheProtocol = Depends(get_cache),
 ) -> RedirectResponse:
     try:
         # Validate provider exists
@@ -108,9 +107,10 @@ async def auth_oidc_login(
         oidc_config = await jwks_manager.get_oidc_config(provider)
         auth_url = f"{oidc_config.authorization_endpoint}?{urlencode(params)}"
 
-        await cache.put(
-            CacheKeys.oidc_login_session(session_id),
+        await put_login_state(
+            session_id,
             LoginSessionState(state=state, provider=provider),
+            oidc_settings.login_session_timeout_s,
         )
         response = RedirectResponse(url=auth_url)
         response.set_cookie(
@@ -133,13 +133,9 @@ async def auth_oidc_redirect(
     code: str,
     state: str,
     jwks_manager: JWKSManager = Depends(get_jwks_manager),
-    cache: CacheProtocol = Depends(get_cache),
 ) -> str:
     login_session_id = request.cookies.get(oidc_settings.cookie.key)
-    login_session_info = t.cast(
-        LoginSessionState,
-        await cache.get(CacheKeys.oidc_login_session(login_session_id), default=None),
-    )
+    login_session_info = login_session_id and await take_login_state(login_session_id)
     if not login_session_info:
         raise UnauthorizedException("Invalid session")
     session_state = login_session_info.get("state")
@@ -236,10 +232,8 @@ async def auth_oidc_redirect(
         all_team_roles = mapped_team_roles
 
     session_id, _ = await update_user_and_get_session_with_team_roles(
-        user_info, cache, team_roles=all_team_roles
+        user_info, team_roles=all_team_roles
     )
-
-    await cache.delete(CacheKeys.oidc_login_session(login_session_id))
 
     # Handle redirect URL from login state
     # For now, default to root - could be enhanced to store original URL in login state
