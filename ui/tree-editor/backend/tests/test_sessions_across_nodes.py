@@ -5,6 +5,7 @@ Needs a migrated Postgres (the e2e stack's: `e2e/stack.sh up`) and runs only whe
 DSP_DB__PORT pointing at it. Each node pair runs once per cache provider: sessions must not depend on it.
 """
 
+import asyncio
 import json
 import os
 import subprocess
@@ -184,6 +185,17 @@ def test_an_idle_session_expires_on_every_node(nodes):
 
     assert not accepted(b, session)
     assert not accepted(a, session)
+
+
+def test_a_renewal_after_signing_out_elsewhere_renews_nothing():
+    from dsp_decikit.auth import sessions
+
+    async def renew_after_sign_out():
+        token, info = await sessions.create_session(uuid.uuid4())
+        await sessions.delete_session(token)
+        return await sessions.renew_session(token, info), await sessions.get_session(token)
+
+    assert asyncio.run(renew_after_sign_out()) == (False, None)
 
 
 def start_oidc_login(node: str) -> tuple[str, str]:

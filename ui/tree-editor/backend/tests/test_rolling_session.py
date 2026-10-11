@@ -33,3 +33,16 @@ def test_an_expired_session_is_redirected_without_logging_its_token(client, monk
     assert reply.status_code == 302
     assert TOKEN[:8] not in caplog.text
 
+
+def test_a_renewal_that_finds_no_session_sets_no_status_cookie(client, monkeypatch):
+    # Signed out on another node while this request ran: the renewal updates nothing.
+    near_expiry = int(time.time()) - settings.auth.session_rolling_duration_s + 5
+    stored(monkeypatch, SessionInfo(created_at=near_expiry, last_activity=near_expiry, user_id=uuid.uuid4()))
+
+    async def renew_session(token, info):
+        return False
+    monkeypatch.setattr(middleware, "renew_session", renew_session)
+
+    reply = client.get("/api/no-such-route")
+
+    assert settings.auth.status_cookie.key not in reply.cookies

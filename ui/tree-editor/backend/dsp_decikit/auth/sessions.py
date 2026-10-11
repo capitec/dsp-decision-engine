@@ -51,15 +51,16 @@ async def get_session(token: str) -> SessionInfo | None:
     return None if value is None else SessionInfo.model_validate(value)
 
 
-async def renew_session(token: str, info: SessionInfo) -> None:
+async def renew_session(token: str, info: SessionInfo) -> bool:
     # UPDATE, never upsert: a renewal racing a sign-out on another node must not bring the session back.
     async with db_session() as session:
-        await session.execute(
+        result = await session.execute(
             update(CacheEntry)
             .where(CacheEntry.key == CacheKeys.auth_session(_hashed(token)))
             .values(value=info.model_dump(mode="json"), expires_at=_at(info.expires_at))
         )
         await session.commit()
+    return result.rowcount == 1
 
 
 async def delete_session(token: str) -> None:
