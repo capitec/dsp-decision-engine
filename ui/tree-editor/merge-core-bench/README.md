@@ -9,14 +9,16 @@ baseline stays put when an approach rewrites the product code.
 
 | file | what |
 |---|---|
-| `vectors/op_level.json` | the 89 cases of `backend/tests/data/live_ops_cases.json`, tagged, plus op-level trap cases |
+| `live_ops_cases.json` | the 89 hand-written op-level cases (they lived in `backend/tests/data/`); `make_vectors.py` tags them |
+| `vectors/op_level.json` | those 89 cases, tagged, plus op-level trap cases: the one fixture the product test suites run (`backend/tests/test_live_ops.py`, `ui/src/lib/__tests__/live-ops.test.ts`) |
 | `vectors/neutral.json` | format-neutral `roundtrip` / `online` / `offline` / `stored` cases derived from those, plus traps |
 | `vectors/real_trees.json` | seeded random edits of the small real trees; documents stored once in `docs`, cases point at them with `{"$doc": id}` |
 | `make_vectors.py`, `traps.py` | write the three vector files and `out/bench_inputs.json` (git-ignored) |
 | `run_vectors.py`, `run_vectors.mjs` | run every vector against an adapter |
 | `adapters/pure_py.py`, `adapters/pure_ts.mjs` | the reference adapters (`reference/` copies; node runs the `.ts` with its type stripping) |
 | `bench.py`, `bench.mjs` | time an adapter against the reference, interleaved in one process |
-| `sizes.sh`, `coldload.mjs`, `coldload_browser.py` | artefact sizes, cold load in node, cold load in headless Chromium |
+| `fuzz.py`, `fuzz.mjs` | differential fuzz of the Rust core against the reference, exact JSON text; the wasm replays the Python cases |
+| `sizes.sh`, `coldload.mjs`, `coldload_browser.py`, `coldload_app.py` | artefact sizes, cold load in node, cold load of a test page in headless Chromium, cold load of the built app |
 
 ## Adapters
 
@@ -53,7 +55,7 @@ throw passes.
 Everything runs through `REPO/.scratch/heavy.sh`. From `ui/tree-editor/backend` (decikit is needed for the real
 trees), regenerate the vectors and the bench inputs:
 
-    uv run --no-project --with-requirements requirements.txt --with-editable ../../.. --with pytest \
+    uv run --no-project --with-requirements requirements.txt --with-editable ../../.. --with ../merge-core --with pytest \
         python ../merge-core-bench/make_vectors.py
 
 From `ui/tree-editor/merge-core-bench` (the runners and benches need only the standard library and node 22.18+):
@@ -73,7 +75,7 @@ node's `module.stripTypeScriptTypes` and add an `index.html` holding
 
 ## Vectors
 
-446 cases, 735 KB in all: `op_level.json` 124 cases (40 KB), `neutral.json` 82 (37 KB), `real_trees.json` 240 cases
+449 cases, 735 KB in all: `op_level.json` 127 cases (40 KB), `neutral.json` 82 (37 KB), `real_trees.json` 240 cases
 over 270 shared documents (658 KB). Real trees get seeded edits when their compact JSON is at most 12 KB (22 of the
 29 trees; the generated sets above 32 rules, `campaign-scale`, `fraud-live` and `fraud-shadow` are skipped): per tree 3 chained
 roundtrip steps and 2 pairs of concurrent edits (each as `online` and `offline`), flat trees both as stored and with
@@ -97,9 +99,10 @@ Recorded as `XFAIL` in `adapters/pure_ts.mjs`:
   `{"b": 1}` gives keys `1, b`; Python `b, 1`).
 - `diff` sorts keys by UTF-16 code unit, Python by code point: an astral character (an emoji) sorts before
   U+E000..U+FFFF in TypeScript, after in Python, so the op order differs.
-- `conflicts` takes only ASCII digits as possible index segments; Python's `str.isdigit` also takes other scripts'
-  digits (`١`, `１`), so for such a key under something they replaced Python reports a conflict and TypeScript merges.
-  The index rule in `apply` is ASCII-only in both, so TypeScript is the consistent one here.
+- `conflicts` takes only ASCII digits as possible index segments, as `apply` does. Python's `str.isdigit` also takes
+  other scripts' digits (`١`, `１`), so for such a key under something they replaced the Python copy reports a
+  conflict; the vectors now pin the ASCII rule (the Python reference is `XFAIL` on the `١` case; `½` is not a digit
+  to Python either).
 - `touched` does not check its ops: an op without a path or that is not an object gives `undefined`; Python raises
   `KeyError` / `TypeError`.
 

@@ -8,7 +8,7 @@ Web editor for decision trees: a FastAPI backend (`backend/`), a React UI (`ui/`
 docker compose up        # UI on :3000, API on :8000, live reload for ui/, backend/ and decikit/
 ```
 
-Postgres, migrations and `decikit` (editable, from this checkout) are handled by the compose file. Sign up on the login page; the first run installs dependencies, so give it a minute.
+Postgres, migrations and `decikit` (editable, from this checkout) are handled by the compose file. Sign up on the login page; the first run installs dependencies and builds `merge-core` (below), so give it a few minutes. After editing `merge-core/`, rerun `docker compose run --rm merge-core` and restart the backend.
 
 Regenerate the UI's API client against the running backend with `./generate-tsx-api-client.sh`.
 
@@ -34,13 +34,25 @@ earlier messages it contains so one applied while the editor reconnected is skip
 the batch is not applied again. A batch is not kept across a
 page reload.
 
+## merge-core
+
+The live-editing ops (diff, apply, conflict checks) are written once, in Rust, in `merge-core/`: the backend runs it as
+a Python extension (`dsp_decikit.services.live_ops` re-exports it) and the browser as WebAssembly
+(`ui/src/lib/live-ops.ts` wraps it). Building either needs a Rust toolchain (`rustup`, then
+`rustup target add wasm32-unknown-unknown` and `cargo install --locked wasm-pack`); maturin is fetched by `uv`. The
+backend commands below build the extension from source (`--with ../merge-core`; uv rebuilds when a Rust file changes).
+The UI imports `merge-core/pkg/`, which is not committed: run `pnpm build:wasm` (in `ui/`) before `pnpm test`, `pnpm
+build:skip-check`, `pnpm dev` or `tsc`, and again after editing the Rust. `merge-core-bench/` holds the vectors both
+test suites run, the frozen reference implementations and the measurements behind this choice.
+
 ## Tests
 
 Unit tests:
 
 ```bash
-cd backend && uv run --with-requirements requirements.txt --with ../../.. --with pytest --with pytest-asyncio pytest
-cd ui && pnpm test
+cd backend && uv run --with-requirements requirements.txt --with ../../.. --with ../merge-core --with pytest --with pytest-asyncio pytest
+cd ui && pnpm build:wasm && pnpm test
+cd merge-core && cargo test
 ```
 
 End to end (`e2e/`: Python, Playwright and pytest in headless Chromium) covers the user stories of both editors and
@@ -71,7 +83,7 @@ With podman, `e2e/stack.sh` runs Postgres in a memory-capped container and the b
 on one port; no compose file is needed:
 
 ```bash
-cd ui && pnpm install --frozen-lockfile --filter dsp-re-ui && cd tree-editor/ui && pnpm build:skip-check
+cd ui && pnpm install --frozen-lockfile --filter dsp-re-ui && cd tree-editor/ui && pnpm build:wasm && pnpm build:skip-check
 cd ../e2e && ./stack.sh up            # Postgres on 55432, backend and UI on http://localhost:8600
 ./stack.sh test -m smoke              # or -m serve, -m "not serve", test_flat_rule_params.py, -k ...
 ./stack.sh down                       # stops the backend, removes the container and its volume
@@ -106,7 +118,7 @@ reason. The 521-rule sets are
 
 ## Image
 
-The image installs `decikit` from the wheel in `dist/`, so build the wheel first and run docker from the repo root:
+The image installs `decikit` from the wheel in `dist/`, so build the wheel first and run docker from the repo root. It builds `merge-core` itself, in a Rust stage (the extension wheel for the runtime, the wasm for the UI stage):
 
 ```bash
 uv build

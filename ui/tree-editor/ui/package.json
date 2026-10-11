@@ -67,6 +67,7 @@
     "zustand": "^5.0.12"
   },
   "scripts": {
+    "build:wasm": "wasm-pack build ../merge-core --target web --release --no-pack -- --features wasm",
     "dev": "vite",
     "build": "tsc && vite build",
     "build:skip-check": "vite build",

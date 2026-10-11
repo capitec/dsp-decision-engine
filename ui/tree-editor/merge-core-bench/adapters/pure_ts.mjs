@@ -16,11 +16,12 @@ export const XFAIL = {
   'offline: my insert onto their reorder keeps their order': NO_REBASE,
   'offline: fraud-overlay-base (rule ids stamped) pair 1': NO_REBASE,
   'integers past 2**53 that differ by one differ': 'a JavaScript number holds integers exactly only up to 2**53',
+  'an integer past 2**53 and the float it rounds to differ': 'a JavaScript number holds integers exactly only up to 2**53',
+  'an integer past 2**53 and the float it rounds to on the two sides conflict':
+    'a JavaScript number holds integers exactly only up to 2**53',
   'an added integer-like key goes last': 'JavaScript objects list integer-like keys first, whatever the insertion order',
   'diff orders keys by code point':
     'Array.prototype.sort orders by UTF-16 code unit, so an astral character sorts before U+E000..U+FFFF',
-  'an Arabic-Indic digit under their replace counts as an index':
-    'conflicts tests index segments with /^\\d+$/ (ASCII); Python\'s str.isdigit also takes other scripts\' digits',
   'touched of an op without a path raises': 'touched does not check ops; it returns undefined for the path',
   'touched of an op that is not an object raises': 'touched does not check ops; it returns undefined for the path',
 }

@@ -3,7 +3,7 @@
 Every real tree gets a seeded synthetic edit session; each edit is diffed into one `ops` message, its `applied`
 broadcast, and the tree gets one `snapshot`. `--dump DIR` writes the frames for the Node half (`.scratch/jsbench`).
 
-    uv run --with protobuf --with msgpack python benchmarks/tree_editor_live_payload.py [--edits 200] [--seed 1]
+    uv run --with protobuf --with msgpack --with ui/tree-editor/merge-core python benchmarks/tree_editor_live_payload.py [--edits 200] [--seed 1]
         [--trees id,id] [--dump DIR]
 """
 import argparse

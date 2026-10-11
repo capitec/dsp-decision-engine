@@ -20,6 +20,24 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
+  # Builds the merge-core wheel (backend) and wasm (ui) into the checkout; the uv and node images have no Rust.
+  # Rerun it (`docker compose run --rm merge-core`) after editing ui/tree-editor/merge-core.
+  merge-core:
+    image: rust:1.95-bookworm
+    working_dir: /repo/ui/tree-editor/merge-core
+    environment:
+      CARGO_HOME: /cache/cargo
+      CARGO_TARGET_DIR: /cache/target
+    command: >
+      sh -c "export PATH=$$CARGO_HOME/bin:$$PATH &&
+      rustup target add wasm32-unknown-unknown &&
+      (command -v wasm-pack >/dev/null || cargo install --locked maturin@1.15.0 wasm-pack@0.15.0) &&
+      rm -rf dist && maturin build --release -o dist &&
+      wasm-pack build --target web --release --no-pack -- --features wasm"
+    volumes:
+      - ../..:/repo
+      - rust-cache:/cache
+
   backend:
     image: ghcr.io/astral-sh/uv:python3.13-bookworm-slim
     <<: *repo
@@ -34,6 +52,7 @@ services:
       UV_LINK_MODE: copy
     command: >
       sh -c "uv run --no-project --with-requirements requirements.txt --with-editable /repo
+      --with /repo/ui/tree-editor/merge-core/dist/*.whl
       sh -c 'alembic upgrade head && uvicorn dsp_decikit.asgi:app --host 0.0.0.0 --port 8000
       --reload --reload-dir /repo/ui/tree-editor/backend --reload-dir /repo/decikit'"
     ports:
@@ -41,6 +60,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      merge-core:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:8000/api/health')"]
       interval: 3s
@@ -86,5 +107,6 @@ services:
 volumes:
   pgdata:
   uv-cache:
+  rust-cache:
   ui-node-modules:
   tree-editor-node-modules:

@@ -2,7 +2,7 @@
 
 Run from ui/tree-editor/backend (the real trees need decikit):
 
-    uv run --no-project --with-requirements requirements.txt --with-editable ../../.. --with pytest \\
+    uv run --no-project --with-requirements requirements.txt --with-editable ../../.. --with ../merge-core --with pytest \\
         python ../merge-core-bench/make_vectors.py
 """
 
@@ -22,7 +22,7 @@ import traps  # noqa: E402
 from real_trees import BY_ID, TREES  # noqa: E402
 from test_live_ops import _edit, _stamp_rule_ids  # noqa: E402
 
-FIXTURE = TREE_EDITOR / "backend/tests/data/live_ops_cases.json"
+FIXTURE = HERE / "live_ops_cases.json"
 # Real trees whose compact JSON is at most this many bytes get seeded edits, so the vector files stay small.
 TREE_BYTES = 12_000
 STEPS, PAIRS = 3, 2
