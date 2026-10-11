@@ -398,3 +398,25 @@ async def test_after_a_validation_hangs_the_next_version_is_validated_in_a_new_p
     hub.validator.shutdown()
     assert hub.validator is not hung
     assert any(m["type"] == "validation" and m["version"] == 2 for m in client.ws.sent)
+
+
+def sleep_for(doc):
+    import time
+    time.sleep(doc["seconds"])
+
+
+@pytest.mark.asyncio
+async def test_the_hub_stops_promptly_while_its_validator_hangs(monkeypatch):
+    import time
+    from dsp_decikit.services import live_hub
+    hub = live_hub.Hub()
+    hub.validator = live_hub._validator()
+    monkeypatch.setattr(live_hub, "validation_errors", sleep_for)
+    validating = asyncio.create_task(hub.validate({"seconds": 20}))
+    await asyncio.sleep(0)
+
+    started = time.perf_counter()
+    await hub.stop()
+
+    assert time.perf_counter() - started < 5
+    validating.cancel()
