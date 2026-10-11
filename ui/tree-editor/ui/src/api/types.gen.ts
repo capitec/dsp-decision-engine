@@ -883,6 +883,10 @@ export type ProjectCreateResponse = {
      */
     updated_at: string;
     /**
+     * Version
+     */
+    version: number;
+    /**
      * Is Owner
      */
     is_owner: boolean;
@@ -940,6 +944,10 @@ export type ProjectDetailResponse = {
      * Updated At
      */
     updated_at: string;
+    /**
+     * Version
+     */
+    version: number;
     /**
      * Is Owner
      */
@@ -1016,6 +1024,10 @@ export type ProjectResponse = {
      */
     updated_at: string;
     /**
+     * Version
+     */
+    version: number;
+    /**
      * Is Owner
      */
     is_owner: boolean;
@@ -1089,6 +1101,12 @@ export type ProjectUpdate = {
     project_data?: {
         [key: string]: unknown;
     } | null;
+    /**
+     * Base Version
+     *
+     * Required with project_data: the version the caller last loaded. The save is refused (409) when another save came first.
+     */
+    base_version?: number | null;
 };
 
 /**
