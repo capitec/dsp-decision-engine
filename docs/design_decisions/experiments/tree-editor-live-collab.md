@@ -68,17 +68,18 @@ fetch lost a version; one dead validator stopped validation for good; a NUL char
 loop; a message in flight across a reconnect, or folded into an offline batch, applied twice (now deduplicated by
 message id); "same value is no conflict" accepted a lost edit; a second disconnect gave offline edits too new a base.
 
-**Risks still open**:
-- A message that fails the same way every time (over 4 MiB, or an unexpected server error) is resent forever.
-- (Fixed since: a 30 s timeout, then a new process; the merge validates without the row lock, see
-  `tree-editor-offline-merge-lock.md`.) A validator that hangs blocked validation on its node, and during an
-  offline merge every write to that project.
-- Websocket traffic does not renew the rolling session. A revoked session reconnects forever without being told why.
-- One slow socket holds up its project's fan-out.
-- (Fixed since: counted.) Validation errors were compared as a set of (type, message), so a new error that
-  repeated an existing one passed. Dangling parameter references are not reported at all.
+**Risks still open** (after `collab/ship`; the rest of the spike's list is fixed, see below):
 - `result_idx` points at output rows by index, so a merge can keep two edits that are each valid but point at the
   wrong row together.
+- Dangling parameter references are not reported by validation at all.
+
+Fixed on `collab/ship`: a message that fails every time (over 4 MiB, a server error) is handed back after three
+tries through the offline banner (a dropped connection or a database outage is never counted); messages Postgres or
+the core would refuse (NUL, lone surrogates, NaN, nesting past 64) are rejected up front; socket edits renew the
+session by the HTTP rule and a sign-out, expiry or lost access closes the socket saying why (the editor stops and
+keeps the edits until the user signs in again); one slow socket is dropped after 5 s instead of holding the fan-out;
+a hung validator times out after 30 s and is replaced, and offline merges validate without the row lock
+(`tree-editor-offline-merge-lock.md`); validation errors are counted, not a set; the node editor edits live.
 
 Closed since, on `collab/ship`: the op log snapshots the document every 100 versions and is trimmed by count and age
 (a rebuild replays at most 100 versions), and a migration logs the current version of projects created before step
