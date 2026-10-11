@@ -47,6 +47,13 @@ class Account(TypedDict, total=False):
     quotation_expiry_date: date
 
 
+class PreparedAccount(Account):
+    months_since_opened: int
+    quotation_held: bool
+    is_nominated: bool
+    is_excluded: bool
+
+
 def num(account: dict, field: str) -> float:
     """A numeric field of an account, 0 where the account does not carry it."""
     return account.get(field) or 0.0
@@ -56,7 +63,7 @@ def num(account: dict, field: str) -> float:
 def prepared_accounts(
     accounts: list[Account], decision_date: date,
     client_nominated_settle: list[int] = missing_as([]), client_excluded_settle: list[int] = missing_as([]),
-) -> list[dict]:
+) -> list[PreparedAccount]:
     """The accounts with the facts the per-account rules need: age, whether a quotation is held and unexpired, and
     what the client asked for."""
     out = []
@@ -64,7 +71,8 @@ def prepared_accounts(
         opened = a.get("opened_date")
         months = (decision_date.year - opened.year) * 12 + decision_date.month - opened.month if opened else 999
         expiry = a.get("quotation_expiry_date")
-        out.append({**a, "months_since_opened": months,
+        # A record rebuilt from a frame row holds null for a key the account left out; the declared fields are not nullable
+        out.append({**{k: v for k, v in a.items() if v is not None}, "months_since_opened": months,
                     "quotation_held": bool(a.get("quotation_reference")) and expiry is not None and expiry >= decision_date,
                     "is_nominated": a["account_ref"] in client_nominated_settle,
                     "is_excluded": a["account_ref"] in client_excluded_settle})

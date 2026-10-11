@@ -1,13 +1,14 @@
 """`each`: run a child flow on every element of a list column, writing the enriched list back."""
 from __future__ import annotations
 
+from decimal import Decimal as StdDecimal
 from typing import TypedDict
 
 import polars as pl
 import pytest
 
-from decikit import EachMode, Engine, FusedEngine, InterpretedEngine, each, flow, missing_as, param
-from decikit.ops import Columnar
+from decikit import EachMode, Engine, FusedEngine, InterpretedEngine, branch, each, flow, missing_as, param
+from decikit.ops import Columnar, Currency
 from decikit.lab.testing import assert_equivalent
 
 MODES = ("interpreted", "stepped", "fused")
@@ -115,3 +116,30 @@ def test_a_parent_step_reads_the_enriched_list_as_columnar_past_the_arrow_thresh
              bundle_total, name="order")
     exe = FusedEngine().bind(p)
     assert exe.run(frame)["bundle_total"].to_list() == [30.0] * (ARROW_ROWS + 4)
+
+
+def doubled(amount: Currency) -> Currency:
+    return amount * 2
+
+
+@pytest.mark.parametrize("mode", MODES)
+@pytest.mark.parametrize("n", [1, 1100], ids=["per item", "past the arrow threshold"])
+def test_a_decimal_item_field_reads_as_its_value_not_its_whole_part(mode, n):
+    pipe = flow(each("items", flow(doubled, name="item"), name="items"), name="order")
+    df = pl.DataFrame({"items": [[{"amount": StdDecimal("1.25")}] * n] * 2},
+                      schema={"items": pl.List(pl.Struct({"amount": pl.Decimal(18, 2)}))})
+    out = pipe.compile(mode).run(df)["items"].to_list()
+    assert {float(item["doubled"]) for row in out for item in row} == {2.5}
+    assert pipe.compile(mode).run({"items": [{"amount": StdDecimal("1.25")}]})["items"][0]["doubled"] == Currency("2.5")
+
+
+def many(n: int) -> bool:
+    return n > 1
+
+
+def test_an_each_inside_a_branch_runs_on_every_engine():
+    pipe = flow(branch(many, each("items", flow(heavy, name="item"), name="items"), modifies=["items"],
+                       name="when_many"), name="order")
+    df = FRAME.with_columns(n=pl.Series([2, 0, 5]))
+    out = assert_equivalent(pipe, df)
+    assert [[i.get("heavy") for i in row] for row in out["items"].to_list()] == [[False, True], [], [True]]

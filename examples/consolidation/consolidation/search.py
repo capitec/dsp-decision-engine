@@ -17,6 +17,7 @@ from consolidation.capacity import Capacity
 from consolidation.everyday_card import CardRates, EverydayCard
 from consolidation.flex_loan import FlexLoanConsolidation
 from consolidation.inventory import num
+from consolidation.records import Scenario, SearchRecord
 from consolidation.rate_tables import (
     CREDIT_LIFE,
     CREDIT_LIFE_VERSION_PARAM,
@@ -86,7 +87,7 @@ def search_step(product11_params: tuple, card_params: tuple, capacity_documents:
         credit_life: ParamTable = CREDIT_LIFE, credit_life_version: str = CREDIT_LIFE_VERSION_PARAM,
         card_promotional_rates: ParamTable = promotional_param, card_promotional_rates_version: str = promotional_version_param,
         card_reversion_rates: ParamTable = reversion_param, card_reversion_rates_version: str = reversion_version_param,
-    ) -> tuple[list[dict], dict]:
+    ) -> tuple[list[Scenario], SearchRecord]:
         """Generate and evaluate scenarios, at most `max_scenarios` of them.
 
         Skipped when the client is not routed to a search, or the plain request already needs no consolidation.

@@ -12,6 +12,7 @@ import polars as pl
 from decikit._engine.concurrency import Cache, once
 from decikit._engine.params import NodeParams, ParamsCache
 from decikit._engine.params.shadow import warn_shadowed_tables
+from decikit._engine.run.gathered import fitted, gathered_dtype
 from decikit._engine.run.params import RunParams, RunReport, check_namespaces
 from decikit._engine.run.representations import despan
 from decikit._engine.run.runners.base import CompiledRunner, Runner
@@ -84,6 +85,8 @@ class Executable:
         # Only a struct output's annotation shapes its record; looking up any other per call hashes it,
         # and hashing a `Literal` of thousands of choices cost more than the rest of a record's run.
         self._structs = {k: v.annotation for k, v in self._results if struct_item(base_annotation(v.annotation))}
+        self._gathers = {sg.out.id: sg for sg in _scatter_gathers(plan.root)}
+        self._gathered = {k: self._gathers[v.id] for k, v in self._results if v.id in self._gathers}
         self._hidden = set(plan.drops) | {k for k, _ in self._results}
         self._record_path = not any(c.node.kind == "frame" for c in plan.calls)
         # The trace's per-run constant table: step ref (call index + 1) -> durable origin.
@@ -186,7 +189,8 @@ class Executable:
         if not self._record_path:
             state, run = self.prepare(pl.DataFrame([dict(record)]), params, n=1)
             self._iterate(state, run, trace)
-            return self.output(state).row(0, named=True)
+            # A record keeps its items as built, not the declared shape a frame gives them.
+            return self._output(state, typed=False).row(0, named=True)
         # A pipeline without frame steps never needs a frame: the record goes
         # straight into one-row arrays and the result straight into a dict.
         self._check_shadowing(record.keys())
@@ -262,13 +266,27 @@ class Executable:
 
     def output(self, state: State) -> pl.DataFrame:
         """The output frame of a finished run: unread frame columns, then every produced output."""
+        return self._output(state, typed=True)
+
+    def _output(self, state: State, typed: bool) -> pl.DataFrame:
         frame = state.frame
-        results = [state.column(k, v) for k, v in self._results]
+        results = [self._column(state, k, v) if typed and k in self._gathered else state.column(k, v)
+                   for k, v in self._results]
         names = frame.columns
         if names and self._hidden.isdisjoint(names):
             # Every frame column passes through: hstack is several times cheaper than a new frame.
             return frame.hstack(results)
         return pl.DataFrame([frame.get_column(c) for c in names if c not in self._hidden] + results)
+
+
+    def _column(self, state: State, name: str, v: NodeVersion) -> pl.Series:
+        # The gather builds its list from Python values, so the data alone would type it; the declarations fix it.
+        s = state.column(name, v)
+        try:
+            dtype = gathered_dtype(self._gathered[name], self._gathers, {}, state.frame.schema)
+        except EngineError:
+            return s
+        return fitted(s, dtype)
 
 
 def _declared(annotation: Any) -> pl.DataType | None:

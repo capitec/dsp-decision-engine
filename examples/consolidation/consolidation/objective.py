@@ -13,6 +13,7 @@ from datetime import date
 from decikit import ParamTable, allow_fallback, param, param_table, step
 
 from consolidation import overlays, vocab
+from consolidation.records import ChosenScenario, ObjectiveValues, ScoredScenario, ShadowBest, Versus
 
 OBJECTIVES = vocab.OBJECTIVES
 
@@ -101,7 +102,8 @@ def selection_step(overlay_set: tuple):
         outcome_weight_exited: float = param(0.15, ge=0.0), outcome_weight_rate: float = param(0.15, ge=0.0),
         outcome_weight_providers: float = param(0.10, ge=0.0), indifference_band: float = param(0.02, ge=0.0, le=0.2),
         overlay_stack_enabled: bool = param(True, shared_key="overlay_stack_enabled"),
-    ) -> tuple[dict, list[str], list[dict], dict, list[dict], bool, list[dict], dict]:
+    ) -> tuple[ObjectiveValues, list[str], list[ScoredScenario], ChosenScenario, list[ChosenScenario], bool, list[Versus],
+               ShadowBest]:
         """The weights in force, every viable scenario scored, the winner and runners-up, and why the winner won.
 
         `winner_vs_runners_up` names the component that accounts for each gap, and `shadow_best_scenario` is the best
