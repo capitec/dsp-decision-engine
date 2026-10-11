@@ -114,7 +114,7 @@ Why the engine (IR, wiring, runners, kernels, compile cache, fallback, `run`'s r
 
 ## A float is never truncated into an `int`
 
-- A whole float (`7.0`) is accepted for an `int` input, tree feature or `-> int` output; `7.5`, NaN and infinity raise `NotIntegralError` naming the input or step, in `run` and `score`, in every mode. Where the fraction is meant to go, the step says so (`int(x)`, `round(x)`).
+- A whole float (`7.0`) is accepted for an `int` input, tree feature or `-> int` output; `7.5`, NaN and infinity raise `NotIntegralError` naming the input or step, in `run` on every engine. Where the fraction is meant to go, the step says so (`int(x)`, `round(x)`).
 - Why: a silent `7.5` -> `7` made a table row of `7` match a value it never held, and the modes disagreed about it. Only an `int` output is checked: a step that reads a float another step wrote as `int` receives the float unchanged.
 - Not: truncating (the earlier behaviour, now a bug), or rounding for the caller (which would pick a rounding mode nobody asked for).
 - See: `tests/run/test_int_is_never_truncated.py`, [known limitations](../known-limitations.md)
