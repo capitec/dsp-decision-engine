@@ -23,7 +23,7 @@ from decikit._engine.compile.declared import tuple_mismatch
 from decikit._engine.compile.fingerprint import fingerprint
 from decikit._engine.compile.rows import rows_probe
 from decikit._engine.compile.span import SPAN
-from decikit._engine.compile.structs import bad_field, struct_dtype, struct_schema
+from decikit._engine.compile.structs import FIELD_TYPES, bad_field, struct_dtype, struct_schema
 from decikit._engine.ir.decls import (KIND_DTYPES, FeatureKind, Input, NullPolicy, Output, base_annotation,
                                      feature_kind, nullable)
 from decikit._engine.ir.nodes import CallNode
@@ -240,7 +240,13 @@ def _unstored(name: str, annotation: Any) -> str:
     # Names the declared form of the same value that does compile, where one exists.
     origin = get_origin(annotation) or annotation
     args = get_args(annotation)
-    if origin is dict or te.is_typeddict(annotation):
+    typed = annotation if te.is_typeddict(annotation) else args[0] if origin is list and args else None
+    held = ([t for _, t in item_schema(typed)] if te.is_typeddict(typed) else
+            args[1:] if origin is dict else args if origin in (tuple, list) else ())
+    if any(t not in FIELD_TYPES for t in held):
+        # A str or nested value has no record field or kernel column, so no declared form compiles.
+        fix = "no compiled step returns one; accept it with @allow_fallback"
+    elif origin is dict or te.is_typeddict(annotation):
         typed = te.is_typeddict(annotation)
         item = annotation.__name__ if typed else "Item"
         fix = (f"to compile it, declare -> Struct[{item}] and return a tuple of its fields (one record), "
