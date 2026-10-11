@@ -25,7 +25,10 @@ version in order, two edits to different fields are both kept, the last writer w
 inside a rule or node someone else changed or deleted is discarded and its author told. A header badge shows Live or
 Offline; Save waits until the server has every edit. READ access receives, WRITE sends. A REST save reaches open
 editors as one whole-document replace. The node editor's nodes, edges (key `id`, else `source:target`) and subtrees
-are addressed by id; node positions are part of the document and sync, selection and measured sizes do not. A
+are addressed by id; node positions are part of the document and sync, selection and measured sizes do not.
+Opening a tree sends nothing until an edit (the editor's own form of a stored document goes with the first edit), and
+a version from someone else that moves a node turns Auto-arrange off in this browser, so it does not lay their move
+out again. Two browsers connecting nodes at once can make a cycle; the validation errors show it. A
 browser that cannot load the merge-core wasm still opens both editors, says live editing is unavailable there, and
 saves with Save over REST (a 409 when someone saved since). The log is never trimmed yet.
 
