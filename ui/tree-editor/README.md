@@ -44,10 +44,11 @@ sends the new status cookie for the page to set. Signing out (on any node), an e
 closes the socket with 1008 and a reason, also at the handshake; the editor stops reconnecting, shows "Not live" and a
 toast, and keeps unsent edits in the editor (Export saves them); signing in again through the session dialog
 reconnects and sends them as an offline batch. A message Postgres or the merge core would refuse
-every time (NUL, a lone surrogate, a non-finite number, nesting past 64 levels) is rejected up front. Other drops
-right after the editor sent its edits, with none answered (over 4 MiB, a server error, not JSON), count against them:
-after three in a row the editor gives them up and shows the offline banner with Download my version. Drops the
-server marks transient (1013, a database or network outage; 1001 and 1012) are not counted. The fan-out sends to a
+every time (NUL, a lone surrogate, a non-finite number, nesting past 64 levels) is rejected up front. A close the
+server reports as its failure on what the editor sent (1009 over 4 MiB, 1011 a server error, 1007 not JSON), right
+after the editor sent its edits and with none answered, counts against them: after three in a row the editor gives
+them up and shows the offline banner with Download my version. Any other drop (1013 for a database outage, a lost
+connection, a missed ping, a restart) is never counted, so an outage never hands edits back. The fan-out sends to a
 project's sockets at once, each with a 5 s limit; a socket that stops reading is dropped, closed with 1013 and
 catches up when it reconnects.
 
