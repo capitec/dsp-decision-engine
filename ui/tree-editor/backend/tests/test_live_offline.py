@@ -165,6 +165,45 @@ async def test_a_validation_error_my_own_document_already_had_does_not_block_the
     assert (await stored()).version == 3
 
 
+def between(key, **bounds):
+    # Either bound alone is valid; a `between` with neither is an error whose message names no rule.
+    return {"op": "replace", "path": f"/rules/{key}/rule", "value": {
+        "id": key, "type": "unary", "then": {"id": f"{key}t", "type": "leaf", "result_idx": -1},
+        "condition": {"op": "between", "feature": "amount", **bounds}}}
+
+
+def unbound(key, bound):
+    return {"op": "remove", "path": f"/rules/{key}/rule/condition/{bound}"}
+
+
+@db
+@pytest.mark.asyncio
+async def test_a_merge_that_repeats_an_error_the_document_already_has_is_rejected(offline):
+    # Rule c already has the error; their edit and mine each leave rule a valid, together they leave it without bounds.
+    from dsp_decikit.services.live_sync import apply_message
+    project_id, stored = offline
+    await apply_message(project_id, "setup", "m1", 1, [between("a", min=1, max=10), between("c")])
+    await apply_message(project_id, "online", "m2", 2, [unbound("a", "min")])
+
+    error = await refused(project_id, [unbound("a", "max")], base=2)
+
+    assert error.conflicts == [] and "min or max" in str(error)
+    assert (await stored()).version == 3
+
+
+@db
+@pytest.mark.asyncio
+async def test_the_same_error_brought_by_each_side_on_its_own_does_not_block_the_merge(offline):
+    from dsp_decikit.services.live_sync import apply_message
+    project_id, stored = offline
+    await apply_message(project_id, "setup", "m1", 1, [between("a", min=1), between("b", min=1)])
+    await apply_message(project_id, "online", "m2", 2, [unbound("a", "min")])
+
+    await merge(project_id, [unbound("b", "min")], base=2)
+
+    assert (await stored()).version == 4
+
+
 @db
 @pytest.mark.asyncio
 async def test_an_offline_base_the_log_no_longer_reaches_is_rejected(project):
@@ -294,3 +333,4 @@ def test_offline_parts_that_do_not_describe_the_ops_are_rejected(parts):
     with pytest.raises(Rejected):
         check_message({"type": "ops", "id": "b", "base": 1, "offline": True, "parts": parts,
                        "ops": [name("a", "x"), name("b", "y")]})
+
