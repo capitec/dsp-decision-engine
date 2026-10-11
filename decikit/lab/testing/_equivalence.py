@@ -30,8 +30,10 @@ def assert_equivalent(
       dtypes and values (NaN equals NaN, nothing else is approximate), except
       that polars may type a column or nested field the others leave `Null`;
     - `run(record)` for every row, as a dict: the same dict as that row of its
-      `run(frame)`, or, when the pipeline has a frame step, as its run of a
-      one-row frame of that record, since a cross-row step sees only that row;
+      `run(frame)`, except that a declared optional key the record omits is
+      null in the row (at any depth), or, when the pipeline has a frame step,
+      as its run of a one-row frame of that record, since a cross-row step
+      sees only that row;
     - on the numba engines, a debug `Session` resumed to the end: the same
       frame as `run`; with `script`, a second session driven by
       `script(session)` (then resumed to the end): the same frame on every
@@ -141,14 +143,19 @@ def _fills(want: pl.DataType, got: pl.DataType) -> bool:
 
 
 def _same_record(got: dict, want: dict, what: str) -> None:
-    if list(got) != list(want):
+    # A declared optional key the record omits is null in every row of the frame.
+    if list(got) != [k for k in want if k in got]:
         raise AssertionError(f"{what}: keys {list(got)} != {list(want)}")
-    for key, value in want.items():
-        if not _same(got[key], value):
-            raise AssertionError(f"{what} at {key!r}: record={got[key]!r}, frame={value!r}")
+    for key, value in got.items():
+        if not _same(value, want[key]):
+            raise AssertionError(f"{what} at {key!r}: record={value!r}, frame={want[key]!r}")
 
 
 def _same(a: Any, b: Any) -> bool:
+    if isinstance(a, dict) and isinstance(b, dict):
+        return all(k in b and _same(v, b[k]) for k, v in a.items()) and all(v is None for k, v in b.items() if k not in a)
+    if isinstance(a, list) and isinstance(b, list):
+        return len(a) == len(b) and all(map(_same, a, b))
     if isinstance(a, float) and isinstance(b, float) and math.isnan(a) and math.isnan(b):
         return True
     return a == b
