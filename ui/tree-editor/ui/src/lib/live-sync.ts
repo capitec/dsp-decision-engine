@@ -175,8 +175,11 @@ export class LiveSync {
   }
 
   private offlineDone() {
-    // A batch settled during a catch-up leaves the edits still pending based on the version reached so far.
-    this.offlineBase = this.ready ? undefined : { version: this.version, doc: this.confirmed }
+    // A batch settled during a catch-up leaves edits pending that were made on the versions they name, before the
+    // ones this catch-up brings: a newer base would hide those versions from the server's conflict check.
+    this.offlineBase = this.ready
+      ? undefined
+      : { version: Math.min(this.version, ...this.pending.map((p) => p.base)), doc: this.confirmed }
   }
 
   private hello() {
