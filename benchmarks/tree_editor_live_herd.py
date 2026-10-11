@@ -77,7 +77,7 @@ async def main():
             await online.send(json.dumps({"type": "ops", "id": msg_id, "base": base,
                                           "ops": [rename(keys[0], f"online {n}")]}))
             await until(online, lambda m: m.get("msg_id") == msg_id and m["type"] in ("applied", "rejected"))
-            trips.append((time.perf_counter() - started) * 1e3)
+            trips.append((started, time.perf_counter()))
             n += 1
             await asyncio.sleep(0.1)
 
@@ -91,16 +91,19 @@ async def main():
 
     task = asyncio.create_task(online_loop())
     await asyncio.sleep(1)
-    before = len(trips)
+    herd = time.perf_counter()
     results = await asyncio.gather(*(batch(i, ws) for i, (ws, _) in enumerate(offline)))
-    during = trips[before:]
+    calm = time.perf_counter()
     await asyncio.sleep(1)
     stop = True
     await task
+    # Every round trip the herd overlapped, including one it held up past its own end.
+    during = [(end - start) * 1e3 for start, end in trips if end > herd and start < calm]
+    before = [(end - start) * 1e3 for start, end in trips if end <= herd]
     done = [ms for _, ms in results]
     print(f"K={K} offline batches of 50, generated-521, {len(PORTS)} nodes: "
           f"{[kind for kind, _ in results].count('applied')} merged, done after p50 {statistics.median(done):.0f} "
-          f"max {max(done):.0f} ms; online round trip before p50 {statistics.median(trips[:before]):.0f} ms, during "
+          f"max {max(done):.0f} ms; online round trip before p50 {statistics.median(before):.0f} ms, during "
           f"n={len(during)} p50 {statistics.median(during):.0f} p95 {pct(during, 0.95):.0f} max {max(during):.0f} ms")
 
 
