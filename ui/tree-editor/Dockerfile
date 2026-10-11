@@ -1,6 +1,19 @@
 # Build from the repo root, after `uv build` has put the decikit wheel in dist/:
 #   docker build -f ui/tree-editor/Dockerfile -t decider-tree-editor .
 
+# The merge-core extension (wheel) and its WebAssembly build (pkg/), one toolchain stage for both.
+FROM rust:1.95-bookworm AS merge-core
+
+RUN rustup target add wasm32-unknown-unknown && \
+    cargo install --locked maturin@1.15.0 wasm-pack@0.15.0
+
+WORKDIR /src
+COPY ui/tree-editor/merge-core/Cargo.toml ui/tree-editor/merge-core/Cargo.lock ui/tree-editor/merge-core/pyproject.toml ./
+COPY ui/tree-editor/merge-core/src src
+COPY ui/tree-editor/merge-core/python python
+RUN maturin build --release -o /wheels && \
+    wasm-pack build --target web --release --no-pack -- --features wasm
+
 FROM node:24-alpine AS ui-builder
 
 WORKDIR /app/ui
@@ -12,6 +25,7 @@ COPY ui/pnpm-workspace.yaml ui/pnpm-lock.yaml ./
 COPY ui/lib/package.json lib/
 COPY ui/vscode/package.json vscode/
 COPY ui/tree-editor/ui tree-editor/ui
+COPY --from=merge-core /src/pkg tree-editor/merge-core/pkg
 
 RUN pnpm install --frozen-lockfile --filter dsp-re-ui && \
     cd tree-editor/ui && \
@@ -32,6 +46,11 @@ COPY dist /tmp/decikit/
 COPY ui/tree-editor/backend/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir /tmp/decikit/*.whl -r requirements.txt && \
     rm -rf /tmp/decikit
+
+# After the big layer above: a change to merge-core reinstalls only this.
+COPY --from=merge-core /wheels /tmp/merge-core/
+RUN pip install --no-cache-dir /tmp/merge-core/*.whl && \
+    rm -rf /tmp/merge-core
 
 # ponytail: migrations run from this image; split into a job image if it grows
 COPY ui/tree-editor/backend/alembic ./alembic
