@@ -7,7 +7,10 @@ Spark, where author-written polars bodies are known to diverge, and how `assert_
 
 For the same pipeline, params document and input rows, every engine returns the same output names, dtypes
 and values, nulls included; a `REQUIRED` input that is null raises `MissingInputError` in every engine; and an
-exception a body raises propagates in every engine. `run(record)` equals the matching row of `run(frame)`.
+exception a body raises propagates in every engine. `run(record)` equals the matching row of `run(frame)`, with two exceptions: a declared
+optional (`NotRequired`) key the step did not set is omitted from the record and null in every row, since a
+declared output type fixes the batch schema; and a pipeline with a frame step is compared with a one-row
+frame of the record, since a cross-row step sees only that row.
 
 Where an engine cannot meet a clause, it refuses the pipeline or the feature with an error rather than
 answering differently: a `frame_step` on Spark, `trace=` on a translator engine, a `Decimal` input to a polars
@@ -60,11 +63,11 @@ either engine's default.
 `assert_equivalent(step, frame, params=None, engines=None, script=None)`:
 
 - `engines` defaults to the built-in numba engines plus `polars`; a tag or an `Engine` instance each.
-- For each numba engine: `run(frame)` equals the first engine's; `run(record)` per row equals that row;
+- For each numba engine: `run(frame)` equals the first engine's; `run(record)` per row equals that row (under the two exceptions of the contract);
   a session resumed to the end equals `run`; the scripted session equals across engines. These are today's
   checks with `score` renamed.
 - For `polars`: `run(frame.lazy()).collect()` equals the first engine's `run(frame)`, and `run(record)` (which
-  delegates to its `segments`) equals the row. No session checks. In v2 this is the check that compares a
+  delegates to its `segments`) equals the row, under the same two exceptions. No session checks. In v2 this is the check that compares a
   polars body with its Python body.
 - For an engine that refuses the pipeline (a `frame_step` on Spark), the refusal is reported as a skip, not a
   divergence; raising only in a later engine is a divergence, as today.
