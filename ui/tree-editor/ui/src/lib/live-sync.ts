@@ -6,7 +6,8 @@
  * message about 150 ms after the last one; every server version arrives in order (my own as the ack), and before one
  * is applied the editor's un-diffed edits are pushed first, so a remote change never overwrites a local one unseen.
  * After a disconnect (a closed socket, or no answer to a ping for ~10 s) the edits made meanwhile, and the messages
- * the catch-up did not show applied, go back as one offline batch the server merges whole or rejects whole.
+ * the catch-up did not show applied, go back as one offline batch the server merges whole or rejects whole. A
+ * close for policy (signed out, or access removed) ends it for good: unsent edits stay in the editor.
  *
  * @example
  * const sync = new LiveSync(liveUrl(projectId), project.project_data, project.version, {
@@ -18,7 +19,8 @@
  */
 import { apply, diff, type Json, type Op } from './live-ops'
 
-export type LiveStatus = 'connecting' | 'live' | 'reconnecting'
+/** `ended`: the server closed live editing for good (signed out, or access removed). */
+export type LiveStatus = 'connecting' | 'live' | 'reconnecting' | 'ended'
 /** `parts`: the earlier messages an offline batch contains, `[id, op count]` in order. */
 type Message = { id: string; base: number; ops: Op[]; offline?: boolean; parts?: Array<[string, number]> }
 type Socket = Pick<WebSocket, 'send' | 'close' | 'onopen' | 'onmessage' | 'onclose'>
@@ -41,7 +43,11 @@ export interface LiveHooks {
   validation?: (errors: unknown[], version: number) => void
   /** Every edit is on the server (nothing pending). */
   settled?: (version: number) => void
+  /** The server ended live editing (`reason`: signed out, or access removed); edits it does not have stay unsent. */
+  ended?: (reason: string) => void
 }
+
+const POLICY_VIOLATION = 1008
 
 export const liveUrl = (projectId: string) =>
   `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/v1/projects/${projectId}/live`
@@ -119,6 +125,7 @@ export class LiveSync {
   settle(timeoutMs = 15000): Promise<boolean> {
     this.flush()
     if (this.idle()) return Promise.resolve(true)
+    if (this.stopped) return Promise.resolve(false)
     return new Promise((resolve) => {
       const timeout = setTimeout(() => resolve(false), timeoutMs)
       this.waiters.push(() => {
@@ -144,15 +151,20 @@ export class LiveSync {
       this.heard = true
       this.receive(JSON.parse(event.data))
     }
-    socket.onclose = () => this.lost(socket)
+    socket.onclose = (event) => this.lost(socket, event)
   }
 
-  private lost(socket: Socket) {
+  private lost(socket: Socket, closed?: { code?: number; reason?: string }) {
     if (this.stopped || socket !== this.socket) return
     this.socket = undefined
     socket.onopen = socket.onmessage = socket.onclose = null
     socket.close()
     this.ready = false
+    if (closed?.code === POLICY_VIOLATION) {
+      this.stop()
+      this.hooks.status?.('ended')
+      return this.hooks.ended?.(closed.reason || 'live editing ended')
+    }
     this.offlineBase ??= { version: this.version, doc: this.confirmed }
     this.hooks.status?.('reconnecting')
     setTimeout(() => this.connect(), Math.min(250 * 2 ** this.retries++, 4000))

@@ -11,6 +11,7 @@ every 15 s.
 """
 
 import asyncio
+import contextlib
 import json
 import time
 import typing as t
@@ -35,6 +36,8 @@ from .routes import router
 MAX_MESSAGE_BYTES = 4 * 1024 * 1024
 RECHECK_S = 15
 POLICY_VIOLATION = 1008
+SIGNED_OUT = "signed out: sign in again to keep editing"
+NO_ACCESS = "your access to this project was removed"
 
 
 async def _user(ws: WebSocket) -> t.Tuple[t.Optional[str], t.Optional[SessionInfo]]:
@@ -52,14 +55,17 @@ async def _user(ws: WebSocket) -> t.Tuple[t.Optional[str], t.Optional[SessionInf
 
 async def _access(project_id: uuid.UUID, ws: WebSocket) -> t.Tuple[t.Optional[AccessMode], t.Optional[str],
                                                                  t.Optional[SessionInfo]]:
+    """The user's access to the project, their session token and the user; the socket is closed, saying why, and
+    the access is None when they have none."""
     token, user = await _user(ws)
-    if user is None:
-        return None, None, None
-    async with db_session() as session:
-        try:
-            return (await get_effective_project_permissions(session, project_id, user))[1], token, user
-        except (PermissionError, ValueError):
-            return None, None, None
+    mode = None
+    if user is not None:
+        async with db_session() as session:
+            with contextlib.suppress(PermissionError, ValueError):
+                mode = (await get_effective_project_permissions(session, project_id, user))[1]
+    if mode is None:
+        await ws.close(POLICY_VIOLATION, NO_ACCESS if user else SIGNED_OUT)
+    return mode, token, user
 
 
 def _same_origin(ws: WebSocket) -> bool:
@@ -70,10 +76,14 @@ def _same_origin(ws: WebSocket) -> bool:
 
 @router.websocket("/projects/{project_id}/live")
 async def live(ws: WebSocket, project_id: uuid.UUID):
-    if not settings.live_collab or not _same_origin(ws) or (await _access(project_id, ws))[0] is None:
+    if not settings.live_collab or not _same_origin(ws):
         await ws.close(POLICY_VIOLATION)
         return
+    # Accepted before the session is checked: a refused handshake reaches the page as a bare network error, and it
+    # would reconnect for ever instead of telling the user why.
     await ws.accept()
+    if (await _access(project_id, ws))[0] is None:
+        return
     client = None
     try:
         while True:
@@ -87,7 +97,6 @@ async def live(ws: WebSocket, project_id: uuid.UUID):
                 return
             mode, token, user = await _access(project_id, ws)
             if mode is None:
-                await ws.close(POLICY_VIOLATION, "session ended or access removed")
                 return
             if not text:
                 continue
