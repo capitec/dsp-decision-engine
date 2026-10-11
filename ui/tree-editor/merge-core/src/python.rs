@@ -32,7 +32,7 @@ mod direct {
     #[pyfunction]
     pub fn call_direct<'py>(py: Python<'py>, name: &str, args: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
         let args: Vec<serde_json::Value> = pythonize::depythonize(args)?;
-        let out = crate::call_value(name, &args).map_err(super::to_py)?;
+        let out = crate::call_value(name, args).map_err(super::to_py)?;
         Ok(pythonize::pythonize(py, &out)?)
     }
 }
