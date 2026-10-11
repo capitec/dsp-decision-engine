@@ -21,7 +21,7 @@ from decikit.serving._errors import (InputParsingError, OutputFormattingError, U
                                      UnsupportedContentTypeError)
 from decikit._settings import get_settings
 from decikit.config import ConfigStore, Version
-from decikit import Engine, Executable, FusedEngine
+from decikit import Engine, Executable, FusedEngine, NumbaEngine
 from decikit.ir import base_annotation, has_optional_key
 from decikit.steps import ConfigurableStep, Step
 from decikit.ops.nested import Columnar, struct_item
@@ -115,6 +115,7 @@ class RequestHandler:
     def __post_init__(self):
         if isinstance(self.engine, str):
             self.engine = Engine.resolve(self.engine)()
+        check_serving_engine(self.engine)
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -284,6 +285,13 @@ class RequestHandler:
 
     def shutdown_fn(self):
         pass
+
+
+def check_serving_engine(engine: Engine) -> None:
+    if not isinstance(engine, NumbaEngine):
+        tags = ", ".join(tag for tag, c in Engine.registered().items() if issubclass(c, NumbaEngine))
+        raise exc.EngineError(f"serving cannot run on the {engine._tag!r} engine; serving runs on a numba "
+                              f"engine ({tags}). The polars engine is for batch runs.")
 
 
 def _inputs(exe: Executable) -> list:
