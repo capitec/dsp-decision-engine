@@ -26,7 +26,7 @@ This page covers the internals: how a config version becomes a live executable, 
 *A request goes straight down the stack. Building a version happens on the side, never inside a request.*
 </div>
 
-The split is deliberate. The server and app layers know about HTTP and nothing about pipelines. `RequestHandler` knows about bytes, content types and config versions and nothing about HTTP: its methods take `bytes` and header strings and return a `Response(content, media_type)`. The engine below knows about records and frames. A test can therefore drive the whole serving path with `handler.process_fn(body, accept, content_type)` (or `handler.score(record)` for a parsed record), which is exactly what the generated project's tests do.
+The split is deliberate. The server and app layers know about HTTP and nothing about pipelines. `RequestHandler` knows about bytes, content types and config versions and nothing about HTTP: its methods take `bytes` and header strings and return a `Response(content, media_type)`. The engine below knows about records and frames. A test can therefore drive the whole serving path with `handler.process_fn(body, accept, content_type)` (or `handler.run(record)` for a parsed record), which is exactly what the generated project's tests do.
 
 ## A version becomes a `Live`
 
@@ -151,7 +151,7 @@ sequenceDiagram
     A->>A: ready? else 503
     A->>H: process_fn(body, accept, type)
     H->>H: input_fn: parse body
-    H->>H: score(request)
+    H->>H: run(request)
     H->>H: live = module_fn()
     alt one JSON object
         H->>H: coerce_record
@@ -167,10 +167,10 @@ sequenceDiagram
     A-->>C: 200, body
 ```
 
-`process_fn` is `output_fn(score(input_fn(data, content_type)), accept)`, and all of its hooks are plain synchronous methods; a subclass that overrides one with `async def` fails with a `TypeError` when the class is created. The steps:
+`process_fn` is `output_fn(run(input_fn(data, content_type)), accept)`, and all of its hooks are plain synchronous methods; a subclass that overrides one with `async def` fails with a `TypeError` when the class is created. The steps:
 
 1. `input_fn` looks the `Content-Type` header up in `DEFAULT_INPUT_HANDLERS` by exact string. A missing parser is `UnsupportedContentTypeError` (415). Any exception the parser raises becomes `InputParsingError` (400) with the parser's message.
-2. `score(request)` starts with `module_fn()`, which returns `self._active` or raises `RuntimeError("no config version is active; call stage() then activate().")`. The HTTP routes never get that far without an active version because `ready()` answers 503 first. A `dict` then takes the single-record path and a `pl.DataFrame` the batch path, both through `Executable.run`. Code in the same process calls `score` directly with a parsed record or frame.
+2. `run(request)` starts with `module_fn()`, which returns `self._active` or raises `RuntimeError("no config version is active; call stage() then activate().")`. The HTTP routes never get that far without an active version because `ready()` answers 503 first. A `dict` then takes the single-record path and a `pl.DataFrame` the batch path, both through `Executable.run`. Code in the same process calls `run` directly with a parsed record or frame.
 3. `output_fn` writes the result for the `Accept` header (default `*/*` when the header is absent).
 
 ### Input formats
@@ -427,4 +427,4 @@ Keep overrides cheap. `output_fn` and `input_fn` run on every request, and the i
 - `decikit build` runs the same staging path without a server and turns any failure into `config version latest failed to build: <Type>: <message>`. Run it first.
 - A `FallbackWarning` at startup names a step that runs in Python instead of a kernel. The template's own `month_end(applied_on: date)` prints one, because no kernel takes a `date`.
 - `--server sanic` without sanic installed is a clean CLI error: `serving with sanic needs sanic: pip install 'decikit[serve-sanic]'`.
-- To see what the handler does without HTTP, score through it in-process with `handler.process_fn(body, "application/json", "application/json")`, the same call the generated tests make, or `handler.score(record)` for a parsed record.
+- To see what the handler does without HTTP, score through it in-process with `handler.process_fn(body, "application/json", "application/json")`, the same call the generated tests make, or `handler.run(record)` for a parsed record.

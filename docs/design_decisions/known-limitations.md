@@ -39,7 +39,7 @@ Workaround: serve single records as a dict through `run()`; see [serving latency
 **A repeated `run` on a small frame is slower fused than interpreted.** `Step.run` follows the default engine (fused when unset) and binds and builds on every call; there is no numba compile after the first call, but a measured repeat on 10 rows costs 2.1 to 2.7 times the interpreted run (+2 to +3.5 ms on the flagship, about +35 ms on the affordability example), almost all of it the build.
 Workaround: `compile()` once and call the executable, or `with decikit.engine("interpreted"):` while iterating. `Step.run` caches no executable on purpose (see [engine](decisions/engine.md)).
 
-**A compiled record call compiles again for each new pattern of null inputs.** `score()` on a fused pipeline specialises on which inputs are null, so the first record with a pattern not seen before compiles: about 0.5 to 2.4 s per new pattern for a 32-rule flat set and about 29 s for a 200-rule set (measured for the tree editor's e2e suite, `ui/tree-editor/e2e/data/README.md`); a pattern seen before is instant.
+**A compiled record call compiles again for each new pattern of null inputs.** `run(record)` on a fused pipeline specialises on which inputs are null, so the first record with a pattern not seen before compiles: about 0.5 to 2.4 s per new pattern for a 32-rule flat set and about 29 s for a 200-rule set (measured for the tree editor's e2e suite, `ui/tree-editor/e2e/data/README.md`); a pattern seen before is instant.
 Impact: a served tree with many nullable features pays a compile per new pattern (up to 2^n of them) in its first requests; send representative null patterns when warming, or score through `run()`.
 
 ## Numbers

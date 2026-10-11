@@ -1,4 +1,4 @@
-"""RequestHandler.score is the in-process entry; process_fn is bytes -> score -> bytes."""
+"""RequestHandler.run is the in-process entry; process_fn is bytes -> run -> bytes."""
 import json
 
 import polars as pl
@@ -20,14 +20,14 @@ def _handler(tmp_path, pipeline):
     return handler
 
 
-def test_score_converts_string_dates_in_a_record(tmp_path):
-    out = _handler(tmp_path, build).score(RECORD)
+def test_run_converts_string_dates_in_a_record(tmp_path):
+    out = _handler(tmp_path, build).run(RECORD)
     assert out["due_day"] == 4
 
 
-def test_score_converts_string_dates_in_a_frame(tmp_path):
+def test_run_converts_string_dates_in_a_frame(tmp_path):
     frame = pl.DataFrame({"decision_date": ["2026-01-31", "2026-02-01"], "tenure": [1, 2]})
-    out = _handler(tmp_path, lambda: flow(due_day, name="d")).score(frame)
+    out = _handler(tmp_path, lambda: flow(due_day, name="d")).run(frame)
     assert out["due_day"].to_list() == [1, 3]
 
 
@@ -57,9 +57,9 @@ async def _async_hook(self, *args):
     pass
 
 
-def test_a_subclass_score_of_its_own_leaves_process_fn_alone(tmp_path):
+def test_a_subclass_run_of_its_own_leaves_process_fn_alone(tmp_path):
     class Replayer(RequestHandler):
-        def score(self, request):
+        def run(self, request):
             return json.loads(self.process_fn(json.dumps(request).encode(), "application/json", "application/json").content)
 
     store = JsonFileStore(basepath=str(tmp_path / "configs"))
@@ -67,4 +67,4 @@ def test_a_subclass_score_of_its_own_leaves_process_fn_alone(tmp_path):
     handler = Replayer(store, build)
     handler.stage()
     handler.activate()
-    assert handler.score(RECORD)["due_day"] == 4
+    assert handler.run(RECORD)["due_day"] == 4

@@ -187,7 +187,7 @@ swap_set(LOAN, requests, LOAN.replayer(), candidate).moved   # (): a cheaper gra
 ```
 governance/
   flows.py        the Flow of each decision flow: entry, outcome and reason fields, its overlay documents, rule lists; reads a version's documents
-  replayer.py     RequestHandler subclass: `score` (typed) and `served` (JSON-safe response dict), optional params, the typed record kept
+  replayer.py     RequestHandler subclass: `run` (typed) and `served` (JSON-safe response dict), optional params, the typed record kept
   evidence.py     Evidence, capture, EvidenceStore (write once)
   replay.py       tolerance grading and replay, divergences in execution order
   explain.py      three audiences

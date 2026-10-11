@@ -6,7 +6,7 @@ import pytest
 from decikit import flow
 from decikit.exceptions import NotIntegralError
 
-from test_handler_score import _handler
+from test_handler_run import _handler
 
 
 def count_double(count: int) -> int:
