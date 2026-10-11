@@ -35,11 +35,11 @@ for (const [name, d] of Object.entries(inputs)) {
 }
 
 // A __proto__ key must stay data.
-const proto = JSON.parse('{"__proto__": {"polluted": true}, "a": 1}')
-for (const [label, f] of [['text', () => JSON.parse(call('diff', JSON.stringify([{}, proto])))], ['direct', () => callDirect('diff', [{}, proto])]]) {
+for (const [label, f] of [['text', (a) => JSON.parse(call('apply', JSON.stringify(a)))], ['direct', (a) => callDirect('apply', a)]]) {
   try {
-    const ops = f()
-    console.log('proto', label, JSON.stringify(ops), 'Object.prototype.polluted =', ({}).polluted)
+    const ops = JSON.parse('[{"op":"add","path":"/__proto__","value":{"polluted":true}}]')
+    const [doc] = f([{}, ops])
+    console.log('proto', label, 'own keys', Object.keys(doc), 'prototype is Object.prototype', Object.getPrototypeOf(doc) === Object.prototype)
   } catch (e) {
     console.log('proto', label, 'threw', e.message)
   }
