@@ -1,7 +1,7 @@
 """Serving binds a numba engine only: the polars engine is batch-only and is refused when the handler is made."""
 import pytest
 
-from decikit import PolarsEngine, SteppedEngine
+from decikit import FusedEngine, PolarsEngine, SteppedEngine, flow, param
 from decikit.config import JsonFileStore
 from decikit.exceptions import EngineError
 from decikit.serving import RequestHandler
@@ -46,3 +46,19 @@ def test_the_settings_handler_refuses_the_polars_engine(monkeypatch, tmp_path):
             construct_handler_from_settings()
     finally:
         get_settings.cache_clear()
+
+
+def lookup(x: float, weights: dict = param({"a": 1.0})) -> float:
+    return x * weights["a"]
+
+
+def test_a_strict_refusal_of_a_launch_time_split_is_not_blamed_on_the_sample(tmp_path):
+    store = JsonFileStore(basepath=str(tmp_path / "configs"))
+    store.create_version({"params": {}})
+    sample = tmp_path / "sample_request.json"
+    sample.write_text('{"x": 2.0}')
+    handler = RequestHandler(store, flow(lookup, name="p"), engine=FusedEngine(strict_compile=True),
+                             sample_request=str(sample))
+    with pytest.raises(EngineError, match="p/lookup runs in Python") as refused:
+        handler.stage()
+    assert "warm-up failed" not in str(refused.value) and "sample_request" not in str(refused.value)

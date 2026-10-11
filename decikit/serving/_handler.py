@@ -278,7 +278,7 @@ class RequestHandler:
                     record = coerce_record(json.load(f), _dates(executable))
             executable.run(record, params)
             executable.run(pl.DataFrame([record]), params)
-        except exc.ParamsError:
+        except (exc.ParamsError, exc.StrictCompileError):
             raise
         except Exception as e:
             raise exc.DecikitError(f"warm-up failed with {type(e).__name__}: {e}. {hint}") from e
