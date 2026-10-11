@@ -10,6 +10,8 @@ from dataclasses import dataclass, field
 
 from decikit import allow_fallback, step
 
+from consolidation.records import EverydayCardPolicy, FlexLoanPolicy, PricingContext, ProductPolicies
+
 
 @dataclass(frozen=True)
 class Quote:
@@ -29,7 +31,7 @@ class Quote:
 
 @allow_fallback
 @step(output="pricing_context")
-def pricing_context(statutory_ceiling: float, initiation_fee_cap: float, monthly_service_fee_cap: float) -> dict:
+def pricing_context(statutory_ceiling: float, initiation_fee_cap: float, monthly_service_fee_cap: float) -> PricingContext:
     """The ceiling and fee caps in force on the decision date, which every product prices under."""
     return {"statutory_ceiling": statutory_ceiling, "initiation_fee_cap": initiation_fee_cap,
             "monthly_service_fee_cap": monthly_service_fee_cap}
@@ -37,7 +39,7 @@ def pricing_context(statutory_ceiling: float, initiation_fee_cap: float, monthly
 
 @allow_fallback
 @step(output="product_policies")
-def product_policies(flex_loan_policy: dict, everyday_card_policy: dict) -> dict:
+def product_policies(flex_loan_policy: FlexLoanPolicy, everyday_card_policy: EverydayCardPolicy) -> ProductPolicies:
     """Every product's policy, by product code. A product team changes its own params and nobody else's."""
     # workaround: a dict with int keys is an Object column in a batch run, which a JSON or CSV batch response cannot
     # write, and this output is emitted, so the product code is text

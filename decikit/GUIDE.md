@@ -925,7 +925,10 @@ assert pipeline.parameters().defaults() == {"order": {"items": {"heavy_kg": 20.0
 row in Python — fastest on a single record's `run()`, slower on a large batch.
 `EachMode.BATCH` explodes the list into one child frame and runs the child once
 over all items — faster on a large batch, slower on a single record. A null list
-reads as a row with no items in both modes.
+reads as a row with no items in both modes. In a frame, an enriched list whose item type and child outputs
+are declared has the declared shape: every field of the item's TypedDict, null
+where unset, in its order, then the child's outputs; `run(record)` returns the
+items as built.
 
 ## Fan-out and reduce: `optimise`
 
@@ -1033,7 +1036,7 @@ except EngineError as e:
 ```
 
 - **The answers are fused's.** Columns, dtypes and values equal `pipeline.compile("fused").run(df)`, except
-  that a column or `each` field fused leaves `Null` for want of a value has its declared dtype; a step's
+  that a column fused leaves `Null` for want of a value has its declared dtype; a step's
   error surfaces at `collect()` or the sink with its own type and its `in step <path>` note. The params
   document is validated against the whole pipeline when `run` builds the plan.
 - **A frame step is a pipeline breaker.** It runs once on the whole frame (it may rank, join or group by), so
@@ -1045,7 +1048,7 @@ except EngineError as e:
   `dict`, a bare `list`, `Any`: annotate a TypedDict or `list[float]`; an `each`'s gathered list needs its
   items' type and its body's outputs declared); at `collect()`, a batch its declared type cannot hold
   unchanged (a fraction in an `int` column, a record whose keys differ from its TypedDict's, or come in
-  another order); a frame step that fails on an empty
+  another order outside an `each`); a frame step that fails on an empty
   frame (the engine runs each frame step once on zero rows to learn its columns), or one that leaves a column
   empty there (declare it: `writes={"band": pl.String}`).
 - `assert_equivalent` checks the polars engine with the others; an engine that refuses a pipeline is skipped

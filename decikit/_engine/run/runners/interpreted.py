@@ -21,7 +21,7 @@ from decikit._engine.run.runners.base import Checkpoint
 from decikit._engine.run.state import State, all_set, dtype_of, fill_missing, from_series, record_value
 from decikit._engine.trace.envelope import Kind
 from decikit._engine.types import (Representation, columnar_item, decimal_boxer, decimal_scale, item_schema,
-                                   representation_for, to_raw)
+                                   raw_values, representation_for, to_raw)
 from decikit._engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, ScatterGather, Sequence, NodeVersion
 
 # Below this many exploded elements the polars explode+gather (about ten lazy collects, each with
@@ -264,7 +264,7 @@ class InterpretedRunner:
             offsets.append(offsets[-1] + len(items))
         elem_state = State(state.plan, pl.DataFrame(), offsets[-1])
         for (name, v) in sg.fields:
-            values, valid = _array(tuple(flat[name]), dtype_of(base_annotation(v.annotation)),
+            values, valid = _array(tuple(raw_values(v.annotation, flat[name])), dtype_of(base_annotation(v.annotation)),
                                    lambda k: f"item field '{name}' of {node.origin.path}")
             elem_state.write(v, values, valid=valid)
         elem_scope = _Scope(None, elem_state.frame, {name: v for name, v in sg.fields}, scope.ctx)
@@ -300,7 +300,9 @@ class InterpretedRunner:
                     .explode(col).unnest(col))
         elem_state = State(state.plan, pl.DataFrame(), exploded.height)
         for (name, v) in sg.fields:
-            values, valid = from_series(exploded.get_column(name))
+            scale = decimal_scale(v.annotation)
+            column = exploded.get_column(name)
+            values, valid = from_series(column if scale is None else decimal_mantissa(column, scale))
             dtype = dtype_of(base_annotation(v.annotation))
             if values.dtype != dtype:
                 if dtype == np.int64 and values.dtype.kind == "f":
