@@ -256,3 +256,20 @@ def test_a_database_outage_closes_the_socket_as_try_again_so_the_client_retries_
         ws.send_text(json.dumps({"type": "ping"}))
 
         assert closed(ws).code == 1013
+
+
+def test_an_unexpected_server_error_closes_the_socket_as_a_server_failure_so_the_client_counts_it(auth):
+    # Left to the server, the socket would drop without a code, as a lost connection does, which is not counted.
+    with connect("token", uuid.uuid4()) as ws:
+        ping(ws)
+        auth["error"] = RuntimeError("a bug")
+        ws.send_text(json.dumps({"type": "ping"}))
+
+        assert closed(ws).code == 1011
+
+
+def test_a_database_outage_when_the_socket_opens_closes_it_as_try_again(auth):
+    auth["error"] = ConnectionRefusedError("the database is restarting")
+
+    with connect("token", uuid.uuid4()) as ws:
+        assert closed(ws).code == 1013
