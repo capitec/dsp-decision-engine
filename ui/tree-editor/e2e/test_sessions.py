@@ -1,5 +1,6 @@
 """Sessions: signing out, protected routes, an expired session during editing and the background refresh."""
 
+import os
 import re
 import time
 
@@ -107,6 +108,10 @@ def test_an_idle_editor_notices_the_expired_session_by_itself(signed_in: Page):
 
 @pytest.mark.parametrize("kind", ["flat", "tree"])
 def test_the_save_interrupted_by_the_expired_session_goes_through_after_the_refresh(signed_in: Page, email: str, kind: str):
+    if kind == "flat" and os.environ.get("E2E_LIVE_COLLAB") == "true":
+        # The edit is already stored over the live socket, which cookies cleared in the browser do not end, so no save
+        # is interrupted; test_live_collab's sign-out test covers a live session that ends.
+        pytest.skip("live editing stores the edit before Save")
     project = open_with_edit(signed_in, kind)
     signed_in.context.clear_cookies()
     press_save(signed_in)
