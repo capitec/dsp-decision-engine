@@ -50,7 +50,7 @@ def in_process(root: Path) -> RequestHandler:
     """The handler `decikit serve` builds, here, interpreted: raw JSON bytes in, the response body out."""
     sys.path.insert(0, str(root.parent))
     handler = RequestHandler(JsonFileStore(basepath=str(root / "configs")), f"{root.name}.pipeline:build",
-                             mode="interpreted", sample_request=str(root / "sample_request.json"))
+                             engine="interpreted", sample_request=str(root / "sample_request.json"))
     handler.stage()
     handler.activate()
     return handler
