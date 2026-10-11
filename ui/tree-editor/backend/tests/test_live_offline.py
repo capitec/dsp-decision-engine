@@ -435,3 +435,45 @@ async def test_an_offline_batch_whose_validation_hangs_is_refused_without_blocki
 
     assert online.version == (await stored()).version == 2
     assert "in time" in str(error.value)
+
+
+@db
+@pytest.mark.asyncio
+async def test_an_offline_batch_another_node_logged_while_it_was_validated_is_not_applied_again(offline):
+    # The client resent the batch to another node after a reconnect; that node's copy commits first.
+    from dsp_decikit.services.documents import validation_errors
+    from dsp_decikit.services.live_sync import apply_message
+    project_id, stored = offline
+    other = []
+
+    async def validate(doc):
+        if not other:
+            other.append(await apply_message(project_id, "c1", "batch", 1, [name("b", "Offline")]))
+        return validation_errors(doc)
+
+    applied = await apply_message(project_id, "c1", "batch", 1, [name("b", "Offline")], offline=True,
+                                  validate=validate)
+
+    assert applied.version == other[0].version == (await stored()).version == 2
+    assert [msg for _, _, msg, _ in await log(project_id)] == ["created", "batch"]
+
+
+@db
+@pytest.mark.asyncio
+async def test_a_message_of_the_batch_logged_while_it_was_validated_is_not_applied_again(offline):
+    # m1 was sent on the socket that dropped and is delivered late, while the batch resending it is validated.
+    from dsp_decikit.services.documents import validation_errors
+    from dsp_decikit.services.live_sync import apply_message
+    project_id, stored = offline
+
+    async def validate(doc):
+        if len(await log(project_id)) == 1:
+            await apply_message(project_id, "c1", "m1", 1, [name("a", "Mine")])
+        return validation_errors(doc)
+
+    await apply_message(project_id, "c1", "batch", 1, [name("a", "Mine"), name("b", "Offline")], offline=True,
+                        parts=[["m1", 1], ["m2", 1]], validate=validate)
+
+    assert [(msg, ops) for _, _, msg, ops in await log(project_id)][1:] == [
+        ("m1", [name("a", "Mine")]), ("batch", [name("b", "Offline")])]
+    assert names(await stored()) == ["Mine", "Offline", "C"]
