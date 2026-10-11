@@ -105,6 +105,9 @@ class AppSettings(BaseSettings):
     db: DatabaseSettings = Field(default_factory=DatabaseSettings)
     datasources: DataSourcesSettings = Field(default_factory=DataSourcesSettings)
     ui_build_path: t.Optional[str] = None
+    live_collab: bool = Field(
+        False, description="Editors sync edits live over a websocket per project instead of saving whole documents"
+    )
 
     @classmethod
     def settings_customise_sources(

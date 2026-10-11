@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -8,11 +9,22 @@ from .settings import settings
 from .spa_static_files import SPAStaticFiles
 from .exceptions import register_handlers
 from .auth.middleware import RollingSessionMiddleware
+from .services.live_hub import hub
+
+
+@asynccontextmanager
+async def lifespan(_app):
+    if settings.live_collab:
+        hub.start()
+    yield
+    await hub.stop()
+
 
 app = FastAPI(
     title="Project Version Management",
     openapi_tags=api.TAGS,
     docs_url="/swagger",
+    lifespan=lifespan,
 )
 
 register_handlers(app)
