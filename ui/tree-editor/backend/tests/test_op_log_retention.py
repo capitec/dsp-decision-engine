@@ -233,3 +233,12 @@ async def test_concurrent_writes_and_offline_merges_while_trimming_keep_the_log_
     for version in versions[:-1]:
         await document_at(project_id, version)
     assert await document_at(project_id, head.version) == head.project_data
+
+
+@pytest.mark.parametrize("field", ["live_log_keep_versions", "live_log_keep_days"])
+def test_a_log_that_keeps_nothing_is_refused_at_start(field):
+    from pydantic import ValidationError
+    from dsp_decikit.settings import AppSettings
+
+    with pytest.raises(ValidationError):
+        AppSettings(**{field: 0})
