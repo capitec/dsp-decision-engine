@@ -48,6 +48,9 @@ export interface LiveHooks {
 }
 
 const POLICY_VIOLATION = 1008
+// Going away, restarting, try again later: the server says the same message will go through.
+const TRANSIENT = [1001, 1012, 1013]
+const MAX_FAILURES = 3
 
 export const liveUrl = (projectId: string) =>
   `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/v1/projects/${projectId}/live`
@@ -62,6 +65,7 @@ export class LiveSync {
   private ready = false
   private stopped = false
   private retries = 0
+  private failures = 0
   private timer?: ReturnType<typeof setTimeout>
   private socket?: Socket
   private waiters: Array<() => void> = []
@@ -159,6 +163,7 @@ export class LiveSync {
     this.socket = undefined
     socket.onopen = socket.onmessage = socket.onclose = null
     socket.close()
+    const sent = this.ready && this.pending.length > 0
     this.ready = false
     if (closed?.code === POLICY_VIOLATION) {
       this.stop()
@@ -166,8 +171,22 @@ export class LiveSync {
       return this.hooks.ended?.(closed.reason || 'live editing ended')
     }
     this.offlineBase ??= { version: this.version, doc: this.confirmed }
+    // A drop right after my edits went out, with none of them answered: one the server fails on every time (too
+    // big, or a server error) would otherwise be resent on every reconnect for ever.
+    if (sent && !TRANSIENT.includes(closed?.code ?? 0) && ++this.failures >= MAX_FAILURES) this.handBack()
     this.hooks.status?.('reconnecting')
     setTimeout(() => this.connect(), Math.min(250 * 2 ** this.retries++, 4000))
+  }
+
+  /** Give up on the pending edits: the editor shows the server's version and the hook gets mine. */
+  private handBack() {
+    this.failures = 0
+    this.flush()
+    const doc = this.view
+    this.pending = []
+    this.waiters = []  // a Save waiting on them times out unsaved
+    this.refresh()
+    this.hooks.offlineRejected?.({ reason: `the server failed on them ${MAX_FAILURES} times in a row.`, conflicts: [], doc })
   }
 
   /** After a reconnect: everything pending goes as one offline batch (resent as is when it already is one). */
@@ -224,6 +243,7 @@ export class LiveSync {
       this.confirmed = apply(this.confirmed, m.ops)[0]
       this.version = m.version
       const mine = m.client_id === this.clientId ? this.pending.find((p) => p.id === m.msg_id) : undefined
+      if (mine) this.failures = 0
       this.pending = this.pending.filter((p) => p !== mine)
       if (mine?.offline) this.offlineDone()
       this.refresh()
@@ -231,6 +251,7 @@ export class LiveSync {
     } else if (m.type === 'rejected') {
       this.flush()
       const mine = this.pending.find((p) => p.id === m.msg_id)
+      if (mine) this.failures = 0
       this.pending = this.pending.filter((p) => p !== mine)
       this.refresh()
       if (!mine?.offline) return this.hooks.rejected?.(m.reason)
