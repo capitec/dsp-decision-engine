@@ -147,6 +147,10 @@ class EngineError(DecikitError, ValueError):
     """
 
 
+class StrictCompileError(EngineError):
+    """A step `strict_compile=True` refuses to run in Python."""
+
+
 class RegistryError(DecikitError, LookupError):
     """A config's `type` tag names no class registered under the registry it is loaded into.
 
