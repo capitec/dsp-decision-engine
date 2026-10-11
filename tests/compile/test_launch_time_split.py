@@ -175,3 +175,13 @@ def test_allow_fallback_accepts_a_kernel_that_splits_at_launch_silently():
     split_after_the_build(exe)
     assert caught_fallbacks(lambda: exe.run(FRAME)) == []
     assert exe.fallbacks()["p/halved"].startswith("@allow_fallback: split at launch: TypingError: ")
+
+
+def test_a_strict_refusal_is_the_top_level_strict_compile_error():
+    import decikit
+    from decikit import StrictCompileError
+
+    with pytest.raises(StrictCompileError, match="p/offer runs in Python, row by row"):
+        FusedEngine(strict_compile=True).bind(flow(offer, name="p")).run(FRAME)
+    assert issubclass(StrictCompileError, EngineError)
+    assert "StrictCompileError" in decikit.__all__ and "StrictCompileError" in decikit.exceptions.__all__
