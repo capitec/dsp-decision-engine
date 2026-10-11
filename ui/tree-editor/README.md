@@ -42,12 +42,24 @@ page reload.
 
 The live-editing ops (diff, apply, conflict checks) are written once, in Rust, in `merge-core/`: the backend runs it as
 a Python extension (`dsp_decikit.services.live_ops` re-exports it) and the browser as WebAssembly
-(`ui/src/lib/live-ops.ts` wraps it). Building either needs a Rust toolchain (`rustup`, then
-`rustup target add wasm32-unknown-unknown` and `cargo install --locked wasm-pack`); maturin is fetched by `uv`. The
-backend commands below build the extension from source (`--with ../merge-core`; uv rebuilds when a Rust file changes).
-The UI imports `merge-core/pkg/`, which is not committed: run `pnpm build:wasm` (in `ui/`) before `pnpm test`, `pnpm
-build:skip-check`, `pnpm dev` or `tsc`, and again after editing the Rust. `merge-core-bench/` holds the vectors both
-test suites run, the frozen reference implementations and the measurements behind this choice.
+(`ui/src/lib/live-ops.ts` wraps it). `merge-core-bench/` holds the vectors every build runs, the frozen reference
+implementations and the measurements behind this choice.
+
+Nothing built from it is committed or published, so every contributor who runs the backend or the UI needs:
+
+- Rust 1.95 or newer through rustup, and the wasm target: `rustup target add wasm32-unknown-unknown`;
+- wasm-pack: `cargo install --locked wasm-pack@0.15.0`;
+- a C linker (`cc`, e.g. `gcc`), which maturin needs to link the extension;
+- maturin needs no install: uv fetches it when it builds `--with ../merge-core` (and rebuilds when a Rust file
+  changes). zig is needed only for the portable wheel the image and CI build (`uvx --from 'maturin[zig]==1.15.0'
+  maturin build --release --zig --compatibility manylinux_2_28`, run in `merge-core/`; uv fetches zig too).
+
+Then `pnpm build:wasm` (in `ui/`) writes `merge-core/pkg/`: run it before `pnpm test`, `pnpm build:skip-check`,
+`pnpm dev` or `tsc`, and again after editing the Rust. Without Rust each step stops with a message naming what to
+install (`build:wasm`, the vite and vitest configs, and the backend's import of `merge_core`); `tsc` alone reports
+only the missing module. `cargo test` in `merge-core/` runs the vectors in Rust;
+`.github/workflows/tree-editor-merge-core.yml` runs them against the wheel and the wasm on every pull request that
+changes the crate.
 
 ## Tests
 
