@@ -34,7 +34,7 @@ class _Walk:
     when a caller asks, so the cache key and `hidden_state` are one walk and cannot disagree.
     """
 
-    __slots__ = ("h", "seen", "strict", "found", "where")
+    __slots__ = ("h", "seen", "strict", "found", "where", "probe")
 
     def __init__(self, strict: bool = False, found: list | None = None):
         self.h = hashlib.sha256()
@@ -42,6 +42,7 @@ class _Walk:
         self.strict = strict
         self.found = found
         self.where: tuple[str, str] = ("", "")
+        self.probe = False  # only asks whether a class attribute has a content key: it reports and refuses nothing
 
 
 def fingerprint(fn: Callable, *, strict: bool = False) -> str:
@@ -82,7 +83,8 @@ def hidden_state(fn: Callable) -> list[tuple[str, str, str, str]]:
 
     One `(name, kind, type_name, site)` per closure variable or module global
     that holds an instance of a class of your own, or a `dict`, `list` or
-    `set` that can be edited in place. `kind` is `"object"` or `"container"`.
+    `set` that can be edited in place, and per such object a class of your
+    own holds as a public attribute (named `Holder.registry`). `kind` is `"object"` or `"container"`.
     Modules, functions, classes, enum members, numbers, strings, dates,
     tuples and frozensets of those, arrays and frames are data, not hidden state.
 
@@ -225,20 +227,38 @@ def _class(w: _Walk, cls: type) -> None:
         _container(w, "members", [(m.name, m.value) for m in cls])
     # Its body too, or a step keeps the code it compiled against an edited method, constant or namedtuple
     # field. Methods by their own code, not what they reach; an attribute with no content key (a
-    # descriptor, a registry) is left out, as keying it by identity would miss every other process.
+    # descriptor, a registry) is left out, as keying it by identity would miss every other process. A public
+    # object a project class holds is still reported and refused like a global; private and dunder names,
+    # descriptors, callables and the classes of decikit or a library are machinery. A nested class is walked
+    # like its holder, so what it holds is found too.
+    file = getattr(sys.modules.get(cls.__module__), "__file__", None) or ""
+    authored = not w.probe and not (_is_library(file) or file.startswith(_OWN_CODE))
     for name, attr in sorted(vars(cls).items()):
         attr = getattr(attr, "__func__", attr)  # a staticmethod or classmethod
         if isinstance(attr, types.FunctionType):
             w.h.update(name.encode())
             _code(w.h, attr.__code__)
             continue
+        if authored and isinstance(attr, type):
+            held = _attribute(w, name)
+            _class(held, attr)
+            w.h.update(f"{name}:{held.h.hexdigest()}".encode())
+            continue
         part = _Walk(True)
-        part.seen = set(w.seen)  # a copy: a failed attempt must not mark what it reached as hashed
+        part.seen, part.probe = set(w.seen), True  # a copy: a failed attempt must not mark what it reached as hashed
         try:
             _value(part, attr)
         except ValueError:
+            if authored and not name.startswith("_") and not callable(attr) and not hasattr(type(attr), "__get__"):
+                _value(_attribute(w, name), attr)
             continue
         w.h.update(f"{name}:{part.h.hexdigest()}".encode())
+
+
+def _attribute(w: _Walk, name: str) -> _Walk:
+    held = _Walk(w.strict, w.found)
+    held.seen, held.where = set(w.seen), (f"{w.where[0]}.{name}", w.where[1])
+    return held
 
 
 def _container(w: _Walk, kind: str, items: Any) -> None:
