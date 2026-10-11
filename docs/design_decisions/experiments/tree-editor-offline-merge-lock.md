@@ -11,8 +11,9 @@ project waited. Can the validation move out of the lock without merging anything
 ## Method
 - Each attempt but the last reads one `REPEATABLE READ` snapshot without the lock, merges and validates there, then
   locks and commits only if the version has not moved. The third attempt holds the lock throughout, so a project that
-  never goes quiet still merges. A conflict or validation refusal is decided on the snapshot (rows only accumulate, so
-  a refusal there stands later).
+  never goes quiet still merges. A conflict or validation refusal is decided on the snapshot. A later version could
+  have let the batch through (someone restores what the merge was missing), but the refusal is what the old code
+  gave a batch that took the lock at that moment, and the batch stays downloadable.
 - Batches of one project wait for each other per backend process (an `asyncio.Lock`), so they do not keep overtaking
   each other's attempts. Not a Postgres advisory lock: a waiter would hold a pool connection, and 30 waiters on one
   node would leave the holder none.
@@ -49,6 +50,8 @@ Herd (5 runs; per run: batch completion p50 and max, online round trips the herd
 - The validator has a 30 s timeout; on a timeout (or a dead process) it is killed and a new one takes over. An
   offline batch it was checking is refused with a reason; the node's per-version validation resumes on the next
   version.
+- A new validator process answers its first validation (spawn and imports) after about 7 s, inside the 30 s. The
+  hub kills its validator on stop: waiting for a hung one would block the event loop, so the timeout never fired.
 
 Open: a validator process of its own for merges would cut the locked fallback by about a quarter, for one more
 process per node.
