@@ -125,9 +125,6 @@ Impact: only a frame step that reads a column it did not declare differs. Declar
 
 ## Serving
 
-**`DECIKIT_API__MODE` is ignored.** The setting became `DECIKIT_API__ENGINE__TYPE`; a deployment still setting the old name gets no error and serves fused.
-Workaround: rename the variable.
-
 **`RequestHandler.process_fn` runs the pipeline on the event loop.** With Starlette one worker serves requests one at a time, so `nogil` kernels never overlap inside it.
 Workaround: run several worker processes; moving scoring to a thread pool is untested and should be measured first (`engine/concurrency.md`).
 
