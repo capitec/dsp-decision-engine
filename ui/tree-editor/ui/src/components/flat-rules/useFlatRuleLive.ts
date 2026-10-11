@@ -76,6 +76,12 @@ export function useFlatRuleLive(project: FlatRuleProjectDetail | null) {
       },
       validation: (errors) => store.getState().setValidationErrors(errors),
       settled: markSavedIfIdle,
+      ended: (reason) => toast({
+        title: "Live Editing Stopped",
+        description: `${reason[0].toUpperCase()}${reason.slice(1)}. Edits not saved yet stay in this editor until you leave it; Export keeps a copy.`,
+        variant: "destructive",
+        duration: Infinity,
+      }),
     });
 
     store.setState({ live: 'connecting', liveSettle: () => sync.settle() });

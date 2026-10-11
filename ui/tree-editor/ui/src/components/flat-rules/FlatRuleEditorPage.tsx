@@ -72,8 +72,11 @@ const FlatRuleEditorHeader: React.FC<{
                 {live && (
                   <Badge variant="secondary" data-testid="live-status" className={live === 'live'
                     ? "text-xs bg-green-100 text-green-800 border-green-200"
-                    : "text-xs bg-amber-100 text-amber-800 border-amber-200"}>
-                    {live === 'live' ? 'Live' : live === 'connecting' ? 'Connecting...' : 'Offline - edits will be merged when you reconnect'}
+                    : live === 'ended'
+                      ? "text-xs bg-red-100 text-red-800 border-red-200"
+                      : "text-xs bg-amber-100 text-amber-800 border-amber-200"}>
+                    {live === 'live' ? 'Live' : live === 'connecting' ? 'Connecting...' : live === 'ended'
+                      ? 'Not live - edits are not saved' : 'Offline - edits will be merged when you reconnect'}
                   </Badge>
                 )}
               </div>
