@@ -230,8 +230,9 @@ export function staleOps(mine: Op[], concurrent: Op[]): Op[] {
 
 /**
  * My touched paths that overlap theirs under the offline rule (both diffed from `base`); empty means merge.
- * Two order ops on the same list conflict only when the keys common to base, mine and theirs end up in a
- * different relative order.
+ * Overlap is an equal, ancestor or descendant path, unless both sides end with the same value at my path.
+ * Two order ops on the same list conflict only when both sides changed the relative order of the keys common to
+ * base, mine and theirs, and changed them differently.
  */
 export function conflicts(mine: Op[], theirs: Op[], base: Json): string[] {
   const theirPaths = touched(theirs).map(split)
@@ -240,13 +241,28 @@ export function conflicts(mine: Op[], theirs: Op[], base: Json): string[] {
   for (const path of touched(mine)) {
     const s = split(path)
     const hits = theirPaths.filter((t) => isPrefix(s, t) || isPrefix(t, s))
-    if (s[s.length - 1] === ORDER && hits.length === 1 && hits[0].length === s.length && isPrefix(s, hits[0])) {
-      docs ??= [base, apply(base, mine)[0], apply(base, theirs)[0]]
-      if (!ordersDisagree(docs, s.slice(0, -1))) continue
-    }
-    if (hits.length) found.push(path)
+    if (!hits.length) continue
+    docs ??= [base, apply(base, mine)[0], apply(base, theirs)[0]]
+    if (s[s.length - 1] === ORDER) {
+      const onlyOrder = hits.length === 1 && hits[0].length === s.length && isPrefix(s, hits[0])
+      if (onlyOrder && !ordersDisagree(docs, s.slice(0, -1))) continue
+    } else if (
+      !diff(valueAt(docs[1], s), valueAt(docs[2], s)).length &&
+      // Under something they replaced, an index can name another item on their side than on mine.
+      !hits.some((t) => t.length < s.length && s.slice(t.length).some((x) => /^\d+$/.test(x)))
+    ) continue
+    found.push(path)
   }
   return found
+}
+
+function valueAt(doc: Json, segments: string[]): Json {
+  try {
+    return { v: walk(doc, segments) }
+  } catch (e) {
+    if (e instanceof Dropped) return {}
+    throw e
+  }
 }
 
 function ordersDisagree(docs: Json[], at: string[]): boolean {
@@ -263,7 +279,6 @@ function ordersDisagree(docs: Json[], at: string[]): boolean {
     keys.push(k)
   }
   const common = new Set(keys[0].filter((k) => keys[1].includes(k) && keys[2].includes(k)))
-  const mineOrder = keys[1].filter((k) => common.has(k))
-  const theirOrder = keys[2].filter((k) => common.has(k))
-  return mineOrder.some((k, i) => k !== theirOrder[i])
+  const [base, mine, theirs] = keys.map((ks) => JSON.stringify(ks.filter((k) => common.has(k))))
+  return base !== mine && mine !== theirs && theirs !== base
 }

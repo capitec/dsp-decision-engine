@@ -82,6 +82,9 @@ def session(browser: Browser, base_url: str, signed_in: Page, email: str):
         context.close()
 
 
+OFFLINE = "Offline - edits will be merged when you reconnect"
+
+
 def two_rules(page: Page) -> str:
     return create_project(page, "Live", document(SMALL, SMALL))["id"]
 
@@ -333,12 +336,13 @@ def test_after_a_backend_restart_clients_reconnect_and_an_edit_made_while_it_was
         open_live(page, project)
 
     restarting = restart_backend()
-    expect(signed_in.get_by_test_id("live-status")).to_have_text("Reconnecting...", timeout=20_000)
+    expect(signed_in.get_by_test_id("live-status")).to_have_text(OFFLINE, timeout=20_000)
     rename_rule(signed_in, "Made while down")
     assert restarting.wait(timeout=240) == 0
 
     for page in (signed_in, second):
         expect(page.get_by_test_id("live-status")).to_have_text("Live", timeout=30_000)
+    expect(toast(signed_in, "Your offline edits were merged")).to_be_visible()
     shows(second, ["Made while down", "Rule 2"])
     stored(signed_in, project, lambda d: names(d) == ["Made while down", "Rule 2"])
     rename_rule(second, "After the restart", rule=1)
