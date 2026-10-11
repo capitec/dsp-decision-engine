@@ -2,7 +2,7 @@
 
 Run from ui/tree-editor/backend (the real trees need decikit):
 
-    uv run --no-project --with-requirements requirements.txt --with-editable ../../.. --with pytest \\
+    uv run --no-project --with-requirements requirements.txt --with-editable ../../.. --with ../merge-core --with pytest \\
         python ../merge-core-bench/make_vectors.py
 """
 
