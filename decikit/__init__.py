@@ -58,7 +58,7 @@ from typing import TYPE_CHECKING, Any
 from decikit._serde import PolarsSchema
 from decikit._engine.params import ParamTable, missing_as, param, param_table
 from decikit.lab import describe
-from decikit.exceptions import DecikitError, FallbackWarning, HiddenStateWarning, ShadowedTableWarning
+from decikit.exceptions import DecikitError, FallbackWarning, HiddenStateWarning, ShadowedTableWarning, StrictCompileError
 from decikit.steps import (ConfigurableStep, CustomFunction, EachMode, ParamRef, Step, StepRef, Value, allow_fallback, branch, dag,
                            each, flow, frame_step, helper, loop, optimise, step)
 from decikit.steps.flowfile import load_flow
@@ -87,7 +87,7 @@ __all__ = [
     # extend
     "Step", "ConfigurableStep", "CustomFunction", "Value", "ParamRef", "StepRef", "NumbaEngine",
     # errors
-    "DecikitError", "FallbackWarning", "HiddenStateWarning", "ShadowedTableWarning",
+    "DecikitError", "FallbackWarning", "HiddenStateWarning", "ShadowedTableWarning", "StrictCompileError",
 ]
 
 # Names whose modules import numba load on first use, so `import decikit` stays light.

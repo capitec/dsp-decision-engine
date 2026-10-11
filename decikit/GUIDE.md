@@ -121,7 +121,10 @@ comes before the first call, so it is seen.
 `FallbackWarning`; `@allow_fallback` accepts that. A fallback step runs row by row in
 Python instead of in the kernel. A step that returns a `dict` falls back too; the same
 record returned as a tuple under `Struct[Item]`, or a list of such tuples under
-`Columnar[Item]`, compiles ("Nested columns").
+`Columnar[Item]`, compiles ("Nested columns"), and so does a tuple under
+`@step(outputs=(...))`. The warning names the form that compiles for what the step
+returns; a `list[float]` compiles only as a one-field `Columnar[Item]`, and a `date`,
+`datetime`, `bytes` or `set` output, or one holding a `str`, has no compiled form.
 
 An input with neither `missing_as(fill)` nor a `T | None` annotation is required:
 a null value or an absent column raises `MissingInputError`. To default it for a
@@ -556,7 +559,7 @@ projects on one path never shadow each other):
 
 JSON dates (`"2026-01-15"`) arrive as the declared `date` inputs, but only through
 the handler: `Executable.run` takes typed values (`date` objects), and a
-string date reaches the step as a string. In-process, `handler.score` takes the
+string date reaches the step as a string. In-process, `handler.run` takes the
 parsed record (or a frame) and converts dates exactly as `decikit serve` does;
 `handler.process_fn` takes raw bytes. Both are plain calls, and the `*_fn` hooks are
 synchronous: an `async def` override is rejected when the class is created.
@@ -570,7 +573,7 @@ handler = RequestHandler(JsonFileStore(basepath="configs"), "credit_risk.pipelin
 handler.stage()
 handler.activate()
 record = {"income": 1000, "debt": 250, "applied_on": "2026-01-15"}
-assert handler.score(record)["approved"] is True
+assert handler.run(record)["approved"] is True
 body = json.dumps(record).encode()
 response = handler.process_fn(body, "application/json", "application/json")
 assert json.loads(response.content)["approved"] is True
@@ -716,8 +719,8 @@ JSON, CSV or Arrow response can carry it. Declare a TypedDict to have the fields
 step instead.
 
 `@allow_fallback` says you accept that: the warning stops, and
-`FusedEngine(strict_compile=True)` — which otherwise raises on a step that runs in
-Python — allows it. `fallbacks()` still reports it, marked `@allow_fallback`,
+`FusedEngine(strict_compile=True)` — which otherwise raises `StrictCompileError` (an
+`EngineError`, `from decikit import StrictCompileError`) on a step that runs in Python — allows it. `fallbacks()` still reports it, marked `@allow_fallback`,
 so it stays visible when you are chasing latency. Put it on a function a step
 *calls* and the step falls back rather than compiling it: an intentional
 Python boundary. Prefer a step that compiles; use `@allow_fallback` only for

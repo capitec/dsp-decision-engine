@@ -5,7 +5,7 @@ import dis
 import inspect
 import os
 import types as py_types
-from typing import Any, Callable, Literal, get_origin
+from typing import Any, Callable, Literal, get_args, get_origin
 
 import numpy as np
 import typing_extensions as te
@@ -23,7 +23,7 @@ from decikit._engine.compile.declared import tuple_mismatch
 from decikit._engine.compile.fingerprint import fingerprint
 from decikit._engine.compile.rows import rows_probe
 from decikit._engine.compile.span import SPAN
-from decikit._engine.compile.structs import bad_field, struct_dtype, struct_schema
+from decikit._engine.compile.structs import FIELD_TYPES, bad_field, struct_dtype, struct_schema
 from decikit._engine.ir.decls import (KIND_DTYPES, FeatureKind, Input, NullPolicy, Output, base_annotation,
                                      feature_kind, nullable)
 from decikit._engine.ir.nodes import CallNode
@@ -176,7 +176,7 @@ def compile_call(node: CallNode) -> tuple[str, Callable, str | None, bool]:
         return key, dispatcher.py_func, no_kernel, declared
     # A function step returning a dict, a TypedDict, a list, a tuple, a set or an array compiles alone, but no
     # kernel column stores it: inside a kernel it fails at launch and takes every other step of the kernel with it.
-    unstored = next((f"writes '{o.name}' as {o.annotation}, which no kernel stores" for o in node.outputs
+    unstored = next((_unstored(o.name, base_annotation(o.annotation)) for o in node.outputs
                      if node.kind == "scalar" and not _stored(base_annotation(o.annotation))), None)
     sig = _probe_signature(node)
     if sig is None:
@@ -184,7 +184,8 @@ def compile_call(node: CallNode) -> tuple[str, Callable, str | None, bool]:
     reason = once(_REASONS, (key, sig), lambda: _refused(dispatcher.compile, sig))
     if reason is not None and undeclared:
         reason = f"calls '{undeclared[0]}' without @helper or @allow_fallback: {reason}"
-    reason = reason or unstored
+    if unstored is not None:
+        reason = unstored if reason is None else f"{unstored}; numba also refused the body: {reason}"
     # A nullable struct output has no record array with a per-row validity mask a kernel stores.
     nullable_struct = next((o for o in node.outputs
                             if nullable(o.annotation) and struct_item(base_annotation(o.annotation)) is not None), None)
@@ -233,6 +234,42 @@ def _stored(annotation: Any) -> bool:
 
 
 _UNSTORED = (bytes, dt.date, dt.datetime, dt.time, dt.timedelta, np.datetime64, np.timedelta64)
+
+
+def _unstored(name: str, annotation: Any) -> str:
+    # Names the declared form of the same value that does compile, where one exists.
+    origin = get_origin(annotation) or annotation
+    args = get_args(annotation)
+    typed = annotation if te.is_typeddict(annotation) else args[0] if origin is list and args else None
+    held = ([t for _, t in item_schema(typed)] if te.is_typeddict(typed) else
+            args[1:] if origin is dict else args if origin in (tuple, list) else ())
+    if any(t not in FIELD_TYPES for t in held):
+        # A str or nested value has no record field or kernel column, so no declared form compiles.
+        fix = "no compiled step returns one; accept it with @allow_fallback"
+    elif origin is dict or te.is_typeddict(annotation):
+        typed = te.is_typeddict(annotation)
+        item = annotation.__name__ if typed else "Item"
+        fix = (f"to compile it, declare -> Struct[{item}] and return a tuple of its fields (one record), "
+               f"-> Columnar[{item}] and return a list of such tuples (many rows), or return a tuple under "
+               "@step(outputs=(...)) (one output per value)")
+        fix += "" if typed else ", Item a TypedDict of the dict's keys"
+    elif origin is tuple:
+        fix = ("to compile it, return the tuple under @step(outputs=(...)) (one output per element), "
+               "or declare -> Struct[Item] (one record)")
+    elif origin in (list, np.ndarray):
+        item = args[0].__name__ if args and te.is_typeddict(args[0]) else "Item"
+        fix = (f"to compile it, declare -> Columnar[{item}] and return a list of tuples of its fields "
+               f"(a one-field {item} for a list of numbers)")
+    else:
+        fix = "no compiled step returns one; accept it with @allow_fallback"
+    return f"writes '{name}' as {_shown(annotation)}, which no kernel stores; {fix}"
+
+
+def _shown(annotation: Any) -> str:
+    args = get_args(annotation)
+    if not args:
+        return getattr(annotation, "__name__", str(annotation))
+    return f"{_shown(get_origin(annotation))}[{', '.join(_shown(a) for a in args)}]"
 
 
 def _ragged_reason(output: Output, item: Any, dispatcher: Dispatcher, sig: tuple) -> str | None:

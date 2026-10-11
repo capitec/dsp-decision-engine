@@ -150,7 +150,7 @@ def terms(pipeline, row):
         ("to_json(result)", lambda: to_json(result)),
         ("output_fn", lambda: handler.output_fn(result, "application/json")),
         ("input_fn", lambda: handler.input_fn(body, "application/json")),
-        ("handler.score(record)", lambda: handler.score(row)),
+        ("handler.run(record)", lambda: handler.run(row)),
         ("process_fn (no HTTP)", lambda: handler.process_fn(body, "application/json", "application/json")),
         ("same work, sync, one function", lambda: handler.output_fn(
             exe.run(coerce_record(parse_application_json(body), dates), params), "application/json")),
