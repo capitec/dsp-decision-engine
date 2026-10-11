@@ -12,3 +12,7 @@ description = "Live-sync diff/apply/merge core for the tree editor"
 features = ["python"]
 python-source = "python"
 module-name = "merge_core._native"
+
+# Without this uv would rebuild only when pyproject.toml changes, not when the Rust sources do.
+[tool.uv]
+cache-keys = [{ file = "pyproject.toml" }, { file = "Cargo.toml" }, { file = "Cargo.lock" }, { file = "src/**/*.rs" }, { file = "python/**/*.py" }]
