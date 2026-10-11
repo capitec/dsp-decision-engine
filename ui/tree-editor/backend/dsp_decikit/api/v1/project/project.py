@@ -11,7 +11,7 @@ from fastapi import Depends, HTTPException, Query, UploadFile, File, Form, Respo
 from fastapi.responses import JSONResponse
 from sqlalchemy import select, case, update
 from fastapi_pagination import Page, Params, paginate
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from dsp_decikit.db.session import db_session
 from dsp_decikit.db.models.projects import (
@@ -58,8 +58,17 @@ class ProjectUpdate(BaseModel):
     project_data: t.Optional[t.Dict[str, t.Any]] = None
     base_version: t.Optional[int] = Field(
         None,
-        description="The version the caller last saw; a save of project_data is refused (409) when another save came first. Omit to overwrite.",
+        description="Required with project_data: the version the caller last loaded. The save is refused (409) when another save came first.",
     )
+
+    @model_validator(mode="after")
+    def _document_save_names_its_base(self) -> "ProjectUpdate":
+        if self.project_data is not None and self.base_version is None:
+            raise ValueError(
+                "base_version is required when project_data is sent: pass the project's version you loaded"
+                " (GET /api/v1/projects/{project_id} returns it as `version`)"
+            )
+        return self
 
 
 class ProjectResponse(BaseModel):
@@ -435,7 +444,7 @@ async def update_project(
         # One conditional statement, so two saves of the same base cannot both pass the check.
         # The version counts document saves only: a rename or move never makes an open editor stale.
         stmt = update(Project).where(Project.id == project_id)
-        if "version" in changes and project_data.base_version is not None:
+        if "version" in changes:
             stmt = stmt.where(Project.version == project_data.base_version)
         saved = await session.execute(
             stmt.values(**changes, updated_at=datetime.now(timezone.utc))

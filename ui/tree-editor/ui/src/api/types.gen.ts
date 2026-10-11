@@ -1104,7 +1104,7 @@ export type ProjectUpdate = {
     /**
      * Base Version
      *
-     * The version the caller last saw; a save of project_data is refused (409) when another save came first. Omit to overwrite.
+     * Required with project_data: the version the caller last loaded. The save is refused (409) when another save came first.
      */
     base_version?: number | null;
 };

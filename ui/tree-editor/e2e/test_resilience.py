@@ -256,14 +256,15 @@ def test_concurrent_saves_of_one_base_version_let_exactly_one_through(signed_in:
     assert get_project(signed_in, project)["version"] == 2
 
 
-def test_a_save_without_a_base_version_still_overwrites_and_bumps_the_version(signed_in: Page):
+def test_a_document_save_without_a_base_version_is_refused_with_422_and_changes_nothing(signed_in: Page):
     project = create_project(signed_in, "Unversioned", flat_document())["id"]
 
-    first = put_project(signed_in, project, project_data=flat_document(), name="First")
-    second = put_project(signed_in, project, project_data=flat_document(), name="Second")
+    refused = put_project(signed_in, project, project_data=flat_document(), name="Overwritten")
 
-    assert first.json()["version"] == 2 and second.json()["version"] == 3
-    assert get_project(signed_in, project)["name"] == "Second"
+    assert refused.status == 422
+    assert "base_version" in refused.json()["validation_errors"][0]["msg"]
+    stored = get_project(signed_in, project)
+    assert (stored["name"], stored["version"]) == ("Unversioned", 1)
 
 
 def test_renaming_or_moving_a_project_leaves_its_version(signed_in: Page):
