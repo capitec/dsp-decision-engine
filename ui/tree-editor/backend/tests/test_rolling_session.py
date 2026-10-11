@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from dsp_decikit.asgi import app
-from dsp_decikit.auth import middleware
+from dsp_decikit.auth import middleware, sessions
 from dsp_decikit.auth.models import SessionInfo
 from dsp_decikit.settings import settings
 
@@ -41,7 +41,7 @@ def test_a_renewal_that_finds_no_session_sets_no_status_cookie(client, monkeypat
 
     async def renew_session(token, info):
         return False
-    monkeypatch.setattr(middleware, "renew_session", renew_session)
+    monkeypatch.setattr(sessions, "renew_session", renew_session)
 
     reply = client.get("/api/no-such-route")
 

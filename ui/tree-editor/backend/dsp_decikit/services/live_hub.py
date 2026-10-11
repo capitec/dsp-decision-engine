@@ -25,11 +25,14 @@ from dsp_decikit.services.documents import validation_errors
 from dsp_decikit.services.live_sync import CHANNEL
 
 logger = logging.getLogger("uvicorn.error").getChild("live")
+# A client that cannot take a message in this long is dropped; it catches up when it reconnects.
+SEND_TIMEOUT_S = 5
+TRY_AGAIN = 1013
 
 
 class Client:
     def __init__(self, ws: WebSocket, client_id: str):
-        self.ws, self.client_id, self.last = ws, client_id, 0
+        self.ws, self.client_id, self.last, self.alive = ws, client_id, 0, True
 
 
 class Room:
@@ -61,15 +64,15 @@ class Hub:
                 logged = await session.scalar(select(func.count()).select_from(ProjectOp).where(
                     ProjectOp.project_id == project_id, ProjectOp.version.between(since + 1, version)))
             if since == 0 or since > version or logged != version - since:
-                await client.ws.send_text(json.dumps({"type": "snapshot", "version": version, "doc": doc}))
+                await _send(client, json.dumps({"type": "snapshot", "version": version, "doc": doc}))
                 client.last = version
             else:
                 client.last = since
             room.clients.add(client)
             await self._send_rows(project_id, room)
-            await client.ws.send_text(json.dumps({"type": "ready", "version": client.last}))
+            await _send(client, json.dumps({"type": "ready", "version": client.last}))
             if room.validation and room.validated == client.last:
-                await client.ws.send_text(room.validation)
+                await _send(client, room.validation)
         self._validate_soon(project_id, room)
 
     def leave(self, project_id: uuid.UUID, client: Client) -> None:
@@ -111,13 +114,13 @@ class Hub:
         for row in rows:
             text = json.dumps({"type": "applied", "version": row.version, "client_id": row.client_id,
                                "msg_id": row.msg_id, "ops": row.ops})
-            for client in list(room.clients):
-                if client.last < row.version:
-                    # ponytail: one slow socket holds up the project's fan-out; add a per-client queue if it shows
-                    if await _send(client, text):
-                        client.last = row.version
-                    else:
-                        room.clients.discard(client)
+            behind = [client for client in room.clients if client.last < row.version]
+            # All at once, so a client that stopped reading holds up the others for one SEND_TIMEOUT_S at most.
+            for client, sent in zip(behind, await asyncio.gather(*(_send(client, text) for client in behind))):
+                if sent:
+                    client.last = row.version
+                else:
+                    room.clients.discard(client)
 
     def _validate_soon(self, project_id: uuid.UUID, room: Room) -> None:
         if room.clients and (room.validating is None or room.validating.done()):
@@ -198,11 +201,27 @@ def _validator() -> ProcessPoolExecutor:
 
 
 async def _send(client: Client, text: str) -> bool:
-    try:
-        await client.ws.send_text(text)
-        return True
-    except Exception:
+    if not client.alive:
         return False
+    try:
+        await asyncio.wait_for(client.ws.send_text(text), SEND_TIMEOUT_S)
+        return True
+    except Exception as e:
+        client.alive = False
+        if isinstance(e, asyncio.TimeoutError):
+            # In a task of its own: closing waits on the stalled reader too.
+            task = asyncio.create_task(_close(client.ws))
+            _closing.add(task)
+            task.add_done_callback(_closing.discard)
+        return False
+
+
+_closing: t.Set[asyncio.Task] = set()
+
+
+async def _close(ws: WebSocket) -> None:
+    with contextlib.suppress(Exception):
+        await ws.close(TRY_AGAIN)
 
 
 hub = Hub()

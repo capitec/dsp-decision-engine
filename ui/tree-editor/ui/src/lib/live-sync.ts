@@ -6,7 +6,8 @@
  * message about 150 ms after the last one; every server version arrives in order (my own as the ack), and before one
  * is applied the editor's un-diffed edits are pushed first, so a remote change never overwrites a local one unseen.
  * After a disconnect (a closed socket, or no answer to a ping for ~10 s) the edits made meanwhile, and the messages
- * the catch-up did not show applied, go back as one offline batch the server merges whole or rejects whole.
+ * the catch-up did not show applied, go back as one offline batch the server merges whole or rejects whole. A
+ * close for policy (signed out, or access removed) ends it until `resume()`: unsent edits stay in the editor.
  *
  * @example
  * const sync = new LiveSync(liveUrl(projectId), project.project_data, project.version, {
@@ -18,7 +19,8 @@
  */
 import { apply, diff, type Json, type Op } from './live-ops'
 
-export type LiveStatus = 'connecting' | 'live' | 'reconnecting'
+/** `ended`: the server closed live editing for good (signed out, or access removed). */
+export type LiveStatus = 'connecting' | 'live' | 'reconnecting' | 'ended'
 /** `parts`: the earlier messages an offline batch contains, `[id, op count]` in order. */
 type Message = { id: string; base: number; ops: Op[]; offline?: boolean; parts?: Array<[string, number]> }
 type Socket = Pick<WebSocket, 'send' | 'close' | 'onopen' | 'onmessage' | 'onclose'>
@@ -41,7 +43,16 @@ export interface LiveHooks {
   validation?: (errors: unknown[], version: number) => void
   /** Every edit is on the server (nothing pending). */
   settled?: (version: number) => void
+  /** The server ended live editing (`reason`: signed out, or access removed); edits it does not have wait for
+   * `resume()`. */
+  ended?: (reason: string) => void
 }
+
+const POLICY_VIOLATION = 1008
+// Not JSON, too big, server error: the server failed on what I sent. Any other drop (a lost connection, a missed
+// ping, a restart, a database outage) says nothing about my edits, so it is never counted against them.
+const FAILED = [1007, 1009, 1011]
+const MAX_FAILURES = 3
 
 export const liveUrl = (projectId: string) =>
   `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/v1/projects/${projectId}/live`
@@ -56,6 +67,8 @@ export class LiveSync {
   private ready = false
   private stopped = false
   private retries = 0
+  private failures = 0
+  private ended = false
   private timer?: ReturnType<typeof setTimeout>
   private socket?: Socket
   private waiters: Array<() => void> = []
@@ -128,6 +141,14 @@ export class LiveSync {
     })
   }
 
+  /** Connect again after the server ended live editing (the user signed in again); unsent edits go then. */
+  resume() {
+    if (!this.ended || this.stopped) return
+    this.ended = false
+    this.hooks.status?.('reconnecting')
+    this.connect()
+  }
+
   stop() {
     this.stopped = true
     clearTimeout(this.timer)
@@ -144,18 +165,39 @@ export class LiveSync {
       this.heard = true
       this.receive(JSON.parse(event.data))
     }
-    socket.onclose = () => this.lost(socket)
+    socket.onclose = (event) => this.lost(socket, event)
   }
 
-  private lost(socket: Socket) {
+  private lost(socket: Socket, closed?: { code?: number; reason?: string }) {
     if (this.stopped || socket !== this.socket) return
     this.socket = undefined
     socket.onopen = socket.onmessage = socket.onclose = null
     socket.close()
+    const sent = this.ready && this.pending.length > 0
     this.ready = false
     this.offlineBase ??= { version: this.version, doc: this.confirmed }
+    if (closed?.code === POLICY_VIOLATION) {
+      // No reconnecting until `resume()`: the server would refuse every try.
+      this.ended = true
+      this.hooks.status?.('ended')
+      return this.hooks.ended?.(closed.reason || 'live editing ended')
+    }
+    // The server failed right after my edits went out, with none of them answered: one it fails on every time
+    // would otherwise be resent on every reconnect for ever.
+    if (sent && FAILED.includes(closed?.code ?? 0) && ++this.failures >= MAX_FAILURES) this.handBack()
     this.hooks.status?.('reconnecting')
     setTimeout(() => this.connect(), Math.min(250 * 2 ** this.retries++, 4000))
+  }
+
+  /** Give up on the pending edits: the editor shows the server's version and the hook gets mine. */
+  private handBack() {
+    this.failures = 0
+    this.flush()
+    const doc = this.view
+    this.pending = []
+    this.waiters = []  // a Save waiting on them times out unsaved
+    this.refresh()
+    this.hooks.offlineRejected?.({ reason: `the server failed on them ${MAX_FAILURES} times in a row.`, conflicts: [], doc })
   }
 
   /** After a reconnect: everything pending goes as one offline batch (resent as is when it already is one). */
@@ -212,6 +254,7 @@ export class LiveSync {
       this.confirmed = apply(this.confirmed, m.ops)[0]
       this.version = m.version
       const mine = m.client_id === this.clientId ? this.pending.find((p) => p.id === m.msg_id) : undefined
+      if (mine) this.failures = 0
       this.pending = this.pending.filter((p) => p !== mine)
       if (mine?.offline) this.offlineDone()
       this.refresh()
@@ -219,6 +262,7 @@ export class LiveSync {
     } else if (m.type === 'rejected') {
       this.flush()
       const mine = this.pending.find((p) => p.id === m.msg_id)
+      if (mine) this.failures = 0
       this.pending = this.pending.filter((p) => p !== mine)
       this.refresh()
       if (!mine?.offline) return this.hooks.rejected?.(m.reason)
@@ -229,6 +273,9 @@ export class LiveSync {
     } else if (m.type === 'validation') {
       this.validation = m
       this.report()
+    } else if (m.type === 'session') {
+      // My edit renewed the session; only the page can update the expiry cookie the session check reads.
+      document.cookie = m.cookie
     } else if (m.type === 'error') {
       console.warn('live sync:', m.reason)
     }

@@ -156,3 +156,42 @@ def test_offline_edits_on_node_two_merge_with_edits_made_on_node_one(signed_in: 
     expect(toast(second, "Your offline edits were merged")).to_be_visible()
     for page in (signed_in, second):
         shows(page, ["On node one", "Offline on node two"])
+
+
+class Padded:
+    """Pads the `ops` messages a page sends on its live socket past the server's 4 MiB limit while `padding`, so the
+    server closes the socket on them every time."""
+
+    def __init__(self, page: Page):
+        self.padding = False
+        page.route_web_socket(LIVE, self._route)
+
+    def _route(self, ws):
+        server = ws.connect_to_server()
+
+        def outgoing(message):
+            data = json.loads(message)
+            if self.padding and data.get("type") == "ops":
+                message = json.dumps({**data, "pad": "x" * (4 * 1024 * 1024 + 1)})
+            server.send(message)
+
+        ws.on_message(outgoing)
+
+
+def test_edits_the_server_fails_on_every_time_are_handed_back_after_three_tries(signed_in: Page):
+    project = two_rules(signed_in)
+    padded = Padded(signed_in)
+    open_live(signed_in, project)
+
+    padded.padding = True
+    rename_rule(signed_in, "Never stored")
+
+    banner = signed_in.get_by_test_id("offline-conflict")
+    expect(banner).to_contain_text("3 times", timeout=30_000)
+    shows(signed_in, ["Rule 1", "Rule 2"])
+    with signed_in.expect_download() as download:
+        banner.get_by_role("button", name="Download my version").click()
+    assert names(json.loads(Path(download.value.path()).read_text())) == ["Never stored", "Rule 2"]
+    padded.padding = False
+    rename_rule(signed_in, "Stored", rule=1)
+    stored(signed_in, project, lambda d: names(d) == ["Rule 1", "Stored"])

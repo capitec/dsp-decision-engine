@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LiveSync } from '../live-sync'
+import { isAuthenticated } from '../auth'
 import type { Json } from '../live-ops'
 
 class FakeSocket {
@@ -8,7 +9,7 @@ class FakeSocket {
   onmessage: any = null
   onclose: any = null
   send(text: string) { this.sent.push(JSON.parse(text)) }
-  close() { this.onclose?.() }
+  close(code?: number, reason = '') { this.onclose?.({ code, reason }) }
   receive(message: object) { this.onmessage({ data: JSON.stringify(message) }) }
   ops() { return this.sent.filter((m) => m.type === 'ops') }
 }
@@ -21,7 +22,7 @@ function setup() {
   const shown: Json[] = []
   const hooks = {
     read: () => editor, show: vi.fn((d: Json) => { editor = d; shown.push(d) }), rejected: vi.fn(), settled: vi.fn(),
-    merged: vi.fn(), offlineRejected: vi.fn(), validation: vi.fn(),
+    merged: vi.fn(), offlineRejected: vi.fn(), validation: vi.fn(), ended: vi.fn(), status: vi.fn(),
   }
   const sync = new LiveSync('ws://x', doc('A'), 1, hooks, 150, () => { const s = new FakeSocket(); sockets.push(s); return s as any })
   const socket = () => sockets[sockets.length - 1]
@@ -233,5 +234,123 @@ describe('LiveSync', () => {
     vi.advanceTimersByTime(250)
 
     expect(sockets).toHaveLength(2)
+  })
+
+  it('keeps the session expiry the server renewed on an edit, so the page does not take me for signed out', () => {
+    const { socket } = setup()
+    document.cookie = 'session_status=1; Path=/'
+    expect(isAuthenticated()).toBe(false)
+
+    const renewed = Math.floor(Date.now() / 1000) + 3600
+    socket().receive({ type: 'session', cookie: `session_status=${renewed}; Max-Age=86400; Path=/; SameSite=strict` })
+
+    expect(isAuthenticated()).toBe(true)
+  })
+
+  it('stops and says why when the server ends my session or my access, instead of reconnecting', () => {
+    const { sync, hooks, socket, sockets, shown, type } = setup()
+    type(doc('Unsent'))
+    vi.advanceTimersByTime(150)
+    const before = shown.length
+
+    socket().close(1008, 'signed out: sign in again to keep editing')
+    vi.advanceTimersByTime(30000)
+
+    expect(sockets).toHaveLength(1)
+    expect(hooks.status).toHaveBeenLastCalledWith('ended')
+    expect(hooks.ended).toHaveBeenCalledWith('signed out: sign in again to keep editing')
+    expect(shown).toHaveLength(before)  // my edit stays in the editor
+    expect(sync.idle()).toBe(false)
+  })
+
+  it('after signing in again connects and sends the edits kept meanwhile as an offline batch', () => {
+    const { sync, socket, sockets, type } = setup()
+    type(doc('Kept'))
+    vi.advanceTimersByTime(150)
+    socket().close(1008, 'signed out: sign in again to keep editing')
+
+    sync.resume()
+    socket().onopen()
+    socket().receive({ type: 'ready', version: 1 })
+
+    expect(sockets).toHaveLength(2)
+    expect(socket().ops()).toMatchObject([{ offline: true, base: 1, ops: [{ path: '/rules/a/meta/name', value: 'Kept' }] }])
+  })
+
+  function failOn(socket: () => FakeSocket, code: number, times: number) {
+    for (let i = 0; i < times; i++) {
+      socket().close(code)
+      vi.advanceTimersByTime(4000)
+      socket().onopen()
+      socket().receive({ type: 'ready', version: 1 })
+    }
+  }
+
+  it('after the server fails on the same edits three times in a row hands them over and goes on without them', () => {
+    const { sync, hooks, socket, shown, type } = setup()
+    type(doc('Poison'))
+    vi.advanceTimersByTime(150)
+
+    failOn(socket, 1011, 3)
+
+    expect(hooks.offlineRejected).toHaveBeenCalledWith({ reason: expect.stringContaining('3 times'), conflicts: [], doc: doc('Poison') })
+    expect(shown[shown.length - 1]).toEqual(doc('A'))
+    expect(sync.idle()).toBe(true)
+    expect(socket().ops()).toEqual([])
+    type(doc('Next'))
+    vi.advanceTimersByTime(150)
+    expect(socket().ops()).toHaveLength(1)
+  })
+
+  it('keeps retrying edits through drops the server calls transient, as during a database restart', () => {
+    const { sync, hooks, socket, type } = setup()
+    type(doc('Kept'))
+    vi.advanceTimersByTime(150)
+
+    failOn(socket, 1013, 5)
+
+    expect(hooks.offlineRejected).not.toHaveBeenCalled()
+    expect(socket().ops()).toHaveLength(1)
+    expect(sync.idle()).toBe(false)
+  })
+
+  it('keeps retrying edits through drops the server did not report as its failure: a lost connection, a missed ping', () => {
+    // A database that hangs rather than refuses keeps the server from answering; the edits must not be given up.
+    const { sync, hooks, socket, type } = setup()
+    type(doc('Kept'))
+    vi.advanceTimersByTime(150)
+
+    failOn(socket, 1006, 3)
+    failOn(socket, undefined as unknown as number, 3)
+
+    expect(hooks.offlineRejected).not.toHaveBeenCalled()
+    expect(sync.idle()).toBe(false)
+  })
+
+  it('signing in again while it reconnects after a drop opens one socket, not two', () => {
+    const { sync, socket, sockets } = setup()
+    socket().onopen()
+    socket().receive({ type: 'ready', version: 1 })
+    socket().close(1006)
+
+    sync.resume()
+    vi.advanceTimersByTime(4000)
+
+    expect(sockets).toHaveLength(2)
+  })
+
+  it('counts failures again from zero once the server answers one of my messages', () => {
+    const { sync, hooks, socket, type } = setup()
+    type(doc('First'))
+    vi.advanceTimersByTime(150)
+    failOn(socket, 1011, 2)
+    const [batch] = socket().ops()
+    socket().receive({ type: 'applied', version: 2, client_id: sync.clientId, msg_id: batch.id, ops: batch.ops })
+
+    type(doc('Second'))
+    vi.advanceTimersByTime(150)
+    failOn(socket, 1011, 2)
+
+    expect(hooks.offlineRejected).not.toHaveBeenCalled()
   })
 })

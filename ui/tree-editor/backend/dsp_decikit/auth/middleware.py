@@ -7,8 +7,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response as StarletteResponse
 
 from dsp_decikit.settings import settings
-from dsp_decikit.auth.sessions import get_session, renew_session
-from dsp_decikit.auth.models import SessionInfo
+from dsp_decikit.auth import sessions
+from dsp_decikit.auth.sessions import get_session
 from logging import getLogger
 
 logger = getLogger(__name__)
@@ -67,15 +67,12 @@ class RollingSessionMiddleware(BaseHTTPMiddleware):
 
         response = await call_next(request)
 
-        if session_info and (
-            session_info.expires_at - int(time.time())
-            <= settings.auth.session_renewal_threshold_s
-        ):
-            try:
-                await self._renew_session(session_token, session_info, response)
-            except Exception as e:
-                # The request itself succeeded; failing it now would misreport it.
-                logger.error(f"Error renewing session: {e}")
+        try:
+            if session_info and await sessions.renew_if_due(session_token, session_info):
+                set_status_cookie(response, session_info.expires_at)
+        except Exception as e:
+            # The request itself succeeded; failing it now would misreport it.
+            logger.error(f"Error renewing session: {e}")
 
         return response
 
@@ -91,28 +88,12 @@ class RollingSessionMiddleware(BaseHTTPMiddleware):
 
         return self._logout_url_cache
 
-    async def _renew_session(
-        self, session_token: str, session_info: SessionInfo, response: Response
-    ):
-        """Renew the session and update cookies."""
-        current_time = int(time.time())
 
-        # Update session info - only last_activity changes (expires_at is calculated dynamically)
-        session_info.last_activity = current_time
-
-        if not await renew_session(session_token, session_info):
-            return
-
-        # Update status cookie with new expiry timestamp (calculated from new last_activity)
-        new_expires_at = (
-            session_info.expires_at
-        )  # This uses the property which calculates from last_activity
-
-        response.set_cookie(
-            key=settings.auth.status_cookie.key,
-            value=str(new_expires_at),
-            max_age=settings.auth.session_max_duration_s,
-            **settings.auth.status_cookie.model_dump(mode="json", exclude={"key"}),
-        )
-
-        logger.debug(f"Session renewed until {new_expires_at}")
+def set_status_cookie(response: Response, expires_at: int) -> None:
+    """Tell the browser the session's new expiry (the status cookie scripts read)."""
+    response.set_cookie(
+        key=settings.auth.status_cookie.key,
+        value=str(expires_at),
+        max_age=settings.auth.session_max_duration_s,
+        **settings.auth.status_cookie.model_dump(mode="json", exclude={"key"}),
+    )
