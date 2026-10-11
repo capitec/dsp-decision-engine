@@ -162,4 +162,4 @@ def test_a_handler_runs_its_own_engine_whatever_the_default(tmp_path):
         handler.activate()
         assert handler.engine == FusedEngine()
         assert handler.module_fn().executable.engine == FusedEngine()
-        assert handler.score({"code": "AB"})["label"] is True
+        assert handler.run({"code": "AB"})["label"] is True

@@ -56,7 +56,7 @@ def in_process(root: Path) -> RequestHandler:
     return handler
 
 
-def score(handler: RequestHandler, record: dict) -> dict:
+def run(handler: RequestHandler, record: dict) -> dict:
     response = handler.process_fn(json.dumps(record).encode(), "application/json", "application/json")
     return json.loads(response.content)
 
