@@ -358,10 +358,10 @@ def mixed_list(x: float) -> list[float]:
 @pytest.mark.parametrize("mode", COMPILED)
 def test_a_numba_lowering_assert_falls_back_with_a_reason(mode):
     exe = Engine.resolve(mode)().bind(flow(mixed_list, name="p"))
-    with warned_in_fused(mode, "p/mixed_list runs in Python, row by row: AssertionError"):
+    with warned_in_fused(mode, "p/mixed_list runs in Python, row by row: writes 'mixed_list' as list"):
         out = exe.run(pl.DataFrame({"x": [2.0, 0.5]}))
     assert out["mixed_list"].to_list() == [[1.0, 2.0], [1.5]]
-    assert exe.fallbacks()["p/mixed_list"].startswith("AssertionError")
+    assert "; numba also refused the body: AssertionError" in exe.fallbacks()["p/mixed_list"]
 
 
 def mixed_records(x: float) -> list[dict]:
@@ -371,9 +371,9 @@ def mixed_records(x: float) -> list[dict]:
 @pytest.mark.parametrize("mode", COMPILED)
 def test_a_numba_boxing_type_error_falls_back_with_a_reason(mode):
     exe = Engine.resolve(mode)().bind(flow(mixed_records, name="p"))
-    with warned_in_fused(mode, "p/mixed_records runs in Python, row by row: TypeError"):
+    with warned_in_fused(mode, "p/mixed_records runs in Python, row by row: writes 'mixed_records' as list"):
         assert exe.run({"x": 1.5})["mixed_records"] == [{"n": 1, "v": "x"}, {"n": 2, "v": 1.5}]
-    assert exe.fallbacks()["p/mixed_records"].startswith("TypeError")
+    assert "; numba also refused the body: TypeError" in exe.fallbacks()["p/mixed_records"]
 
 
 @allow_fallback
