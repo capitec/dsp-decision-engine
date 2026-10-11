@@ -29,7 +29,9 @@ changed the order of the same rules differently) and the merged document has no 
 stored document nor the offline editor's own had. Otherwise it refuses the whole batch: the editor shows the stored
 document and a banner naming the rules that collided, with Download my version (the offline document, shaped like an
 Export). The base document is rebuilt from the log (a new project logs its first version), so a batch older than the
-log is refused. A batch is not kept across a page reload.
+log is refused. A message is logged at most once per client: a resend is not applied again, and a batch names the
+earlier messages it contains so one applied while the editor reconnected is skipped. A batch is not kept across a
+page reload.
 
 ## Tests
 
