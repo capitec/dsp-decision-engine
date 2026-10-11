@@ -314,6 +314,31 @@ describe('LiveSync', () => {
     expect(sync.idle()).toBe(false)
   })
 
+  it('keeps retrying edits through drops the server did not report as its failure: a lost connection, a missed ping', () => {
+    // A database that hangs rather than refuses keeps the server from answering; the edits must not be given up.
+    const { sync, hooks, socket, type } = setup()
+    type(doc('Kept'))
+    vi.advanceTimersByTime(150)
+
+    failOn(socket, 1006, 3)
+    failOn(socket, undefined as unknown as number, 3)
+
+    expect(hooks.offlineRejected).not.toHaveBeenCalled()
+    expect(sync.idle()).toBe(false)
+  })
+
+  it('signing in again while it reconnects after a drop opens one socket, not two', () => {
+    const { sync, socket, sockets } = setup()
+    socket().onopen()
+    socket().receive({ type: 'ready', version: 1 })
+    socket().close(1006)
+
+    sync.resume()
+    vi.advanceTimersByTime(4000)
+
+    expect(sockets).toHaveLength(2)
+  })
+
   it('counts failures again from zero once the server answers one of my messages', () => {
     const { sync, hooks, socket, type } = setup()
     type(doc('First'))
