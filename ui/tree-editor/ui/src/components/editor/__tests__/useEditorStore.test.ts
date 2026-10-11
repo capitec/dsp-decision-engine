@@ -154,3 +154,15 @@ describe('saving', () => {
     expect(state().isDirty).toBe(true);
   });
 });
+
+describe('auto-arrange while another session edits', () => {
+  it('turns off when a server version moves a node, so this browser does not lay their move out again', () => {
+    useEditorStore.setState({ autoRearrange: true });
+
+    state().applyDocument(doc({ nodes: [unary('root', 99), leaf('yes', 0), leaf('no', 1)] }), 5);
+    expect(state().autoRearrange).toBe(true);
+
+    state().applyDocument(doc({ nodes: [unary('root', 99), leaf('yes', 0), { ...leaf('no', 1), position: { x: 400, y: 300 } }] }), 6);
+    expect(state().autoRearrange).toBe(false);
+  });
+});
