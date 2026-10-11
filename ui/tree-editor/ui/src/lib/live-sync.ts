@@ -49,8 +49,9 @@ export interface LiveHooks {
 }
 
 const POLICY_VIOLATION = 1008
-// Going away, restarting, try again later: the server says the same message will go through.
-const TRANSIENT = [1001, 1012, 1013]
+// Not JSON, too big, server error: the server failed on what I sent. Any other drop (a lost connection, a missed
+// ping, a restart, a database outage) says nothing about my edits, so it is never counted against them.
+const FAILED = [1007, 1009, 1011]
 const MAX_FAILURES = 3
 
 export const liveUrl = (projectId: string) =>
@@ -178,9 +179,9 @@ export class LiveSync {
       this.hooks.status?.('ended')
       return this.hooks.ended?.(closed.reason || 'live editing ended')
     }
-    // A drop right after my edits went out, with none of them answered: one the server fails on every time (too
-    // big, or a server error) would otherwise be resent on every reconnect for ever.
-    if (sent && !TRANSIENT.includes(closed?.code ?? 0) && ++this.failures >= MAX_FAILURES) this.handBack()
+    // The server failed right after my edits went out, with none of them answered: one it fails on every time
+    // would otherwise be resent on every reconnect for ever.
+    if (sent && FAILED.includes(closed?.code ?? 0) && ++this.failures >= MAX_FAILURES) this.handBack()
     this.hooks.status?.('reconnecting')
     setTimeout(() => this.connect(), Math.min(250 * 2 ** this.retries++, 4000))
   }
