@@ -84,7 +84,9 @@ Closed since, on `collab/ship`: the op log snapshots the document every 100 vers
 2, so their offline batches merge. On the 521-rule set (123 KB) rebuilding a version takes 19 ms from its snapshot
 and 29 ms 99 versions after it (loading the snapshot dominates; a version replays in about 0.1 ms); a write that
 stores a snapshot and trims takes 53 to 55 ms against 39 ms (p50) for one that does not; the trim of a 6,200-version
-log to 5,001 rows takes 18 ms.
+log to 5,001 rows takes 18 ms. The trim looks for its whole row only below the count or age bound: on a log of
+5,100 REST saves of 521 rules (1.2 GB, every row a whole document) filtering every row for being whole took 4.3 s
+under the row lock, the bounded lookup 17 ms.
 
 ## Recommendation
 
