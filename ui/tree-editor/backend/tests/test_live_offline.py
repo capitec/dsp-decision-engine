@@ -334,3 +334,79 @@ def test_offline_parts_that_do_not_describe_the_ops_are_rejected(parts):
         check_message({"type": "ops", "id": "b", "base": 1, "offline": True, "parts": parts,
                        "ops": [name("a", "x"), name("b", "y")]})
 
+
+# ---- the row lock while a batch is validated ---------------------------------------------------------------------
+
+async def row_locked(project_id) -> bool:
+    from sqlalchemy import select
+    from dsp_decikit.db.session import db_session
+    from dsp_decikit.db.models import Project
+    async with db_session() as session:
+        free = await session.scalar(select(Project.id).where(Project.id == project_id).with_for_update(skip_locked=True))
+    return free is None
+
+
+@db
+@pytest.mark.asyncio
+async def test_an_edit_saved_while_an_offline_batch_is_validated_is_validated_with_it(offline):
+    from dsp_decikit.services.documents import validation_errors
+    from dsp_decikit.services.live_sync import apply_message
+    project_id, stored = offline
+    saved = []
+
+    async def validate(doc):
+        if not saved:
+            assert not await row_locked(project_id)
+            saved.append(await apply_message(project_id, "online", "m1", 1, [LIMIT_TEXT]))
+        return validation_errors(doc)
+
+    with pytest.raises(Rejected) as error:
+        await apply_message(project_id, "offline", "batch", 1, [USES_LIMIT], offline=True, validate=validate)
+
+    assert "limit" in str(error.value) and saved[0].version == 2
+    assert (await stored()).version == 2
+
+
+@db
+@pytest.mark.asyncio
+async def test_an_offline_batch_overtaken_by_an_edit_while_it_was_validated_merges_on_top_of_it(offline):
+    from dsp_decikit.services.documents import validation_errors
+    from dsp_decikit.services.live_sync import apply_message
+    project_id, stored = offline
+    validated = []
+
+    async def validate(doc):
+        if not validated:  # it would wait for ever if the merge held the row lock
+            await asyncio.wait_for(apply_message(project_id, "online", "m1", 1, [name("a", "Online")]), 5)
+        validated.append(doc)
+        return validation_errors(doc)
+
+    applied = await apply_message(project_id, "offline", "batch", 1, [name("b", "Offline")], offline=True,
+                                  validate=validate)
+
+    row = await stored()
+    assert applied.version == row.version == 3 and names(row) == ["Online", "Offline", "C"]
+    assert row.project_data == validated[-1]
+
+
+@db
+@pytest.mark.asyncio
+async def test_an_offline_batch_overtaken_on_every_attempt_merges_under_the_row_lock(offline):
+    from dsp_decikit.services.documents import validation_errors
+    from dsp_decikit.services.live_sync import apply_message
+    project_id, stored = offline
+    validated = []
+
+    async def validate(doc):
+        validated.append(doc)
+        if not await row_locked(project_id):
+            await apply_message(project_id, "online", f"m{len(validated)}", 1, [name("a", f"Online {len(validated)}")])
+        return validation_errors(doc)
+
+    applied = await apply_message(project_id, "offline", "batch", 1, [name("b", "Offline")], offline=True,
+                                  validate=validate)
+
+    row = await stored()
+    assert applied.version == row.version and row.project_data == validated[-1]
+    assert names(row)[1] == "Offline"
+
