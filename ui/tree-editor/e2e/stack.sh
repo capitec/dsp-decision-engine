@@ -22,7 +22,7 @@ state=${E2E_STATE:-$repo/.scratch/ui-e2e-stack}
 nodes=${E2E_NODES:-1}
 live=${DSP_LIVE_COLLAB:-false}
 pg=tree-editor-e2e-pg-$pg_port
-mkdir -p "$state"
+mkdir -p "$state" "${E2E_TMPDIR:-/var/tmp/dtmp-ui-e2e}"
 
 # Node n listens on port+n-1 and logs to backend.log (node 1) or backend-<n>.log.
 node_port() { echo $((port + $1 - 1)); }
@@ -32,7 +32,7 @@ start_node() {
   local n=$1 p; p=$(node_port "$1")
   local env=(DSP_DB__PORT="$pg_port" DSP_UI_BUILD_PATH="$here/../ui/build" SETUPTOOLS_SCM_PRETEND_VERSION=0.0.0
              DSP_AUTH__COOKIE__SECURE=false DSP_AUTH__STATUS_COOKIE__SECURE=false DSP_LIVE_COLLAB="$live"
-             PATH="$PATH")
+             TMPDIR="${E2E_TMPDIR:-/var/tmp/dtmp-ui-e2e}" PATH="$PATH")
   # merge-core is built from source (cargo and maturin on PATH) and cached until its Rust sources change.
   local cmd=(uv run --no-project --with-requirements requirements.txt --with-editable "$repo" --with "$here/../merge-core"
              sh -c "alembic upgrade head && exec uvicorn dsp_decikit.asgi:app --host 127.0.0.1 --port $p")
