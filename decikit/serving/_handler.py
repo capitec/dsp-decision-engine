@@ -290,7 +290,7 @@ class RequestHandler:
 def check_serving_engine(engine: Engine) -> None:
     if not isinstance(engine, NumbaEngine):
         tags = ", ".join(tag for tag, c in Engine.registered().items() if issubclass(c, NumbaEngine))
-        raise exc.EngineError(f"serving cannot run on the {engine._tag!r} engine; serving runs on a numba "
+        raise exc.EngineError(f"serving cannot run on the {engine.type!r} engine; serving runs on a numba "
                               f"engine ({tags}). The polars engine is for batch runs.")
 
 
