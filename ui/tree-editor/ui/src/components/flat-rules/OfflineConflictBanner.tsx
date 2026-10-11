@@ -1,15 +1,15 @@
 import React from 'react';
 import { Button } from "@/components/ui/button";
 import { downloadJson } from './api';
-import type { FlatRuleProjectDetail } from './types';
 import type { OfflineConflict } from './useFlatRuleLive';
 
 /** Persistent notice that offline edits were refused, with the user's own version to download. */
 export const OfflineConflictBanner: React.FC<{
-  project: FlatRuleProjectDetail,
+  project: { id: string, name: string },
+  projectType?: 'flat_rule' | 'tree',
   conflict: OfflineConflict,
   onDismiss: () => void,
-}> = ({ project, conflict, onDismiss }) => {
+}> = ({ project, projectType = 'flat_rule', conflict, onDismiss }) => {
   const download = () => {
     // The shape Export gives, so the file imports back as a project.
     const doc = conflict.doc as Record<string, any>;
@@ -19,7 +19,7 @@ export const OfflineConflictBanner: React.FC<{
         name: project.name,
         ...(doc.metadata ?? {}),
         project_id: project.id,
-        project_type: 'flat_rule',
+        project_type: projectType,
         exported_at: new Date().toISOString(),
       },
     }, `${project.name.replace(/[^a-zA-Z0-9]/g, '_')}_my_offline_version.json`);
