@@ -35,7 +35,8 @@ start_node() {
              PATH="$PATH")
   # Two nodes need logins both can read: the in-memory cache is per process.
   [ "$nodes" -gt 1 ] && env+=(DSP_CACHE='{"provider": "persisted-cache", "cache": {"provider": "in-memory"}}')
-  local cmd=(uv run --no-project --with-requirements requirements.txt --with-editable "$repo"
+  # merge-core is built from source (cargo and maturin on PATH) and cached until its Rust sources change.
+  local cmd=(uv run --no-project --with-requirements requirements.txt --with-editable "$repo" --with "$here/../merge-core"
              sh -c "alembic upgrade head && exec uvicorn dsp_decikit.asgi:app --host 127.0.0.1 --port $p")
   cd "$here/../backend"
   if command -v systemd-run >/dev/null; then
