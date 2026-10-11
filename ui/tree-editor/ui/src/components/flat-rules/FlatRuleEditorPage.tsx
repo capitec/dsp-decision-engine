@@ -23,6 +23,7 @@ import {
   useFlatRuleStore,
 } from './useFlatRuleStore';
 import { useFlatRuleLive } from './useFlatRuleLive';
+import { OfflineConflictBanner } from './OfflineConflictBanner';
 import { OutputConfigurationTab } from './OutputConfigurationTab';
 import { InputConfigurationTab } from './InputConfigurationTab';
 import type { FlatRuleProjectDetail } from './types';
@@ -72,7 +73,7 @@ const FlatRuleEditorHeader: React.FC<{
                   <Badge variant="secondary" data-testid="live-status" className={live === 'live'
                     ? "text-xs bg-green-100 text-green-800 border-green-200"
                     : "text-xs bg-amber-100 text-amber-800 border-amber-200"}>
-                    {live === 'live' ? 'Live' : live === 'connecting' ? 'Connecting...' : 'Reconnecting...'}
+                    {live === 'live' ? 'Live' : live === 'connecting' ? 'Connecting...' : 'Offline - edits will be merged when you reconnect'}
                   </Badge>
                 )}
               </div>
@@ -118,7 +119,7 @@ export const FlatRuleEditorPage: React.FC = () => {
   const saveProject = useFlatRuleSaveProject();
   const dirty = useFlatRuleDirty();
   useUnsavedChanges(dirty, LEAVE_MESSAGE);
-  useFlatRuleLive(project);
+  const offline = useFlatRuleLive(project);
   const hasInputSchemaErrors = useFlatRuleHasInputSchemaErrors();
   const hasOutputErrors = useFlatRuleHasOutputErrors();
   const hasParameterErrors = useFlatRuleHasParameterErrors();
@@ -269,6 +270,9 @@ export const FlatRuleEditorPage: React.FC = () => {
         onExport={handleExport}
         onRename={handleRename}
       />
+      {offline.conflict && (
+        <OfflineConflictBanner project={project} conflict={offline.conflict} onDismiss={offline.dismiss} />
+      )}
 
       {/* Main Content with Tabs */}
       <div className="max-w-full mx-auto p-6">

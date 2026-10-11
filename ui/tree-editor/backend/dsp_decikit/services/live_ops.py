@@ -243,8 +243,9 @@ def stale_ops(mine, concurrent):
 def conflicts(mine, theirs, base):
     """My touched paths that overlap theirs under the offline rule (both diffed from `base`); empty means merge.
 
-    Overlap is an equal, ancestor or descendant path. Two order ops on the same list conflict only when the keys
-    common to base, mine and theirs end up in a different relative order.
+    Overlap is an equal, ancestor or descendant path, unless both sides end with the same value at my path (they
+    made the same change). Two order ops on the same list conflict only when both sides changed the relative order
+    of the keys common to base, mine and theirs, and changed it differently.
     """
     their_paths = [_split(p) for p in touched(theirs)]
     docs = None
@@ -252,13 +253,25 @@ def conflicts(mine, theirs, base):
     for path in touched(mine):
         s = _split(path)
         hits = [t for t in their_paths if _prefix(s, t) or _prefix(t, s)]
-        if s[-1:] == [ORDER] and s in hits and len(hits) == 1:
-            docs = docs or [base, apply(base, mine)[0], apply(base, theirs)[0]]
-            if not _orders_disagree(docs, s[:-1]):
+        if not hits:
+            continue
+        docs = docs or [base, apply(base, mine)[0], apply(base, theirs)[0]]
+        if s[-1:] == [ORDER]:
+            if s in hits and len(hits) == 1 and not _orders_disagree(docs, s[:-1]):
                 continue
-        if hits:
-            found.append(path)
+        elif not diff(_at(docs[1], s), _at(docs[2], s)) and not any(
+                len(t) < len(s) and any(x.isdigit() for x in s[len(t):]) for t in hits):
+            # Under something they replaced, an index can name another item on their side than on mine.
+            continue
+        found.append(path)
     return found
+
+
+def _at(doc, segments):
+    try:
+        return {"v": _walk(doc, segments)}
+    except _Dropped:
+        return {}
 
 
 def _orders_disagree(docs, at):
@@ -271,4 +284,28 @@ def _orders_disagree(docs, at):
     if None in keys:
         return True
     common = set(keys[0]) & set(keys[1]) & set(keys[2])
-    return [k for k in keys[1] if k in common] != [k for k in keys[2] if k in common]
+    base, mine, theirs = ([k for k in ks if k in common] for ks in keys)
+    return base != mine != theirs != base
+
+
+def rebase_orders(mine, base, current):
+    """`mine` with each order op that kept the relative order of base's keys (it only placed new keys) rewritten
+    onto the order in `current`, so merging it does not undo a reorder made since `base`."""
+    rebased = []
+    for op in mine:
+        if op.get("op") == "order":
+            at = _split(op["path"])
+            try:
+                old, now = _keys(at, _walk(base, at)), _keys(at, _walk(current, at))
+            except _Dropped:
+                old = now = None
+            given = op["value"]
+            if old is not None and now is not None and _kept_order(old, given):
+                op = {**op, "value": reconcile(given, now)}
+        rebased.append(op)
+    return rebased
+
+
+def _kept_order(old, new):
+    old_set, new_set = set(old), set(new)
+    return [k for k in new if k in old_set] == [k for k in old if k in new_set]
