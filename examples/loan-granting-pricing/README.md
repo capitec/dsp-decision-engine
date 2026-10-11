@@ -241,6 +241,9 @@ and account fields.
   which order, is code. The assessment's own params appear under `affordability_assessment/...`.
 - **A params document is read once.** Pass a new dict for each change: editing one in place after scoring with it is not
   noticed.
+- **A `decline` band needs a rule that has a decline reason.** Setting `decline` on a `cap_bands` row of a rule with none
+  (CAP-0150, CAP-0140, CAP-0210, CAP-0305, CAP-0330) puts `None` in `waterfall_decline_reason_codes` (`list[int]`), and the
+  step raises at the output check (checked on the interpreted and fused engines).
 - **Names the embedded assessment would overwrite are moved aside** (`affordability_decline_reason_codes`,
   `affordability_adjustments_applied`, ...), and the scorecard reads `applicant1_dependants_count` because the
   assessment's own `dependants_count` is downstream of the risk grade.

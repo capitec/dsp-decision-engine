@@ -4,7 +4,7 @@ Gaps in the current code that users and maintainers should know about before rel
 
 ## Compilation and caching
 
-**Object globals are keyed by identity.** A step reading an instance of a class of its own is fingerprinted with `id()` (`_engine/compile/fingerprint.py`); numbers, strings, dates, Decimals, regexes, enums, classes and plain containers of those are keyed by value. A class is keyed by its own methods' bytecode and constants, not by what its methods call, and a jitclass by its numba type, which differs per process.
+**Object globals are keyed by identity.** A step reading an instance of a class of its own is fingerprinted with `id()` (`_engine/compile/fingerprint.py`); numbers, strings, dates, Decimals, regexes, enums, classes and plain containers of those are keyed by value. A class is keyed by its own methods' bytecode and constants, not by what its methods call, and a jitclass by its numba type, which differs per process. A helper of an installed package that a step calls is not walked: its module constants are not keyed and hidden state it reads is not linted (the step itself is still checked).
 Impact: the numba disk cache from `decikit build` misses on another process, and `decikit.lab.diff` reads the step as always changed. Binding warns with `HiddenStateWarning` (`FusedEngine(strict_compile=True)` raises); put the data in literals, a config document, `param()`s or `param_table`s.
 
 **A callable object read as `module.NAME` is not seen.** The walk follows the attributes a step reads off a module, but skips any callable that is not a function, module or class (so a ufunc or `np.searchsorted` is not flagged). An instance with `__call__` read that way (`transforms.normalise(x)` where `normalise = Normaliser(mean, std)`) is neither keyed nor warned about; read as a plain global it is.
@@ -116,6 +116,9 @@ Impact: noise only. Fixing it means `run(lazy_frame)` no longer runs the whole p
 
 **The polars engine refuses an output it cannot type.** A column crossing a frame step or reaching the output must have a polars dtype before the first row, so a step returning an untyped `dict`, a bare `list` or `Any` there raises `EngineError` naming the step. None of the 12 examples is refused this way.
 Workaround: annotate the output (`TypedDict`, `list[float]`, `Struct[Item]`), or run on the numba engine.
+
+**The polars engine sees an in-place edit of a params document; the numba engines do not.** `run` re-prunes the document for each segment, so editing the dict you passed between two `run` calls changes the polars answer, while a numba engine keeps the values it first validated.
+Workaround: pass a new dict (the documented contract for every engine).
 
 **A fallback step's error counts the row from the start of its batch.** When the plan streams, the `in step <path>, row <k>` note of a step that runs in Python is the row within the batch polars handed the segment, not within the frame.
 Workaround: run the same frame on the fused engine to find the row.
