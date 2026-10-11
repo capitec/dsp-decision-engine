@@ -68,6 +68,7 @@ export class LiveSync {
   private stopped = false
   private retries = 0
   private failures = 0
+  private ended = false
   private timer?: ReturnType<typeof setTimeout>
   private socket?: Socket
   private waiters: Array<() => void> = []
@@ -142,7 +143,8 @@ export class LiveSync {
 
   /** Connect again after the server ended live editing (the user signed in again); unsent edits go then. */
   resume() {
-    if (this.socket || this.stopped) return
+    if (!this.ended || this.stopped) return
+    this.ended = false
     this.hooks.status?.('reconnecting')
     this.connect()
   }
@@ -176,6 +178,7 @@ export class LiveSync {
     this.offlineBase ??= { version: this.version, doc: this.confirmed }
     if (closed?.code === POLICY_VIOLATION) {
       // No reconnecting until `resume()`: the server would refuse every try.
+      this.ended = true
       this.hooks.status?.('ended')
       return this.hooks.ended?.(closed.reason || 'live editing ended')
     }
