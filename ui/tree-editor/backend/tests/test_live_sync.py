@@ -374,16 +374,27 @@ def hang(doc):
     time.sleep(3600)
 
 
+@pytest_asyncio.fixture
+async def hanging_hub(monkeypatch):
+    """A hub whose validator never answers and times out after 3 s; stopped (its process killed) even when the test
+    fails, or pytest would wait for the hung process on exit."""
+    from dsp_decikit.services import live_hub
+    hub = live_hub.Hub()
+    hub.validator = live_hub._validator()
+    monkeypatch.setattr(live_hub, "VALIDATE_TIMEOUT_S", 3)
+    monkeypatch.setattr(live_hub, "validation_errors", hang)
+    yield hub
+    await hub.stop()
+
+
 @db
 @pytest.mark.asyncio
-async def test_after_a_validation_hangs_the_next_version_is_validated_in_a_new_process(project, monkeypatch):
+async def test_after_a_validation_hangs_the_next_version_is_validated_in_a_new_process(project, hanging_hub,
+                                                                                         monkeypatch):
     from dsp_decikit.services import live_hub
     from dsp_decikit.services.live_sync import apply_message
     project_id, _ = project
-    hub = live_hub.Hub()
-    hub.validator = hung = live_hub._validator()
-    monkeypatch.setattr(live_hub, "VALIDATE_TIMEOUT_S", 3)
-    monkeypatch.setattr(live_hub, "validation_errors", hang)
+    hub, hung = hanging_hub, hanging_hub.validator
     client = live_hub.Client(Socket(), "c1")
     await hub.join(project_id, client, 1)
     await asyncio.wait_for(asyncio.gather(*[r.validating for r in hub.rooms.values() if r.validating]), 10)
@@ -395,7 +406,6 @@ async def test_after_a_validation_hangs_the_next_version_is_validated_in_a_new_p
         if any(m["type"] == "validation" and m["version"] == 2 for m in client.ws.sent):
             break
         await asyncio.sleep(0.1)
-    hub.validator.shutdown()
     assert hub.validator is not hung
     assert any(m["type"] == "validation" and m["version"] == 2 for m in client.ws.sent)
 
