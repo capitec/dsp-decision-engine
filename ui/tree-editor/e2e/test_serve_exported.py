@@ -31,7 +31,7 @@ def exported_project(page: Page, tree, nulls: float = 0.1):
 def test_exported_tree_scored_in_process_matches_the_library(page: Page, tree):
     root, records, expected = exported_project(page, tree)
     handler = project.in_process(root)
-    assert [project.score(handler, record) for record in records] == expected
+    assert [project.run(handler, record) for record in records] == expected
 
 
 @pytest.mark.parametrize("tree_id, port", SERVED)
@@ -43,4 +43,4 @@ def test_exported_tree_served_by_decikit_serve_matches_in_process(page: Page, tr
     project.build(root)
     with project.serving(root, port) as post:
         for record in records:
-            assert post(record) == project.score(handler, record)
+            assert post(record) == project.run(handler, record)

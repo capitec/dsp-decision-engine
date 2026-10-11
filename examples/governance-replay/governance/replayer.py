@@ -26,7 +26,7 @@ class _Tap:
 class Replayer(RequestHandler):
     """Scores raw JSON requests exactly as `decikit serve` does, against one staged config version.
 
-    `params` replaces the version's params document, for what-if runs. `score` gives the typed result;
+    `params` replaces the version's params document, for what-if runs. `run` gives the typed result;
     `served` gives it as the client would receive it, which is what evidence records and replay compares.
 
         replayer.served({"decision_id": "a", ...})   # the response as a JSON-safe dict
@@ -41,7 +41,7 @@ class Replayer(RequestHandler):
         return live._replace(params=params, executable=_Tap(live.executable, self))
 
     def served(self, request: dict) -> dict:
-        return json.loads(self.output_fn(self.score(request), "application/json").content)
+        return json.loads(self.output_fn(self.run(request), "application/json").content)
 
     def untapped(self):
         return RequestHandler.module_fn(self)
