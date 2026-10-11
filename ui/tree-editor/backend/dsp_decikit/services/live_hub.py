@@ -25,6 +25,7 @@ from dsp_decikit.services.documents import validation_errors
 from dsp_decikit.services.live_sync import CHANNEL
 
 logger = logging.getLogger("uvicorn.error").getChild("live")
+VALIDATE_TIMEOUT_S = 30
 # A client that cannot take a message in this long is dropped; it catches up when it reconnects.
 SEND_TIMEOUT_S = 5
 TRY_AGAIN = 1013
@@ -51,6 +52,7 @@ class Hub:
         self.rooms: t.Dict[uuid.UUID, Room] = {}
         self.listener: t.Optional[asyncio.Task] = None
         self.validator: t.Optional[ProcessPoolExecutor] = None
+        self.validating = asyncio.Lock()
 
     async def join(self, project_id: uuid.UUID, client: Client, since: int) -> None:
         """Bring `client` up to date from version `since` (a snapshot when the log does not reach back), then
@@ -136,14 +138,12 @@ class Hub:
                                                       .where(Project.id == project_id))).one()
             if version == room.validated:
                 return
-            started, pool = time.perf_counter(), self.validator
+            started = time.perf_counter()
             try:
-                errors = await asyncio.get_running_loop().run_in_executor(pool, validation_errors, doc)
-            except BrokenProcessPool:
-                # The process was killed (out of memory, say); a new one validates the next version.
-                logger.warning("live validator died on project=%s version=%d", project_id, version)
-                if self.validator is pool:
-                    self.validator = _validator()
+                errors = await self.validate(doc)
+            except (asyncio.TimeoutError, BrokenProcessPool):
+                # The process hung or was killed (out of memory, say); a new one validates the next version.
+                logger.warning("live validator failed on project=%s version=%d", project_id, version)
                 return
             logger.info("live validation project=%s version=%d errors=%d ms=%.1f", project_id, version, len(errors),
                         (time.perf_counter() - started) * 1e3)
@@ -152,13 +152,30 @@ class Hub:
             for client in list(room.clients):
                 await _send(client, room.validation)
 
+    async def validate(self, doc: dict) -> list:
+        """The validation errors of `doc`, from the validator process. Raises asyncio.TimeoutError when it does not
+        answer within VALIDATE_TIMEOUT_S, or BrokenProcessPool when it died; either way a new process takes over."""
+        # One at a time, so the timeout counts this document's validation, not a queue behind others.
+        async with self.validating:
+            pool = self.validator
+            try:
+                return await asyncio.wait_for(
+                    asyncio.get_running_loop().run_in_executor(pool, validation_errors, doc), VALIDATE_TIMEOUT_S)
+            except (asyncio.TimeoutError, BrokenProcessPool):
+                if pool is not None and self.validator is pool:
+                    self.validator = _validator()
+                    _kill(pool)
+                raise
+
     def start(self) -> None:
         self.validator = _validator()
         self.listener = asyncio.create_task(self._listen())
 
     async def stop(self) -> None:
-        if self.validator:
-            self.validator.shutdown(cancel_futures=True)
+        # Killed, not shut down: shutdown() waits for a hung validation on the event loop, so its timeout never fires.
+        pool, self.validator = self.validator, None
+        if pool:
+            _kill(pool)
         if self.listener:
             self.listener.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -198,6 +215,13 @@ class Hub:
 
 def _validator() -> ProcessPoolExecutor:
     return ProcessPoolExecutor(1, mp_context=multiprocessing.get_context("spawn"))
+
+
+def _kill(pool: ProcessPoolExecutor) -> None:
+    # shutdown() leaves a hung worker running. ponytail: private attribute; Python 3.14 has kill_workers()
+    for process in list((pool._processes or {}).values()):
+        process.kill()
+    pool.shutdown(wait=False, cancel_futures=True)
 
 
 async def _send(client: Client, text: str) -> bool:

@@ -173,7 +173,7 @@ async def _ops(ws: WebSocket, project_id: uuid.UUID, client: t.Optional[Client],
         if not writer:
             raise Rejected("read-only access: your edits are not saved")
         applied = await apply_message(project_id, client.client_id, msg_id, message["base"], message["ops"],
-                                      offline=message.get("offline") is True, executor=hub.validator,
+                                      offline=message.get("offline") is True, validate=hub.validate,
                                       parts=message.get("parts", []))
     except Rejected as e:
         await ws.send_text(json.dumps({"type": "rejected", "msg_id": msg_id, "reason": str(e),

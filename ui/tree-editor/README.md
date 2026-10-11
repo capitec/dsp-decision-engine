@@ -39,13 +39,17 @@ gets the whole document.
 Edits made while disconnected (a closed socket, or no answer to a ping for about 10 seconds) go back on reconnect as
 one offline batch, after the editor has caught up. The server merges it whole only when none of its paths is equal to,
 inside or above a path someone else changed since the disconnect (unless both left the same value there; two reorders of the rules conflict only when both
-changed the order of the same rules differently) and the merged document has no validation error that neither the
-stored document nor the offline editor's own had. Otherwise it refuses the whole batch: the editor shows the stored
-document and a banner naming the rules (or nodes) that collided, with Download my version (the offline document,
-shaped like an Export). The base document is rebuilt from the log (a new project logs its first version, and the
-migration that adds snapshots logs the current version of every project older than that), so a batch made on a
-version the log no longer keeps is refused and stays downloadable. A message is logged at most once per client: a
-resend is not applied again, and a batch names the
+changed the order of the same rules differently) and the merged document has no validation error beyond those the
+stored document or the offline editor's own had (counted by type and message: one more copy of an existing error is
+new; the same error added by each side on its own is not). Otherwise it refuses the whole batch: the editor shows the
+stored document and a banner naming the rules (or nodes) that collided, with Download my version (the offline
+document, shaped like an Export). The merge is validated without holding the project's row lock and committed only if
+no other version came in meanwhile; the third attempt holds the lock throughout. A validator that does not answer
+within 30 s is replaced by a new process, and a batch it was checking is refused (still downloadable). The base
+document is rebuilt from the log (a new project logs its first version, and the migration that adds snapshots logs
+the current version of every project older than that), so a batch made on a version the log no longer keeps is
+refused and stays downloadable. A message is logged at most once per client: a resend is not applied again, and a
+batch names the
 earlier messages it contains so one applied while the editor reconnected is skipped, and one delivered late after
 the batch is not applied again. A batch is not kept across a
 page reload.
