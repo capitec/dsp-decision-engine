@@ -9,6 +9,7 @@ step; the appetite by grade (CAP-0104) is the `appetite_by_grade` document.
 from __future__ import annotations
 
 import math
+from typing import TypedDict
 
 from decikit import allow_fallback, flow, missing_as, param, step
 
@@ -22,10 +23,21 @@ R_APPETITE_DECLINE = 2012
 R_ENQUIRY_VELOCITY_DECLINE = 2013
 
 AMOUNT = ("amount_value", "amount_chain", "amount_declined")
-Fold = tuple[float, list[dict], int]
 
 
-def narrow(value: float, chain: list[dict], declined: int, rule_id: str, applies: bool, cap: float,
+class ChainLink(TypedDict):
+    """One rule's entry in the amount chain."""
+
+    rule_id: str
+    before: float
+    after: float
+    status: str
+
+
+Fold = tuple[float, list[ChainLink], int]
+
+
+def narrow(value: float, chain: list[ChainLink], declined: int, rule_id: str, applies: bool, cap: float,
            decline_reason: int = 0) -> Fold:
     """One rule's turn. `applies` says whether the application is in the rule's scope, not whether its threshold is
     crossed: a rule in scope whose threshold is not crossed was evaluated and did not bind. A rule with a
@@ -47,68 +59,68 @@ def seed(product_max_amount: float) -> Fold:
 
 
 @allow_fallback
-def cap_0029(amount_value: float, amount_chain: list[dict], amount_declined: int,
+def cap_0029(amount_value: float, amount_chain: list[ChainLink], amount_declined: int,
              channel_open: bool = missing_as(True)) -> Fold:
     return narrow(amount_value, amount_chain, amount_declined, "CAP-0029", not channel_open, 0.0, R_CHANNEL_CLOSED)
 
 
 @allow_fallback
-def cap_0104(amount_value: float, amount_chain: list[dict], amount_declined: int, appetite_amount_cap: float) -> Fold:
+def cap_0104(amount_value: float, amount_chain: list[ChainLink], amount_declined: int, appetite_amount_cap: float) -> Fold:
     return narrow(amount_value, amount_chain, amount_declined, "CAP-0104", True, appetite_amount_cap, R_APPETITE_DECLINE)
 
 
 @allow_fallback
-def cap_0131(amount_value: float, amount_chain: list[dict], amount_declined: int,
+def cap_0131(amount_value: float, amount_chain: list[ChainLink], amount_declined: int,
              months_employed: float = missing_as(0.0)) -> Fold:
     return narrow(amount_value, amount_chain, amount_declined, "CAP-0131", True,
                   30_000.0 if months_employed < 9 else 85_000.0 if months_employed < 24 else math.inf)
 
 
 @allow_fallback
-def cap_0158(amount_value: float, amount_chain: list[dict], amount_declined: int,
+def cap_0158(amount_value: float, amount_chain: list[ChainLink], amount_declined: int,
              is_existing_client: bool = missing_as(True)) -> Fold:
     return narrow(amount_value, amount_chain, amount_declined, "CAP-0158", not is_existing_client, 70_000.0)
 
 
 @allow_fallback
-def cap_0176(amount_value: float, amount_chain: list[dict], amount_declined: int, worst_arrears_months: int) -> Fold:
+def cap_0176(amount_value: float, amount_chain: list[ChainLink], amount_declined: int, worst_arrears_months: int) -> Fold:
     return narrow(amount_value, amount_chain, amount_declined, "CAP-0176", True,
                   35_000.0 if worst_arrears_months >= 3 else 140_000.0 if worst_arrears_months >= 2 else math.inf)
 
 
 @allow_fallback
-def cap_0212(amount_value: float, amount_chain: list[dict], amount_declined: int,
+def cap_0212(amount_value: float, amount_chain: list[ChainLink], amount_declined: int,
              enquiry_velocity_90d: int = missing_as(0)) -> Fold:
     return narrow(amount_value, amount_chain, amount_declined, "CAP-0212", True,
                   40_000.0 if enquiry_velocity_90d >= 7 else math.inf)
 
 
 @allow_fallback
-def cap_0212_decline(amount_value: float, amount_chain: list[dict], amount_declined: int,
+def cap_0212_decline(amount_value: float, amount_chain: list[ChainLink], amount_declined: int,
                      enquiry_velocity_90d: int = missing_as(0)) -> Fold:
     return narrow(amount_value, amount_chain, amount_declined, "CAP-0212-decline", enquiry_velocity_90d >= 12, 0.0,
                   R_ENQUIRY_VELOCITY_DECLINE)
 
 
 @allow_fallback
-def cap_0248(amount_value: float, amount_chain: list[dict], amount_declined: int, channel_code: int) -> Fold:
+def cap_0248(amount_value: float, amount_chain: list[ChainLink], amount_declined: int, channel_code: int) -> Fold:
     return narrow(amount_value, amount_chain, amount_declined, "CAP-0248", channel_code == 5, 180_000.0)
 
 
 @allow_fallback
-def cap_0266(amount_value: float, amount_chain: list[dict], amount_declined: int,
+def cap_0266(amount_value: float, amount_chain: list[ChainLink], amount_declined: int,
              on_concentration_watchlist: bool = missing_as(False)) -> Fold:
     return narrow(amount_value, amount_chain, amount_declined, "CAP-0266", on_concentration_watchlist, 60_000.0)
 
 
 @allow_fallback
-def cap_0301(amount_value: float, amount_chain: list[dict], amount_declined: int,
+def cap_0301(amount_value: float, amount_chain: list[ChainLink], amount_declined: int,
              group_limit: float = missing_as(math.inf), group_exposure: float = missing_as(0.0)) -> Fold:
     return narrow(amount_value, amount_chain, amount_declined, "CAP-0301", True, max(0.0, group_limit - group_exposure))
 
 
 @allow_fallback
-def cap_0310(amount_value: float, amount_chain: list[dict], amount_declined: int, income_evidence_tier: int) -> Fold:
+def cap_0310(amount_value: float, amount_chain: list[ChainLink], amount_declined: int, income_evidence_tier: int) -> Fold:
     return narrow(amount_value, amount_chain, amount_declined, "CAP-0310", income_evidence_tier >= 6, 80_000.0)
 
 
@@ -130,7 +142,7 @@ def worst_acceptable_grade(worst_arrears_months: int) -> int:
     return 9 if worst_arrears_months >= 2 else 12
 
 
-def binding_rule(chain: list[dict]) -> str:
+def binding_rule(chain: list[ChainLink]) -> str:
     """The rule that set the final value: the last to bind, or raise, or "" if nothing narrowed the seed."""
     bound = [c["rule_id"] for c in chain if c["status"] in (BOUND, RAISED)]
     return bound[-1] if bound else ""
@@ -138,9 +150,9 @@ def binding_rule(chain: list[dict]) -> str:
 
 @allow_fallback
 def policy_caps(
-    amount_value: float, amount_chain: list[dict], amount_declined: int, campaign_id: str = missing_as(""),
+    amount_value: float, amount_chain: list[ChainLink], amount_declined: int, campaign_id: str = missing_as(""),
     uplift_pct: float = param(0.20, ge=0.0, le=1.0), uplift_ceiling: float = param(200_000.0, ge=0.0),
-) -> tuple[float, str, list[dict], bool, int]:
+) -> tuple[float, str, list[ChainLink], bool, int]:
     """(amount_cap_before_overlay, amount_cap_binding_rule, amount_cap_chain, p09_declined, p09_decline_reason).
 
     A campaign may raise the amount cap, the only rule that can, by at most `uplift_pct` and never to more than

@@ -4,7 +4,7 @@ import warnings
 import polars as pl
 import pytest
 
-from decikit import Engine, FallbackWarning, branch, flow, step
+from decikit import FallbackWarning, FusedEngine, branch, flow, step
 from decikit.exceptions import ExprError
 from decikit.steps.trees import expr_condition
 from decikit.lab.testing import assert_equivalent
@@ -124,7 +124,7 @@ def test_used_as_a_string_branch_condition_agrees_across_modes():
 
 def test_numeric_condition_compiles_without_falling_back():
     rules = branch(expr_condition("score >= 600", name="good"), _cap_a, _cap_b, modifies=["cap"], name="b")
-    exe = Engine(strict_compile=True).bind(flow(rules, name="p"), mode="fused")
+    exe = FusedEngine(strict_compile=True).bind(flow(rules, name="p"))
     exe.run(ARMS)
     assert exe.fallbacks() == {}
 
@@ -133,7 +133,7 @@ def test_string_condition_compiles_without_falling_back():
     # Trees read strings as byte spans inside their kernel, so an exact string_match
     # compiles too: no FallbackWarning and no fallback under strict_compile.
     rules = branch(expr_condition('crc_model == "CrC3.0"', name="good"), _cap_a, _cap_b, modifies=["cap"], name="b")
-    exe = Engine(strict_compile=True).bind(flow(rules, name="p"), mode="fused")
+    exe = FusedEngine(strict_compile=True).bind(flow(rules, name="p"))
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         exe.run(ARMS)

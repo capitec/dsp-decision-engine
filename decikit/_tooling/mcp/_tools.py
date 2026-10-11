@@ -19,7 +19,7 @@ from decikit._tooling.bridge.building import build_step
 from decikit._tooling.bridge.describing import find_pipelines
 from decikit.lab.data import read
 from decikit._tooling.bridge.loading import load_module
-from decikit import Engine
+from decikit import InterpretedEngine
 from decikit.trace import TraceSink
 from decikit._tooling.bridge.replay import trace as run_trace
 from decikit.lab.experiments import ExperimentDef, ExperimentResult, run
@@ -157,7 +157,7 @@ def raw_trace(policy: Policy, entry: str, data: str, record: int) -> dict:
         return {"redacted": REDACTED}
     step, params = _flow(entry)
     sink = TraceSink()
-    Engine().bind(step).run(read(data), params=params, trace=sink)
+    InterpretedEngine().bind(step).run(read(data), params=params, trace=sink)
     return {"entry": entry, "record": record,
             "events": [_event(e) for e in sink.events() if e.record is None or e.record == record]}
 
@@ -181,7 +181,7 @@ def start_debug(entry: str, data: str) -> dict:
     """
     step, params = _flow(entry)
     frame = read(data)
-    session = Engine().bind(step).session(frame, params)
+    session = InterpretedEngine().bind(step).session(frame, params)
     return {"entry": entry, "rows": frame.height, "finished": session.finished,
             "structure": session.structure()}
 
@@ -198,7 +198,7 @@ def generate_ids(path: str = ".", check: bool = True) -> dict:
 def _summarise(entry: str, data: str) -> dict:
     step, params = _flow(entry)
     frame = read(data)
-    exe = Engine().bind(step)
+    exe = InterpretedEngine().bind(step)
     out = exe.run(frame, params=params)
     produced = [c for c in out.columns if c not in frame.columns]
     return {

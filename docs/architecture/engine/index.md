@@ -3,15 +3,15 @@
 The engine turns a pipeline into something that runs. It takes a step, a plain function or an IR node, lowers it
 to the [IR](ir.md), binds every name the IR reads to a version of a value ([wiring](wiring.md)), prepares the
 [params](params.md), and drives one of three [runners](runners.md) over a polars frame or a single dict record.
-Everything lives under `decikit/_engine/`. Users reach it through `Engine` and `Executable` (both exported from
-`decikit`), or through `Step.run`, `Step.compile` and `Step.session`, which build an `Engine()` and call `bind`.
+Everything lives under `decikit/_engine/`. Users reach it through the engine classes and `Executable` (all exported
+from `decikit`), or through `Step.run`, `Step.compile` and `Step.session`, which resolve an engine and call `bind`.
 
 ```python
-from decikit import Engine
+from decikit import FusedEngine
 
-exe = Engine(params_validation="lazy").bind(pipeline, mode="fused")
+exe = FusedEngine(params_validation="lazy").bind(pipeline)
 exe.run(df, params=doc)          # a polars DataFrame
-exe.score(record, doc)           # a dict
+exe.run(record, doc)             # a dict
 exe.session(df)                  # a debug Session, paused before anything runs
 ```
 
@@ -36,6 +36,7 @@ builds, and what happens on each call.
 | `boundary/` | `extract.py`, `dtypes.py`, `nulls.py`, `_arrow/` | reading polars columns into typed arrays through Arrow, `MissingInputError` | [Boundary](boundary.md) |
 | `debug/` | `session.py`, `edit.py`, `hot.py`, ... | `Session`, which drives a runner one checkpoint at a time | [Debug](debug.md) |
 | `trace/` | `envelope.py`, `sink.py` | `TraceSink` and the per-record events runners emit | [Trace](trace.md) |
+| `polars/` | `engine.py`, `host.py` | `PolarsEngine`: the fused segments of a pipeline run inside a polars `LazyFrame` plan | [Polars engine](polars.md) |
 | `concurrency.py` | | `Cache` and `once()`, the build-once caches shared by threads | [Concurrency](concurrency.md) |
 | `types.py` | | annotation helpers every layer shares (below) | this page |
 
@@ -50,41 +51,41 @@ page has the full map.
 
 ## Engine and bind
 
-`Engine` holds two settings and nothing else:
+An engine is a settings document in the registry, named by its `type` tag. `Engine` is the abstract root;
+`InterpretedEngine`, `SteppedEngine` and `FusedEngine` (tags `"interpreted"`, `"stepped"`, `"fused"`) are the built-in
+ones, under `NumbaEngine`. `PolarsEngine` (`"polars"`) is the other built-in: it runs fused segments inside a polars
+plan and has no session ([Polars engine](polars.md)). `Engine.registered()` gives `{tag: class}` and
+`Engine.resolve(tag)` the class. `compile` and `session` take a tag or an instance (`engine="fused"`,
+`FusedEngine(strict_compile=True)`).
 
-| Argument | Default | Effect |
+`Step.run` and `Step.compile` with no engine follow the context-scoped default: `decikit.engine(...)` sets it for a block
+(a `ContextVar`: an `asyncio` task started inside gets a copy, a thread sees it only when run under
+`contextvars.copy_context().run`), and unset it is the fused engine. `Step.session` opens
+interpreted and ignores the default; serving names its engine in its own document and never reads it. `run` does not
+cache executables, so a fused `run` binds and builds on every call; compile once to avoid that.
+
+| Setting | Default | Effect |
 |---|---|---|
 | `params_validation` | `"eager"` | `"eager"` validates every node's params the first time a params document is seen and raises on any invalid one. `"lazy"` validates a node the first time it runs, so an invalid param in a node no row reaches never fails a run. |
-| `strict_compile` | `False` | In `"stepped"` and `"fused"` modes, a step that would fall back to Python raises at the first run instead of warning, unless the step is marked `@allow_fallback`. In every mode, a `HiddenStateWarning` finding raises `EngineError` at `bind`. |
+| `strict_compile` | `False` | On `SteppedEngine` and `FusedEngine`, a step that would fall back to Python raises at the first run instead of running, unless the step is marked `@allow_fallback`. On every engine, a `HiddenStateWarning` finding raises `EngineError` at `bind`. |
 
-`Engine.bind(step_or_ir, mode="interpreted")` looks the mode up in `RUNNERS`, a plain dict in
-`decikit/_engine/run/engine.py`:
+`NumbaEngine.bind(step_or_ir)` builds its runner (passing `strict=` to the two compiled ones), calls
+`resolve(step_or_ir)` to get the [Plan](wiring.md), and returns `Executable(plan, runner, lazy, step_or_ir, engine=self)`.
+`resolve` calls `to_ir` when it is given anything but an IR node, so `bind` accepts a step, a plain function or a
+hand-built IR.
 
-```python
-RUNNERS = {
-    "interpreted": InterpretedRunner,
-    "stepped": SteppedRunner,
-    "fused": FusedRunner,
-}
-```
-
-It builds the runner (passing `strict=` to the two compiled ones), calls `resolve(step_or_ir)` to get the
-[Plan](wiring.md), and returns `Executable(plan, runner, lazy, step_or_ir)`. `resolve` calls `to_ir` when it is
-given anything but an IR node, so `bind` accepts a step, a plain function or a hand-built IR.
-
-Both settings are checked up front:
+Both the tag and the settings are checked up front:
 
 ```text
->>> Engine().bind(credit, "turbo")
-EngineError: unknown mode 'turbo'; expected one of
-  ['fused', 'interpreted', 'stepped']
->>> Engine(params_validation="sometimes")
-EngineError: params_validation must be 'eager' or 'lazy', not 'sometimes'
+>>> credit.compile("turbo")
+RegistryError: 'turbo' is not a registered Engine type. Import the module that defines it first, ...
+>>> FusedEngine(params_validation="sometimes")
+ValidationError: ... params_validation ...
 ```
 
-The three modes give the same answers. They differ in what runs compiled and where a debug session can pause:
+The three engines give the same answers. They differ in what runs compiled and where a debug session can pause:
 
-| Mode | Runner | What runs compiled | Pauses at |
+| Engine | Runner | What runs compiled | Pauses at |
 |---|---|---|---|
 | `interpreted` | `InterpretedRunner` | nothing; plain Python, row by row | every node, and inside trees through `visit` |
 | `stepped` | `SteppedRunner` | each scalar or row call as its own numba kernel | every node |
@@ -105,10 +106,10 @@ call only does the rest. For the plan it was given it builds:
 - `_produced`, `_params_at` and `_watched`: the names the pipeline writes, and where each param lives in a params
   document. A frame or record holding one of these names is an error or a warning (below).
 - `_declared`: the polars dtype each input column is cast to when the frame holds an all-null column.
-- `_inputs`: the input versions grouped by numpy dtype, so `score` fills one array per dtype.
+- `_inputs`: the input versions grouped by numpy dtype, so `run(record)` fills one array per dtype.
 - `_results`, `_boxers`, `_structs`, `_hidden`: the output versions, which of them are Decimals or structs, and
   which frame columns the output leaves out.
-- `_record_path`: true when the plan has no frame steps, so `score` can skip polars entirely.
+- `_record_path`: true when the plan has no frame steps, so `run(record)` can skip polars entirely.
 - `_trace_table`: the per-run `StepTable` of origins a [trace](trace.md) sink receives.
 
 None of this changes after `__init__`. The convention test `test_runners_and_executable_keep_no_per_call_state`
@@ -169,7 +170,7 @@ df = pl.DataFrame({
 ```
 
 ```text
->>> Engine().bind(credit).run(df)
+>>> InterpretedEngine().bind(credit).run(df)
 shape: (4, 6)
 ┌────────────┬──────────┬─────────────────┬────────────┬─────────┬────────────┐
 │ net_income ┆ expenses ┆ employment_type ┆ instalment ┆ limit   ┆ affordable │
@@ -227,14 +228,19 @@ sequenceDiagram
    times cheaper than building a new frame, and otherwise it builds a new `pl.DataFrame` from the kept columns and
    the outputs.
 
-## score: one record without polars
+## run on a record: one record without polars
 
-`score(record, params=None, trace=None)` takes a dict and returns a dict. When the plan has no frame steps
+`run` dispatches on its input: a `dict` takes the record path at once, a `pl.LazyFrame` is collected and run as a
+frame, a `pl.DataFrame` takes the frame path, any other `Mapping` takes the record path, and anything else raises
+`TypeError`. The `dict` check comes first because the record path is the serving hot path: it costs about
+0.06 µs, where the frame and `Mapping` checks would cost about 0.5 µs a record.
+
+`run(record, params=None, trace=None)` takes a dict and returns a dict. When the plan has no frame steps
 (`_record_path`), it never builds a polars frame:
 
 ```mermaid
 flowchart TD
-    A["score(record, params)"]:::author --> B{"plan has a<br/>frame step?"}:::engine
+    A["run(record, params)"]:::author --> B{"plan has a<br/>frame step?"}:::engine
     B -- yes --> C["pl.DataFrame([record])<br/>then prepare(df, n=1)"]:::data
     C --> D["run the plan"]:::engine
     D --> E["output(state).row(0, named=True)"]:::data
@@ -255,7 +261,7 @@ specialisation. On the way out, a Decimal output is boxed from its int64 back to
 becomes the dict a step returns.
 
 ```text
->>> exe.score({"net_income": 9000.0, "expenses": 3000.0,
+>>> exe.run({"net_income": 9000.0, "expenses": 3000.0,
 ...            "employment_type": 1, "instalment": 1500.0})
 {'net_income': 9000.0, 'expenses': 3000.0, 'employment_type': 1,
  'instalment': 1500.0, 'limit': 18000.0, 'affordable': True}
@@ -265,14 +271,14 @@ Building one array per input took about 8 µs of a 36 µs call,
 and hashing an empty params document took 3.7 µs, so the empty document's key is now a constant. The benchmark
 (`benchmarks/modes.py`, flagship pipeline, 20k calls, CPython 3.14) measured:
 
-| Engine | Batch rows/s | `score` p50 | `score` p99 |
+| Engine | Batch rows/s | `run(record)` p50 | `run(record)` p99 |
 |---|---|---|---|
 | decikit fused | 12.5M | 27.7 µs | 34.7 µs |
 | decikit stepped | 12.9M | 37.1 µs | 47.6 µs |
 | decikit interpreted | 0.25M | 59.1 µs | 84.5 µs |
 
 Running the credit pipeline above in fused mode on a loaded development machine while writing this page gave a
-`score` p50 of 80.7 µs against 192.4 µs for `run` on the same record as a one-row frame. `score` takes a dict
+`run(record)` p50 of 80.7 µs against 192.4 µs for `run` on the same record as a one-row frame. `run` takes a record as a dict
 because matching keyword names against a 400-argument signature cost 1190 µs per call, against 60 µs for a dict.
 
 ## session and fallbacks
@@ -285,7 +291,7 @@ the same `prepare` and the same `runner.iterate`, and advances the generator onl
 the interpreted runner. For a compiled runner it compiles the plan if no call has done so yet:
 
 ```text
->>> Engine().bind(credit, "fused").fallbacks()
+>>> FusedEngine().bind(credit).fallbacks()
 {}
 ```
 
@@ -319,7 +325,7 @@ An exception raised inside a step keeps its type, and the runner adds a note nam
 mode, the row:
 
 ```text
->>> exe.score({"net_income": 1.0, "employment_type": 1, "instalment": 0.0})
+>>> exe.run({"net_income": 1.0, "employment_type": 1, "instalment": 0.0})
 ZeroDivisionError: division by zero
 in step credit/affordable, row 0
 ```
@@ -346,15 +352,16 @@ helper answers without it.
 
 ## Extending and debugging the engine
 
-A new execution mode is one entry in `RUNNERS` and a class with an `iterate(plan, state, params, trace=None,
-table=None)` generator method (the `Runner` protocol in `decikit/_engine/run/runners/base.py`). A compiled mode
-also implements `CompiledRunner`: `_compile(plan, lazy)` and `fallbacks()`. Subclassing `InterpretedRunner` and
+A new engine is a subclass of `Engine` with a `type` tag, registered by an entry point in the `decikit.engines`
+group (the registry takes it from there). A numba engine subclasses `NumbaEngine` and supplies `_runner()`: a class with
+an `iterate(plan, state, params, trace=None, table=None)` generator method (the `Runner` protocol in
+`decikit/_engine/run/runners/base.py`). A compiled runner also implements `CompiledRunner`: `_compile(plan, lazy)` and `fallbacks()`. Subclassing `InterpretedRunner` and
 overriding `_call` is how `SteppedRunner` does it.
 
 To see what the engine is doing, drive the generator yourself:
 
 ```python
-exe = Engine().bind(credit)
+exe = InterpretedEngine().bind(credit)
 state, params = exe.prepare(df)
 for cp in exe.runner.iterate(exe.plan, state, params):
     print(cp.when, cp.origin.path, cp.arm, cp.rows)
@@ -373,5 +380,5 @@ and a new step type only implements `to_ir` ([IR](ir.md)). The two compiled runn
 with compiled calls, so branches, loops, row subsets and frame steps have one implementation, and a debug session
 gets the same checkpoints from every mode ([runners](runners.md)). Params are always runtime arguments: retuning
 validates a new document and builds new bundles, and never rebuilds the IR or recompiles a kernel
-([params](params.md)). `score` takes a dict because keyword arguments cost more than the whole optimised call on
+([params](params.md)). `run` takes a record as a dict because keyword arguments cost more than the whole optimised call on
 wide records.

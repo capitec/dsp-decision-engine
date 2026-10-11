@@ -222,4 +222,4 @@ def test_a_custom_function_writing_an_int_feeds_a_declared_int_table_exactly():
     out = assert_equivalent(pipeline, pl.DataFrame({"raw": [0, 1]}))
     assert out["pts"].to_list() == [5, 0]
     with pytest.raises(NotIntegralError, match="input 'raw'"):
-        pipeline.compile("fused").score({"raw": 0.5})
+        pipeline.compile("fused").run({"raw": 0.5})

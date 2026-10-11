@@ -77,7 +77,7 @@ a client's qualifying campaigns become a contact, given the channels' capacity a
 | Policy numbers as params, per cycle: `resolve` writes the overlays in force on the cycle date into the params document | [overlays.py](campaign_trees/overlays.py), [scripts/generate_configs.py](scripts/generate_configs.py) |
 | The cap reduction is an `adjustment_stack` document (an `AdjustmentStack` scoped by campaign and tier), so a release diff sees its effect, scope and window | [`cap_reductions.json`](configs/0.1.0/cap_reductions.json), [overlays.py](campaign_trees/overlays.py), [tests/test_hidden_state.py](tests/test_hidden_state.py) |
 | The rate card and the credit life rates are `param_table`s read through `loan_granting.rate_tables`, so no step closes over an object | [preassessment.py](campaign_trees/preassessment.py), [tests/test_hidden_state.py](tests/test_hidden_state.py) |
-| `@allow_fallback` for steps that are Python on purpose, checked by `Engine(strict_compile=True)` | [tests/test_serving.py](tests/test_serving.py) |
+| `@allow_fallback` for steps that are Python on purpose, checked by `FusedEngine(strict_compile=True)` | [tests/test_serving.py](tests/test_serving.py) |
 | Warm-up from `sample_request.json`; the JSON date string arrives as a `date` | [tests/test_serving.py](tests/test_serving.py) |
 
 ## Run it
@@ -95,7 +95,7 @@ fresh checkout takes a minute while numba compiles):
 
 ```bash
 uv run decikit build
-# built config version 0.1.0 (pipeline campaign_trees.pipeline:build, mode fused)
+# built config version 0.1.0 (pipeline campaign_trees.pipeline:build, engine fused)
 ```
 
 Serve, and decide the sample client. Its date is a plain JSON string:

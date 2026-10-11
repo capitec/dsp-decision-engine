@@ -162,7 +162,9 @@ lands, the bullets that survive move to `docs/design_decisions/decisions/engine.
   The guide says what `@allow_fallback` costs before it shows it, and points to `Struct[Item]` and
   `Columnar[Item]` tuple returns, which compile, as the way to return a record.
 - To make a launch-time split visible at `compile()` rather than at the first real batch, the build probes
-  each kernel once on zero rows (see P2 in the plan).
+  each kernel once on zero rows (see P2 in the plan). As built (2026-10-10): no probe; a scalar step writing a
+  container, `bytes` or a time is refused at build, so its kernel splits around it and its neighbours stay
+  compiled; `Kernel.on_split` reports the launch-time splits that remain (open question 3 in the plan).
 - Alternatives: today's behaviour (stepped and fused both warn at build, neither at launch); a `quiet` setting
   on every engine (one more knob for a per-class fact).
 - Why: fused is the production engine, where a Python fallback is a performance defect worth hearing about;

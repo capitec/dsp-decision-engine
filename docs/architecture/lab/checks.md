@@ -100,7 +100,7 @@ flowchart LR
   N --> R["_refs<br/>node id to StepRef"]:::ir
   D --> R
   IR --> SU["_suppressions<br/>inherited per node"]:::neutral
-  P --> O["ctx.outputs<br/>Engine().bind().run(frame, params)"]:::engine
+  P --> O["ctx.outputs<br/>InterpretedEngine().bind().run(frame, params)"]:::engine
   N --> CA["ctx.calls()<br/>authored call nodes"]:::ir
   CA --> SRC["ctx.source(node)<br/>parsed once per function"]:::authoring
   R --> F["ctx.finding(...)"]:::tooling
@@ -616,7 +616,7 @@ findings at all. `crash_probe` doesn't cover this case, because it runs over gen
 | Code | Alias | What it does | Severity |
 |---|---|---|---|
 | DCD501 | `crash_probe` | Binds the flow once and runs every frame of `testing.corpus(pipeline)` with `params`. Each exception is a finding at the flow root, naming the case frame | error |
-| DCD505 | `mode_divergence` | Calls `testing.assert_equivalent(pipeline, frame, params, modes)` for every corpus frame. An `AssertionError` is a finding; any other exception is ignored, since `crash_probe` reports crashes. `modes` is an option, default all three | error |
+| DCD505 | `mode_divergence` | Calls `testing.assert_equivalent(pipeline, frame, params, engines)` for every corpus frame. An `AssertionError` is a finding; any other exception is ignored, since `crash_probe` reports crashes. `engines` is an option (tags), default every built-in engine, polars included | error |
 
 Neither needs `data=`; both build their own inputs. Over a flow that divides by an unguarded `income`:
 

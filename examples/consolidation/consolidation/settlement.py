@@ -12,6 +12,7 @@ from decikit import ParamTable, allow_fallback, param, param_table, step
 
 from consolidation import vocab
 from consolidation.inventory import num
+from consolidation.records import Settlement, SettlementBufferPolicy
 
 # early_settlement_rule_code -> months of interest charged at or above the large-agreement threshold
 EARLY_SETTLEMENT_RULES = param_table({"early_settlement_rule_code": int, "months_of_interest": float}, default=[
@@ -30,7 +31,7 @@ def settlement_buffer(settlement_total: float, buffer_pct: float, buffer_cap: fl
 
 
 def derive_settlement(account: dict, decision_date: date, disbursement_lag_days: int, large_agreement_threshold: float,
-                      security_release_cost: float, estimate_tolerance_pct: float, months_of_interest: dict[int, float]) -> dict:
+                      security_release_cost: float, estimate_tolerance_pct: float, months_of_interest: dict[int, float]) -> Settlement:
     """One account's settlement amount with every component, its basis and the date the figure is for."""
     # the rules table has one turnaround per provider, used as both the quotation and the payment turnaround
     assumed = decision_date + timedelta(days=int(num(account, "quotation_turnaround_days")) + disbursement_lag_days)
@@ -67,7 +68,7 @@ def settlements(
     security_release_cost: float = param(500.0, ge=0.0), estimate_tolerance_pct: float = param(0.03, ge=0.0, le=0.5),
     buffer_pct: float = param(0.015, ge=0.0, le=0.1), buffer_cap: float = param(2_500.0, ge=0.0),
     early_settlement_rules: ParamTable = EARLY_SETTLEMENT_RULES,
-) -> tuple[list[dict], dict]:
+) -> tuple[list[Settlement], SettlementBufferPolicy]:
     """The settlement amount of every account that can be settled, and the buffer policy scenarios will apply.
 
     A client exclusion is applied before this step: an excluded account is not costed.

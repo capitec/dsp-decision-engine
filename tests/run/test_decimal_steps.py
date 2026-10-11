@@ -7,7 +7,7 @@ import polars as pl
 import pytest
 from numba.core import types
 
-from decikit import Engine, allow_fallback, branch, flow, loop, missing_as, param, step
+from decikit import Engine, FusedEngine, InterpretedEngine, SteppedEngine, allow_fallback, branch, flow, loop, missing_as, param, step
 from decikit._engine.compile import default_bundle
 from decikit._engine.compile.decimal_type import DecimalType
 from decikit._engine.compile.njit import _input_type
@@ -41,7 +41,7 @@ def test_a_money_flow_agrees_in_every_mode_over_the_corpus_and_a_frame():
 
 @pytest.mark.parametrize("mode", MODES)
 def test_the_answer_is_exact_decimal_arithmetic_in_every_mode(mode):
-    out = Engine().bind(MONEY, mode=mode).run(FRAME)
+    out = Engine.resolve(mode)().bind(MONEY).run(FRAME)
     # 1000.50 * 0.1275 / 36 = 3.54343...; the floor is 12.50; the fee adds 1.25
     assert out["with_fee"].dtype == pl.Decimal(38, 4)
     assert out["with_fee"].to_list() == [D("13.7500"), D("13.7500"), D("13.7500")]
@@ -50,56 +50,56 @@ def test_the_answer_is_exact_decimal_arithmetic_in_every_mode(mode):
 
 @pytest.mark.parametrize("mode", ("stepped", "fused"))
 def test_a_decimal_step_compiles_with_no_fallback(mode):
-    exe = Engine(strict_compile=True).bind(MONEY, mode=mode)
+    exe = Engine.resolve(mode)(strict_compile=True).bind(MONEY)
     exe.run(FRAME)
-    assert exe.score({"principal": "1000.50"})["with_fee"] == Currency("13.75")
+    assert exe.run({"principal": "1000.50"})["with_fee"] == Currency("13.75")
     assert exe.fallbacks() == {}
 
 
-# ---- score() takes anything the construction rules take, and gives back Decimal or Currency
+# ---- run() on a record takes anything the construction rules take, and gives back Decimal or Currency
 
 @pytest.mark.parametrize("mode", MODES)
 @pytest.mark.parametrize("value", [Currency("2000.5"), Decimal("2000.5000"), D("2000.5"), 2000.5, "2000.5", Decimal("2000.5", units="$")])
-def test_score_accepts_every_way_to_write_an_amount(mode, value):
-    out = Engine().bind(flow(instalment), mode=mode).score({"principal": value})
+def test_a_record_run_accepts_every_way_to_write_an_amount(mode, value):
+    out = Engine.resolve(mode)().bind(flow(instalment)).run({"principal": value})
     assert out["instalment"] == Currency("7.09") and type(out["instalment"]) is Currency
     assert out["instalment"].units == "R" and repr(out["instalment"]) == "R 7.0900"
 
 
-def test_score_rounds_an_input_to_the_declared_scale_half_even():
-    exe = Engine().bind(flow(passthrough), mode="fused")
-    assert exe.score({"x": "2.675"})["passthrough"] == Decimal("2.68")
-    assert exe.score({"x": 2.675})["passthrough"] == Decimal("2.67")    # the double is 2.67499999999999982...
-    assert exe.score({"x": 3})["passthrough"] == Decimal("3.00")
+def test_a_record_run_rounds_an_input_to_the_declared_scale_half_even():
+    exe = FusedEngine().bind(flow(passthrough))
+    assert exe.run({"x": "2.675"})["passthrough"] == Decimal("2.68")
+    assert exe.run({"x": 2.675})["passthrough"] == Decimal("2.67")    # the double is 2.67499999999999982...
+    assert exe.run({"x": 3})["passthrough"] == Decimal("3.00")
 
 
 def passthrough(x: Decimal[10, 2]) -> Decimal[10, 2]:
     return x
 
 
-def test_score_refuses_a_value_that_is_not_a_number():
-    exe = Engine().bind(flow(passthrough), mode="fused")
+def test_a_record_run_refuses_a_value_that_is_not_a_number():
+    exe = FusedEngine().bind(flow(passthrough))
     for bad in ("abc", None, [1]):
         with pytest.raises((ValueError, TypeError)):
-            exe.score({"x": bad})
+            exe.run({"x": bad})
     with pytest.raises(OverflowError):
-        exe.score({"x": "9999999999999999999"})
+        exe.run({"x": "9999999999999999999"})
 
 
 # ---- the boundary
 
 def test_a_column_of_another_scale_is_rescaled_half_even_and_an_integer_column_is_whole_units():
     frame = pl.DataFrame({"x": [D("2.675"), D("2.665"), D("-2.675")]}, schema={"x": pl.Decimal(10, 3)})
-    out = Engine().bind(flow(passthrough), mode="fused").run(frame)
+    out = FusedEngine().bind(flow(passthrough)).run(frame)
     assert out["passthrough"].to_list() == [D("2.68"), D("2.66"), D("-2.68")]
-    out = Engine().bind(flow(passthrough), mode="fused").run(pl.DataFrame({"x": [3, -4]}))
+    out = FusedEngine().bind(flow(passthrough)).run(pl.DataFrame({"x": [3, -4]}))
     assert out["passthrough"].to_list() == [D("3.00"), D("-4.00")]
 
 
 def test_a_decimal_column_too_wide_for_int64_is_an_error_naming_the_column():
     frame = pl.DataFrame({"x": [D("9" * 30)]}, schema={"x": pl.Decimal(38, 0)})
     with pytest.raises(Exception, match=r"column 'x'.*does not fit a Decimal at scale 2"):
-        Engine().bind(flow(passthrough), mode="fused").run(frame)
+        FusedEngine().bind(flow(passthrough)).run(frame)
 
 
 def test_nulls_in_and_out_of_a_decimal_column_follow_the_null_policy():
@@ -109,7 +109,7 @@ def test_nulls_in_and_out_of_a_decimal_column_follow_the_null_policy():
     frame = pl.DataFrame({"x": [D("1.5"), None], "y": [None, D("2")]}, schema={"x": pl.Decimal(10, 2), "y": pl.Decimal(10, 1)})
     out = assert_equivalent(flow(maybe), frame)
     assert out["maybe"].to_list() == [D("4.5000"), None]
-    assert Engine().bind(flow(maybe), mode="fused").score({"x": None})["maybe"] is None
+    assert FusedEngine().bind(flow(maybe)).run({"x": None})["maybe"] is None
 
 
 # ---- stored as int64, typed as a decimal only inside a step
@@ -119,7 +119,7 @@ def test_no_decimal_object_reaches_a_dispatcher_on_the_warm_path():
     bundle = default_bundle(node)
     assert bundle == (125000,) and type(bundle[0]) is int
     assert _input_type(node.inputs[0]) == DecimalType(4)
-    exe = Engine().bind(MONEY, mode="fused")
+    exe = FusedEngine().bind(MONEY)
     state, _ = exe.prepare(FRAME)
     assert {v.name: a.dtype for v, a in ((v, state.values[v.id]) for v in exe.plan.versions if v.id in state.values)}["principal"] == np.int64
 
@@ -159,7 +159,7 @@ def test_a_float_returned_for_a_decimal_output_is_a_type_error_in_every_mode(mod
         return float(a) * 0.5
 
     with pytest.raises(TypeError, match="Decimal"):
-        Engine().bind(flow(bad), mode=mode).score({"a": 1})
+        Engine.resolve(mode)().bind(flow(bad)).run({"a": 1})
 
 
 # ---- a wrong scale between steps is a wiring error, not a silent misread
@@ -172,7 +172,7 @@ def test_a_step_reading_a_value_at_another_scale_is_refused():
         return fine
 
     with pytest.raises(WiringError, match=r"reads 'fine' as Decimal at scale 2, but .* writes it as Decimal at scale 4"):
-        Engine().bind(flow(fine, coarse))
+        InterpretedEngine().bind(flow(fine, coarse))
     with pytest.raises(WiringError, match=r"as float.*writes it as Currency at scale 4"):
         def plain(fine: float) -> float:
             return fine
@@ -183,7 +183,7 @@ def test_a_step_reading_a_value_at_another_scale_is_refused():
         def reader(money: float) -> float:
             return money
 
-        Engine().bind(flow(money, reader))
+        InterpretedEngine().bind(flow(money, reader))
 
 
 def test_two_steps_reading_one_input_column_at_different_scales_are_refused():
@@ -194,7 +194,7 @@ def test_two_steps_reading_one_input_column_at_different_scales_are_refused():
         return 2
 
     with pytest.raises(WiringError, match="an input column has one type"):
-        Engine().bind(flow(a, b))
+        InterpretedEngine().bind(flow(a, b))
 
 
 # ---- annotations
@@ -232,16 +232,16 @@ def test_currency_is_decimal_19_4_and_decimal_spells_its_own_precision():
 # ---- params
 
 def test_a_decimal_param_takes_a_number_or_string_validates_bounds_and_stores_an_int64():
-    exe = Engine().bind(MONEY, mode="fused")
+    exe = FusedEngine().bind(MONEY)
     row = {"principal": "100"}
-    base = exe.score(row)["with_fee"]
+    base = exe.run(row)["with_fee"]
     assert base == Currency("13.75")
-    assert exe.score(row, {"loan": {"with_fee": {"floor": "20"}}})["with_fee"] == Currency("21.25")
-    assert exe.score(row, {"loan": {"with_fee": {"floor": 20.5}}})["with_fee"] == Currency("21.75")
+    assert exe.run(row, {"loan": {"with_fee": {"floor": "20"}}})["with_fee"] == Currency("21.25")
+    assert exe.run(row, {"loan": {"with_fee": {"floor": 20.5}}})["with_fee"] == Currency("21.75")
     with pytest.raises(ParamsError, match="floor"):
-        exe.score(row, {"loan": {"with_fee": {"floor": "-1"}}})
+        exe.run(row, {"loan": {"with_fee": {"floor": "-1"}}})
     with pytest.raises(ParamsError, match="floor"):
-        exe.score(row, {"loan": {"with_fee": {"floor": "abc"}}})
+        exe.run(row, {"loan": {"with_fee": {"floor": "abc"}}})
 
 
 def test_the_params_document_shows_a_decimal_default_as_its_digits():
@@ -258,7 +258,7 @@ def test_a_decimal_param_and_input_reach_a_python_step_as_decimals(mode):
         # `.scale` exists only on the Python object: no kernel takes this step.
         return floor.scale * 10 + x.scale + (1 if floor == Currency(5) else 0)
 
-    assert Engine().bind(flow(seen), mode=mode).score({"x": 1})["seen"] == 45
+    assert Engine.resolve(mode)().bind(flow(seen)).run({"x": 1})["seen"] == 45
 
 
 # ---- constructing values in a step
@@ -269,20 +269,20 @@ def test_a_step_builds_currency_and_decimal_values(mode):
         base = Currency(2, 6500) + Currency(n) + Decimal(1, 2)
         return -base if n > 5 else abs(-base)
 
-    exe = Engine(strict_compile=True).bind(flow(build), mode=mode)
-    assert exe.score({"n": 1})["build"] == Currency("4.65")
-    assert exe.score({"n": 6})["build"] == Currency("-9.65")
+    exe = Engine.resolve(mode)(strict_compile=True).bind(flow(build))
+    assert exe.run({"n": 1})["build"] == Currency("4.65")
+    assert exe.run({"n": 6})["build"] == Currency("-9.65")
 
 
 def test_currency_major_minor_follows_its_rules_in_a_step():
     def build(major: int, minor: int) -> Currency:
         return Currency(major, minor)
 
-    exe = Engine().bind(flow(build), mode="fused")
-    assert exe.score({"major": -2, "minor": 5})["build"] == Currency("-2.0005")
-    assert exe.score({"major": 0, "minor": 9999})["build"] == Currency("0.9999")
+    exe = FusedEngine().bind(flow(build))
+    assert exe.run({"major": -2, "minor": 5})["build"] == Currency("-2.0005")
+    assert exe.run({"major": 0, "minor": 9999})["build"] == Currency("0.9999")
     with pytest.raises(ValueError, match="minor"):
-        exe.score({"major": 1, "minor": 10000})
+        exe.run({"major": 1, "minor": 10000})
 
 
 def test_negation_in_python_keeps_a_currency_and_its_units():
@@ -322,7 +322,7 @@ def test_a_decimal_loop_and_branch_pack_into_kernels_and_agree_with_python():
                          schema={"size": pl.Decimal(18, 4), "balance": pl.Decimal(18, 4), "months": pl.Int64})
     out = assert_equivalent(pipeline, frame)
     assert out["months"].to_list() == [10, 3, 0]
-    exe = Engine(strict_compile=True).bind(pipeline, mode="fused")
+    exe = FusedEngine(strict_compile=True).bind(pipeline)
     exe.run(frame)
     assert sorted(exe.runner.packed) == ["plan/big", "plan/repay"]
 
@@ -330,7 +330,7 @@ def test_a_decimal_loop_and_branch_pack_into_kernels_and_agree_with_python():
 # ---- debugging
 
 def test_a_session_override_of_a_decimal_takes_any_way_to_write_an_amount():
-    exe = Engine().bind(flow(instalment, with_fee, name="loan"), mode="stepped")
+    exe = SteppedEngine().bind(flow(instalment, with_fee, name="loan"))
     s = exe.session(FRAME)
     s.break_at("loan/with_fee")
     s.resume()

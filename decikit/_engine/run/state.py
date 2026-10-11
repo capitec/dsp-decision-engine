@@ -102,10 +102,18 @@ class State:
             target = self.values[vid] = np.full(self.n, None, object) if values.dtype == object else np.zeros(self.n, values.dtype)
             self.valid[vid] = np.zeros(self.n, bool)
         elif values.dtype == object and target.dtype != object:
-            target = self.values[vid] = target.astype(object)
+            if valid is not None and not valid.any():
+                # Only nulls (an arm that left the name unwritten): keep the typed storage.
+                values = target[rows]
+            else:
+                target = self.values[vid] = _objects(target)
         elif values.dtype != object and target.dtype == object and values.dtype.names is not None:
-            # A struct carry seeded null (object) is later written as a record; rows still null stay zero records.
-            target = self.values[vid] = np.zeros(self.n, values.dtype)
+            if (mask := self.valid.get(vid)) is not None and not mask.any():
+                # A struct carry seeded null (object) is later written as a record; rows still null stay zero records.
+                target = self.values[vid] = np.zeros(self.n, values.dtype)
+            else:
+                # Records beside a Python step's dicts (another arm, a loop's seed): all dicts, losing neither.
+                values = _objects(values)
         target[rows] = values
         mask = self.valid.get(vid)
         if mask is None:
@@ -249,11 +257,18 @@ def _series(name: str, values: np.ndarray, valid: np.ndarray | None, annotation:
         if schema_of(annotation) is not None:
             # The step's values were checked against the declaration, so what polars widens (an int
             # beside a float) is the same number; its strict inference would truncate a later float.
-            return pl.Series(name, values, dtype=_typed_dtype(annotation), strict=False)
+            dtype = _typed_dtype(annotation)
+            try:
+                return pl.Series(name, values, dtype=dtype, strict=False)
+            except TypeError:
+                # Walking every row costs about as much as building the column, so only on a refusal.
+                return pl.Series(name, [_floats(x, dtype) for x in values], dtype=dtype, strict=False)
         try:
-            return pl.Series(name, values)
+            s = pl.Series(name, values)
         except TypeError:
-            return pl.Series(name, values, strict=False)
+            s = pl.Series(name, values, strict=False)
+        # Only nulls (or no rows) infer `Null`: the declared type keeps the schema the pipeline's, not the data's.
+        return s.cast(dtype) if dtype is not None and s.dtype == pl.Null else s
     if values.dtype.names is not None:
         # A struct output is a record per row; polars reads dicts (not tuples) for a Struct
         # with nulls, so spell each row as the dict a step returns.
@@ -271,6 +286,16 @@ def _series(name: str, values: np.ndarray, valid: np.ndarray | None, annotation:
     return s
 
 
+def _objects(values: np.ndarray) -> np.ndarray:
+    # `astype(object)` makes a record a tuple, which no reader takes for a struct; spell it as the dict a step returns.
+    if values.dtype.names is None:
+        return values.astype(object)
+    out = np.empty(len(values), object)
+    for i, row in enumerate(values.tolist()):
+        out[i] = dict(zip(values.dtype.names, row))
+    return out
+
+
 def all_set(mask: np.ndarray) -> bool:
     # A third of the cost of `mask.all()`, which a one-record run asks several times per step.
     return np.count_nonzero(mask) == mask.size
@@ -281,7 +306,7 @@ def record_value(value: Any, annotation: Any = None) -> Any:
 
     A compiled struct output is a numpy record, which `tolist()` turns into a
     tuple of fields (or leaves as a `np.void` in an object array); a step
-    returns a dict, so `score` must agree. A Decimal value is boxed by the caller.
+    returns a dict, so a record's run must agree. A Decimal value is boxed by the caller.
     """
     item = struct_item(base_annotation(annotation))
     if item is not None and value is not None and not isinstance(value, dict):
@@ -294,8 +319,8 @@ def load_record(state: State, record: Mapping[str, Any], versions: list[NodeVers
     """Write `record`'s value of every one-row `versions` `dtype` groups into `state`.
 
     One array per dtype, viewed per input, is far cheaper than one array per
-    input; shared by `Engine.score`'s record path and `each`'s per-item runs,
-    so both score a plain dict the same way.
+    input; shared by `Executable.run`'s record path and `each`'s per-item runs,
+    so both read a plain dict the same way.
     """
     given = [v for v in versions if v.name in record]
     if not given:
@@ -351,7 +376,7 @@ def fill_missing(values: np.ndarray, valid: np.ndarray, fill: Any) -> np.ndarray
     """
     if not isinstance(fill, (list, dict, tuple)):
         return np.where(valid, values, fill)
-    out = values.astype(object)
+    out = _objects(values)
     for i in np.flatnonzero(~valid):
         out[i] = copy.deepcopy(fill)
     return out
@@ -401,6 +426,21 @@ def _typed_dtype(annotation: Any) -> pl.DataType | None:
     if typing.get_origin(t) is list and (item := _typed_dtype(typing.get_args(t)[0])) is not None:
         return pl.List(item)
     return None
+
+
+def _floats(value: Any, dtype: pl.DataType | None) -> Any:
+    # `value` with every int in a Float64 field of `dtype` a float and every numpy scalar its Python
+    # value: polars builds a Struct strictly whatever `strict` says, so either raises in a list inside one.
+    if isinstance(value, np.generic):
+        value = value.item()
+    if dtype == pl.Float64:
+        return float(value) if isinstance(value, int) else value
+    if isinstance(dtype, pl.Struct) and isinstance(value, dict):
+        fields = {f.name: f.dtype for f in dtype.fields}
+        return {k: _floats(x, fields.get(k)) for k, x in value.items()}
+    if isinstance(dtype, pl.List) and isinstance(value, list):
+        return [_floats(x, dtype.inner) for x in value]
+    return value
 
 
 def _item_dtype(item: Any) -> pl.Struct:

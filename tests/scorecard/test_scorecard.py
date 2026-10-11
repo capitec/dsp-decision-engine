@@ -187,5 +187,5 @@ def test_value_bins_match_strings_in_compiled_modes(mode):
 
     sc = _sc([ScoredVariable(variable_name="status", bins=[ValuesBin(value=50.0, items=["vip"])],
                              default=DefaultBin(value=0.0))])
-    out = Engine().bind(sc, mode=mode).run(pl.DataFrame({"status": ["vip", "other"]}))
+    out = Engine.resolve(mode)().bind(sc).run(pl.DataFrame({"status": ["vip", "other"]}))
     assert out["score"].to_list() == [50.0, 0.0]

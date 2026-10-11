@@ -9,12 +9,13 @@ from __future__ import annotations
 from datetime import date
 
 from consolidation import overlays
+from consolidation.records import Intervention
 
 PASSED, FAILED, NOT_APPLICABLE = "passed", "failed", "not_applicable"
 
 
 def evaluate(facts: dict, policy: dict, decision_date: date, consolidations_24m: int, max_consolidations_24m: int,
-             overlay_set: tuple, stack_enabled: bool = True) -> list[dict]:
+             overlay_set: tuple, stack_enabled: bool = True) -> list[Intervention]:
     """All fourteen interventions for one priced scenario, by number.
 
     Numbers 2, 7, 11 and 12 are enforced earlier, when accounts are classified and the client is routed, so here they

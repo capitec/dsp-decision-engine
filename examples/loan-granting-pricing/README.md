@@ -87,8 +87,8 @@ The stages, in the order the decision takes them:
 | `AdjustmentStack` and `ReasonCodes` from `credit_core`, loaded from documents: the overlays and the reason ranking are in the diff, each overlay point switched off through the same code, and the unadjusted value kept | [scoring.py](loan_granting/scoring.py), [outcome.py](loan_granting/outcome.py), [`configs/0.1.0`](configs/0.1.0) |
 | `DecisionTableConfig` tables from `credit_core` (appetite, grade boundaries, calibration, fee caps) renamed with `.relabel` | [pipeline.py](loan_granting/pipeline.py), [scoring.py](loan_granting/scoring.py) |
 | `dag` of units with `.emit`, and `flow` for a value written twice (reasons fired, then ranked) | [pipeline.py](loan_granting/pipeline.py), [outcome.py](loan_granting/outcome.py) |
-| `Text` inputs that stay in the kernel; `list[dict]` outputs (the offers) from steps that are Python on purpose | [bureau.py](loan_granting/bureau.py), [offers.py](loan_granting/offers.py) |
-| `@allow_fallback` for those steps, checked by `Engine(strict_compile=True)` | [tests/test_serving.py](tests/test_serving.py) |
+| `Text` inputs that stay in the kernel; `TypedDict` outputs (the gate verdicts, the waterfall rules, the offers) from steps that are Python on purpose, declared so the polars engine knows their columns | [bureau.py](loan_granting/bureau.py), [eligibility.py](loan_granting/eligibility.py), [waterfall.py](loan_granting/waterfall.py), [offers.py](loan_granting/offers.py) |
+| `@allow_fallback` for those steps, checked by `FusedEngine(strict_compile=True)` | [tests/test_serving.py](tests/test_serving.py) |
 | Warm-up from `sample_request.json`; JSON date strings arrive as `date`s | [tests/test_serving.py](tests/test_serving.py) |
 
 ## Run it
@@ -106,7 +106,7 @@ checkout takes a minute while numba compiles):
 
 ```bash
 uv run decikit build
-# built config version 0.1.0 (pipeline loan_granting.pipeline:build, mode fused)
+# built config version 0.1.0 (pipeline loan_granting.pipeline:build, engine fused)
 ```
 
 Serve, and decide the sample application: a client asking for R120 000 over 60 months. Its dates are plain JSON strings:

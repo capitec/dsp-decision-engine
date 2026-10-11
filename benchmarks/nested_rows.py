@@ -1,7 +1,7 @@
 """`Columnar[Item]` against plain `list[dict]` and a numeric-kernel ceiling.
 
 `Columnar[Item]` is the opt-in fast path for a `list[dict]` column, so the bar it
-has to clear is the plain Python step, on `score()` first. Also compares three
+has to clear is the plain Python step, on `run(record)` first. Also compares three
 ways to build the per-row namedtuples in one process: the value-by-value loop
 this replaced, the Python-values path, and the Arrow read.
 
@@ -16,7 +16,7 @@ from typing import TypedDict
 import numpy as np
 import polars as pl
 
-from decikit import Engine, flow
+from decikit import SteppedEngine, flow
 from decikit.ops import Columnar
 from decikit._engine.compile.rows import build_rows
 from decikit._engine.run.state import from_series
@@ -111,25 +111,25 @@ def _repeat(fn, a, reps):
 
 def latency(exe, record, calls=3000):
     for _ in range(300):
-        exe.score(record)
+        exe.run(record)
     gc.collect()
     us = np.empty(calls)
     for k in range(calls):
         t = time.perf_counter()
-        exe.score(record)
+        exe.run(record)
         us[k] = (time.perf_counter() - t) * 1e6
     return np.percentile(us, 50), np.percentile(us, 99)
 
 
 def end_to_end():
     print(f"{N} rows x {ITEMS} items")
-    print(f"{'variant':<34}{'batch rows/s':>14}{'score p50':>12}{'p99':>8}")
+    print(f"{'variant':<34}{'batch rows/s':>14}{'record p50':>12}{'p99':>8}")
     for name, step, frame, record in (
         ("numeric kernel (the ceiling)", numeric_total, NUMERIC, NUMERIC_RECORD),
         ("list[dict], Python per row", list_total, FRAME, RECORD),
         ("Columnar[Item], compiled kernel", rows_total, FRAME, RECORD),
     ):
-        exe = Engine().bind(flow(step, name="p"), mode="stepped")
+        exe = SteppedEngine().bind(flow(step, name="p"))
         p50, p99 = latency(exe, record)
         print(f"{name:<34}{frame.height / best(exe.run, frame, budget=2.0):>14,.0f}{p50:>11.1f}us{p99:>8.1f}")
 

@@ -5,9 +5,9 @@ and the docstrings (`help(decikit)`, `help(decikit.flow)`, ...) are current.
 `decikit guide` prints this guide.
 
 The decider toolkit builds decision pipelines (credit, pricing, fraud rules, campaigns)
-from plain Python functions. A pipeline runs over a polars frame (`run`) or one
-record (`score`, a dict), interpreted or compiled with numba, and serves over
-HTTP with `decikit serve`.
+from plain Python functions. A pipeline runs over a polars frame or one
+record (a dict), both through `run`, compiled with numba (fused) or interpreted,
+and serves over HTTP with `decikit serve`.
 
 ## Mental model
 
@@ -23,9 +23,19 @@ HTTP with `decikit serve`.
   a `param()`**: a param ignores the request.
 - **Outputs**: `run` returns the input columns plus every value nothing reads;
   intermediates are dropped unless kept with `.emit("name")`.
-- **Modes**: `p.compile(mode)`: `"interpreted"` (plain Python; what
-  `p.run` uses), `"stepped"` or `"fused"` (numba; `decikit serve`'s default).
-  All modes give the same answers.
+- **Engines**: `p.compile(engine)` takes a tag or an instance:
+  `InterpretedEngine` (`"interpreted"`, plain Python), `SteppedEngine`
+  (`"stepped"`) or `FusedEngine` (`"fused"`, numba; `decikit serve`'s default).
+  Settings ride on the instance: `FusedEngine(strict_compile=True)`. `"polars"`
+  (`PolarsEngine`) runs the fused kernels inside a polars `LazyFrame` plan, for
+  batches to stream or sink. All engines give the same answers. `p.run` and
+  `p.compile()` follow the default engine, fused when unset, except that
+  `p.run(lazy_frame)` runs on polars; `with decikit.engine("interpreted"):`
+  switches both for a block (instant runs while you edit: a fused `run` binds
+  and builds on every call, so repeat it on a small frame and it is slower than
+  interpreted), or pass `engine=` to one call. `p.session` opens interpreted,
+  and `decikit serve` takes its engine from its own document, not from this
+  default.
 
 ## Which construct for which need
 
@@ -55,20 +65,22 @@ HTTP with `decikit serve`.
 | structure in a YAML/JSON file, steps in Python | `load_flow`, `DECIKIT_API__PIPELINE=flow.yaml` |
 | immutable config versions | `decikit.config.JsonFileStore` (`ConfigStore`) |
 | why a record got its answer; what-if | `pipeline.session(df)` |
-| modes, batch and single record agree | `decikit.lab.testing.assert_equivalent` |
+| a batch larger than memory, streamed or sunk to parquet | `pipeline.run(pl.scan_parquet(...))`: the polars engine |
+| engines, batch and single record agree | `decikit.lab.testing.assert_equivalent` |
 
-## Steps, params, run and score
+## Steps, params and run
 
 ```python
 from datetime import date
 
 import polars as pl
-from decikit import DecikitError, Executable, flow, missing_as, param
+from decikit import DecikitError, Executable, allow_fallback, flow, missing_as, param
 from decikit.exceptions import ParamsError
 
 def debt_ratio(income: float, debt: float = missing_as(0.0)) -> float:
     return debt / income
 
+@allow_fallback                      # a date never enters a kernel, so this step runs in Python
 def month_end(applied_on: date) -> bool:
     return applied_on.day >= 25
 
@@ -96,26 +108,32 @@ except DecikitError as error:        # the base of every error a user handles; P
     assert isinstance(error, ParamsError)
 
 exe: Executable = pipeline.compile("fused")      # compile once, call many times
-assert exe.score({"income": 1000.0, "debt": 350.0, "applied_on": date(2026, 1, 5)}, params)["approved"] is False
+assert exe.run({"income": 1000.0, "debt": 350.0, "applied_on": date(2026, 1, 5)}, params)["approved"] is False
 ```
 
-`run` and `score` treat a params document as immutable: the one you pass is
+`run` treats a params document as immutable: the one you pass is
 validated once and remembered by identity, so editing it in place and passing
 it again keeps the old values, silently. Pass a new dict to change a value
 (`copy.deepcopy(params)`, then edit the copy). In the example above the edit
 comes before the first call, so it is seen.
+
+`run` is fused by default, so a step that reads a `date`, `str` or `list` warns with a
+`FallbackWarning`; `@allow_fallback` accepts that. A fallback step runs row by row in
+Python instead of in the kernel. A step that returns a `dict` falls back too; the same
+record returned as a tuple under `Struct[Item]`, or a list of such tuples under
+`Columnar[Item]`, compiles ("Nested columns").
 
 An input with neither `missing_as(fill)` nor a `T | None` annotation is required:
 a null value or an absent column raises `MissingInputError`. To default it for a
 step you reuse as it is, put a step in front that writes the column
 (`def income(income: float = missing_as(0.0)) -> float: return income`).
 
-For one record, call `score(record)`, never `run(df)` on a one-row frame: `run`
-builds a frame, exports it through Arrow and assembles an output frame, which
-costs about five times what `score` does on the same record.
+For one record, pass a dict to `run`, never a one-row frame: a frame is exported
+through Arrow and an output frame assembled, which costs about five times as much
+on the same record.
 
 An `int` input or `-> int` output takes a whole float (`7.0`) but never truncates one: `7.5`, NaN
-and infinity raise `NotIntegralError` naming the input or step, in `score` and `run`, interpreted
+and infinity raise `NotIntegralError` naming the input or step, for a record or a frame, interpreted
 or compiled. Where you mean to drop the fraction, say so in the step (`int(x)`, `round(x)`).
 
 ### Rounding
@@ -133,7 +151,7 @@ from decikit.ops.decimal import Rounding
 def instalment(amount: float, months: float = param(12.0)) -> float:
     return decimal.round(amount / months, 2, mode=Rounding.HALF_EVEN)
 
-assert flow(instalment).compile("fused").score({"amount": 100.0})["instalment"] == 8.33
+assert flow(instalment).compile("fused").run({"amount": 100.0})["instalment"] == 8.33
 assert decimal.round(2.5) == 3.0 and decimal.round(2.5, mode=Rounding.HALF_EVEN) == 2.0
 ```
 
@@ -159,9 +177,9 @@ def fee(instalment: Currency["R"], floor: Currency = param(Currency(5, 5000))) -
     return max(instalment, floor) + Currency(1, 2500)       # Currency(major, minor): 1.25
 
 exe = flow(instalment, fee, name="loan").compile("fused")
-out = exe.score({"principal": "1000.50"})                   # a str, int, float, Decimal or decimal.Decimal
+out = exe.run({"principal": "1000.50"})                     # a str, int, float, Decimal or decimal.Decimal
 assert out["fee"] == Currency("11.88") and repr(out["fee"]) == "R 11.8800"
-assert exe.score({"principal": 10}, {"loan": {"fee": {"floor": "20"}}})["fee"] == Currency("21.25")
+assert exe.run({"principal": 10}, {"loan": {"fee": {"floor": "20"}}})["fee"] == Currency("21.25")
 
 frame = pl.DataFrame({"principal": [StdDecimal("1000.50"), StdDecimal("2.5")]}, schema={"principal": pl.Decimal(18, 2)})
 result = exe.run(frame)                                      # a Decimal column in, Decimal(38, 4) out
@@ -428,7 +446,7 @@ assert pricing.parameters() == {"pricing/rate": {"ladder": {
 params = pricing.parameters().defaults()          # {"pricing": {"rate": {"ladder": [{"floor": 0, "rate": 0.2}]}}}
 params["pricing"]["rate"]["ladder"] = [{"floor": 0, "rate": 0.2}, {"floor": 600, "rate": 0.1}]
 df = pl.DataFrame({"score": [550, 720]})
-assert pricing.run(df, params=params)["rate"].to_list() == [0.2, 0.1]     # interpreted
+assert pricing.run(df, params=params)["rate"].to_list() == [0.2, 0.1]     # the default engine: fused
 
 exe = pricing.compile("fused")
 assert exe.run(df, params=params)["rate"].to_list() == [0.2, 0.1]
@@ -436,7 +454,7 @@ with no_recompile():                              # more rows, new values: same 
     params = {"pricing": {"rate": {"ladder": [{"floor": 0, "rate": 0.25}, {"floor": 500, "rate": 0.15},
                                               {"floor": 700, "rate": 0.08}]}}}
     assert exe.run(df, params=params)["rate"].to_list() == [0.15, 0.08]
-    assert exe.score({"score": 720}, params)["rate"] == 0.08
+    assert exe.run({"score": 720}, params)["rate"] == 0.08
 ```
 
 Rows are checked when the document arrives: a missing or undeclared column or
@@ -468,7 +486,7 @@ store = JsonFileStore(basepath="shadow_configs")
 store.create_version({"params": {"pricing": {"priced": {"ladder": [{"floor": 0, "rate": 0.3}]}}}})
 with warnings.catch_warnings(record=True) as caught:
     warnings.simplefilter("always")
-    RequestHandler(store, flow(priced, name="pricing"), mode="interpreted").stage()
+    RequestHandler(store, flow(priced, name="pricing"), engine="interpreted").stage()
 [shadowed] = [w for w in caught if issubclass(w.category, ShadowedTableWarning)]
 assert "table `ladder` of pricing/priced" in str(shadowed.message) and "`rate_card`" in str(shadowed.message)
 ```
@@ -537,7 +555,7 @@ projects on one path never shadow each other):
   command and option; there are no others.
 
 JSON dates (`"2026-01-15"`) arrive as the declared `date` inputs, but only through
-the handler: `Executable.score` and `run` take typed values (`date` objects), and a
+the handler: `Executable.run` takes typed values (`date` objects), and a
 string date reaches the step as a string. In-process, `handler.score` takes the
 parsed record (or a frame) and converts dates exactly as `decikit serve` does;
 `handler.process_fn` takes raw bytes. Both are plain calls, and the `*_fn` hooks are
@@ -675,10 +693,10 @@ like `DECIKIT_API__PIPELINE=myapp.pipeline:build`.
 **The plain type always works.** Annotate a step `str`, `date`, `list[dict]`,
 `dict` or a TypedDict and it runs in every mode and gives the same answer. A
 numba kernel holds only numbers (`float`, `int`, `bool`, `Decimal`) and `Text`, so a step
-reading or writing anything else runs on its own, row by row, in Python, and says so once
-per step with a `FallbackWarning`. Only speed changes: such a step runs at
-under 1M rows/s in a batch instead of a kernel's hundreds of millions, and
-costs under 10 µs more on a single `score()`. Trees and decision tables read
+reading or writing anything else runs on its own, row by row, in Python. Fused mode says so
+once per step with a `FallbackWarning`; stepped mode only lists it in `fallbacks()`. Only
+speed changes: such a step runs at under 1M rows/s in a batch instead of a kernel's hundreds
+of millions, and costs under 10 µs more on a single record's `run()`. Trees and decision tables read
 their strings as byte spans inside their kernels, so a string rule set does not
 pay this at all.
 
@@ -691,14 +709,14 @@ is. A `Struct` or
 `Columnar` step returning tuples that can't be the declared record (wrong arity, a float for an `int`
 field) is caught when it compiles and falls back with that reason.
 
-`score` returns each value as the step made it. A plain `dict` or `list[dict]` output declares no
+`run` on a record returns each value as the step made it. A plain `dict` or `list[dict]` output declares no
 shape, so a frame from `run` takes one type per field: an int beside a float comes back as a
 float, a number beside a string raises, and non-string keys of a `dict` become strings, so a
 JSON, CSV or Arrow response can carry it. Declare a TypedDict to have the fields checked at the
 step instead.
 
 `@allow_fallback` says you accept that: the warning stops, and
-`Engine(strict_compile=True)` — which otherwise raises on a step that runs in
+`FusedEngine(strict_compile=True)` — which otherwise raises on a step that runs in
 Python — allows it. `fallbacks()` still reports it, marked `@allow_fallback`,
 so it stays visible when you are chasing latency. Put it on a function a step
 *calls* and the step falls back rather than compiling it: an intentional
@@ -708,7 +726,7 @@ Python boundary.
 import warnings
 
 import polars as pl
-from decikit import Engine, FallbackWarning, allow_fallback, flow
+from decikit import FallbackWarning, FusedEngine, allow_fallback, flow
 
 def is_private(sector: str) -> float:        # a str never enters a kernel, so this runs in Python
     return 1.0 if sector == "private" else 0.0
@@ -732,8 +750,8 @@ assert exe.fallbacks() == {
     "p/order_total": "@allow_fallback: reads 'items' as list[dict], which no kernel takes",
 }
 
-strict = Engine(strict_compile=True).bind(flow(order_total, name="q"), mode="fused")
-assert strict.score({"items": [{"price": 2.0}]})["order_total"] == 2.0
+strict = FusedEngine(strict_compile=True).bind(flow(order_total, name="q"))
+assert strict.run({"items": [{"price": 2.0}]})["order_total"] == 2.0
 ```
 
 **A step must not read a Python object it did not receive.** Binding a pipeline
@@ -746,7 +764,7 @@ tuples and frozensets of those, arrays and frames are data and are fine, as
 are functions and classes. `@allow_fallback` does not silence this warning.
 Put the data in a config document, a `ConfigurableStep` or `CustomFunction`
 field, a `param()` or a `param_table()`, and call a plain function. With
-`Engine(strict_compile=True)` (use it in CI) the warning is an `EngineError`
+`FusedEngine(strict_compile=True)` (use it in CI) the warning is an `EngineError`
 instead, so a build with hidden state fails.
 
 ```python
@@ -769,11 +787,11 @@ with warnings.catch_warnings(record=True) as caught:
 assert [w.category for w in caught] == [HiddenStateWarning]
 assert "q/capped reads Limits `LIMITS` (module global in " in str(caught[0].message)
 
-from decikit import Engine
+from decikit import FusedEngine
 from decikit.exceptions import EngineError
 
 try:
-    Engine(strict_compile=True).bind(flow(capped, name="q"))
+    FusedEngine(strict_compile=True).bind(flow(capped, name="q"))
 except EngineError as e:
     assert "q/capped reads Limits `LIMITS`" in str(e)
 else:
@@ -836,7 +854,7 @@ as its plain type in every mode:
   *not* a list of per-item dicts — `for i in items` iterates the *fields*, not
   the items, so index each field by position. An `Item` field may be `float`,
   `int`, `bool`, `str`, or `float | None` / `str | None`; reach for it when the
-  per-item work is heavy or the lists are long (it costs ~20 µs a `score()` call
+  per-item work is heavy or the lists are long (it costs ~20 µs a record `run()` call
   to build the arrays).
 
 ```python
@@ -904,10 +922,13 @@ assert pipeline.parameters().defaults() == {"order": {"items": {"heavy_kg": 20.0
 ```
 
 `execution_mode=EachMode.PER_ROW` (the default) runs the child once per parent
-row in Python — fastest on a single `score()`, slower on a large batch.
+row in Python — fastest on a single record's `run()`, slower on a large batch.
 `EachMode.BATCH` explodes the list into one child frame and runs the child once
 over all items — faster on a large batch, slower on a single record. A null list
-reads as a row with no items in both modes.
+reads as a row with no items in both modes. In a frame, an enriched list whose item type and child outputs
+are declared has the declared shape: every field of the item's TypedDict, null
+where unset, in its order, then the child's outputs; `run(record)` returns the
+items as built.
 
 ## Fan-out and reduce: `optimise`
 
@@ -956,11 +977,88 @@ To get the winner's other fields back (the product, the rate), pass `record=Item
 and have `evaluate` also write `record` as a `Struct[Item]`; or recompute them
 on the winner with `evaluate.relabel(reads={"index": "best_index"})`.
 
+## Large batches: the polars engine
+
+`pipeline.run(lazy_frame)` runs a pipeline as a polars `LazyFrame` plan on the polars engine, whatever the
+default engine is; `pipeline.compile("polars")` (or `PolarsEngine()`) binds it once. Every step still runs on
+the fused engine's kernels, on each batch polars hands it; polars decides the batches and the threads. Collect
+the result, stream it, or sink it to a file larger than memory. A numba engine named explicitly
+(`pipeline.run(lazy_frame, engine="fused")`) collects the frame first and returns a `DataFrame`.
+
+```python
+import polars as pl
+from decikit import FusedEngine, PolarsEngine, flow, frame_step, param
+from decikit.exceptions import EngineError
+
+def ratio(income: float, debt: float) -> float:
+    return debt / income
+
+def approved(ratio: float, limit: float = param(0.4)) -> bool:
+    return ratio <= limit
+
+@frame_step(reads=["income"], writes=["income_rank"])
+def rank_income(df: pl.DataFrame) -> pl.DataFrame:        # cross-row: it needs the whole frame
+    return df.with_columns(pl.col("income").rank().alias("income_rank"))
+
+def tier(income_rank: float, approved: bool) -> int:
+    return 2 if approved and income_rank > 2 else 1
+
+pipeline = flow(ratio, approved, rank_income, tier, name="credit")
+pl.DataFrame({"income": [1000.0, 800.0, 4000.0, 2500.0],
+              "debt": [500.0, 100.0, 400.0, 200.0]}).write_parquet("applications.parquet")
+
+plan = pipeline.run(pl.scan_parquet("applications.parquet"))   # a LazyFrame: nothing has run yet
+plan.sink_parquet("decisions.parquet")                     # streamed, batch by batch
+out = pl.read_parquet("decisions.parquet")
+assert out["tier"].to_list() == [1, 1, 2, 2]
+assert out.equals(pipeline.compile("fused").run(pl.read_parquet("applications.parquet")))
+assert plan.collect(engine="streaming").equals(out)
+
+assert pipeline.run(pl.scan_parquet("applications.parquet"), engine="fused").equals(out)   # collected first
+exe = pipeline.compile("polars")                            # bind once, run many plans
+
+# Where the stream breaks: each frame step sees the whole frame, everything else streams.
+assert exe.segments == ((("credit/ratio", "credit/approved"), True), (("credit/rank_income",), False),
+                        (("credit/tier",), True))
+assert exe.fallbacks() == {}                                # every step here runs in a kernel
+
+assert exe.run(pl.read_parquet("applications.parquet")).equals(out)   # a DataFrame in, a DataFrame out
+assert exe.run({"income": 1000.0, "debt": 500.0})["tier"] == 1        # a record runs on the fused engine
+strict = PolarsEngine(segments=FusedEngine(strict_compile=True))      # settings for the fused segments
+
+def details(ratio: float) -> dict:                          # no shape to know before a row arrives
+    return {"ratio": ratio}
+
+try:
+    flow(ratio, details, name="d").compile("polars").run(pl.scan_parquet("applications.parquet"))
+except EngineError as e:
+    assert "TypedDict" in str(e)                            # annotate it, then it runs
+```
+
+- **The answers are fused's.** Columns, dtypes and values equal `pipeline.compile("fused").run(df)`, except
+  that a column fused leaves `Null` for want of a value has its declared dtype; a step's
+  error surfaces at `collect()` or the sink with its own type and its `in step <path>` note. The params
+  document is validated against the whole pipeline when `run` builds the plan.
+- **A frame step is a pipeline breaker.** It runs once on the whole frame (it may rank, join or group by), so
+  the frame materialises there; the steps before and after it stream. A branch or loop holding a frame step
+  runs whole too. Larger than memory works when the frame steps' outputs fit in memory.
+- **Refused, with an `EngineError` saying what to do:** `trace=` and `session()` (debug and trace on the
+  numba engine: the same pipeline gives the same answers there); a qualified emit (`.emit("x@path")`; relabel
+  the step so the version has its own name); an output polars has no dtype for until it holds values (a plain
+  `dict`, a bare `list`, `Any`: annotate a TypedDict or `list[float]`; an `each`'s gathered list needs its
+  items' type and its body's outputs declared); at `collect()`, a batch its declared type cannot hold
+  unchanged (a fraction in an `int` column, a record whose keys differ from its TypedDict's, or come in
+  another order outside an `each`); a frame step that fails on an empty
+  frame (the engine runs each frame step once on zero rows to learn its columns), or one that leaves a column
+  empty there (declare it: `writes={"band": pl.String}`).
+- `assert_equivalent` checks the polars engine with the others; an engine that refuses a pipeline is skipped
+  with a warning.
+
 ## Debugging, testing and introspection
 
 ```python
 import polars as pl
-from decikit import Engine, describe, flow, param
+from decikit import describe, flow, param
 from decikit.ir import step_map, to_ir
 from decikit.lab.testing import assert_equivalent, corpus, no_recompile
 
@@ -981,7 +1079,7 @@ s.set("ratio", 0.1)                      # what-if
 s.resume()
 assert s.output()["approved"].to_list() == [True, True]
 
-out = assert_equivalent(pipeline, df)    # every mode; run == score per row == a session
+out = assert_equivalent(pipeline, df)    # every engine; a frame run == a record run per row == a session
 assert out["approved"].to_list() == [False, True]
 for frame in corpus(pipeline).values():  # zeros, negatives, empty and chunked frames
     assert_equivalent(pipeline, frame)
@@ -992,7 +1090,7 @@ with no_recompile():                     # retuning a param never compiles
     exe.run(df, params={"credit": {"approved": {"limit": 0.9}}})
 
 assert list(step_map(pipeline)) == ["credit/ratio", "credit/approved", "credit"]
-ir = to_ir(pipeline)                     # the checked IR that Engine().bind runs
+ir = to_ir(pipeline)                     # the checked IR that an engine runs
 assert {n.path for n in describe(pipeline).nodes} >= {"credit/ratio", "credit/approved"}   # nodes, edges, value slots
 ```
 
@@ -1010,7 +1108,7 @@ def instalment(loan: Currency["R"], term_months: Annotated[int, Duration("months
                rate: Annotated[float, Percent()] = param(0.25)) -> Currency["R"]:
     return loan * (1 + rate) / term_months
 
-assert flow(instalment, name="loan").compile("fused").score({"loan": 1200, "term_months": 12})["instalment"] == Currency(125)
+assert flow(instalment, name="loan").compile("fused").run({"loan": 1200, "term_months": 12})["instalment"] == Currency(125)
 ```
 
 Subclass `decikit.ops.FieldMetadata` for another kind.
@@ -1019,7 +1117,7 @@ Sessions also `step()`, `step_into()` (branches, loops), `rewind(path)` and
 break on a tree node (`"risk#high"`) or table row (`"band#2"`); see
 `help(decikit.debug.Session)`. `s.events` holds the `decikit.debug` events
 (`Paused`, `NodeFinished`, ...). Test through the decider toolkit
-(`Engine().bind(build())` or the handler), not by calling the functions: only
+(`FusedEngine().bind(build())` or the handler), not by calling the functions: only
 that proves the pipeline wires, builds and serves.
 
 ## Durable ids, tracing, checks, experiments and MCP

@@ -51,6 +51,9 @@ class PolarsEngine(Engine):
     segments: FusedEngine = FusedEngine()                   # runs every boundary
 ```
 
+As built (2026-10-10): `NumbaEngine` has no `mode` attribute; each subclass returns its runner from `_runner()`,
+which is also what a third-party numba engine overrides.
+
 - `Engine.resolve("fused")` is the alias lookup; `Step.compile("fused")` becomes
   `Engine.resolve(mode)().bind(self)`, and `compile(FusedEngine(strict_compile=True))` takes an instance.
 - `APISettings.engine` is an `EngineSettings(type="fused", extra="allow")` document and `RequestHandler`
@@ -68,6 +71,8 @@ engine never calls a step's polars body: a step that falls back today falls back
 numba engine. The only change it sees is the registry wrapper around `Engine.bind` and `run` taking a dict.
 
 ## Polars bodies on steps (built only if phase P6 goes ahead)
+
+Dropped 2026-10-10: P5 (experiment E2) was a no-go, so P6 is not built and this section is history; see `docs/design_decisions/experiments/polars-host-vs-native.md`.
 
 A polars body is an optional optimisation an author may add to a step; the Python body is always required
 and is what serving, debugging and the equivalence baseline run.
@@ -136,6 +141,8 @@ once on the input schema with the whole pipeline's executable. A `REQUIRED` null
 read, as it does today. The full design, verified facts and test list: [09-polars-host-design.md](09-polars-host-design.md).
 
 ### v2: native segments (conditional on the measurement in P5)
+
+Dropped 2026-10-10: P5 (experiment E2) was a no-go, so P6 is not built and this section is history; see `docs/design_decisions/experiments/polars-host-vs-native.md`.
 
 The segmenter rule becomes the packing rule:
 

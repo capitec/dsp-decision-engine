@@ -20,6 +20,7 @@ from decikit import ConfigurableStep, allow_fallback, each, flow, step
 
 from consolidation import vocab
 from consolidation.inventory import num
+from consolidation.records import BufferProbe
 
 # The evidence outputs `capacity_unit()` reads.
 INVARIANTS = ("net_monthly_income", "living_expenses", "income_verification_tier", "applicant_income_evidence_gap",
@@ -80,7 +81,7 @@ class Capacity:
                   "applicant1_internal_accounts": internal}
         if proposed_instalment is not None:
             record["proposed_instalment"] = proposed_instalment
-        return self._exe.score(record, self._params[stack_enabled])
+        return self._exe.run(record, self._params[stack_enabled])
 
 
 def _behaviour(document) -> str:
@@ -112,7 +113,7 @@ def case_record(decision_date: date, product_code: int, channel_code: int, segme
 
 @allow_fallback
 @step(output="buffer_probes")
-def buffer_probes(product_policies: dict, risk_grade: float) -> list[dict]:
+def buffer_probes(product_policies: dict, risk_grade: float) -> list[BufferProbe]:
     """One probe per product the search can price: the keys the buffer grid is read with."""
     return [{"product_code": int(code), "risk_grade": int(risk_grade)} for code in product_policies]
 

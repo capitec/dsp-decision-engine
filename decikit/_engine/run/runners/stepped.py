@@ -3,7 +3,7 @@ from __future__ import annotations
 import threading
 import warnings
 from functools import partial
-from typing import Any, Iterator, NamedTuple
+from typing import Any, Iterable, Iterator, NamedTuple
 
 import numpy as np
 import polars as pl
@@ -21,7 +21,7 @@ from decikit._engine.run.runners.base import Checkpoint
 from decikit._engine.run.runners.interpreted import InterpretedRunner, _absent, _Context, _encoded, _note, _Scope
 from decikit._engine.run.state import State, all_set, fill_missing
 from decikit._engine.trace.envelope import Kind
-from decikit.exceptions import FallbackWarning, NotIntegralError
+from decikit.exceptions import EngineError, FallbackWarning, NotIntegralError
 from decikit.ops.nested import struct_item
 from decikit._engine.types import Representation, is_raw, representation_for, columnar_item, item_schema
 from decikit._engine.wiring.plan import Call, Plan, NodeVersion
@@ -51,20 +51,23 @@ class SteppedRunner(InterpretedRunner):
     values, except a `Text` or `Columnar[...]` input, whose representation is
     part of what it declares.
 
-    A step no kernel holds -- one reading or writing a semantic `str`, a `date`
-    or a `list`, or with a body numba can't compile -- runs in Python, row by
-    row, with one `FallbackWarning` naming it. With `strict=True` it raises
-    instead, unless the step is `@allow_fallback`. A `Columnar[Item]` input still
-    runs compiled, one call per row.
+    A step no kernel holds -- one reading or writing a semantic `str`, a `date`,
+    a `list` or a `dict`, or with a body numba can't compile -- runs in Python,
+    row by row, and so does every step of a kernel numba refuses only when it
+    is launched. `fallbacks()` lists each, without a warning; with
+    `strict=True` it raises instead, unless the step is `@allow_fallback`. A
+    `Columnar[Item]` input still runs compiled, one call per row.
 
     Example::
 
-        exe = Engine().bind(pipeline, mode="stepped")
+        exe = SteppedEngine().bind(pipeline)
         for checkpoint in exe.runner.iterate(exe.plan, *exe.prepare(df)):
             ...
     """
 
     fuse = False
+    # Whether a step outside a shared kernel warns with a `FallbackWarning`; `strict` refuses one either way.
+    loud = False
 
     def __init__(self, strict: bool = False) -> None:
         super().__init__()
@@ -105,10 +108,17 @@ class SteppedRunner(InterpretedRunner):
         strs = {c.id: names for c in plan.calls if _reads_span(c)
                 and (names := tuple(d.name for d in c.node.params if d.annotation is str))}
         units = compile_plan(plan, fuse=self.fuse, python=python)
-        fallbacks: dict[str, str] = {}
+        fallbacks = self._report(u for u in units.values() if isinstance(u, Fallback))
         for unit in units.values():
-            if not isinstance(unit, Fallback):
-                continue
+            if isinstance(unit, Kernel):
+                unit.on_split = partial(self._split, plan)
+        reads = {id(unit): _external(unit) for unit in units.values()}
+        return Compiled(plan, units, reads, strs, fallbacks, python, {}, {})
+
+    def _report(self, units: Iterable[Fallback]) -> dict[str, str]:
+        # Every step outside a shared kernel, by path; strict refuses one that runs Python undeclared.
+        fallbacks: dict[str, str] = {}
+        for unit in units:
             # A fallback backed by a dispatcher still runs compiled, just one call per row.
             compiled = isinstance(unit.fn, Dispatcher)
             for c in unit.calls:
@@ -117,15 +127,26 @@ class SteppedRunner(InterpretedRunner):
                 if unit.declared:
                     continue
                 if compiled:
-                    warnings.warn(f"{path} runs compiled, one call per row outside the shared "
-                                  f"kernel: {unit.reason}", FallbackWarning, stacklevel=5)
+                    if self.loud:
+                        warnings.warn(f"{path} runs compiled, one call per row outside the shared "
+                                      f"kernel: {unit.reason}", FallbackWarning, stacklevel=6)
                     continue
                 message = f"{path} runs in Python, row by row: {unit.reason}"
                 if self.strict:
-                    raise ValueError(f"{message}; accept it with @allow_fallback, or run mode='interpreted'")
-                warnings.warn(message, FallbackWarning, stacklevel=5)
-        reads = {id(unit): _external(unit) for unit in units.values()}
-        return Compiled(plan, units, reads, strs, fallbacks, python, {}, {})
+                    raise EngineError(f"{message}; accept it with @allow_fallback, or run engine='interpreted'")
+                if self.loud:
+                    warnings.warn(message, FallbackWarning, stacklevel=6)
+        return fallbacks
+
+    def _split(self, plan: Plan, units: tuple[Fallback, ...]) -> None:
+        # A kernel splitting at a launch after the build: reported like a build-time fallback, once.
+        with self._lock:
+            now = self._compiled
+            if now.plan is plan and units[0].calls[0].node.origin.path in now.fallbacks:
+                return   # another thread's launch split it first
+            found = self._report(units)
+            if now.plan is plan:
+                self._compiled = now._replace(fallbacks=now.fallbacks | found)
 
     def fallbacks(self) -> dict[str, str]:
         return dict(self._compiled.fallbacks)
@@ -180,7 +201,8 @@ class SteppedRunner(InterpretedRunner):
                     raise MissingInputError(decl.name, path, int((~mask).sum()), len(mask), absent=_absent(state, v))
                 if not filled and _fills(decl, mask, kind):
                     # ponytail: one fill per version per kernel; two readers with different fills share the first.
-                    x = fill_missing(x, mask, stored_fill(decl)).astype(x.dtype, copy=False)
+                    # A struct's records come back as dicts beside the fill, as a Python body takes them.
+                    x = fill_missing(x, mask, stored_fill(decl)).astype(object if x.dtype.names else x.dtype, copy=False)
                 valid[v.id] = mask
             values.setdefault(v.id, x)
         try:
@@ -191,17 +213,15 @@ class SteppedRunner(InterpretedRunner):
             # and a subset of rows would mislabel records from the buffer's
             # row-major offsets.
             top = scope.rows is None and scope.arm is None and scope.iteration is None
-            if trace is not None and isinstance(unit, Kernel) and top:
-                unit.run(values, valid, bundles, n, trace, ctx.table)
-            else:
-                unit.run(values, valid, bundles, n)
-                if trace is not None:
-                    for c in unit.calls:
-                        self._emit_rows(Kind.STEP, c.node.origin, scope, n, step=c.id + 1)
+            captured = (unit.run(values, valid, bundles, n, trace, ctx.table)
+                        if trace is not None and isinstance(unit, Kernel) and top else unit.run(values, valid, bundles, n))
+            if trace is not None and not captured:
+                for c in unit.calls:
+                    self._emit_rows(Kind.STEP, c.node.origin, scope, n, step=c.id + 1)
         except Exception as e:
             paths = [c.node.origin.path for c in unit.calls]
             where = (f"step {paths[0]}" if len(paths) == 1 else
-                     f"one of the steps {paths}, fused into one kernel; run in mode='stepped' to see which")
+                     f"one of the steps {paths}, fused into one kernel; run in engine='stepped' to see which")
             if isinstance(e, NotIntegralError) and e.message == NOT_WHOLE:
                 # The kernel is shared by content, so its message can't name the step.
                 raise NotIntegralError(f"in {where}: {e.message}") from None

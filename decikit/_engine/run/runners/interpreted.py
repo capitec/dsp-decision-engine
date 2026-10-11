@@ -10,9 +10,9 @@ import polars as pl
 from decikit._engine.boundary.dtypes import decimal_mantissa
 from decikit._engine.boundary.whole import check_series, int64_array
 from decikit._engine.boundary.nulls import MissingInputError
-from decikit._engine.compile import numpy_dtype
 from decikit._engine.compile.declared import check_output
 from decikit._engine.compile.rows import build_rows, rows_needs_no_fill
+from decikit._engine.compile.structs import to_dicts
 from decikit._engine.ir.decls import Input, NullPolicy, base_annotation, stored_fill
 from decikit._engine.run.params import RunParams
 from decikit._engine.run.representations import span_objects
@@ -20,9 +20,8 @@ from decikit.ops.text import Text
 from decikit._engine.run.runners.base import Checkpoint
 from decikit._engine.run.state import State, all_set, dtype_of, fill_missing, from_series, record_value
 from decikit._engine.trace.envelope import Kind
-from decikit.ops.nested import struct_item
-from decikit._engine.types import (Representation, columnar_item, decimal_boxer, decimal_scale, is_raw, item_schema,
-                                   representation_for, to_raw)
+from decikit._engine.types import (Representation, columnar_item, decimal_boxer, decimal_scale, item_schema,
+                                   raw_values, representation_for, to_raw)
 from decikit._engine.wiring.plan import Branch, Call, Loop, Plan, Resolved, ScatterGather, Sequence, NodeVersion
 
 # Below this many exploded elements the polars explode+gather (about ten lazy collects, each with
@@ -168,20 +167,14 @@ class InterpretedRunner:
         for v, out, scale, values in zip(call.writes, node.outputs, scales, columns):
             if node.kind == "scalar":
                 check_output(node.origin.path, out, values, scope.rows)
-            # A `Struct[Item]` step returning a tuple of fields is stored as the dict a reader expects,
-            # so interpreted and compiled modes agree on the value a struct step reads back.
-            if (item := struct_item(out.annotation)) is not None:
-                fields = [name for name, _ in item_schema(item)]
-                values = tuple(None if x is None else (x if isinstance(x, dict) else dict(zip(fields, x)))
-                               for x in values)
+            if (dicts := to_dicts(out.annotation)) is not None:
+                values = tuple(None if x is None else dicts(x) for x in values)
             if scale is not None:
                 values = tuple(None if x is None else to_raw(x, scale) for x in values)
             if base_annotation(out.annotation) is str:
                 values = tuple(x.text if isinstance(x, Text) else x for x in values)
-            # A `Columnar[...]` output is stored as a kernel stores it, or the modes disagree on dtype.
             row = scope.rows
-            array, valid = _array(values, numpy_dtype(out.annotation) if is_raw(out.annotation)
-                                  else dtype_of(base_annotation(out.annotation)),
+            array, valid = _array(values, dtype_of(base_annotation(out.annotation)),
                                   lambda k: f"step '{node.origin.path}' output '{v.name}'"
                                   + (f" (row {k if row is None else int(row[k])})" if m > 1 else ""))
             state.write(v, array, scope.rows, valid)
@@ -271,7 +264,7 @@ class InterpretedRunner:
             offsets.append(offsets[-1] + len(items))
         elem_state = State(state.plan, pl.DataFrame(), offsets[-1])
         for (name, v) in sg.fields:
-            values, valid = _array(tuple(flat[name]), dtype_of(base_annotation(v.annotation)),
+            values, valid = _array(tuple(raw_values(v.annotation, flat[name])), dtype_of(base_annotation(v.annotation)),
                                    lambda k: f"item field '{name}' of {node.origin.path}")
             elem_state.write(v, values, valid=valid)
         elem_scope = _Scope(None, elem_state.frame, {name: v for name, v in sg.fields}, scope.ctx)
@@ -307,7 +300,9 @@ class InterpretedRunner:
                     .explode(col).unnest(col))
         elem_state = State(state.plan, pl.DataFrame(), exploded.height)
         for (name, v) in sg.fields:
-            values, valid = from_series(exploded.get_column(name))
+            scale = decimal_scale(v.annotation)
+            column = exploded.get_column(name)
+            values, valid = from_series(column if scale is None else decimal_mantissa(column, scale))
             dtype = dtype_of(base_annotation(v.annotation))
             if values.dtype != dtype:
                 if dtype == np.int64 and values.dtype.kind == "f":

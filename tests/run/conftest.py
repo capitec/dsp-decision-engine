@@ -12,5 +12,5 @@ def mode(request):
 
 @pytest.fixture
 def bind(mode):
-    """`bind(step, **engine_kwargs)`: an Executable in the test's mode."""
-    return lambda step, **kw: Engine(**kw).bind(step, mode=mode)
+    """`bind(step, **engine_settings)`: an Executable on the test's engine."""
+    return lambda step, **kw: Engine.resolve(mode)(**kw).bind(step)

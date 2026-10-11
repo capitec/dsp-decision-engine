@@ -10,7 +10,6 @@ from numba.core import event
 from decikit import flow, step
 from decikit._engine.debug import Edited, Paused, ReloadFailed
 from decikit._engine.debug.hot import ModuleWatcher
-from decikit.lab.testing import MODES
 
 FRAME = pl.DataFrame({"net_income": [9200.0, 4100.0], "expenses": [3100.0, 1500.0], "instalment": [1200.0, 800.0]})
 
@@ -39,9 +38,9 @@ def buffer(headroom: float) -> float:
     return headroom * 0.5
 
 
-@pytest.mark.parametrize("mode", MODES)
+@pytest.mark.parametrize("mode", ("interpreted", "stepped", "fused"))
 def test_reload_reruns_from_the_first_changed_step_in_every_mode(mode):
-    s = flow(disposable_income, ratio, headroom).session(FRAME, mode=mode)
+    s = flow(disposable_income, ratio, headroom).session(FRAME, engine=mode)
     s.resume()
     edited = flow(disposable_income, step(halved, name="ratio", output="ratio"), headroom)
     cp = s.reload(edited)
@@ -159,7 +158,7 @@ def test_editing_an_imported_module_on_disk_reloads_the_pipeline_without_stale_r
     monkeypatch.syspath_prepend(str(tmp_path))
     try:
         watcher = ModuleWatcher(f"{pkg}.pipeline:pipeline")
-        s = watcher.get().session(FRAME, mode=mode)
+        s = watcher.get().session(FRAME, engine=mode)
         s.resume()
         assert watcher.poll() is None
         _write(root / "features.py", "def ratio(disposable_income: float, instalment: float) -> float:\n"

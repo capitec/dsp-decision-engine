@@ -40,7 +40,7 @@ def test_without_extends_only_the_listed_checks_run(tmp_path):
 
 
 def test_json_is_read_too_and_options_reach_the_check(tmp_path):
-    path = _write(tmp_path, json.dumps({"checks": [{"type": "mode_divergence", "modes": ["interpreted"]}]}),
+    path = _write(tmp_path, json.dumps({"checks": [{"type": "mode_divergence", "engines": ["interpreted"]}]}),
                   "checks.json")
     assert checks.run(flow(scale, name="term"), config=path).findings
 

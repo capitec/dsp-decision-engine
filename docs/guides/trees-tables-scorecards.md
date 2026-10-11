@@ -139,7 +139,7 @@ exe = risk.compile("fused")
 print(exe.run(df)["risk_band"].to_list())
 with no_recompile():                                  # raises if anything compiles
     print(exe.run(df, params={"risk": {"max_ratio": 0.7}})["risk_band"].to_list())
-print(exe.score({"debt_ratio": 0.3, "bureau_score": 650.0}))
+print(exe.run({"debt_ratio": 0.3, "bureau_score": 650.0}))
 ```
 
 ```text
@@ -404,7 +404,7 @@ df = pl.DataFrame({"grade": ["A", "A", "B", "C", None],
 print(rate.run(df))
 exe = rate.compile("fused")
 print(exe.fallbacks())
-print(exe.score({"grade": "B", "amount": 1000.0}))
+print(exe.run({"grade": "B", "amount": 1000.0}))
 ```
 
 ```text
@@ -669,7 +669,7 @@ outputs: [band]
 default: [C]
 """
 band = ConfigurableStep.load(yaml.safe_load(text))
-print(type(band).__name__, band.compile("fused").score({"bureau_score": 655.0}))
+print(type(band).__name__, band.compile("fused").run({"bureau_score": 655.0}))
 ```
 
 ```text
@@ -690,7 +690,7 @@ risk = TreeConfig.load("risk_tree.json")
 doc = risk.model_dump(mode="json")
 doc["tree"]["output"]["data"][3]["max_term"] = 84          # low risk now gets 84 months
 edited = ConfigurableStep.load(doc)
-print(edited == risk, edited.compile("fused").score({"debt_ratio": 0.2, "bureau_score": 720.0})["max_term"])
+print(edited == risk, edited.compile("fused").run({"debt_ratio": 0.2, "bureau_score": 720.0})["max_term"])
 try:
     risk.name = "other"
 except Exception as e:

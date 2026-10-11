@@ -356,9 +356,10 @@ def _row(env: Env, m: z3.ModelRef) -> dict[str, t.Any]:
 
 def _reproduces(old: t.Any, new: t.Any, env: Env, row: dict[str, t.Any]) -> bool:
     # Runs both steps on the row, so a counterexample is only claimed when the real steps disagree on it.
+    # Interpreted: one row needs no kernel, and building two would cost seconds on a cold cache.
     frame = pl.DataFrame({n: [row[n]] for n in row}, schema={n: _POLARS[env.vars[n][0]] for n in row})
     try:
-        return not old.run(frame).equals(new.run(frame))
+        return not old.run(frame, engine="interpreted").equals(new.run(frame, engine="interpreted"))
     except Exception:
         return False
 
