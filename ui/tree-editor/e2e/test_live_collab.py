@@ -218,9 +218,11 @@ def test_a_rest_save_reaches_an_open_editor(signed_in: Page):
     project = two_rules(signed_in)
     open_live(signed_in, project)
 
-    data = get_project(signed_in, project)["project_data"]
+    loaded = get_project(signed_in, project)
+    data = loaded["project_data"]
     data["rules"][0]["meta"]["name"] = "Saved over REST"
-    assert signed_in.request.put(f"/api/v1/projects/{project}", data={"project_data": data}).ok
+    assert signed_in.request.put(f"/api/v1/projects/{project}",
+                                 data={"project_data": data, "base_version": loaded["version"]}).ok
 
     shows(signed_in, ["Saved over REST", "Rule 2"])
 
