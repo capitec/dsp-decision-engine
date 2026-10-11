@@ -11,6 +11,8 @@ Two helpers in `decikit/_engine/concurrency.py` implement most of the contract: 
 | `Executable.run` on one shared executable, frame or record: same or different params documents, traced or not, including the first call | `RequestHandler` serves every request from one executable, and kernels are `nogil=True` so threads overlap |
 | `RequestHandler.process_fn` while `stage`, `activate` or `rollback` run | versions are swapped under load |
 | `InterpretedEngine().bind(...)` while other executables run | staging a new version compiles while the old one serves, and both touch the module-global compile caches |
+| `PolarsExecutable.run` on one shared executable | polars calls each segment's executable from its own threads, up to one per batch in flight, so a pipeline's segments are shared executables under load |
+| the default-engine context variable (`decikit.engine(...)`) | read by `run` and `compile` on every thread and task; each sees its own block |
 | registry `resolve` and `lazy` | loading a document can import and register types while requests run |
 | input extraction, `raw_str` codes, params validation and conversion | all reached from `run` |
 
@@ -37,6 +39,8 @@ The rules the code follows:
 4. Reusable scratch is pooled per thread and popped while in use.
 5. Module-global build caches use a double-checked lock: a lock-free `dict.get` on the hit path, a lock, a second check, the build and one insert on the miss path.
 6. No rule depends on the GIL making dict operations atomic. The decider toolkit runs on CPython with the GIL today; rule 3's `setdefault` relies only on per-object dict atomicity, which free-threaded CPython keeps.
+
+Free-threaded CPython (numba 0.67 on 3.14t) has not been checked. Two spots lean on the GIL: the lazy `_trace_kernel` build (a duplicate build is harmless) and `jit()` swapping `dispatcher._cache` outside numba's compile lock.
 
 Locks appear only on miss paths, so a warm `run(record)` takes none.
 
@@ -123,6 +127,12 @@ The caches that go through `once`:
 
 `rows.py` and `structs.py` call it as `_LAYOUTS.get(schema) or once(...)`, which saves a function call on the hot path. `jit()` attaches numba's disk cache to a dispatcher inside the `build`, before the dispatcher is published; when a later copy of the same code has a real file and the shared dispatcher still has none, it attaches the cache under `_DISPATCHERS.lock`. Compile caching itself is covered in [Compile cache](cache.md).
 
+## The polars engine and the default engine
+
+`PolarsExecutable.run` writes nothing to `self`. Its segments are ordinary executables that polars calls concurrently from its own threads (`map_batches`, up to 31 batches in flight were stressed), so they follow the contract above. Each segment's params document is pruned afresh per run, so concurrent runs with different documents displace each segment's one-entry params cache: correct answers, a slowdown only.
+
+The default engine is a `ContextVar`, so each thread and `asyncio` task reads its own block; 14,400 threaded and 8,000 interleaved-task reads never saw another's. Which threads inherit a block, and the two ways to leak one out, are in the `engine()` docstring: `asyncio.to_thread` sees it; `loop.run_in_executor`, plain threads and polars' threads do not on GIL CPython. Pass `engine=` explicitly when the work crosses a thread.
+
 ## The per-thread pool
 
 ```python
@@ -188,6 +198,9 @@ The call then carries `compiled` in its `_Context`, so every node of the call se
 
 - `_bundle` converts a node's `str` params to `(address, length)` spans of their UTF-8 bytes. The entry is the pair `(bundle, utf8)`, inserted with `converted.setdefault(key, ...)`. A thread that loses the race uses the winner's entry, and the buffers the spans point into live as long as that entry.
 - `_drop`, which removes a packed kernel numba refused at run time, takes the lock and publishes `now._replace(packed=...)`, a new snapshot without that path, instead of mutating the dict in place.
+- `_split`, installed on each `Kernel` as `on_split`, does the same for a kernel that splits at its first launch: under the lock it re-checks that no other thread reported the split first, then publishes `now._replace(fallbacks=...)`. A kernel splits at most once, so the callback publishes at most once per kernel.
+
+A `FallbackWarning` from a launch-time split therefore fires at run time, once, from whichever request or polars thread launches the kernel first. On GIL builds `warnings.catch_warnings()` in another thread is process-wide and can swallow it, so serving sees it in the logs only.
 
 A convention test enforces rule 1 mechanically. `test_runners_and_executable_keep_no_per_call_state` in `tests/test_conventions.py` walks the AST of every class in `decikit/_engine/run/engine.py` and `decikit/_engine/run/runners/` and fails on any assignment to `self.<attr>`, any subscript assignment through `self`, and any mutating method call (`update`, `pop`, `append`, `setdefault`, ...) on something reached from `self`, outside `__init__`, `_compile`, `_build` and `with self._lock:` blocks. The one allowlisted exception is `Executable._params`, which writes a `threading.local`.
 
@@ -286,6 +299,8 @@ sequenceDiagram
 | `test_the_default_dates_of_a_live_version_cannot_be_changed` | race 10 |
 
 Together with the debug and trace suites, this file passed in 30.6 s (130 tests) on 2026-10-08.
+
+A separate audit on 2026-10-11 (scripts on branch `audit/thread-safety`; every script sets the switch interval to 1 µs and compares each answer with a single-thread reference) ran about 9,000 concurrent comparisons on 3 examples with 0 failures: warm and cold executables, launch-time splits, never-compiled code on the default engine, the polars engine in memory and streaming, the default engine per thread and per task. It did not cover the consolidation example on the stepped, interpreted and polars engines, or the other 9 examples.
 
 ## Adding shared state
 

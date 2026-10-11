@@ -21,7 +21,7 @@ from decikit._engine.run.runners.base import Checkpoint
 from decikit._engine.run.runners.interpreted import InterpretedRunner, _absent, _Context, _encoded, _note, _Scope
 from decikit._engine.run.state import State, all_set, fill_missing
 from decikit._engine.trace.envelope import Kind
-from decikit.exceptions import EngineError, FallbackWarning, NotIntegralError
+from decikit.exceptions import FallbackWarning, NotIntegralError, StrictCompileError
 from decikit.ops.nested import struct_item
 from decikit._engine.types import Representation, is_raw, representation_for, columnar_item, item_schema
 from decikit._engine.wiring.plan import Call, Plan, NodeVersion
@@ -133,7 +133,7 @@ class SteppedRunner(InterpretedRunner):
                     continue
                 message = f"{path} runs in Python, row by row: {unit.reason}"
                 if self.strict:
-                    raise EngineError(f"{message}; accept it with @allow_fallback, or run engine='interpreted'")
+                    raise StrictCompileError(f"{message}; accept it with @allow_fallback, or run engine='interpreted'")
                 if self.loud:
                     warnings.warn(message, FallbackWarning, stacklevel=6)
         return fallbacks

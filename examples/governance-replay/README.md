@@ -238,7 +238,8 @@ tests/
   version instead and capture new evidence, or keep the old version directory untouched.
 - **One declared Python boundary.** The replay service looks the flows up by code in `governance.flows.FLOWS`, a Python
   registry, so the decider toolkit reports it as hidden state when the service is built. The service is a harness, not a decision;
-  there is no document to hold the flows.
+  there is no document to hold the flows. As a consequence `decikit.lab.diff.structure` of the replay service against
+  itself is never identical (the registry is keyed by identity); the flows it replays diff normally.
 - **Rule lists.** The fraud rule list is the live rules in `rule_set.json`; the loan list is the cap waterfall's
   `REGISTER`; the business list is the roll-up rule ids. The business flow also reports a binding rule
   `worst-event` that is in none of them; coverage lists it under `unknown`.

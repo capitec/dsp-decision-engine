@@ -10,8 +10,8 @@ Read this before changing how a request is parsed, scored or transported, or how
 
 ## Serving binds the engine its settings name, and builds it before warm-up
 
-- `DECIKIT_API__ENGINE__TYPE` (default `fused`) names the engine and `DECIKIT_API__ENGINE__<FIELD>` sets its own fields (`STRICT_COMPILE`, `PARAMS_VALIDATION`); `decikit serve --engine <tag>` sets the type. `RequestHandler(engine=...)` takes an `Engine` or a tag, resolved once. Serving never reads the `decikit.engine(...)` default. `serve` validates the engine document before it starts workers.
-- `stage()` builds the kernels (`exe.fallbacks()`) before `warm_fn`, so a `strict_compile` refusal raises as `EngineError` unwrapped; a warm-up failure keeps the sample-request hint.
+- `DECIKIT_API__ENGINE__TYPE` (default `fused`) names the engine and `DECIKIT_API__ENGINE__<FIELD>` sets its own fields (`STRICT_COMPILE`, `PARAMS_VALIDATION`); `decikit serve --engine <tag>` sets the type. `RequestHandler(engine=...)` takes an `Engine` or a tag, resolved once. Serving never reads the `decikit.engine(...)` default. `serve` validates the engine document before it starts workers. Serving takes a `NumbaEngine` only: the polars engine is batch-only, so `RequestHandler` and `serve` refuse it with an `EngineError` naming the numba tags. `APISettings` forbids unknown fields, so the retired `DECIKIT_API__MODE` fails loading instead of being ignored.
+- `stage()` builds the kernels (`exe.fallbacks()`) before `warm_fn`, so a `strict_compile` refusal raises as `EngineError` unwrapped (a kernel that splits only at launch is refused during warm-up; `warm_fn` re-raises that `StrictCompileError` unwrapped too); a warm-up failure keeps the sample-request hint.
 - Why: `strict_compile` and `params_validation` could not be set for a served project before, and a worker that cannot build its engine dies and is restarted forever. Warming first blamed a strict refusal on the sample request.
 - See: [engine](engine.md) ("An engine is a registry document"), `decikit/serving/_handler.py`, `decikit/_tooling/cli/__init__.py`
 
@@ -20,6 +20,13 @@ Read this before changing how a request is parsed, scored or transported, or how
 - A batch response (a JSON array, JSONL, Parquet, Arrow) is a frame, so each row of a declared `TypedDict` or `list[TypedDict]` output carries every declared key, `null` where the step left an optional key out, in the declared order; a one-record response returns the value as the step built it. Decided by the owner, 2026-10-10.
 - Why: before, a batch's struct fields were whichever keys some row in that batch happened to hold, so the same request answered differently depending on its neighbours, and the polars engine could not equal the numba engines. Cost: consolidation's served batch gained null keys (`unpriced_reason`, unused rejection codes) when its outputs were declared; no per-record response changed.
 - See: [engine](engine.md) (the `each` bullet), [flexible engine comparison](../experiments/flexible-engine-comparison.md)
+
+## A `NotRequired` key a JSON array leaves out is absent for the step, as in a record
+
+- For an input declared with `NotRequired` keys, `coerce_frame` validates the frame with the nulls polars filled in removed, and `State.from_frame` hands the step the item without the key; a null for a required key is a 400 naming the row and field.
+- Why: a record that leaves the key out gave the step an absent key, but the same item inside a JSON array reached it as `None`, so one request answered differently as a record and as a batch.
+- Not: treating null as absent for every key (it would hide a null in a required field).
+- See: `tests/serving/test_frame_requests.py`, [serving](../../architecture/serving.md) (Dates from JSON)
 
 ## The handler hooks are synchronous, and `score` is the in-process entry
 

@@ -196,7 +196,7 @@ def engine(which: str | Engine):
 | run `uv run pytest tests/test_guide.py -q`; for each failure decide: the example needs `engine="interpreted"` (say why in the PR), or its shown output changes (a `FallbackWarning` now prints); the "Modes" bullet becomes "Engines" and shows the context manager; `@allow_fallback` appears beside the first example that warns | `decikit/GUIDE.md`, `docs/guides/debugging-and-testing.md`, `docs/guides/compile-and-fallback.md` |
 | tests that call `Step.run` and assume interpreted (no warning, tree `visit`) get `engine="interpreted"` or the context manager, each with a reason | `tests/` |
 | the bridge and MCP pass their engine explicitly (they already pass a mode) | `decikit/_tooling/bridge/`, `_tooling/mcp/` |
-| tests | `tests/run/test_default_engine.py`: unset → `FusedEngine`; context manager sets and resets, also on exception; nesting; a thread started inside the context inherits it, one started before does not; an async task inherits a copy; `session` opens interpreted under a fused default; a `str` step warns once under the default |
+| tests | `tests/run/test_default_engine.py`: unset → `FusedEngine`; context manager sets and resets, also on exception; nesting; a thread started inside the context inherits it (As built: false on GIL CPython, where a new thread starts with an empty context; the test pins `copy_context().run`, and `asyncio.to_thread` sees the block); an async task inherits a copy; `session` opens interpreted under a fused default; a `str` step warns once under the default |
 
 Exit: a notebook sets nothing and `pipeline.run(df)` is fused; sets `interpreted` once and every `run` and
 `compile` below is interpreted; `benchmarks/modes.py` explicit numbers unchanged.
