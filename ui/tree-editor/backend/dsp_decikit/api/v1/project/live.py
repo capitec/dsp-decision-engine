@@ -20,6 +20,7 @@ from datetime import datetime, timezone
 from urllib.parse import urlparse
 
 from fastapi import Response, WebSocket, WebSocketDisconnect
+from sqlalchemy import exc
 
 from dsp_decikit.auth import sessions
 from dsp_decikit.auth.authorization import handle_bearer_token_auth
@@ -36,6 +37,8 @@ from .routes import router
 MAX_MESSAGE_BYTES = 4 * 1024 * 1024
 RECHECK_S = 15
 POLICY_VIOLATION = 1008
+NOT_JSON = 1007
+TRY_AGAIN = 1013
 SIGNED_OUT = "signed out: sign in again to keep editing"
 NO_ACCESS = "your access to this project was removed"
 
@@ -66,6 +69,15 @@ async def _access(project_id: uuid.UUID, ws: WebSocket) -> t.Tuple[t.Optional[Ac
     if mode is None:
         await ws.close(POLICY_VIOLATION, NO_ACCESS if user else SIGNED_OUT)
     return mode, token, user
+
+
+def _transient(e: Exception) -> bool:
+    # A database or network outage: the same message goes through once it is back, so the client resends it
+    # without counting it as one the server fails on every time.
+    if isinstance(e, (OSError, exc.OperationalError, exc.InterfaceError, exc.TimeoutError)):
+        return True
+    state = str(getattr(getattr(e, "orig", None), "sqlstate", None) or "")
+    return getattr(e, "connection_invalidated", False) or state[:2] in ("08", "53", "57")
 
 
 def _same_origin(ws: WebSocket) -> bool:
@@ -104,13 +116,15 @@ async def live(ws: WebSocket, project_id: uuid.UUID):
             try:
                 message = json.loads(text)
                 kind = message.get("type")
-            except (ValueError, AttributeError):
-                await ws.send_text(json.dumps({"type": "error", "reason": "not a JSON object"}))
-                continue
+            except (ValueError, AttributeError, RecursionError):
+                # Closed rather than answered: the client counts the drop, and gives up on a message after a few.
+                await ws.close(NOT_JSON, "not a JSON object")
+                return
             writer = mode in (AccessMode.WRITE, AccessMode.ADMIN)
             if kind == "hello":
                 since, client_id = message.get("since"), message.get("client_id")
-                if not isinstance(since, int) or since < 0 or not isinstance(client_id, str) or not client_id[:64]:
+                if (not isinstance(since, int) or since < 0 or not isinstance(client_id, str) or not client_id[:64]
+                        or not client_id[:64].isprintable()):
                     await ws.send_text(json.dumps({"type": "error", "reason": "hello needs since and client_id"}))
                     continue
                 if client is not None:
@@ -134,6 +148,13 @@ async def live(ws: WebSocket, project_id: uuid.UUID):
                 await ws.send_text(json.dumps({"type": "error", "reason": f"unknown message type {kind!r}"}))
     except WebSocketDisconnect:
         pass
+    except Exception as e:
+        # Anything else drops the socket (1011), which the client counts against the message it sent.
+        if not _transient(e):
+            raise
+        logger.warning("live socket project=%s closed on a transient error: %s", project_id, e)
+        with contextlib.suppress(Exception):
+            await ws.close(TRY_AGAIN)
     finally:
         if client is not None:
             hub.leave(project_id, client)
