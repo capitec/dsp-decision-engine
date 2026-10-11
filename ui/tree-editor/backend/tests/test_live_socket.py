@@ -17,7 +17,7 @@ from starlette.websockets import WebSocketDisconnect
 from dsp_decikit.asgi import app
 from dsp_decikit.settings import settings
 
-from .test_live_sync import RULE_A, RULE_B, flat, name
+from .test_live_sync import RULE_A, RULE_B, Socket, flat, name, project  # noqa: F401
 
 db = pytest.mark.skipif(os.environ.get("TREE_EDITOR_DB") != "1", reason="needs the e2e stack's Postgres (TREE_EDITOR_DB=1)")
 
@@ -123,3 +123,53 @@ def test_an_edit_far_from_the_session_expiry_leaves_it_alone(live_on):
         receive_until(ws, "applied")
 
     assert run(expiry(token)) == before
+
+
+# ---- a client that stops reading -----------------------------------------------------------------------------------
+
+class StalledSocket(Socket):
+    """A websocket whose reader stops once `stalled`: a send then never finishes."""
+
+    def __init__(self):
+        super().__init__()
+        self.stalled, self.closed = False, None
+
+    async def send_text(self, text):
+        if self.stalled:
+            await asyncio.Event().wait()
+        await super().send_text(text)
+
+    async def close(self, code=1000, reason=None):
+        self.closed = code
+
+
+async def until(check, timeout: float = 5):
+    deadline = time.monotonic() + timeout
+    while not check():
+        assert time.monotonic() < deadline
+        await asyncio.sleep(0.02)
+
+
+@db
+@pytest.mark.asyncio
+async def test_a_client_that_stops_reading_does_not_hold_up_the_others_and_is_dropped(project, monkeypatch):
+    from dsp_decikit.services import live_hub
+    from dsp_decikit.services.live_hub import Client, Hub
+    from dsp_decikit.services.live_sync import apply_message
+    project_id, _ = project
+    monkeypatch.setattr(live_hub, "SEND_TIMEOUT_S", 1)
+    hub = Hub()
+    fast, slow = Client(Socket(), "fast"), Client(StalledSocket(), "slow")
+    await hub.join(project_id, fast, 1)
+    await hub.join(project_id, slow, 1)
+    slow.ws.stalled = True
+
+    await apply_message(project_id, "c3", "m1", 1, [name("a", "One")])
+    hub.pump_soon(project_id)
+    await until(lambda: fast.ws.versions() == [2], timeout=0.5)  # well inside the stalled send's timeout
+
+    await until(lambda: slow.ws.closed is not None)
+    assert slow.ws.closed == 1013 and slow not in hub.rooms[project_id].clients
+    await apply_message(project_id, "c3", "m2", 2, [name("b", "Two")])
+    hub.pump_soon(project_id)
+    await until(lambda: fast.ws.versions() == [2, 3], timeout=0.5)
