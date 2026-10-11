@@ -17,6 +17,7 @@ baseline stays put when an approach rewrites the product code.
 | `run_vectors.py`, `run_vectors.mjs` | run every vector against an adapter |
 | `adapters/pure_py.py`, `adapters/pure_ts.mjs` | the reference adapters (`reference/` copies; node runs the `.ts` with its type stripping) |
 | `bench.py`, `bench.mjs` | time an adapter against the reference, interleaved in one process |
+| `fuzz.py`, `fuzz.mjs` | differential fuzz of the Rust core against the reference, exact JSON text; the wasm replays the Python cases |
 | `sizes.sh`, `coldload.mjs`, `coldload_browser.py`, `coldload_app.py` | artefact sizes, cold load in node, cold load of a test page in headless Chromium, cold load of the built app |
 
 ## Adapters
@@ -74,7 +75,7 @@ node's `module.stripTypeScriptTypes` and add an `index.html` holding
 
 ## Vectors
 
-446 cases, 735 KB in all: `op_level.json` 124 cases (40 KB), `neutral.json` 82 (37 KB), `real_trees.json` 240 cases
+449 cases, 735 KB in all: `op_level.json` 127 cases (40 KB), `neutral.json` 82 (37 KB), `real_trees.json` 240 cases
 over 270 shared documents (658 KB). Real trees get seeded edits when their compact JSON is at most 12 KB (22 of the
 29 trees; the generated sets above 32 rules, `campaign-scale`, `fraud-live` and `fraud-shadow` are skipped): per tree 3 chained
 roundtrip steps and 2 pairs of concurrent edits (each as `online` and `offline`), flat trees both as stored and with
