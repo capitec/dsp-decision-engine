@@ -21,6 +21,13 @@ Read this before changing how a request is parsed, scored or transported, or how
 - Why: before, a batch's struct fields were whichever keys some row in that batch happened to hold, so the same request answered differently depending on its neighbours, and the polars engine could not equal the numba engines. Cost: consolidation's served batch gained null keys (`unpriced_reason`, unused rejection codes) when its outputs were declared; no per-record response changed.
 - See: [engine](engine.md) (the `each` bullet), [flexible engine comparison](../experiments/flexible-engine-comparison.md)
 
+## A `NotRequired` key a JSON array leaves out is absent for the step, as in a record
+
+- For an input declared with `NotRequired` keys, `coerce_frame` validates the frame with the nulls polars filled in removed, and `State.from_frame` hands the step the item without the key; a null for a required key is a 400 naming the row and field.
+- Why: a record that leaves the key out gave the step an absent key, but the same item inside a JSON array reached it as `None`, so one request answered differently as a record and as a batch.
+- Not: treating null as absent for every key (it would hide a null in a required field).
+- See: `tests/serving/test_frame_requests.py`, [serving](../../architecture/serving.md) (Dates from JSON)
+
 ## The handler hooks are synchronous, and `score` is the in-process entry
 
 - `init_fn`, `input_fn`, `process_fn` and `shutdown_fn` are plain methods; a subclass that defines one with `async def` gets a `TypeError` when the class is created. `score(record_or_frame)` is `process_fn` without the bytes. `score` is not a hook: `process_fn` calls `RequestHandler.score` itself, so a subclass's own `score` (a replay service's, say) never changes what a request does.
