@@ -8,57 +8,13 @@ import {
 import type { ProjectDetailResponse } from '@/api/types.gen';
 import { ValidationResult } from '../validation/ValidationResultsDialog';
 import { withNodeFeatures, renameFeature } from './FeatureActions';
-import { detectSubtrees, generateDefaultNodeName } from './util';
-import { ParameterMap, TreeEdge, V2Subtree, PolarsSchema } from '@/types/tree-types';
-import { normalizeTreeOutput } from '@/utils/normalize-dtypes';
+import { ParameterMap, PolarsSchema } from '@/types/tree-types';
+import { defaultOutput, fromDocument, toDocument } from './document';
 import { ValidationError, parseValidationErrors, formatValidationErrors, getInvalidNodeIds, getSectionErrors } from '@/utils/validation-error-parser';
 import { toast } from '@/hooks/use-toast';
 import { isStaleSave, staleSaveToast } from '@/lib/stale-save';
 import { apiErrorMessage } from '@/lib/utils';
 import { subscribeToStoreActivity } from '@/lib/background-token-refresh';
-
-// v2 default output with sample data
-const defaultOutput: TreeOutput = {
-  dtypes: [
-    ['action', 'String'],
-    ['description', 'String'],
-  ],
-  type_defs: {},
-  data: [
-    { action: 'Allow', description: 'Default Action' },
-    { action: 'Alert', description: 'A rule suggests that there is an alert' },
-    { action: 'Block', description: 'This is more serious and must be blocked' },
-  ],
-  default: { action: 'Allow', description: 'Default Action' },
-};
-
-// Helper function to normalize nodes from imports/API
-const normalizeNode = (node: any): Node => {
-  // Legacy documents stored the ranges strictness as `strict_mode`
-  if (node.data && 'strict_mode' in node.data) {
-    const { strict_mode, ...data } = node.data;
-    node = { ...node, data: { ...data, strict: data.strict ?? strict_mode } };
-  }
-  return {
-    ...node,
-    type: "default",
-    measured: node.measured || undefined,
-    selected: false,
-    dragging: false,
-    ...node,
-    // decikit lets a document leave out positions (they default to 0, 0); the canvas is laid out on load then
-    position: node.position ?? { x: 0, y: 0 },
-  };
-};
-
-const EDITOR_KEYS = new Set(['type', 'nodes', 'edges', 'subtrees', 'input_schema', 'output', 'parameters', 'formatVersion', 'format_version']);
-
-// decikit also accepts edges without an id and a single sourceIndex instead of a list
-const normalizeEdge = (edge: any): Edge => ({
-  ...edge,
-  id: edge.id ?? `${edge.source}:${edge.target}`,
-  data: { ...edge.data, sourceIndex: [edge.data?.sourceIndex ?? 0].flat() },
-});
 
 // Map decikit's validation_errors onto node highlighting and section flags
 const applyValidationErrors = (errors: ValidationError[], nodes: Array<{ id: string }>) => {
@@ -358,48 +314,7 @@ const editorStore = create<EditorStoreState>()(
       try {
         set({ saving: true, error: null });
 
-        // Convert nodes/edges/subtrees for API
-        const v3Nodes = state.nodes.map(node => ({
-          id: node.id,
-          position: node.position,
-          data: node.data
-        }));
-
-        const v3Edges: TreeEdge[] = state.edges.map(edge => {
-          const sourceIndex = edge.data?.sourceIndex;
-          return {
-            id: edge.id,
-            source: edge.source,
-            target: edge.target,
-            data: {
-              sourceIndex: Array.isArray(sourceIndex) ? sourceIndex : [sourceIndex || 0]
-            }
-          };
-        });
-
-        const v3Subtrees: V2Subtree[] = (state.subtrees || []).map(st => ({
-          id: st.id || st.rootNodeId,
-          name: st.name
-        }));
-
-        // Prepare project data in v3 format
-        const projectData = {
-          ...state.documentRest,
-          type: "ui-tree", // Type discriminator (stays as "ui-tree" for all versions)
-          nodes: v3Nodes,
-          edges: v3Edges,
-          subtrees: v3Subtrees,
-
-          // V3 uses input_schema instead of features
-          input_schema: state.input_schema,
-
-          // V3 format (required)
-          output: state.output || defaultOutput,
-          parameters: state.parameters || {},
-
-          // Format version discriminator
-          formatVersion: 3
-        } as any;
+        const projectData = toDocument(state);
 
         const response = await updateProjectApiV1ProjectsProjectIdPut({
           path: { project_id: state.projectId },
@@ -456,44 +371,13 @@ const editorStore = create<EditorStoreState>()(
     // Initialization
     initializeFromProject: (response) => {
       const projectData = response.project_data as any; // Type as any since it's a union type
-      const normalizedNodes = (projectData.nodes || []).map(normalizeNode);
-      const edges = (projectData.edges || []).map(normalizeEdge);
-      // A saved subtree is {id: its root node's id, name}, and decikit runs the first one listed, so the
-      // editor's subtrees start from them, in their order, rather than being rebuilt in node order.
-      const nodeById = new Map<string, Node>(normalizedNodes.map((n: Node) => [n.id, n]));
-      const savedSubtrees: Subtree[] = (projectData.subtrees || [])
-        .filter((st: any) => nodeById.has(st.rootNodeId ?? st.id))
-        .map((st: any, order: number) => {
-          const rootNodeId = st.rootNodeId ?? st.id;
-          return { ...st, id: st.id ?? rootNodeId, rootNodeId, order: st.order ?? order,
-                   name: st.name || generateDefaultNodeName(nodeById.get(rootNodeId)!) };
-        });
-
-      const inputSchema: PolarsSchema = withNodeFeatures(projectData.input_schema || [], normalizedNodes);
-
-      // Normalize output dtypes to handle both array and object formats from backend
-      const normalizedOutput = projectData.output
-        ? normalizeTreeOutput(projectData.output)
-        : defaultOutput;
 
       set({
         projectName: response.name,
         projectDescription: response.description,
         version: response.version,
-        input_schema: inputSchema,
-        nodes: normalizedNodes,
-        edges,
+        ...fromDocument(projectData),
         ...((projectData.nodes || []).some((n: any) => !n.position) && { autoRearrange: true }),
-        subtrees: detectSubtrees(normalizedNodes, edges, savedSubtrees),
-
-        // v2 format - backend handles backward compatibility
-        output: normalizedOutput,
-        parameters: projectData.parameters || {},
-
-        // Extract format version from loaded project
-        formatVersion: projectData.formatVersion || projectData.format_version || 3,
-        documentRest: Object.fromEntries(Object.entries(projectData).filter(([k]) => !EDITOR_KEYS.has(k))),
-
         isDirty: false,
         error: null,
         ...applyValidationErrors(
