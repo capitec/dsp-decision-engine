@@ -4,14 +4,17 @@
 # The merge-core extension (wheel) and its WebAssembly build (pkg/), one toolchain stage for both.
 FROM rust:1.95-bookworm AS merge-core
 
+COPY --from=ghcr.io/astral-sh/uv:0.11.19 /uv /usr/local/bin/uv
 RUN rustup target add wasm32-unknown-unknown && \
-    cargo install --locked maturin@1.15.0 wasm-pack@0.15.0
+    cargo install --locked wasm-pack@0.15.0 && \
+    uv tool install 'maturin[zig]==1.15.0'
 
 WORKDIR /src
 COPY ui/tree-editor/merge-core/Cargo.toml ui/tree-editor/merge-core/Cargo.lock ui/tree-editor/merge-core/pyproject.toml ./
 COPY ui/tree-editor/merge-core/src src
 COPY ui/tree-editor/merge-core/python python
-RUN maturin build --release -o /wheels && \
+# zig links against glibc 2.28, so the abi3 wheel installs on any glibc from 2.28 and every Python from 3.10.
+RUN uv tool run --from 'maturin[zig]==1.15.0' maturin build --release --zig --compatibility manylinux_2_28 -o /wheels && \
     wasm-pack build --target web --release --no-pack -- --features wasm
 
 FROM node:24-alpine AS ui-builder
