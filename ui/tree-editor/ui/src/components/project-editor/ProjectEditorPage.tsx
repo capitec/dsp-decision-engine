@@ -5,6 +5,8 @@ import { parseValidationErrors, formatValidationErrors } from '@/utils/validatio
 import Editor from '../editor/Editor';
 import { EditorProvider, useEditorContext } from '../editor/EditorContext';
 import { useEditorStore, useEditorFormatVersion } from '../editor/useEditorStore';
+import { useNodeLive } from '../editor/useNodeLive';
+import { OfflineConflictBanner } from '../flat-rules/OfflineConflictBanner';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -71,6 +73,8 @@ const ProjectEditorContent: React.FC<{ onGoBack: () => void }> = ({ onGoBack }) 
   const setOutput = useEditorStore((state) => state.setOutput);
   const setSubtrees = useEditorStore((state) => state.setSubtrees);
   const formatVersion = useEditorFormatVersion();
+  const live = useEditorStore((state) => state.live);
+  const offline = useNodeLive();
 
   // Handle unsaved changes warnings
   const { navigateWithConfirmation } = useUnsavedChanges(
@@ -320,6 +324,13 @@ const ProjectEditorContent: React.FC<{ onGoBack: () => void }> = ({ onGoBack }) 
                   Unsaved changes
                 </Badge>
               )}
+              {live && (
+                <Badge variant="secondary" data-testid="live-status" className={live === 'live'
+                  ? "text-xs bg-green-100 text-green-800 border-green-200"
+                  : "text-xs bg-amber-100 text-amber-800 border-amber-200"}>
+                  {live === 'live' ? 'Live' : live === 'connecting' ? 'Connecting...' : 'Offline - edits will be merged when you reconnect'}
+                </Badge>
+              )}
             </div>
             {projectDescription && (
               <p className="text-sm text-gray-600 truncate mt-1" title={projectDescription}>
@@ -329,9 +340,10 @@ const ProjectEditorContent: React.FC<{ onGoBack: () => void }> = ({ onGoBack }) 
           </div>
         </div>
         <div className="flex items-center space-x-3">
+          {/* Live, Save waits until the server has every edit, which may already be the case */}
           <Button
             onClick={saveProject}
-            disabled={saving || !isDirty}
+            disabled={saving || (!isDirty && !live)}
             className="flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white"
             size="sm"
           >
@@ -374,6 +386,13 @@ const ProjectEditorContent: React.FC<{ onGoBack: () => void }> = ({ onGoBack }) 
           </DropdownMenu>
         </div>
       </header>
+
+      {offline.conflict && (
+        <div className="fixed top-20 left-0 right-0 z-40">
+          <OfflineConflictBanner project={{ id: projectId as string, name: projectName }} projectType="tree"
+                                 conflict={offline.conflict} onDismiss={offline.dismiss} />
+        </div>
+      )}
 
       {/* Editor with top padding to account for fixed header */}
       <div className="flex-1 pt-20">
