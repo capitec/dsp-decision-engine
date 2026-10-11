@@ -88,11 +88,22 @@ fn is_int(n: &serde_json::Number) -> bool {
     !n.to_string().contains(['.', 'e', 'E'])
 }
 
+// Exact, as Python compares an int with a float: past 2**53 the int must not be rounded to a float first.
+fn int_eq_float(int: &serde_json::Number, float: &serde_json::Number) -> bool {
+    let Some(f) = float.as_f64().filter(|f| f.fract() == 0.0) else { return false };
+    let int = int.to_string();
+    format!("{f:.0}") == int || (f == 0.0 && int == "0")
+}
+
 /// Equality of JSON values: `1` equals `1.0` as in JavaScript, `true` does not equal `1`, object key order is ignored.
 pub fn same(a: &Value, b: &Value) -> bool {
     match (a, b) {
-        (Value::Number(x), Value::Number(y)) if is_int(x) && is_int(y) => x.to_string() == y.to_string(),
-        (Value::Number(x), Value::Number(y)) => x.as_f64() == y.as_f64(),
+        (Value::Number(x), Value::Number(y)) => match (is_int(x), is_int(y)) {
+            (true, true) => x.to_string() == y.to_string(),
+            (false, false) => x.as_f64() == y.as_f64(),
+            (true, false) => int_eq_float(x, y),
+            (false, true) => int_eq_float(y, x),
+        },
         (Value::Array(x), Value::Array(y)) => x.len() == y.len() && x.iter().zip(y).all(|(p, q)| same(p, q)),
         (Value::Object(x), Value::Object(y)) => {
             x.len() == y.len() && x.iter().all(|(k, v)| y.get(k).is_some_and(|w| same(v, w)))
