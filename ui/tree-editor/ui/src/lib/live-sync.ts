@@ -229,6 +229,9 @@ export class LiveSync {
     } else if (m.type === 'validation') {
       this.validation = m
       this.report()
+    } else if (m.type === 'session') {
+      // My edit renewed the session; only the page can update the expiry cookie the session check reads.
+      document.cookie = m.cookie
     } else if (m.type === 'error') {
       console.warn('live sync:', m.reason)
     }
