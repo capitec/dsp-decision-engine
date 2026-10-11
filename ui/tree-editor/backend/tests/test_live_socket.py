@@ -168,8 +168,8 @@ async def test_a_client_that_stops_reading_does_not_hold_up_the_others_and_is_dr
     hub.pump_soon(project_id)
     await until(lambda: fast.ws.versions() == [2], timeout=0.5)  # well inside the stalled send's timeout
 
-    await until(lambda: slow.ws.closed is not None)
-    assert slow.ws.closed == 1013 and slow not in hub.rooms[project_id].clients
+    await until(lambda: slow not in hub.rooms[project_id].clients and slow.ws.closed is not None)
+    assert slow.ws.closed == 1013
     await apply_message(project_id, "c3", "m2", 2, [name("b", "Two")])
     hub.pump_soon(project_id)
     await until(lambda: fast.ws.versions() == [2, 3], timeout=0.5)
