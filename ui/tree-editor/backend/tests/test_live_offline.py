@@ -410,3 +410,28 @@ async def test_an_offline_batch_overtaken_on_every_attempt_merges_under_the_row_
     assert applied.version == row.version and row.project_data == validated[-1]
     assert names(row)[1] == "Offline"
 
+
+# ---- a validator that never answers ------------------------------------------------------------------------------
+
+@db
+@pytest.mark.asyncio
+async def test_an_offline_batch_whose_validation_hangs_is_refused_without_blocking_other_writes(offline, monkeypatch):
+    from dsp_decikit.services import live_hub
+    from dsp_decikit.services.live_sync import apply_message
+    from tests.test_live_sync import hang
+    project_id, stored = offline
+    hub = live_hub.Hub()
+    hub.validator = live_hub._validator()
+    monkeypatch.setattr(live_hub, "validation_errors", hang)
+    monkeypatch.setattr(live_hub, "VALIDATE_TIMEOUT_S", 3)
+
+    batch = asyncio.create_task(apply_message(project_id, "offline", "batch", 1, [name("b", "Offline")],
+                                              offline=True, validate=hub.validate))
+    await asyncio.sleep(0.5)
+    online = await asyncio.wait_for(apply_message(project_id, "online", "m1", 1, [name("a", "Online")]), 2)
+    with pytest.raises(Rejected) as error:
+        await asyncio.wait_for(batch, 10)
+    hub.validator.shutdown()
+
+    assert online.version == (await stored()).version == 2
+    assert "in time" in str(error.value)
