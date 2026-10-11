@@ -10,8 +10,8 @@ Read this before changing how a request is parsed, scored or transported, or how
 
 ## Serving binds the engine its settings name, and builds it before warm-up
 
-- `DECIKIT_API__ENGINE__TYPE` (default `fused`) names the engine and `DECIKIT_API__ENGINE__<FIELD>` sets its own fields (`STRICT_COMPILE`, `PARAMS_VALIDATION`); `decikit serve --engine <tag>` sets the type. `RequestHandler(engine=...)` takes an `Engine` or a tag, resolved once. Serving never reads the `decikit.engine(...)` default. `serve` validates the engine document before it starts workers.
-- `stage()` builds the kernels (`exe.fallbacks()`) before `warm_fn`, so a `strict_compile` refusal raises as `EngineError` unwrapped; a warm-up failure keeps the sample-request hint.
+- `DECIKIT_API__ENGINE__TYPE` (default `fused`) names the engine and `DECIKIT_API__ENGINE__<FIELD>` sets its own fields (`STRICT_COMPILE`, `PARAMS_VALIDATION`); `decikit serve --engine <tag>` sets the type. `RequestHandler(engine=...)` takes an `Engine` or a tag, resolved once. Serving never reads the `decikit.engine(...)` default. `serve` validates the engine document before it starts workers. Serving takes a `NumbaEngine` only: the polars engine is batch-only, so `RequestHandler` and `serve` refuse it with an `EngineError` naming the numba tags. `APISettings` forbids unknown fields, so the retired `DECIKIT_API__MODE` fails loading instead of being ignored.
+- `stage()` builds the kernels (`exe.fallbacks()`) before `warm_fn`, so a `strict_compile` refusal raises as `EngineError` unwrapped (a kernel that splits only at launch is refused during warm-up; `warm_fn` re-raises that `StrictCompileError` unwrapped too); a warm-up failure keeps the sample-request hint.
 - Why: `strict_compile` and `params_validation` could not be set for a served project before, and a worker that cannot build its engine dies and is restarted forever. Warming first blamed a strict refusal on the sample request.
 - See: [engine](engine.md) ("An engine is a registry document"), `decikit/serving/_handler.py`, `decikit/_tooling/cli/__init__.py`
 
