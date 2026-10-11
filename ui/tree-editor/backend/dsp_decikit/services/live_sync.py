@@ -129,13 +129,13 @@ async def _locked(session: AsyncSession, project_id: uuid.UUID) -> Project:
 
 
 async def _commit_version(session: AsyncSession, project: Project, ops: list, client_id: str, msg_id: str,
-                          **values) -> int:
+                          parts: t.Sequence[str] = (), **values) -> int:
     version = project.version + 1
     await session.execute(update(Project).where(Project.id == project.id)
                           .values(**values, version=version, updated_at=datetime.now(timezone.utc))
                           .execution_options(synchronize_session=False))
     await session.execute(insert(ProjectOp).values(project_id=project.id, version=version, client_id=client_id,
-                                                   msg_id=msg_id, ops=ops))
+                                                   msg_id=msg_id, ops=ops, parts=list(parts)))
     # Delivered only when the transaction commits, so a listener never fetches a row it cannot see yet.
     await session.execute(select(func.pg_notify(CHANNEL, json.dumps({"p": str(project.id), "v": version}))))
     return version
@@ -165,7 +165,8 @@ def _unreachable(base: int) -> Rejected:
 async def _since(session: AsyncSession, project: Project, base: int) -> list:
     if base > project.version:
         raise Rejected(f"base {base} is newer than the project (version {project.version})")
-    rows = (await session.execute(select(ProjectOp.version, ProjectOp.client_id, ProjectOp.msg_id, ProjectOp.ops)
+    rows = (await session.execute(select(ProjectOp.version, ProjectOp.client_id, ProjectOp.msg_id, ProjectOp.ops,
+                                         ProjectOp.parts)
                                   .where(ProjectOp.project_id == project.id, ProjectOp.version > base)
                                   .order_by(ProjectOp.version))).all()
     if len(rows) != project.version - base:
@@ -218,11 +219,13 @@ async def apply_message(project_id: uuid.UUID, client_id: str, msg_id: str, base
         project = await _locked(session, project_id)
         locked = time.perf_counter()
         rows = await _since(session, project, base)
+        # A message still in flight when its client reconnected can be logged on its own or inside a batch, and
+        # arrive again either way: inside a later batch, or late on the socket that dropped.
         for row in rows:
-            if (row.client_id, row.msg_id) == (client_id, msg_id):
+            if row.client_id == client_id and (row.msg_id == msg_id or msg_id in row.parts):
                 return Applied(row.version, row.ops)
-        # A message still in flight when its client reconnected is applied by now, but resent inside the batch.
-        ops = _unlogged(ops, parts, {row.msg_id for row in rows if row.client_id == client_id})
+        logged = {i for row in rows if row.client_id == client_id for i in [row.msg_id, *row.parts]}
+        ops = _unlogged(ops, parts, logged)
         theirs = [op for row in rows if row.client_id != client_id for op in row.ops]
         stale, base_doc, replayed, compared = [], None, locked, locked
         if offline:
@@ -253,7 +256,8 @@ async def apply_message(project_id: uuid.UUID, client_id: str, msg_id: str, base
                 raise Rejected("merging your offline edits would add these errors: "
                                + "; ".join(sorted({e["msg"] for e in new})))
         validated = time.perf_counter()
-        version = await _commit_version(session, project, applied, client_id, msg_id, project_data=doc)
+        version = await _commit_version(session, project, applied, client_id, msg_id, [p[0] for p in parts],
+                                        project_data=doc)
         await session.commit()
     done = time.perf_counter()
     logger.info("live apply project=%s version=%d offline=%s ops=%d dropped=%d lock_ms=%.1f replay_ms=%.1f "
