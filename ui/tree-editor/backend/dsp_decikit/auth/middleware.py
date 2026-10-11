@@ -62,7 +62,7 @@ class RollingSessionMiddleware(BaseHTTPMiddleware):
         request.state.session = (session_token, session_info)
         # Unknown sessions go through: the route's own auth refuses them.
         if session_info and int(time.time()) >= session_info.expires_at:
-            logger.info(f"Session {session_token[:8]}... expired, redirecting to logout")
+            logger.info("Session expired, redirecting to logout")
             return RedirectResponse(url=self._get_logout_url(request), status_code=302)
 
         response = await call_next(request)
