@@ -10,8 +10,8 @@ Read this before changing how a request is parsed, scored or transported, or how
 
 ## Serving binds the engine its settings name, and builds it before warm-up
 
-- `DECIKIT_API__ENGINE__TYPE` (default `fused`) names the engine and `DECIKIT_API__ENGINE__<FIELD>` sets its own fields (`STRICT_COMPILE`, `PARAMS_VALIDATION`); `decikit serve --engine <tag>` sets the type. `RequestHandler(engine=...)` takes an `Engine` or a tag, resolved once. Serving never reads the `decikit.engine(...)` default. `serve` validates the engine document before it starts workers. Serving takes a `NumbaEngine` only: the polars engine is batch-only, so `RequestHandler` and `serve` refuse it with an `EngineError` naming the numba tags. `APISettings` forbids unknown fields, so the retired `DECIKIT_API__MODE` fails loading instead of being ignored.
-- `stage()` builds the kernels (`exe.fallbacks()`) before `warm_fn`, so a `strict_compile` refusal raises as `EngineError` unwrapped (a kernel that splits only at launch is refused during warm-up; `warm_fn` re-raises that `StrictCompileError` unwrapped too); a warm-up failure keeps the sample-request hint.
+- `DECIKIT_API__ENGINE__TYPE` (default `fused`) names the engine and `DECIKIT_API__ENGINE__<FIELD>` sets its own fields (`STRICT_COMPILE`, `PARAMS_VALIDATION`); `decikit serve --engine <tag>` sets the type. `RequestHandler(engine=...)` takes an `Engine` or a tag, resolved once (owner, 2026-10-11). Serving never reads the `decikit.engine(...)` default. `serve` validates the engine document before it starts workers. Serving takes a `NumbaEngine` only: the polars engine is batch-only, so `RequestHandler` and `serve` refuse it with an `EngineError` naming the numba tags. `APISettings` forbids unknown fields, so the retired `DECIKIT_API__MODE` fails loading instead of being ignored.
+- `stage()` builds the kernels (`exe.fallbacks()`) before `warm_fn` (owner, 2026-10-11), so a `strict_compile` refusal raises as `EngineError` unwrapped (a kernel that splits only at launch is refused during warm-up; `warm_fn` re-raises that `StrictCompileError` unwrapped too); a warm-up failure keeps the sample-request hint.
 - Why: `strict_compile` and `params_validation` could not be set for a served project before, and a worker that cannot build its engine dies and is restarted forever. Warming first blamed a strict refusal on the sample request.
 - See: [engine](engine.md) ("An engine is a registry document"), `decikit/serving/_handler.py`, `decikit/_tooling/cli/__init__.py`
 
@@ -28,9 +28,10 @@ Read this before changing how a request is parsed, scored or transported, or how
 - Not: treating null as absent for every key (it would hide a null in a required field).
 - See: `tests/serving/test_frame_requests.py`, [serving](../../architecture/serving.md) (Dates from JSON)
 
-## The handler hooks are synchronous, and `score` is the in-process entry
+## The handler hooks are synchronous, and `run` is the in-process entry
 
-- `init_fn`, `input_fn`, `process_fn` and `shutdown_fn` are plain methods; a subclass that defines one with `async def` gets a `TypeError` when the class is created. `score(record_or_frame)` is `process_fn` without the bytes. `score` is not a hook: `process_fn` calls `RequestHandler.score` itself, so a subclass's own `score` (a replay service's, say) never changes what a request does.
+- `init_fn`, `input_fn`, `process_fn` and `shutdown_fn` are plain methods; a subclass that defines one with `async def` gets a `TypeError` when the class is created. `run(record_or_frame)` is `process_fn` without the bytes. `run` is not a hook: `process_fn` calls `RequestHandler.run` itself, so a subclass's own `run` (a replay service's, say) never changes what a request does.
+- It is named `run`, like `Executable.run` and `Step.run`, with no `score` alias: one name for running a record or a frame (owner, 2026-10-11).
 - Why: nothing in the default path awaits, a coroutine cost a frame and an event loop per in-process call, and in-process code should not go through the HTTP layer's bytes machinery.
 - The Starlette and Sanic endpoints stay `async def` and call the hooks directly, with no thread hop: single-record latency comes first.
 - See: `decikit/serving/_handler.py`

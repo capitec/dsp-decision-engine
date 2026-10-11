@@ -76,7 +76,7 @@ class RequestHandler:
     Override any `*_fn` method in a `Handler` subclass in `inference.py` to
     change how requests are parsed, scored or formatted. The hooks are plain
     methods, not coroutines; one defined with `async def` is rejected when the
-    class is created. `score(record_or_frame)` is the in-process entry. JSON dates arrive as
+    class is created. `run(record_or_frame)` is the in-process entry. JSON dates arrive as
     ISO strings and are converted to the pipeline's declared `date` and
     `datetime` inputs, including inside `list[date]`, `date | None` and
     TypedDict fields (`accounts: list[Account]`); a bare `dict` is left as sent.
@@ -240,8 +240,8 @@ class RequestHandler:
         except Exception as e:
             raise OutputFormattingError(str(e))
 
-    def score(self, request: dict[str, t.Any] | pl.DataFrame) -> dict[str, t.Any] | pl.DataFrame:
-        """Score a record (a `dict`) or a frame against the active version, as a request would be.
+    def run(self, request: dict[str, t.Any] | pl.DataFrame) -> dict[str, t.Any] | pl.DataFrame:
+        """Run a record (a `dict`) or a frame through the active version, as a request would be.
 
         Date strings in the record or frame are converted to the pipeline's declared
         `date` and `datetime` inputs, so a parsed JSON body can be passed as it is.
@@ -249,8 +249,8 @@ class RequestHandler:
 
         Example::
 
-            handler.score({"income": 1000, "debt": 250, "applied_on": "2026-01-15"})
-            handler.score(pl.DataFrame({"income": [1000], "debt": [250], "applied_on": ["2026-01-15"]}))
+            handler.run({"income": 1000, "debt": 250, "applied_on": "2026-01-15"})
+            handler.run(pl.DataFrame({"income": [1000], "debt": [250], "applied_on": ["2026-01-15"]}))
         """
         live = self.module_fn()
         if isinstance(request, dict):
@@ -258,8 +258,8 @@ class RequestHandler:
         return live.executable.run(coerce_frame(request, live.frame_inputs), live.params)
 
     def process_fn(self, data: bytes, accept: str, content_type: str) -> Response:
-        # Not `self.score`: `score` is no hook, and a subclass's own `score` must not change what a request does.
-        return self.output_fn(RequestHandler.score(self, self.input_fn(data, content_type)), accept)
+        # Not `self.run`: `run` is no hook, and a subclass's own `run` must not change what a request does.
+        return self.output_fn(RequestHandler.run(self, self.input_fn(data, content_type)), accept)
 
     def warm_fn(self, executable: Executable, params: t.Any) -> None:
         # One record through both paths compiles every kernel before a request needs it.

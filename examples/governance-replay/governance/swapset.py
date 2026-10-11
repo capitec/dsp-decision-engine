@@ -23,7 +23,7 @@ def _score(replayer: Replayer, population: list[dict]) -> dict:
     out = {}
     for request in population:
         try:
-            out[request["decision_id"]] = replayer.score(request)
+            out[request["decision_id"]] = replayer.run(request)
         except Exception as e:  # one bad record must not hide the rest
             out[request["decision_id"]] = e
     return out

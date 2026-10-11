@@ -164,10 +164,11 @@ It answers in this order, cheapest first, and stops at the first reason:
    semantic `str`, or a function step writing a `Literal`.
 5. The signature is probed: each input, param and const is typed as the value the kernel will
    pass (`_probe_signature`), and `dispatcher.compile(sig)` runs. Its failure, if any, is cached
-   per `(key, sig)`. A function step whose body compiles but which writes a container (a `dict`, a
+   per `(key, sig)`. A function step that writes a container (a `dict`, a
    TypedDict, a `list`, a `tuple`, a `set` or a numpy array), `bytes` or a time (`date`, `datetime`,
    `time`, `timedelta`, numpy's `datetime64`, `timedelta64`) is then refused with `writes
-   '<output>' as <type>, which no kernel stores`: it compiles alone, but no kernel column stores
+   '<output>' as <type>, which no kernel stores; <the declared form that compiles>` (`_unstored`; a
+   numba refusal of the body follows it): it compiles alone, but no kernel column stores
    its value, so in a kernel it would fail at launch and take the other steps of the kernel into
    Python with it (an array would be cut to its first element, and a time from a body returning only
    `None` stored as float64). Any other output (`Any`, a numpy number, a `NewType` of `float`) is

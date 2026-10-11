@@ -415,7 +415,7 @@ A missing document is an error naming it (`the config version has no 'risk' docu
 
 ## Changing request handling
 
-Override any `*_fn` method in `inference.py`'s `Handler`. `input_fn(data, content_type)` parses the body, `output_fn(output, accept)` formats the result, `process_fn` does both around scoring, `warm_fn(executable, params)` warms a staged version, `pipeline_fn(config)` builds the pipeline from a version, and `init_fn` / `shutdown_fn` run at server start and stop. The hooks are plain methods: one defined with `async def` fails with a `TypeError` when the class is created. In-process, `handler.score(record_or_frame)` runs the scoring step alone, converting date strings as the server does.
+Override any `*_fn` method in `inference.py`'s `Handler`. `input_fn(data, content_type)` parses the body, `output_fn(output, accept)` formats the result, `process_fn` does both around `run`, `warm_fn(executable, params)` warms a staged version, `pipeline_fn(config)` builds the pipeline from a version, and `init_fn` / `shutdown_fn` run at server start and stop. The hooks are plain methods: one defined with `async def` fails with a `TypeError` when the class is created. In-process, `handler.run(record_or_frame)` runs the active version without the bytes, converting date strings as the server does.
 
 ```python
 import sys

@@ -94,4 +94,4 @@ Alternatives considered: warn only (chosen first), raise under `strict_compile`,
 - Whether mutable containers of literals should be flagged (the stable-fingerprint change already keys exact literal containers by value). Decided:
   `list`, `dict` and `set` are flagged (`decisions/engine.md`).
 - The engine rework (`2026-10-09_flexible_engine_rework`) defines per-engine loudness for fallbacks; the hidden-state warning is a design lint and is
-  emitted in every mode. Confirm that split with the owner. Pending owner confirmation: the code warns in every engine and mode on that assumption.
+  emitted in every mode. Decided by the owner (2026-10-11): `HiddenStateWarning` fires on every engine, as the code does.

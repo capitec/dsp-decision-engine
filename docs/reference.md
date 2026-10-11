@@ -74,6 +74,8 @@ The public API, generated from the docstrings and grouped by what you use each n
 
 ::: decikit.ShadowedTableWarning
 
+::: decikit.StrictCompileError
+
 ## Value types
 
 ::: decikit.ops.Text
