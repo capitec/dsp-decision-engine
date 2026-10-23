@@ -40,4 +40,3 @@ polars
 # Decision engine (tree validation)
 
 # Core Python packages
-typing-extensions

@@ -4,7 +4,6 @@ import '@xyflow/react/dist/style.css';
 import './xy-theme.css';
 import './index.css';
 import App from './components/core/App';
-import reportWebVitals from './reportWebVitals';
 import { loadLiveOps } from './lib/live-ops';
 import { LiveOpsFailedBanner } from './components/core/LiveOpsFailedBanner';
 
@@ -27,7 +26,3 @@ loadLiveOps().then((error) => {
   );
 });
 
-// If you want to start measuring performance in your app, pass a function
-// to log results (for example: reportWebVitals(console.log))
-// or send to an analytics endpoint. Learn more: https://bit.ly/CRA-vitals
-reportWebVitals();

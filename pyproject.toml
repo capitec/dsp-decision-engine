@@ -16,31 +16,26 @@ dependencies = [
 [project.optional-dependencies]
 serve-starlette = ["uvicorn", "starlette"]
 serve-sanic     = ["sanic"]
-visualise       = ["streamlit", "graphviz"]
 notebook        = ["ipython"]
 experiments     = ["altair", "ipython", "markdown-it-py"]
-eval            = ["simpleeval"]
 yaml            = ["pyyaml"]
 mcp             = ["fastmcp>=4.0.10"]
 prove           = ["z3-solver"]
 dev = [
     "pytest",
     "pytest-asyncio",
-    "anyio",
 ]
 all = [
     "uvicorn", "starlette",
     "sanic",
-    "streamlit", "graphviz",
     "ipython",
     "altair",
-    "simpleeval",
+    "markdown-it-py",
     "pyyaml",
     "fastmcp>=4.0.10",
     "z3-solver",
     "pytest",
     "pytest-asyncio",
-    "anyio",
 ]
 
 [project.scripts]
@@ -78,8 +73,6 @@ system-certs = true   # required: corporate proxy uses a private CA
 dev = [
     "pytest",
     "pytest-asyncio",
-    "anyio",
-    "pytest-cov>=7.1.0",
     "starlette>=1.2.1",
     "ipython>=8.39.0",
     "altair",
