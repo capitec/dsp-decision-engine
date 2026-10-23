@@ -62,7 +62,7 @@ def test_a_data_source_error_keeps_its_message_for_the_user(client_with):
 
 def test_an_unexpected_error_in_a_streamed_preview_is_not_sent_to_the_browser(client_with):
     response = client_with(RuntimeError(SECRET)).get("/api/v1/datasources/pg/tables/t/preview-stream")
-    assert '"type": "error"' in response.text and "hunter2" not in response.text
+    assert "Failed to preview table data: unexpected server error" in response.text and "hunter2" not in response.text
 
 
 def test_an_unexpected_error_creating_a_view_is_not_sent_to_the_browser(client_with):

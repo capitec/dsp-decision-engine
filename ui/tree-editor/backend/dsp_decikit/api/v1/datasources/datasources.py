@@ -280,7 +280,7 @@ async def preview_table_data_stream(
         except (DataSourceNotFoundError, TableNotFoundError) as e:
             yield f"data: {json.dumps({'type': 'error', 'error': str(e), 'error_type': 'not_found'})}\n\n"
         except Exception as e:
-            yield f"data: {json.dumps({'type': 'error', 'error': _failed("Failed to preview table data", e)})}\n\n"
+            yield f"data: {json.dumps({'type': 'error', 'error': _failed('Failed to preview table data', e)})}\n\n"
 
     return StreamingResponse(
         generate_preview_stream(),
