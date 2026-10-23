@@ -15,6 +15,8 @@ does logging a save as `merge_core.diff(stored, saved)` change? Does `lz4` colum
   `octet_length(...::text)`; `pg_total_relation_size('project_ops')` (table, TOAST and indexes) before and after
   the run, after a `CHECKPOINT`. Run with each column's compression set to `pglz` (the default) and to `lz4`.
 - The diff a save would log for edits that touch every rule, computed in the script (JSON bytes).
+- The "before" rows are the same script run at the base commit (449fc57f), when a save was logged as one
+  whole-document replace.
 
 ## Result
 Per save, 200 saves:
@@ -31,7 +33,7 @@ Per save, 200 saves:
   entries and a hundredth of a snapshot. 5000 saves cost about 5.5 MB. The first version stays whole (67 KB).
 - `lz4` stores the same JSON 8% bigger than `pglz` (it trades size for speed); the diff rows are not compressed at
   all. Not added.
-- Diffing the 521-rule document takes 17.7 ms (p50, n=30), under the row lock of the save.
+- Diffing the 521-rule document takes 13 to 18 ms (p50, n=30, two runs), under the row lock of the save.
 
 The diff a save logs for edits that touch every rule (whole document 177.6 KB):
 

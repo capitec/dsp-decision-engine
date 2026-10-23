@@ -151,7 +151,8 @@ gives every rule a new id logs 1.4 times the document (255 KB of JSON).
 with `DSP_LIVE_COLLAB=true` (REST-only stories skipped when live); the rest is run with the flag off, and some of it
 (the failed and in-flight save stories in `test_resilience.py`) tests REST saves a live editor never sends.
 
-**Smaller gaps.** Leaving a page within 150 ms of an edit (after confirming the unsaved-changes prompt) drops that
+**Smaller gaps.** A REST save that only turns an int into an equal float (`5` to `5.0`) logs no ops, so the stored
+document holds `5.0` while the log and open editors hold `5`; live edits already behave this way. Leaving a page within 150 ms of an edit (after confirming the unsaved-changes prompt) drops that
 edit. Clicking a subtree in the node editor leaves "Unsaved changes" showing while live, and a remote version clears
 the subtree list's highlight. A deadlock or serialization failure (SQLSTATE 40) closes the socket as an error the
 client counts, not as transient. Two browsers connecting nodes at once can make a cycle (validation reports it).
