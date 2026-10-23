@@ -143,14 +143,16 @@ Workaround: accept Arrow bodies only from trusted callers, or serve JSON.
 
 **The log keeps 5000 versions and 30 days per project** (`DSP_LIVE_LOG_KEEP_VERSIONS`, `DSP_LIVE_LOG_KEEP_DAYS`, the
 owner's defaults). A busy project can write 5000 live versions in about an hour, and an offline batch made on
-an older version is refused (it stays downloadable). The count also caps REST saves, each a whole document (about
-240 KB on 521 rules, so about 1.2 GB per heavily saved project).
+an older version is refused (it stays downloadable). The count also caps REST saves, each logged as its diff: 5000
+one-rule saves of 521 rules take about 5.5 MB, mostly the snapshot every 100 versions (68 KB as stored). A save that
+gives every rule a new id logs 1.4 times the document (255 KB of JSON).
 
 **Only part of the e2e suite is run with the flag on.** The smoke set, `test_sessions.py` and `test_live_*.py` pass
 with `DSP_LIVE_COLLAB=true` (REST-only stories skipped when live); the rest is run with the flag off, and some of it
 (the failed and in-flight save stories in `test_resilience.py`) tests REST saves a live editor never sends.
 
-**Smaller gaps.** Leaving a page within 150 ms of an edit (after confirming the unsaved-changes prompt) drops that
+**Smaller gaps.** A REST save that only turns an int into an equal float (`5` to `5.0`) logs no ops, so the stored
+document holds `5.0` while the log and open editors hold `5`; live edits already behave this way. Leaving a page within 150 ms of an edit (after confirming the unsaved-changes prompt) drops that
 edit. Clicking a subtree in the node editor leaves "Unsaved changes" showing while live, and a remote version clears
 the subtree list's highlight. A deadlock or serialization failure (SQLSTATE 40) closes the socket as an error the
 client counts, not as transient. Two browsers connecting nodes at once can make a cycle (validation reports it).

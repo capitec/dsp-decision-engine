@@ -24,8 +24,10 @@ channel `project_ops`. With `DSP_LIVE_COLLAB=true` both editors edit live over `
 version in order, two edits to different fields are both kept, the last writer wins on the same field, and an edit
 inside a rule or node someone else changed or deleted is discarded and its author told. A header badge shows Live or
 Offline; Save waits until the server has every edit. READ access receives, WRITE sends. A REST save reaches open
-editors as one whole-document replace. The node editor's nodes, edges (key `id`, else `source:target`) and subtrees
-are addressed by id; node positions are part of the document and sync, selection and measured sizes do not.
+editors as the ops that make it from the stored document, and wins over a live edit made before it on what it
+changed (that edit is discarded and its author told). The node editor's nodes, edges (key `id`, else
+`source:target`) and subtrees are addressed by id; node positions are part of the document and sync, selection and
+measured sizes do not.
 Opening a tree sends nothing until an edit (the editor's own form of a stored document goes with the first edit), and
 a version from someone else that moves a node turns Auto-arrange off in this browser, so it does not lay their move
 out again. Two browsers connecting nodes at once can make a cycle; the validation errors show it. A

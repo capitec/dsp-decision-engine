@@ -253,7 +253,7 @@ async def test_a_base_newer_than_the_project_is_rejected(project):
 
 @db
 @pytest.mark.asyncio
-async def test_a_rest_save_is_logged_as_one_root_replace(project):
+async def test_a_rest_save_is_logged_as_the_ops_that_make_it_from_the_stored_document(project):
     from dsp_decikit.services.live_sync import save_version
     from dsp_decikit.db.session import db_session
     project_id, stored = project
@@ -264,7 +264,7 @@ async def test_a_rest_save_is_logged_as_one_root_replace(project):
         await session.commit()
 
     assert version == 2 and (await stored()).project_data == document
-    assert await log(project_id) == [(2, "rest", "m1", [{"op": "replace", "path": "", "value": document}])]
+    assert await log(project_id) == [(2, "rest", "m1", [{"op": "remove", "path": "/rules/a"}])]
 
 
 @db

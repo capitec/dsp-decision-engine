@@ -67,6 +67,23 @@ Read this before changing how the tree editor saves, syncs or merges a project d
 - 5000 versions and 30 days are the owner's defaults (2026-10-23); `DSP_LIVE_LOG_KEEP_VERSIONS` and
   `DSP_LIVE_LOG_KEEP_DAYS` change them.
 
+## A REST save is logged as a diff
+
+- A REST save logs `diff(stored document, saved document)`, the ops a live editor would send; a save that changes
+  nothing still makes a version, with no ops. Live editors apply it like any other version.
+- Why: a whole document per save was 68 KB as stored (TOAST compresses it 2.6 times), about 350 MB for 5000 saves of
+  521 rules; a one-rule save is now a 115-byte row, 1.1 KB per save with the snapshots
+  (`tree-editor-op-log-size.md`). And a root replace overlapped every path: it refused every offline batch based
+  before it and dropped every concurrent online edit. Now only edits that overlap what the save changed are refused
+  or dropped (the owner's call, 2026-10-23).
+- Online, the save still wins on what it changed: a live edit made before it on the same path, above it or inside it
+  is dropped and its author told, though between live editors the last writer wins on an equal path. Why: the REST
+  caller was already told it saved, so a later-arriving older edit must not undo that silently (owner, 2026-10-23).
+- The rows a version is rebuilt from are the snapshots, a new project's first version (whole) and rows logged before
+  this change. A save that gives every rule a new id logs 1.4 times the document; the editors keep ids.
+- No `lz4` column compression: it stores the documents 8% bigger than the default `pglz`, and a diff row is too small
+  to be compressed.
+
 ## What it costs
 
 - Every contributor who builds the UI or the backend needs Rust, the wasm32 target, wasm-pack and maturin until CI

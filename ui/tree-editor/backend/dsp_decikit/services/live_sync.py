@@ -5,7 +5,8 @@ A live message (`apply_message`) follows the online rule: an op inside something
 message's base is dropped, the rest apply, and the last writer wins per field. An offline message (edits made while
 disconnected, sent as one batch) merges whole only when none of its paths overlaps what others changed since its base
 and it brings no new validation error; otherwise it is rejected whole. Its validation runs without the row lock where
-it can (see `_merge`). A REST save (`save_version`) is one root-replace op; only document changes make versions.
+it can (see `_merge`). A REST save (`save_version`) is logged as the diff from the stored document, so it conflicts
+only with edits that overlap what it changed; only document changes make versions.
 
 Every `SNAPSHOT_EVERY` versions a log row also stores the whole document, and the log is trimmed to the versions
 `settings.live_log_keep_versions` and `live_log_keep_days` keep, from a row holding a whole document on, so any
@@ -31,13 +32,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from dsp_decikit.db.models.projects import Project, ProjectOp
 from dsp_decikit.db.session import db_session
 from dsp_decikit.services.documents import check_document, validation_errors
-from dsp_decikit.services.live_ops import apply, conflicts, diff, rebase_orders, stale_ops
+from dsp_decikit.services.live_ops import apply, conflicts, diff, rebase_orders, stale_ops, touched
 from dsp_decikit.settings import settings
 
 CHANNEL = "project_ops"
 MAX_OPS = 5000
 # A rebuild replays at most this many versions; each snapshot is a whole document (120 to 190 KB on 521 rules).
 SNAPSHOT_EVERY = 100
+# The client ids a REST save and the server log under; a live client may not take them.
+REST = "rest"
+RESERVED_CLIENT_IDS = {REST, "server"}
 # The merge core parses at most 128 levels; real documents nest about a dozen.
 MAX_DEPTH = 64
 ATTEMPTS = 3
@@ -176,8 +180,9 @@ async def _commit_version(session: AsyncSession, project: Project, ops: list, cl
 async def save_version(session: AsyncSession, project_id: uuid.UUID, base_version: t.Optional[int],
                        changes: t.Dict[str, t.Any], client_id: str, msg_id: str) -> int:
     """Write `changes` (columns of the project); the caller commits. Only a document change makes a new version,
-    logged as one root-replace op; a rename or move keeps the version and ignores `base_version`. Raises StaleVersion
-    when a document save names a `base_version` the project has moved on from."""
+    logged as the diff from the stored document (no ops when it is the same); a rename or move keeps the version and
+    ignores `base_version`. Raises StaleVersion when a document save names a `base_version` the project has moved on
+    from."""
     project = await _locked(session, project_id)
     if "project_data" in changes and base_version is not None and project.version != base_version:
         raise StaleVersion(project.version)
@@ -186,12 +191,16 @@ async def save_version(session: AsyncSession, project_id: uuid.UUID, base_versio
                               .values(**changes, updated_at=datetime.now(timezone.utc))
                               .execution_options(synchronize_session=False))
         return project.version
-    ops = [{"op": "replace", "path": "", "value": changes["project_data"]}]
+    try:
+        ops = diff(project.project_data, changes["project_data"])
+    except ValueError:  # nested deeper than the core parses: still saved, logged whole as before
+        ops = [{"op": "replace", "path": "", "value": changes["project_data"]}]
     return await _commit_version(session, project, ops, client_id, msg_id, **changes)
 
 
 def _whole(project_id: uuid.UUID):
-    # The rows a document can be rebuilt from without the rows before them.
+    # The rows a document can be rebuilt from without the rows before them: snapshots, a new project's first version
+    # and rows logged before REST saves were diffs.
     return (ProjectOp.project_id == project_id) & (ProjectOp.snapshot.is_not(None)
                                                    | (ProjectOp.ops[0]["path"].astext == ""))
 
@@ -199,8 +208,7 @@ def _whole(project_id: uuid.UUID):
 async def _trim(session: AsyncSession, project_id: uuid.UUID, version: int) -> None:
     # Under the project's row lock, so no write, catch-up check or offline replay of this project runs meanwhile on
     # the server path; a reader outside the lock (a joining client) sees a gap and gets a snapshot.
-    # Bounded by version first, so only the rows from the bound back are read for being whole: that reads their ops,
-    # a whole document on every REST save.
+    # Bounded by version first, so only the rows from the bound back are read for being whole (that reads their ops).
     aged = select(func.max(ProjectOp.version)).where(
         ProjectOp.project_id == project_id,
         ProjectOp.created_at < func.now() - timedelta(days=settings.live_log_keep_days)).scalar_subquery()
@@ -280,7 +288,8 @@ async def apply_message(project_id: uuid.UUID, client_id: str, msg_id: str, base
                         parts: t.Sequence = ()) -> Applied:
     """Apply one live message and commit it as the next version; a message already in the log is not applied again.
 
-    Online, an op inside something another client changed since `base` is dropped. `offline` merges the batch whole
+    Online, an op inside something another client changed since `base` is dropped, and so is one on, above or
+    inside anything a REST save changed since then. `offline` merges the batch whole
     or not at all (Rejected names the conflicting paths); `validate` (document to validation errors) checks the
     merge, in a thread when left out. `parts` (`[msg_id, op count]` in order) names earlier messages of this client
     the batch contains; the ops of one already logged are skipped. Raises Rejected (nothing stored) when the base is
@@ -298,6 +307,11 @@ async def apply_message(project_id: uuid.UUID, client_id: str, msg_id: str, base
             return logged
         ops = _unlogged(ops, parts, _logged_ids(rows, client_id))
         stale = stale_ops(ops, [op for row in rows if row.client_id != client_id for op in row.ops])
+        # A REST save's caller was told it saved, so an edit made before it never overwrites what it changed.
+        saved = set(touched([op for row in rows if row.client_id == REST for op in row.ops]))
+        above = {p for path in saved for p in _prefixes(path)}
+        stale += [op for op in ops if not any(op is s for s in stale)
+                  and ((path := touched([op])[0]) in above or any(p in saved for p in _prefixes(path)))]
         fresh = [op for op in ops if not any(op is s for s in stale)]
         doc, failed = apply(project.project_data, fresh)
         applied = [op for op in fresh if not any(op is f for f in failed)]
@@ -311,6 +325,12 @@ async def apply_message(project_id: uuid.UUID, client_id: str, msg_id: str, base
                 (locked - started) * 1e3, (applying - locked) * 1e3, (checked - applying) * 1e3,
                 (done - checked) * 1e3, (done - started) * 1e3)
     return Applied(version, applied, stale + failed)
+
+
+def _prefixes(path: str) -> list:
+    # "" and every ancestor of a JSON pointer, then the pointer itself; split by segment, as the core compares paths.
+    parts = path.split("/")
+    return ["/".join(parts[:i]) for i in range(1, len(parts) + 1)]
 
 
 async def _merge(project_id: uuid.UUID, client_id: str, msg_id: str, base: int, ops: list, parts: t.Sequence,
