@@ -1,9 +1,16 @@
 """Flat-rule editor actions: each does what a user does, nothing more."""
 
 import json
+import os
 import re
 
 from playwright.sync_api import Locator, Page, expect
+
+from seed import get_project
+
+# The stack edits live (DSP_LIVE_COLLAB=true): edits reach the server as they are made, and Save sends no request.
+LIVE = os.environ.get("E2E_LIVE_COLLAB") == "true"
+SAVE_OUTCOME = re.compile("Project Saved|Saved with validation issues|Save Failed")
 
 
 def open_flat_rules(page: Page, project_id: str) -> None:
@@ -85,11 +92,24 @@ def fill_parameter(scope: Locator, name: str, index: int = 0) -> None:
 
 
 def save(page: Page) -> dict:
-    """Click Save; returns the server's reply (with `validation_errors`)."""
-    with page.expect_response(lambda r: r.request.method == "PUT" and "/api/v1/projects/" in r.url) as reply:
-        page.get_by_role("button", name="Save", exact=True).click()
-    assert reply.value.ok, reply.value.text()
-    return reply.value.json()
+    """Click Save; returns the server's reply (with `validation_errors`). In an editor editing live, Save waits until
+    the server has every edit, and the reply is the project as stored then."""
+    button = page.get_by_role("button", name="Save", exact=True)
+    live = page.get_by_test_id("live-status").count()
+    assert LIVE or not live, "the editor is editing live on a stack with live editing off"
+    # On a live stack a browser without the wasm still saves over REST, so the page decides, not LIVE.
+    if not live:
+        with page.expect_response(lambda r: r.request.method == "PUT" and "/api/v1/projects/" in r.url) as reply:
+            button.click()
+        assert reply.value.ok, reply.value.text()
+        return reply.value.json()
+    # Only one toast shows at a time, so an earlier save's outcome may still be up: wait for a new one.
+    page.evaluate("document.querySelectorAll('li[data-swipe-direction]').forEach(t => t.dataset.before = '')")
+    button.click()
+    outcome = page.locator("li[data-swipe-direction]:not([data-before])").filter(has_text=SAVE_OUTCOME)
+    outcome.wait_for()
+    assert "Save Failed" not in outcome.inner_text(), outcome.inner_text()
+    return get_project(page, re.search(r"/(?:flat-rules|projects)/([0-9a-f-]{36})", page.url)[1])
 
 
 def export(page: Page, tmp_path) -> dict:

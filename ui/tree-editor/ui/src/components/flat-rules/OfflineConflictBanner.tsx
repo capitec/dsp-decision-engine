@@ -1,7 +1,7 @@
 import React from 'react';
 import { Button } from "@/components/ui/button";
 import { downloadJson } from './api';
-import type { OfflineConflict } from './useFlatRuleLive';
+import type { OfflineConflict } from '@/hooks/use-live-editing';
 
 /** Persistent notice that offline edits were refused, with the user's own version to download. */
 export const OfflineConflictBanner: React.FC<{

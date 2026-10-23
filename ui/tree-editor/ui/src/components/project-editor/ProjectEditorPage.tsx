@@ -7,6 +7,7 @@ import { EditorProvider, useEditorContext } from '../editor/EditorContext';
 import { useEditorStore, useEditorFormatVersion } from '../editor/useEditorStore';
 import { useNodeLive } from '../editor/useNodeLive';
 import { OfflineConflictBanner } from '../flat-rules/OfflineConflictBanner';
+import { LiveStatusBadge } from '../flat-rules/LiveStatusBadge';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -324,13 +325,7 @@ const ProjectEditorContent: React.FC<{ onGoBack: () => void }> = ({ onGoBack }) 
                   Unsaved changes
                 </Badge>
               )}
-              {live && (
-                <Badge variant="secondary" data-testid="live-status" className={live === 'live'
-                  ? "text-xs bg-green-100 text-green-800 border-green-200"
-                  : "text-xs bg-amber-100 text-amber-800 border-amber-200"}>
-                  {live === 'live' ? 'Live' : live === 'connecting' ? 'Connecting...' : 'Offline - edits will be merged when you reconnect'}
-                </Badge>
-              )}
+              <LiveStatusBadge live={live} />
             </div>
             {projectDescription && (
               <p className="text-sm text-gray-600 truncate mt-1" title={projectDescription}>

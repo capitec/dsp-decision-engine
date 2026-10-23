@@ -7,7 +7,7 @@ import pytest
 from playwright.sync_api import Page, expect
 
 import node_ui
-from flat_rules_ui import add_parameter, open_flat_rules
+from flat_rules_ui import LIVE, add_parameter, open_flat_rules
 from platform_ui import edit_is_stored, first_held, open_projects, open_with_edit, press_save, project_card, toast
 from seed import create_folder, create_project, get_project
 from test_flat_rule_params import flat_document
@@ -83,6 +83,8 @@ def test_a_failed_save_does_not_leave_the_editor_stuck_saving(signed_in: Page, k
 # ---- a slow save --------------------------------------------------------------------------------------------------------
 
 @pytest.mark.smoke
+@pytest.mark.skipif(LIVE, reason="a live Save sends no request to hold; test_live_collab's and test_live_node_editor's "
+                                 "test_save_waits_for_the_server_* cover Save while live, none a slow one")
 @pytest.mark.parametrize("kind", ["flat", "tree"])
 def test_a_slow_save_shows_progress_and_repeated_clicks_send_one_request(signed_in: Page, kind: str):
     project = open_with_edit(signed_in, kind)
@@ -174,6 +176,9 @@ def stale_tab(signed_in: Page, kind: str) -> tuple[str, Page]:
 
 
 @pytest.mark.smoke
+@pytest.mark.skipif(LIVE, reason="live, two tabs' edits merge instead of the later save being refused: "
+                                 "test_live_collab's test_simultaneous_edits_to_different_rules_are_all_kept and "
+                                 "test_live_node_editor's test_edits_to_different_nodes_in_two_browsers_are_both_kept")
 @pytest.mark.parametrize("kind", ["flat", "tree"])
 def test_a_stale_save_from_a_second_tab_is_refused_and_its_edit_stays(signed_in: Page, kind: str):
     project, second = stale_tab(signed_in, kind)

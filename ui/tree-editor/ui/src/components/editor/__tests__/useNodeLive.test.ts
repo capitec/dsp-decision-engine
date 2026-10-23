@@ -46,6 +46,12 @@ const connected = () => {
   socket.receive({ type: 'ready', version: 3 });
   return socket;
 };
+const drop = (socket: FakeSocket, code: number, reason = '') => act(() => socket.onclose({ code, reason }));
+const editA = (threshold: number) => {
+  act(() => state().updateNodeData('a', { condition: { op: '<=', feature: 'amount', threshold } }));
+  act(() => { vi.advanceTimersByTime(150); });
+};
+const thresholdOfA = () => (state().nodes.find((n) => n.id === 'a') as any).data.condition.threshold;
 
 beforeEach(() => {
   FakeSocket.all = [];
@@ -146,6 +152,57 @@ describe('the node editor live', () => {
     socket.receive({ type: 'validation', version: 3, errors: [{ loc: [], msg: "tree node 'b': bad", type: 'build_error' }] });
 
     expect([...state().invalidNodeIds]).toEqual(['b']);
+  });
+
+  it('stops when the server ends my session, says why and keeps my edit unsaved in the editor', () => {
+    open();
+    renderHook(() => useNodeLive());
+    const socket = connected();
+    editA(7);
+
+    drop(socket, 1008, 'signed out: sign in again to keep editing');
+    act(() => { vi.advanceTimersByTime(30000); });
+
+    expect(FakeSocket.all).toHaveLength(1);
+    expect(state().live).toBe('ended');
+    expect(toast).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'Live Editing Stopped', description: expect.stringContaining('Signed out: sign in again'),
+    }));
+    expect(thresholdOfA()).toBe(7);
+    expect(state().isDirty).toBe(true);
+  });
+
+  it('after I sign in again through the session dialog connects and sends the kept edit as an offline batch', () => {
+    open();
+    renderHook(() => useNodeLive());
+    const socket = connected();
+    editA(7);
+    drop(socket, 1008, 'signed out: sign in again to keep editing');
+
+    act(() => { window.dispatchEvent(new Event('session-refreshed')); });
+    const again = connected();
+
+    expect(FakeSocket.all).toHaveLength(2);
+    expect(state().live).toBe('live');
+    expect(again.ops()).toMatchObject([{ offline: true, base: 3, ops: [{ path: '/nodes/a/data/condition/threshold', value: 7 }] }]);
+  });
+
+  it('hands my edit back through the offline banner after the server failed on it three times in a row', () => {
+    open();
+    const { result } = renderHook(() => useNodeLive());
+    connected();
+    editA(7);
+
+    for (let i = 0; i < 3; i++) {
+      drop(FakeSocket.all[FakeSocket.all.length - 1], 1011);
+      act(() => { vi.advanceTimersByTime(4000); });
+      connected();
+    }
+
+    expect(result.current.conflict).toMatchObject({ names: [], reason: expect.stringContaining('3 times') });
+    expect((result.current.conflict!.doc as any).nodes.find((n: any) => n.id === 'a').data.condition.threshold).toBe(7);
+    expect(thresholdOfA()).toBe(10);
+    expect(state().isDirty).toBe(false);
   });
 
   it('does not connect when live editing is off, or when this browser could not load the wasm', () => {

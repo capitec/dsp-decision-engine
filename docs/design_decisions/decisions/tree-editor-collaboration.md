@@ -55,14 +55,17 @@ Read this before changing how the tree editor saves, syncs or merges a project d
 - Validation runs on a snapshot without the row lock and commits only if no version came in meanwhile (the third
   attempt holds the lock). Why: validating 521 rules under the lock took 0.35 to 0.5 s and held other editors' round
   trips at 1.5 s under ten batches; now the lock is held about 23 ms (`tree-editor-offline-merge-lock.md`).
-- Errors are counted by (type, message), not compared as a set: one more copy of an existing error is new.
+- Errors are counted by (type, message), not compared as a set: one more copy of an existing error is new. A merge
+  may keep an error either side already had (`max(theirs, mine, theirs + mine - base)` copies); the owner
+  confirmed this rule and the three attempts on 2026-10-23.
 
 ## The op log is bounded
 
 - Every 100th version stores the whole document; the log keeps a project's latest 5000 versions and 30 days, trimmed
   back to a whole row under the row lock. A rebuild replays at most 100 versions; an editor reconnecting from a
   trimmed version gets a snapshot; an offline batch on one is refused (downloadable).
-- The 5000/30-day defaults are not settled (`known-limitations.md`).
+- 5000 versions and 30 days are the owner's defaults (2026-10-23); `DSP_LIVE_LOG_KEEP_VERSIONS` and
+  `DSP_LIVE_LOG_KEEP_DAYS` change them.
 
 ## What it costs
 

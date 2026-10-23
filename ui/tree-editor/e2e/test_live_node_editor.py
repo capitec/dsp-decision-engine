@@ -12,7 +12,8 @@ from playwright.sync_api import Page, expect
 from node_ui import document, drag_node, edge, fit_view, leaf, node, select_node, set_threshold, unary
 from platform_ui import press_save, toast
 from seed import create_project, get_project
-from test_live_collab import OFFLINE, Held, session, stored, two_nodes  # noqa: F401
+from test_live_collab import ENDED, OFFLINE, SECOND_NODE, Held, session, stored, two_nodes  # noqa: F401
+from tree_ui import sign_in, sign_out
 from test_live_offline import Line
 
 pytestmark = [pytest.mark.skipif(os.environ.get("E2E_LIVE_COLLAB") != "true",
@@ -160,6 +161,35 @@ def test_save_waits_for_the_server_and_the_edit_is_stored(signed_in: Page, tree:
     expect(toast(signed_in, "Project Saved")).to_be_visible()
     expect(signed_in.get_by_text("Unsaved changes")).to_be_hidden()
     assert thresholds(stored(signed_in, tree, lambda d: True))["root"] == 250
+
+
+def test_signing_out_on_node_two_ends_live_editing_of_a_tree_on_node_one_until_i_sign_in_again(
+        signed_in: Page, email: str, tree: str):
+    held = open_live(signed_in, tree, hold=True)
+    held.holding = True
+    threshold(signed_in, "root", "250")
+    held.wait_held(signed_in)
+
+    elsewhere = signed_in.context.new_page()  # the same browser, so the same session
+    elsewhere.goto(f"{SECOND_NODE}/projects")
+    sign_out(elsewhere)
+
+    expect(signed_in.get_by_test_id("live-status")).to_have_text(ENDED, timeout=30_000)
+    expect(toast(signed_in, "sign in again")).to_be_visible()
+    expect(node(signed_in, "root")).to_contain_text("250")
+    expect(signed_in.get_by_text("Unsaved changes")).to_be_visible()
+    opened = held.opened
+    signed_in.wait_for_timeout(3000)
+    assert held.opened == opened  # it stopped instead of reconnecting
+
+    held.holding = False
+    expect(signed_in.get_by_role("dialog").get_by_text("Session Expired")).to_be_visible(timeout=30_000)
+    with signed_in.expect_popup() as popup:
+        signed_in.get_by_role("button", name="Refresh Session").click()
+    sign_in(popup.value, email)
+    expect(toast(signed_in, "Your offline edits were merged")).to_be_visible()
+    expect(signed_in.get_by_test_id("live-status")).to_have_text("Live")
+    stored(signed_in, tree, lambda d: thresholds(d)["root"] == 250)
 
 
 def positions(data: dict) -> dict:

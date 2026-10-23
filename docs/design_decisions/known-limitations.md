@@ -141,21 +141,14 @@ Workaround: accept Arrow bodies only from trusted callers, or serve JSON.
 
 ## Tree editor live editing (`DSP_LIVE_COLLAB`)
 
-**The node editor does not handle a socket the server ended.** The flat-rule editor stops and says why when its
-socket is closed for a sign-out, expiry or lost access, resumes after the session dialog, and hands back edits the
-server fails on three times; the node editor's live hook (`components/editor/useNodeLive.ts`) was written before
-those `LiveSync` hooks and does not pass them, so it stops syncing without a message.
-Workaround: reload the page; unsaved node edits stay in the editor until then (Export keeps a copy). The fix is one
-live hook shared by both editors.
-
-**The log keeps 5000 versions and 30 days per project** (`DSP_LIVE_LOG_KEEP_VERSIONS`, `DSP_LIVE_LOG_KEEP_DAYS`): an
-owner decision still open. A busy project can write 5000 live versions in about an hour, and an offline batch made on
+**The log keeps 5000 versions and 30 days per project** (`DSP_LIVE_LOG_KEEP_VERSIONS`, `DSP_LIVE_LOG_KEEP_DAYS`, the
+owner's defaults). A busy project can write 5000 live versions in about an hour, and an offline batch made on
 an older version is refused (it stays downloadable). The count also caps REST saves, each a whole document (about
 240 KB on 521 rules, so about 1.2 GB per heavily saved project).
 
-**The e2e suite with the flag on is not green.** The smoke set and `test_sessions.py` wait for the REST PUT that a
-live editor never sends (or test REST-only flows); with `DSP_LIVE_COLLAB=true` 8 to 14 smoke tests fail for that
-reason. The suite is run with the flag off; the live stories are in `test_live_*.py`.
+**Only part of the e2e suite is run with the flag on.** The smoke set, `test_sessions.py` and `test_live_*.py` pass
+with `DSP_LIVE_COLLAB=true` (REST-only stories skipped when live); the rest is run with the flag off, and some of it
+(the failed and in-flight save stories in `test_resilience.py`) tests REST saves a live editor never sends.
 
 **Smaller gaps.** Leaving a page within 150 ms of an edit (after confirming the unsaved-changes prompt) drops that
 edit. Clicking a subtree in the node editor leaves "Unsaved changes" showing while live, and a remote version clears
