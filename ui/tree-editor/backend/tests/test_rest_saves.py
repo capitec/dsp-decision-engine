@@ -149,3 +149,20 @@ async def test_an_online_edit_made_before_a_rest_save_is_dropped_only_inside_wha
 
     assert applied.dropped == [name("a", "Online")]
     assert names(await stored()) == ["Online", "C"]
+
+
+@db
+@pytest.mark.asyncio
+async def test_a_rest_save_too_deep_to_diff_is_logged_whole(offline):
+    project_id, stored = offline
+
+    def nest(doc):
+        deep = doc["rules"][0]["meta"]
+        for _ in range(200):
+            deep["x"] = {}
+            deep = deep["x"]
+
+    doc = await rest_save(project_id, nest)
+
+    assert (await stored()).project_data == doc
+    assert (await log(project_id))[-1] == (2, "rest", "save-1", [{"op": "replace", "path": "", "value": doc}])
