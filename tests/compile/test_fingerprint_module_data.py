@@ -76,8 +76,9 @@ def test_an_edited_module_constant_is_not_served_from_the_previous_process_disk_
 
     def run(k, seed):
         (tmp_path / "limits.py").write_text(f"K = {k}\nPAIR = (1, 2)\n")
+        # No .pyc: limits.py is rewritten at the same size within a second, which a .pyc cannot tell apart.
         env = dict(os.environ, PYTHONHASHSEED=seed, NUMBA_CACHE_DIR=str(tmp_path / "numba_cache"),
-                   PYTHONPATH=str(tmp_path))
+                   PYTHONPATH=str(tmp_path), PYTHONDONTWRITEBYTECODE="1")
         proc = subprocess.run([sys.executable, "child.py"], cwd=tmp_path, env=env, capture_output=True, text=True,
                               timeout=600, check=False)
         assert proc.returncode == 0, proc.stderr
