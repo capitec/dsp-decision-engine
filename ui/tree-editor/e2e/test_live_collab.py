@@ -230,6 +230,31 @@ def test_a_rest_save_reaches_an_open_editor(signed_in: Page):
     shows(signed_in, ["Saved over REST", "Rule 2"])
 
 
+@pytest.mark.xfail(strict=True, reason="the first live connection to a flat-rule project whose rules have no ids stores "
+                                       "ids as a new version, which draws every rule card again and closes an open menu")
+def test_a_menu_opened_before_live_editing_connects_stays_open(signed_in: Page):
+    project = two_rules(signed_in)  # seeded through the API, so its rules have no ids
+    sockets, held, released = [], [], []  # the server's messages wait in `held` until released
+
+    def route(ws):
+        sockets.append(ws)
+        server = ws.connect_to_server()
+        ws.on_message(lambda m: server.send(m))
+        server.on_message(lambda m: ws.send(m) if released else held.append(m))
+
+    signed_in.route_web_socket(LIVE, route)
+    signed_in.goto(f"/flat-rules/{project}")
+    signed_in.get_by_test_id("rule-card").first.get_by_test_id("node-type").click()
+    expect(signed_in.get_by_role("option", name="Unary", exact=True)).to_be_visible()
+
+    while held:
+        sockets[0].send(held.pop(0))
+    released.append(True)
+
+    expect(signed_in.get_by_test_id("live-status")).to_have_text("Live")
+    expect(signed_in.get_by_role("option", name="Unary", exact=True)).to_be_visible()
+
+
 def test_save_waits_for_the_server_and_reports_the_project_saved(signed_in: Page):
     project = two_rules(signed_in)
     open_live(signed_in, project)
