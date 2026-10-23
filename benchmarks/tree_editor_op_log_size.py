@@ -17,6 +17,7 @@ import copy
 import json
 import os
 import sys
+import time
 import uuid
 from pathlib import Path
 
@@ -66,6 +67,13 @@ def whole_list_edits(doc):
         ops = diff(old, new)
         assert apply(old, ops)[0] == new
         print(f"  {label}: {len(ops)} ops, {kb(len(json.dumps(ops)))} (whole document {kb(len(json.dumps(new)))})")
+    old, new = cases["one rule renamed"]
+    took = []
+    for _ in range(30):
+        start = time.perf_counter()
+        diff(old, new)
+        took.append(time.perf_counter() - start)
+    print(f"  diffing the document: {sorted(took)[15] * 1000:.1f} ms p50 (n=30)")
 
 
 async def main():
