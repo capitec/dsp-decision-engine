@@ -441,7 +441,7 @@ async def update_project(
                 raise HTTPException(status_code=400, detail=str(e))
             changes["project_data"] = project_data.project_data
 
-        # Live editors see a save as one version that replaces the whole document
+        # Live editors see a save as one version, the ops that make it from the stored document
         try:
             await save_version(session, project_id, project_data.base_version, changes, "rest", str(uuid.uuid4()))
         except StaleVersion as e:

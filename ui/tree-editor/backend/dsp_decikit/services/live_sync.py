@@ -5,7 +5,8 @@ A live message (`apply_message`) follows the online rule: an op inside something
 message's base is dropped, the rest apply, and the last writer wins per field. An offline message (edits made while
 disconnected, sent as one batch) merges whole only when none of its paths overlaps what others changed since its base
 and it brings no new validation error; otherwise it is rejected whole. Its validation runs without the row lock where
-it can (see `_merge`). A REST save (`save_version`) is one root-replace op; only document changes make versions.
+it can (see `_merge`). A REST save (`save_version`) is logged as the diff from the stored document, so it conflicts
+only with edits that overlap what it changed; only document changes make versions.
 
 Every `SNAPSHOT_EVERY` versions a log row also stores the whole document, and the log is trimmed to the versions
 `settings.live_log_keep_versions` and `live_log_keep_days` keep, from a row holding a whole document on, so any
@@ -176,7 +177,8 @@ async def _commit_version(session: AsyncSession, project: Project, ops: list, cl
 async def save_version(session: AsyncSession, project_id: uuid.UUID, base_version: t.Optional[int],
                        changes: t.Dict[str, t.Any], client_id: str, msg_id: str) -> int:
     """Write `changes` (columns of the project); the caller commits. Only a document change makes a new version,
-    logged as one root-replace op; a rename or move keeps the version and ignores `base_version`. Raises StaleVersion
+    logged as the diff from the stored document (no ops when it is the same); a rename or move keeps the version and
+    ignores `base_version`. Raises StaleVersion
     when a document save names a `base_version` the project has moved on from."""
     project = await _locked(session, project_id)
     if "project_data" in changes and base_version is not None and project.version != base_version:
@@ -186,12 +188,13 @@ async def save_version(session: AsyncSession, project_id: uuid.UUID, base_versio
                               .values(**changes, updated_at=datetime.now(timezone.utc))
                               .execution_options(synchronize_session=False))
         return project.version
-    ops = [{"op": "replace", "path": "", "value": changes["project_data"]}]
+    ops = diff(project.project_data, changes["project_data"])
     return await _commit_version(session, project, ops, client_id, msg_id, **changes)
 
 
 def _whole(project_id: uuid.UUID):
-    # The rows a document can be rebuilt from without the rows before them.
+    # The rows a document can be rebuilt from without the rows before them: snapshots, a new project's first version
+    # and rows logged before REST saves were diffs.
     return (ProjectOp.project_id == project_id) & (ProjectOp.snapshot.is_not(None)
                                                    | (ProjectOp.ops[0]["path"].astext == ""))
 
@@ -199,8 +202,7 @@ def _whole(project_id: uuid.UUID):
 async def _trim(session: AsyncSession, project_id: uuid.UUID, version: int) -> None:
     # Under the project's row lock, so no write, catch-up check or offline replay of this project runs meanwhile on
     # the server path; a reader outside the lock (a joining client) sees a gap and gets a snapshot.
-    # Bounded by version first, so only the rows from the bound back are read for being whole: that reads their ops,
-    # a whole document on every REST save.
+    # Bounded by version first, so only the rows from the bound back are read for being whole (that reads their ops).
     aged = select(func.max(ProjectOp.version)).where(
         ProjectOp.project_id == project_id,
         ProjectOp.created_at < func.now() - timedelta(days=settings.live_log_keep_days)).scalar_subquery()
