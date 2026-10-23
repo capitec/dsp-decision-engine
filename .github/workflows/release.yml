@@ -114,6 +114,7 @@ jobs:
           context: .
           file: docker/Dockerfile
           push: true
+          build-args: VERSION=${{ needs.version.outputs.version }}
           tags: ${{ env.DOCKER_IMAGE }}:${{ needs.version.outputs.version }}
           cache-from: type=gha
           cache-to:   type=gha,mode=max
@@ -124,6 +125,7 @@ jobs:
           context: .
           file: docker/Dockerfile
           push: true
+          build-args: VERSION=${{ needs.version.outputs.version }}
           tags: ${{ env.DOCKER_IMAGE }}:latest
           cache-from: type=gha
 
