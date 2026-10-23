@@ -11,7 +11,7 @@ import pytest
 from dsp_decikit.services.live_ops import apply
 from dsp_decikit.services.live_sync import Rejected
 from tests.test_live_offline import merge, names, offline  # noqa: F401
-from tests.test_live_sync import Socket, db, log, name, project  # noqa: F401
+from tests.test_live_sync import RULE_B, Socket, db, log, name, project  # noqa: F401
 from tests.test_op_log_retention import document_at, small_log  # noqa: F401
 
 
@@ -150,6 +150,33 @@ async def test_an_online_edit_made_before_a_rest_save_is_dropped_only_inside_wha
     assert applied.dropped == [name("a", "Online")]
     assert names(await stored()) == ["Online", "C"]
 
+
+
+@db
+@pytest.mark.asyncio
+async def test_an_online_edit_made_before_a_rest_save_to_the_same_field_is_dropped_so_the_save_stands(offline):
+    from dsp_decikit.services.live_sync import apply_message
+    project_id, stored = offline
+    await rest_save(project_id, rename(1, "Saved"))
+
+    applied = await apply_message(project_id, "live", "m1", 1, [name("b", "Online"), name("c", "Online")])
+
+    assert applied.dropped == [name("b", "Online")]
+    assert names(await stored()) == ["A", "Saved", "Online"]
+
+
+@db
+@pytest.mark.asyncio
+async def test_an_online_replace_above_what_a_rest_save_changed_is_dropped_so_the_save_stands(offline):
+    from dsp_decikit.services.live_sync import apply_message
+    project_id, stored = offline
+    await rest_save(project_id, rename(1, "Saved"))
+    replace = {"op": "replace", "path": "/rules/b", "value": copy.deepcopy(RULE_B)}
+
+    applied = await apply_message(project_id, "live", "m1", 1, [replace])
+
+    assert applied.dropped == [replace]
+    assert names(await stored()) == ["A", "Saved", "C"]
 
 @db
 @pytest.mark.asyncio
