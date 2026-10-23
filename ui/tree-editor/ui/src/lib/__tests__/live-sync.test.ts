@@ -108,8 +108,23 @@ describe('LiveSync', () => {
 
     socket().receive({ type: 'validation', version: 2, errors: ['invalid'] })
     await Promise.resolve()
-    expect(settled).toBe(true)
+    expect(settled).toBe('saved')
     expect(hooks.validation).toHaveBeenLastCalledWith(['invalid'], 2)
+  })
+
+  it('a Save whose edits are on the server but never validated says so, apart from edits the server lacks', async () => {
+    const { sync, socket, type } = setup()
+    type(doc('Mine'))
+    const stored = sync.settle()
+    const [sent] = socket().ops()
+    socket().receive({ type: 'applied', version: 2, client_id: sync.clientId, msg_id: sent.id, ops: sent.ops })
+    vi.advanceTimersByTime(15000)
+    expect(await stored).toBe('unvalidated')
+
+    type(doc('Unsent'))
+    const unsent = sync.settle()
+    vi.advanceTimersByTime(15000)
+    expect(await unsent).toBe('unsaved')
   })
 
   it('catches up again when a version is missing', () => {
