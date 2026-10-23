@@ -94,6 +94,24 @@ describe('LiveSync', () => {
     expect(hooks.validation.mock.calls).toEqual([[['ahead'], 2]])
   })
 
+  it('Save settles once the server has the edit and has validated the version it made, not on an older validation', async () => {
+    const { sync, hooks, socket, type } = setup()
+    socket().receive({ type: 'validation', version: 1, errors: [] })
+    type(doc('Invalid'))
+    let settled: boolean | undefined
+    sync.settle().then((ok) => { settled = ok })
+
+    const [sent] = socket().ops()
+    socket().receive({ type: 'applied', version: 2, client_id: sync.clientId, msg_id: sent.id, ops: sent.ops })
+    await Promise.resolve()
+    expect(settled).toBeUndefined()
+
+    socket().receive({ type: 'validation', version: 2, errors: ['invalid'] })
+    await Promise.resolve()
+    expect(settled).toBe(true)
+    expect(hooks.validation).toHaveBeenLastCalledWith(['invalid'], 2)
+  })
+
   it('catches up again when a version is missing', () => {
     const { sync, socket } = setup()
 
