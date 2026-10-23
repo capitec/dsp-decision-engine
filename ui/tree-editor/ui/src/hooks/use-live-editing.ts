@@ -107,6 +107,7 @@ export function useLiveEditing(
     const unsubscribe = e.watch(() => { if (!showing) sync.edit(); });
     return () => {
       window.removeEventListener('session-refreshed', resume);
+      ended?.dismiss();
       setConflict(null);
       unsubscribe();
       sync.stop();
