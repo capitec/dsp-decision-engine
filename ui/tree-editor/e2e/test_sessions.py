@@ -1,13 +1,12 @@
 """Sessions: signing out, protected routes, an expired session during editing and the background refresh."""
 
-import os
 import re
 import time
 
 import pytest
 from playwright.sync_api import Page, expect
 
-from flat_rules_ui import open_flat_rules
+from flat_rules_ui import LIVE, open_flat_rules
 from platform_ui import edit_is_stored, open_projects, open_with_edit, press_save, toast
 from seed import create_project
 from test_flat_rule_params import flat_document
@@ -85,6 +84,10 @@ def test_signing_in_again_after_signing_out_shows_only_the_users_own_projects(si
 
 @pytest.mark.parametrize("kind", ["flat", "tree"])
 def test_saving_with_an_expired_session_says_so_and_keeps_the_edit_on_screen(signed_in: Page, kind: str):
+    if kind == "tree" and LIVE:
+        # The edit is stored over the live socket before Save, so nothing is left unsaved to keep;
+        # test_live_node_editor's sign-out test covers edits kept when a live session ends.
+        pytest.skip("live editing stores the edit before Save")
     open_with_edit(signed_in, kind)
     signed_in.context.clear_cookies()
 
@@ -108,9 +111,9 @@ def test_an_idle_editor_notices_the_expired_session_by_itself(signed_in: Page):
 
 @pytest.mark.parametrize("kind", ["flat", "tree"])
 def test_the_save_interrupted_by_the_expired_session_goes_through_after_the_refresh(signed_in: Page, email: str, kind: str):
-    if kind == "flat" and os.environ.get("E2E_LIVE_COLLAB") == "true":
+    if LIVE:
         # The edit is already stored over the live socket, which cookies cleared in the browser do not end, so no save
-        # is interrupted; test_live_collab's sign-out test covers a live session that ends.
+        # is interrupted; test_live_collab's and test_live_node_editor's sign-out tests cover a live session that ends.
         pytest.skip("live editing stores the edit before Save")
     project = open_with_edit(signed_in, kind)
     signed_in.context.clear_cookies()
