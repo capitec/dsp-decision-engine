@@ -32,15 +32,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from dsp_decikit.db.models.projects import Project, ProjectOp
 from dsp_decikit.db.session import db_session
 from dsp_decikit.services.documents import check_document, validation_errors
-from dsp_decikit.services.live_ops import apply, conflicts, diff, is_related, rebase_orders, stale_ops, touched
+from dsp_decikit.services.live_ops import apply, conflicts, diff, rebase_orders, stale_ops, touched
 from dsp_decikit.settings import settings
 
 CHANNEL = "project_ops"
 MAX_OPS = 5000
 # A rebuild replays at most this many versions; each snapshot is a whole document (120 to 190 KB on 521 rules).
 SNAPSHOT_EVERY = 100
-# The client id a REST save is logged under.
+# The client ids a REST save and the server log under; a live client may not take them.
 REST = "rest"
+RESERVED_CLIENT_IDS = {REST, "server"}
 # The merge core parses at most 128 levels; real documents nest about a dozen.
 MAX_DEPTH = 64
 ATTEMPTS = 3
@@ -307,9 +308,10 @@ async def apply_message(project_id: uuid.UUID, client_id: str, msg_id: str, base
         ops = _unlogged(ops, parts, _logged_ids(rows, client_id))
         stale = stale_ops(ops, [op for row in rows if row.client_id != client_id for op in row.ops])
         # A REST save's caller was told it saved, so an edit made before it never overwrites what it changed.
-        saved = touched([op for row in rows if row.client_id == REST for op in row.ops])
+        saved = set(touched([op for row in rows if row.client_id == REST for op in row.ops]))
+        above = {p for path in saved for p in _prefixes(path)}
         stale += [op for op in ops if not any(op is s for s in stale)
-                  and any(is_related(touched([op])[0], path) for path in saved)]
+                  and ((path := touched([op])[0]) in above or any(p in saved for p in _prefixes(path)))]
         fresh = [op for op in ops if not any(op is s for s in stale)]
         doc, failed = apply(project.project_data, fresh)
         applied = [op for op in fresh if not any(op is f for f in failed)]
@@ -323,6 +325,12 @@ async def apply_message(project_id: uuid.UUID, client_id: str, msg_id: str, base
                 (locked - started) * 1e3, (applying - locked) * 1e3, (checked - applying) * 1e3,
                 (done - checked) * 1e3, (done - started) * 1e3)
     return Applied(version, applied, stale + failed)
+
+
+def _prefixes(path: str) -> list:
+    # "" and every ancestor of a JSON pointer, then the pointer itself; split by segment, as the core compares paths.
+    parts = path.split("/")
+    return ["/".join(parts[:i]) for i in range(1, len(parts) + 1)]
 
 
 async def _merge(project_id: uuid.UUID, client_id: str, msg_id: str, base: int, ops: list, parts: t.Sequence,

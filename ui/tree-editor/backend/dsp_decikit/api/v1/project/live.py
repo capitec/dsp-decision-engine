@@ -30,7 +30,8 @@ from dsp_decikit.db.models.projects import AccessMode
 from dsp_decikit.db.session import db_session
 from dsp_decikit.services.folder_permissions import get_effective_project_permissions
 from dsp_decikit.services.live_hub import Client, hub
-from dsp_decikit.services.live_sync import Rejected, apply_message, check_message, logger, stamp_project
+from dsp_decikit.services.live_sync import (RESERVED_CLIENT_IDS, Rejected, apply_message, check_message, logger,
+                                             stamp_project)
 from dsp_decikit.settings import settings
 from .routes import router
 
@@ -125,7 +126,7 @@ async def live(ws: WebSocket, project_id: uuid.UUID):
             if kind == "hello":
                 since, client_id = message.get("since"), message.get("client_id")
                 if (not isinstance(since, int) or since < 0 or not isinstance(client_id, str) or not client_id[:64]
-                        or not client_id[:64].isprintable()):
+                        or not client_id[:64].isprintable() or client_id[:64] in RESERVED_CLIENT_IDS):
                     await ws.send_text(json.dumps({"type": "error", "reason": "hello needs since and client_id"}))
                     continue
                 if client is not None:
