@@ -139,6 +139,12 @@ Workaround: set `serve.workers` explicitly in restricted containers.
 **Arrow request bodies reach the kernels without a full validation pass.** `serving/_parse.py` reads Arrow IPC with polars, and the boundary shim reads string views with nanoarrow's unchecked accessor, so a malformed view that polars accepts could crash the worker. Whether polars rejects such views was not tested.
 Workaround: accept Arrow bodies only from trusted callers, or serve JSON.
 
+## Tree editor data sources
+
+**A data source's own error carries the driver's message.** An unexpected error is logged and the browser gets
+"unexpected server error", but the data sources wrap driver failures (psycopg, S3, DuckDB) in `DataSourceError` with
+the original text, which users need for bad SQL; a Postgres or S3 failure can so show a signed-in user its host.
+
 ## Tree editor live editing (`DSP_LIVE_COLLAB`)
 
 **The log keeps 5000 versions and 30 days per project** (`DSP_LIVE_LOG_KEEP_VERSIONS`, `DSP_LIVE_LOG_KEEP_DAYS`, the
