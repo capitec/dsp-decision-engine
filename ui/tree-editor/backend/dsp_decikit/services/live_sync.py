@@ -178,8 +178,8 @@ async def save_version(session: AsyncSession, project_id: uuid.UUID, base_versio
                        changes: t.Dict[str, t.Any], client_id: str, msg_id: str) -> int:
     """Write `changes` (columns of the project); the caller commits. Only a document change makes a new version,
     logged as the diff from the stored document (no ops when it is the same); a rename or move keeps the version and
-    ignores `base_version`. Raises StaleVersion
-    when a document save names a `base_version` the project has moved on from."""
+    ignores `base_version`. Raises StaleVersion when a document save names a `base_version` the project has moved on
+    from."""
     project = await _locked(session, project_id)
     if "project_data" in changes and base_version is not None and project.version != base_version:
         raise StaleVersion(project.version)
@@ -188,7 +188,10 @@ async def save_version(session: AsyncSession, project_id: uuid.UUID, base_versio
                               .values(**changes, updated_at=datetime.now(timezone.utc))
                               .execution_options(synchronize_session=False))
         return project.version
-    ops = diff(project.project_data, changes["project_data"])
+    try:
+        ops = diff(project.project_data, changes["project_data"])
+    except ValueError:  # nested deeper than the core parses: still saved, logged whole as before
+        ops = [{"op": "replace", "path": "", "value": changes["project_data"]}]
     return await _commit_version(session, project, ops, client_id, msg_id, **changes)
 
 
