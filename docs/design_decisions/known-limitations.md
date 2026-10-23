@@ -146,9 +146,16 @@ owner's defaults). A busy project can write 5000 live versions in about an hour,
 an older version is refused (it stays downloadable). The count also caps REST saves, each a whole document (about
 240 KB on 521 rules, so about 1.2 GB per heavily saved project).
 
-**Only part of the e2e suite is run with the flag on.** The smoke set, `test_sessions.py` and `test_live_*.py` pass
-with `DSP_LIVE_COLLAB=true` (REST-only stories skipped when live); the rest is run with the flag off, and some of it
-(the failed and in-flight save stories in `test_resilience.py`) tests REST saves a live editor never sends.
+**Opening a flat-rule project whose rules have no ids draws it twice.** The first live connection of a writer stores
+ids for its rule nodes as a new version (so opening it changes its version), and the editor, which loaded the document without them, draws every rule
+card again a moment after it shows: an open menu closes (strict xfail
+`test_a_menu_opened_before_live_editing_connects_stays_open`), and 521 rules render twice. Projects created or
+imported through the API have no ids. The fix is a choice: stamp ids when the editor loads the project (a GET that
+writes) or when a document is stored, or keep the cards' keys across the stamp.
+
+**Some e2e stories have no live counterpart.** The whole e2e suite passes with `DSP_LIVE_COLLAB=true`, but its
+REST-only save stories are skipped there, and no live test covers a slow or failing live Save, an edit made while a
+live Save waits, a server failing on node-editor edits, or a reader's edit in the node editor.
 
 **Smaller gaps.** Leaving a page within 150 ms of an edit (after confirming the unsaved-changes prompt) drops that
 edit. Clicking a subtree in the node editor leaves "Unsaved changes" showing while live, and a remote version clears
@@ -157,4 +164,6 @@ client counts, not as transient. Two browsers connecting nodes at once can make 
 `lib/background-token-refresh.ts` pings `/api/auth/config`, a public path, so it never renews a session (only edits
 and other API calls do). `result_idx` points at output rows by index, so a merge can keep two edits that point at
 the wrong row together. The offline merge falls back to validating under the row lock when a project is edited
-faster than a validation (every ~170 ms on 521 rules), so ten simultaneous offline batches finish in about 7 s.
+faster than a validation (every ~170 ms on 521 rules), so ten simultaneous offline batches finish in about 7 s. A
+live Save waits for the server's validation of the version it saved, so a failed validator makes it report "Save
+Failed" after 15 s although the edits are stored.
