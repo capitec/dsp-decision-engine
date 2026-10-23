@@ -5,6 +5,7 @@ import polars as pl
 from decikit import TreeConfig
 from playwright.sync_api import Page, expect
 
+from flat_rules_ui import LIVE
 from tree_ui import build_loan_tree, create_tree_project, save
 
 
@@ -82,7 +83,8 @@ def test_new_project_starts_without_unsaved_changes(signed_in: Page):
     create_tree_project(signed_in, "Clean start")
     signed_in.wait_for_load_state("networkidle")
     expect(signed_in.get_by_text("Unsaved changes")).to_be_hidden()
-    expect(signed_in.get_by_role("button", name="Save")).to_be_disabled()
+    if not LIVE:  # live, Save stays enabled: it waits until the server has every edit
+        expect(signed_in.get_by_role("button", name="Save")).to_be_disabled()
 
 
 def test_projects_page_loads_folders_right_after_sign_up(signed_in: Page):
