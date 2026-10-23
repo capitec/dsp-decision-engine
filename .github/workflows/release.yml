@@ -5,6 +5,10 @@ on:
     tags:
       - 'v[0-9]*'
 
+# Jobs that need more ask for it themselves.
+permissions:
+  contents: read
+
 env:
   DOCKER_IMAGE: sjnarmstrong/pydecider
   TREE_EDITOR_IMAGE: sjnarmstrong/decider-tree-editor
