@@ -147,8 +147,8 @@ an older version is refused (it stays downloadable). The count also caps REST sa
 240 KB on 521 rules, so about 1.2 GB per heavily saved project).
 
 **Opening a flat-rule project whose rules have no ids draws it twice.** The first live connection of a writer stores
-ids for its rule nodes as a new version (so opening it changes its version), and the editor, which loaded the document without them, draws every rule
-card again a moment after it shows: an open menu closes (strict xfail
+ids for its rule nodes as a new version (so opening it changes its version), and the editor, which loaded the
+document without them, draws every rule card again a moment after it shows: an open menu closes (strict xfail
 `test_a_menu_opened_before_live_editing_connects_stays_open`), and 521 rules render twice. Projects created or
 imported through the API have no ids. The fix is a choice: stamp ids when the editor loads the project (a GET that
 writes) or when a document is stored, or keep the cards' keys across the stamp.
@@ -165,5 +165,6 @@ client counts, not as transient. Two browsers connecting nodes at once can make 
 and other API calls do). `result_idx` points at output rows by index, so a merge can keep two edits that point at
 the wrong row together. The offline merge falls back to validating under the row lock when a project is edited
 faster than a validation (every ~170 ms on 521 rules), so ten simultaneous offline batches finish in about 7 s. A
-live Save waits for the server's validation of the version it saved, so a failed validator makes it report "Save
-Failed" after 15 s although the edits are stored.
+live Save waits for the server's validation of the version it saved, and drops one for an older version: when the
+validator fails, or someone else edits faster than validation runs, it waits 15 s and says "Saved, not validated
+yet".
