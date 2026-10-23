@@ -125,6 +125,17 @@ def test_an_edit_far_from_the_session_expiry_leaves_it_alone(live_on):
     assert run(expiry(token)) == before
 
 
+
+@db
+@pytest.mark.parametrize("reserved", ["rest", "server"])
+def test_a_client_cannot_take_the_id_rest_saves_or_the_server_are_logged_under(live_on, reserved):
+    token, project_id = run(signed_in_owner())
+
+    with connect(token, project_id) as ws:
+        ws.send_text(json.dumps({"type": "hello", "since": 0, "client_id": reserved}))
+        assert json.loads(ws.receive_text()) == {"type": "error", "reason": "hello needs since and client_id"}
+    run(asyncio.sleep(0))  # drops the connections the socket pooled on the test client's loop
+
 # ---- a client that stops reading -----------------------------------------------------------------------------------
 
 class StalledSocket(Socket):

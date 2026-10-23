@@ -151,7 +151,6 @@ async def test_an_online_edit_made_before_a_rest_save_is_dropped_only_inside_wha
     assert names(await stored()) == ["Online", "C"]
 
 
-
 @db
 @pytest.mark.asyncio
 async def test_an_online_edit_made_before_a_rest_save_to_the_same_field_is_dropped_so_the_save_stands(offline):
@@ -177,6 +176,25 @@ async def test_an_online_replace_above_what_a_rest_save_changed_is_dropped_so_th
 
     assert applied.dropped == [replace]
     assert names(await stored()) == ["A", "Saved", "C"]
+
+
+@db
+@pytest.mark.asyncio
+async def test_a_large_live_message_after_a_rest_save_of_every_rule_is_checked_quickly(offline):
+    import time
+    from dsp_decikit.services.live_sync import apply_message
+    project_id, stored = offline
+    many = [name(f"r{i}", f"R{i}") for i in range(300)]
+    await rest_save(project_id, lambda doc: doc["rules"].extend(
+        {"meta": {"name": f"R{i}"}, "rule": {"id": f"r{i}", "type": "leaf", "result_idx": -1}} for i in range(300)))
+    await rest_save(project_id, lambda doc: [r["meta"].update(name=r["meta"]["name"] + "!") for r in doc["rules"]])
+
+    started = time.perf_counter()
+    applied = await apply_message(project_id, "live", "m1", 2, many)
+
+    assert len(applied.dropped) == 300
+    assert time.perf_counter() - started < 0.5
+
 
 @db
 @pytest.mark.asyncio
