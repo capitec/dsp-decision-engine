@@ -32,13 +32,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from dsp_decikit.db.models.projects import Project, ProjectOp
 from dsp_decikit.db.session import db_session
 from dsp_decikit.services.documents import check_document, validation_errors
-from dsp_decikit.services.live_ops import apply, conflicts, diff, rebase_orders, stale_ops
+from dsp_decikit.services.live_ops import apply, conflicts, diff, is_related, rebase_orders, stale_ops, touched
 from dsp_decikit.settings import settings
 
 CHANNEL = "project_ops"
 MAX_OPS = 5000
 # A rebuild replays at most this many versions; each snapshot is a whole document (120 to 190 KB on 521 rules).
 SNAPSHOT_EVERY = 100
+# The client id a REST save is logged under.
+REST = "rest"
 # The merge core parses at most 128 levels; real documents nest about a dozen.
 MAX_DEPTH = 64
 ATTEMPTS = 3
@@ -285,7 +287,8 @@ async def apply_message(project_id: uuid.UUID, client_id: str, msg_id: str, base
                         parts: t.Sequence = ()) -> Applied:
     """Apply one live message and commit it as the next version; a message already in the log is not applied again.
 
-    Online, an op inside something another client changed since `base` is dropped. `offline` merges the batch whole
+    Online, an op inside something another client changed since `base` is dropped, and so is one on, above or
+    inside anything a REST save changed since then. `offline` merges the batch whole
     or not at all (Rejected names the conflicting paths); `validate` (document to validation errors) checks the
     merge, in a thread when left out. `parts` (`[msg_id, op count]` in order) names earlier messages of this client
     the batch contains; the ops of one already logged are skipped. Raises Rejected (nothing stored) when the base is
@@ -303,6 +306,10 @@ async def apply_message(project_id: uuid.UUID, client_id: str, msg_id: str, base
             return logged
         ops = _unlogged(ops, parts, _logged_ids(rows, client_id))
         stale = stale_ops(ops, [op for row in rows if row.client_id != client_id for op in row.ops])
+        # A REST save's caller was told it saved, so an edit made before it never overwrites what it changed.
+        saved = touched([op for row in rows if row.client_id == REST for op in row.ops])
+        stale += [op for op in ops if not any(op is s for s in stale)
+                  and any(is_related(touched([op])[0], path) for path in saved)]
         fresh = [op for op in ops if not any(op is s for s in stale)]
         doc, failed = apply(project.project_data, fresh)
         applied = [op for op in fresh if not any(op is f for f in failed)]
