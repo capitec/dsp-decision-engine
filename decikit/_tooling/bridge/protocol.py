@@ -32,11 +32,9 @@ Unset = Union[_T, SkipJsonSchema[None]]
 
 # Optional extra (pyproject) -> the module that proves it is installed.
 _OPTIONAL_EXTRAS = {
-    "visualise": "graphviz",
     "serve-starlette": "uvicorn",
     "serve-sanic": "sanic",
     "notebook": "IPython",
-    "eval": "simpleeval",
     "mcp": "fastmcp",
     "prove": "z3",
 }
