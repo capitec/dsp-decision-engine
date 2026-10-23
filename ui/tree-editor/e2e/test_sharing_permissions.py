@@ -6,6 +6,7 @@ import pytest
 from playwright.sync_api import Page, expect
 
 import node_ui
+from flat_rules_ui import LIVE, save
 from platform_fixtures import Other, other  # noqa: F401  (the fixture)
 from platform_ui import (
     expand_folder,
@@ -116,11 +117,14 @@ def test_a_read_write_user_can_save_and_the_owner_sees_it(signed_in: Page, other
 
     make_edit(other.page, kind)
 
-    assert attempt_save(other.page) == 200
+    save(other.page)
     expect(toast(other.page, "Saved")).to_be_visible()
     assert stored_document(signed_in, project) != (flat_document() if kind == "flat" else node_ui.loan_document())
 
 
+@pytest.mark.skipif(LIVE, reason="live, a reader's edit is refused as it is made, not on Save: test_live_collab's "
+                                 "test_a_read_only_share_sees_edits_live_but_cannot_send (the flat-rule editor; none "
+                                 "for the node editor)")
 @pytest.mark.parametrize("kind", ["flat", "tree"])
 def test_a_read_only_users_save_is_refused_with_a_message_and_stores_nothing(signed_in: Page, other: Other, kind: str):
     project = seed_shared(signed_in, other, kind, "read")

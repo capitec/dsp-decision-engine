@@ -7,7 +7,7 @@ import pytest
 from playwright.sync_api import Page, expect
 
 import node_ui
-from flat_rules_ui import LIVE, add_parameter, open_flat_rules
+from flat_rules_ui import LIVE, add_parameter, open_flat_rules, save
 from platform_ui import edit_is_stored, first_held, open_projects, open_with_edit, press_save, project_card, toast
 from seed import create_folder, create_project, get_project
 from test_flat_rule_params import flat_document
@@ -37,6 +37,9 @@ def failure_shown(page: Page, kind: str) -> None:
 
 # ---- a save that fails -------------------------------------------------------------------------------------------------
 
+@pytest.mark.skipif(LIVE, reason="a live Save sends no request to refuse; test_live_offline's "
+                                 "test_edits_the_server_fails_on_every_time_are_handed_back_after_three_tries covers a "
+                                 "server failing on edits (the flat-rule editor; none for the node editor)")
 @pytest.mark.parametrize("kind", ["flat", "tree"])
 @pytest.mark.parametrize("status,detail", [(500, "the database is down"), (400, "that document is not valid")])
 def test_a_refused_save_shows_the_reason_keeps_the_edit_and_succeeds_when_retried(signed_in: Page, kind: str, status: int, detail: str):
@@ -54,6 +57,10 @@ def test_a_refused_save_shows_the_reason_keeps_the_edit_and_succeeds_when_retrie
     assert edit_is_stored(signed_in, project, kind)
 
 
+@pytest.mark.skipif(LIVE, reason="a live Save sends no request to lose; edits made while the server is unreachable "
+                                 "merge on reconnect: test_live_offline's "
+                                 "test_offline_edits_to_another_rule_merge_on_reconnect_and_everyone_sees_them and "
+                                 "test_live_node_editor's test_an_offline_edit_merges_on_reconnect_with_an_edit_made_meanwhile")
 @pytest.mark.parametrize("kind", ["flat", "tree"])
 def test_a_save_that_never_reaches_the_server_shows_an_error_keeps_the_edit_and_succeeds_when_retried(signed_in: Page, kind: str):
     project = open_with_edit(signed_in, kind)
@@ -69,6 +76,7 @@ def test_a_save_that_never_reaches_the_server_shows_an_error_keeps_the_edit_and_
     assert edit_is_stored(signed_in, project, kind)
 
 
+@pytest.mark.skipif(LIVE, reason="a live Save sends no request to fail; no live test covers a Save that fails")
 @pytest.mark.parametrize("kind", ["flat", "tree"])
 def test_a_failed_save_does_not_leave_the_editor_stuck_saving(signed_in: Page, kind: str):
     open_with_edit(signed_in, kind)
@@ -101,6 +109,8 @@ def test_a_slow_save_shows_progress_and_repeated_clicks_send_one_request(signed_
     assert edit_is_stored(signed_in, project, kind)
 
 
+@pytest.mark.skipif(LIVE, reason="a live Save sends no request to hold; no live test covers an edit made while Save "
+                                 "waits")
 def test_an_edit_made_while_a_save_is_in_flight_is_not_reported_as_saved(signed_in: Page):
     project = node_ui.open_tree(signed_in, node_ui.loan_document(), "In flight")
     node_ui.nudge(signed_in, "root")
@@ -125,16 +135,15 @@ def test_double_clicking_export_downloads_the_same_file_once_or_twice(signed_in:
 
     with signed_in.expect_download():
         signed_in.get_by_role("button", name="Export").dblclick()
-    # a later save still goes through: the page is responsive and the export left no save running
-    with signed_in.expect_response(lambda r: r.request.method == "PUT" and SAVE_URL.search(r.url)) as reply:
-        press_save(signed_in)
-    assert reply.value.ok
+    save(signed_in)  # a later save still goes through: the page is responsive and the export left no save running
 
     contents = []
     for i, download in enumerate(downloads):
         path = tmp_path / f"export-{i}.json"
         download.save_as(path)
-        contents.append(json.loads(path.read_text()))
+        content = json.loads(path.read_text())
+        del content["metadata"]["exported_at"]  # two downloads are two exports, a moment apart
+        contents.append(content)
     assert 1 <= len(contents) <= 2
     assert all(c == contents[0] for c in contents)
 
@@ -198,6 +207,9 @@ def test_a_stale_save_from_a_second_tab_is_refused_and_its_edit_stays(signed_in:
         assert positions["root"] != original["root"] and positions["yes"] == original["yes"]
 
 
+@pytest.mark.skipif(LIVE, reason="live, the second tab's save is not refused, so there is nothing to reload for: "
+                                 "test_live_collab's test_simultaneous_edits_to_different_rules_are_all_kept and "
+                                 "test_live_node_editor's test_edits_to_different_nodes_in_two_browsers_are_both_kept")
 @pytest.mark.parametrize("kind", ["flat", "tree"])
 def test_after_a_reload_the_second_tab_sees_the_first_tabs_edit_and_can_save(signed_in: Page, kind: str):
     project, second = stale_tab(signed_in, kind)
