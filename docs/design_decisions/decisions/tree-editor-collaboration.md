@@ -76,6 +76,9 @@ Read this before changing how the tree editor saves, syncs or merges a project d
   (`tree-editor-op-log-size.md`). And a root replace overlapped every path: it refused every offline batch based
   before it and dropped every concurrent online edit. Now only edits that overlap what the save changed are refused
   or dropped (the owner's call, 2026-10-23).
+- Online, the save still wins on what it changed: a live edit made before it on the same path, above it or inside it
+  is dropped and its author told, though between live editors the last writer wins on an equal path. Why: the REST
+  caller was already told it saved, so a later-arriving older edit must not undo that silently (owner, 2026-10-23).
 - The rows a version is rebuilt from are the snapshots, a new project's first version (whole) and rows logged before
   this change. A save that gives every rule a new id logs 1.4 times the document; the editors keep ids.
 - No `lz4` column compression: it stores the documents 8% bigger than the default `pglz`, and a diff row is too small
