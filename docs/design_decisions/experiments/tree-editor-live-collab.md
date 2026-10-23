@@ -81,6 +81,10 @@ keeps the edits until the user signs in again); one slow socket is dropped after
 a hung validator times out after 30 s and is replaced, and offline merges validate without the row lock
 (`tree-editor-offline-merge-lock.md`); validation errors are counted, not a set; the node editor edits live.
 
+Fixed since: both editors share one live hook, so the node editor also stops on a sign-out, expiry or lost access,
+resumes after the session dialog and hands back edits the server fails on three times; the e2e smoke set and
+`test_sessions.py` pass with the flag on (two nodes) as well as off.
+
 Closed since, on `collab/ship`: the op log snapshots the document every 100 versions and is trimmed by count and age
 (a rebuild replays at most 100 versions), and a migration logs the current version of projects created before step
 2, so their offline batches merge. On the 521-rule set (123 KB) rebuilding a version takes 19 ms from its snapshot
