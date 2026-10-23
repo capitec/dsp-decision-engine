@@ -77,6 +77,7 @@ export class LiveSync {
   /** The version (and document) my edits since the disconnect were made on. */
   private offlineBase?: { version: number; doc: Json }
   private offlineDoc: Json = null
+  private validated = -1
   // Validation runs apart from the fan-out, so it can arrive before the version it is for.
   private validation?: { errors: unknown[]; version: number }
 
@@ -128,10 +129,16 @@ export class LiveSync {
     return !this.edited && this.pending.length === 0
   }
 
-  /** Push the edits now and wait until the server has them all; false after `timeoutMs`. */
+  // A Save reports the validation of what it saved, not of an earlier version.
+  private done() {
+    return this.idle() && this.validated === this.version
+  }
+
+  /** Push the edits now and wait until the server has them all and has validated the result; false after
+   * `timeoutMs`. */
   settle(timeoutMs = 15000): Promise<boolean> {
     this.flush()
-    if (this.idle()) return Promise.resolve(true)
+    if (this.done()) return Promise.resolve(true)
     return new Promise((resolve) => {
       const timeout = setTimeout(() => resolve(false), timeoutMs)
       this.waiters.push(() => {
@@ -285,16 +292,17 @@ export class LiveSync {
     this.view = apply(this.confirmed, this.pending.flatMap((p) => p.ops))[0]
     this.hooks.show(this.view)
     this.report()
-    if (this.idle()) {
-      this.hooks.settled?.(this.version)
-      this.waiters.splice(0).forEach((resolve) => resolve())
-    }
+    if (this.idle()) this.hooks.settled?.(this.version)
   }
 
   private report() {
     if (this.validation && this.validation.version <= this.version) {
-      if (this.validation.version === this.version) this.hooks.validation?.(this.validation.errors, this.version)
+      if (this.validation.version === this.version) {
+        this.validated = this.version
+        this.hooks.validation?.(this.validation.errors, this.version)
+      }
       this.validation = undefined
     }
+    if (this.done()) this.waiters.splice(0).forEach((resolve) => resolve())
   }
 }
