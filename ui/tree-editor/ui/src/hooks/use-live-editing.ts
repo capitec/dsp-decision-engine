@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { toast } from '@/hooks/use-toast';
-import { LiveSync, liveUrl, type LiveStatus } from '@/lib/live-sync';
+import { LiveSync, liveUrl, type LiveStatus, type Settled } from '@/lib/live-sync';
 import { liveOpsLoaded, type Json, type Op } from '@/lib/live-ops';
 
 /** Offline edits the server refused: what they collided with, and my version of the document with them. */
@@ -13,7 +13,7 @@ export interface OfflineConflict {
 /** What live editing needs from one editor. */
 export interface LiveEditor {
   /** The editor's store; live editing sets its `live` status and the `liveSettle` that Save waits on. */
-  store: { setState(state: Partial<{ live: LiveStatus | null; liveSettle: (() => Promise<boolean>) | null }>): void };
+  store: { setState(state: Partial<{ live: LiveStatus | null; liveSettle: (() => Promise<Settled>) | null }>): void };
   /** The document the editor holds now. */
   read: () => Json;
   /** Show the server's document (at `version`) in the editor. */

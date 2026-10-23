@@ -17,6 +17,15 @@ def open_flat_rules(page: Page, project_id: str) -> None:
     """Open the flat-rule editor on a project and wait until it has loaded."""
     page.goto(f"/flat-rules/{project_id}")
     expect(page.get_by_role("button", name="Add Rule")).to_be_visible(timeout=30_000)  # the test machine is shared
+    wait_until_connected(page)
+
+
+def wait_until_connected(page: Page) -> None:
+    """On a live stack, wait until the editor's live connection has caught up (or the browser has no wasm): the first
+    connection to a project whose rules have no ids draws every rule card again."""
+    if LIVE:
+        badge = page.get_by_test_id("live-status").filter(has_not_text="Connecting...")
+        expect(badge.or_(page.get_by_test_id("live-ops-failed"))).to_be_visible(timeout=60_000)
 
 
 def rule_card(page: Page, rule: int = 0) -> Locator:

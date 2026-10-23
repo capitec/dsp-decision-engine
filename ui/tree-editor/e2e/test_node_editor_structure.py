@@ -24,6 +24,7 @@ from node_ui import (
     select_node,
     unary,
 )
+from flat_rules_ui import LIVE
 from seed import export_document, get_project
 from tree_ui import create_tree_project
 
@@ -189,7 +190,10 @@ def test_removing_the_last_branch_of_an_edge_keeps_one_branch_assigned(signed_in
     click_edge(signed_in, "root", "yes")
     signed_in.get_by_test_id("remove-branch").last.click()
 
-    expect(signed_in.get_by_role("button", name="Save", exact=True)).to_be_disabled()  # the removal is refused
+    if LIVE:
+        save(signed_in)  # Save stays enabled live; this waits until the server has any edit the removal made
+    else:
+        expect(signed_in.get_by_role("button", name="Save", exact=True)).to_be_disabled()  # the removal is refused
     assert saved_edges(signed_in, project)["root:yes"] == [0]
 
 

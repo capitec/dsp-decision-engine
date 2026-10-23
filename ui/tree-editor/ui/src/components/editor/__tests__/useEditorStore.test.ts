@@ -131,7 +131,7 @@ describe('saving', () => {
   });
 
   it('with live editing waits for the server instead of PUTting, then reports the project saved', async () => {
-    const settle = vi.fn().mockResolvedValue(true);
+    const settle = vi.fn().mockResolvedValue('saved');
     useEditorStore.setState({ live: 'live', liveSettle: settle });
     state().updateNodeData('root', { condition: { op: '<=', feature: 'amount', threshold: 3 } });
 
@@ -145,13 +145,23 @@ describe('saving', () => {
   });
 
   it('with live editing, a server that does not confirm in time leaves the edits unsaved and says so', async () => {
-    useEditorStore.setState({ live: 'reconnecting', liveSettle: vi.fn().mockResolvedValue(false) });
+    useEditorStore.setState({ live: 'reconnecting', liveSettle: vi.fn().mockResolvedValue('unsaved') });
     state().updateNodeData('root', { condition: { op: '<=', feature: 'amount', threshold: 3 } });
 
     await state().saveProject();
 
     expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Save Failed' }));
     expect(state().isDirty).toBe(true);
+  });
+
+  it('with live editing, edits the server stored but has not validated yet are saved and the toast says so', async () => {
+    useEditorStore.setState({ live: 'live', liveSettle: vi.fn().mockResolvedValue('unvalidated') });
+    state().updateNodeData('root', { condition: { op: '<=', feature: 'amount', threshold: 3 } });
+
+    await state().saveProject();
+
+    expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Saved, not validated yet' }));
+    expect(state().isDirty).toBe(false);
   });
 });
 

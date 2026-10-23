@@ -146,10 +146,12 @@ The team tests insert their teams with `psql` in the stack's container and skip 
 `E2E_NODES=2` starts a second backend on `E2E_PORT+1` (same Postgres, so sessions are shared),
 `DSP_LIVE_COLLAB=true` turns live editing on, and `./stack.sh restart` restarts the backends but keeps Postgres.
 `test_live_collab.py`, `test_live_offline.py` and `test_live_node_editor.py` run only on such a stack
-(`E2E_NODES=2 DSP_LIVE_COLLAB=true ./stack.sh up`); `test_live_ops_unavailable.py` runs either way. The smoke set
-and `test_sessions.py` pass with live editing on as well as off: a live Save waits for "Project Saved" instead of the
-REST reply, and a test of a REST-only story is skipped when live, naming the live test that covers it. The rest of
-the suite is run with live editing off.
+(`E2E_NODES=2 DSP_LIVE_COLLAB=true ./stack.sh up`); `test_live_ops_unavailable.py` runs either way. The whole suite
+passes with live editing on (two nodes) as well as off (one node). On a live stack the helpers wait for the editor's
+live connection when they open a flat-rule project, a Save waits for "Project Saved" instead of the REST reply, and a
+flat tree's round trip renames a rule and back, since a live editor sends its form of the document only with an
+edit. A test of a REST-only story (a refused, lost, failed or held save, a stale second tab, a reader's refused Save)
+is skipped when live, naming the live test that covers it or saying that none does.
 
 With docker compose, `docker compose --profile e2e run --rm e2e` runs the whole suite against the dev stack;
 `-e PYTEST_ADDOPTS="-m smoke"` picks a subset. The suite was run under podman with `stack.sh`; the compose route is
@@ -167,8 +169,8 @@ Workspace dialog that promises an undo it lacks and a canvas 80px taller than th
 widens the page; the folder and project move
 dialogs, Create Subfolder's parent, folder-create and team-create messages, Delete all contents (it moves subfolders
 to the root), folder shares not listing the folder's projects and subfolders and the refresh popup closed without a
-reason. The 521-rule sets are
-`xfail(run=False)` in the editor round trips: the flat-rule editor renders every rule and exceeds 3 GB.
+reason; with live editing on, opening a flat-rule project whose rules have no ids draws every rule card twice.
+The 521-rule sets are `xfail(run=False)` in the editor round trips: the flat-rule editor renders every rule and exceeds 3 GB.
 
 ## Image
 

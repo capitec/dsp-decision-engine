@@ -28,6 +28,7 @@ from node_ui import (
     sidebar,
     unary,
 )
+from flat_rules_ui import LIVE
 from seed import create_project, export_document, get_project
 
 
@@ -210,7 +211,8 @@ def test_clean_tree_has_no_unsaved_indicator_and_save_is_disabled(signed_in: Pag
     signed_in.wait_for_load_state("networkidle")
 
     expect(signed_in.get_by_text("Unsaved changes")).to_be_hidden()
-    expect(signed_in.get_by_role("button", name="Save", exact=True)).to_be_disabled()
+    if not LIVE:  # live, Save stays enabled: it waits until the server has every edit
+        expect(signed_in.get_by_role("button", name="Save", exact=True)).to_be_disabled()
 
 
 def test_an_edit_shows_unsaved_changes_and_saving_clears_it(signed_in: Page):
@@ -221,7 +223,8 @@ def test_an_edit_shows_unsaved_changes_and_saving_clears_it(signed_in: Page):
     expect(signed_in.get_by_role("button", name="Save", exact=True)).to_be_enabled()
     save(signed_in)
 
-    expect(signed_in.get_by_role("button", name="Save", exact=True)).to_be_disabled()
+    if not LIVE:  # live, Save stays enabled: it waits until the server has every edit
+        expect(signed_in.get_by_role("button", name="Save", exact=True)).to_be_disabled()
 
 
 def test_back_with_unsaved_edits_asks_first_and_staying_keeps_the_edits(signed_in: Page):
