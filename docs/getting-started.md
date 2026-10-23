@@ -21,11 +21,9 @@ Optional extras add what a particular task needs. These are the extras declared 
 | `yaml` | pyyaml | flow files written in YAML |
 | `experiments` | altair, ipython, markdown-it-py | experiment plots and reports |
 | `notebook` | ipython | notebook display helpers |
-| `visualise` | streamlit, graphviz | visual tooling |
-| `eval` | simpleeval | expression evaluation |
 | `mcp` | fastmcp | `decikit mcp`, the MCP server for agents |
 | `prove` | z3-solver | `diff.prove` with the SMT tier |
-| `dev` | pytest, pytest-asyncio, anyio | the tests a template project ships |
+| `dev` | pytest, pytest-asyncio | the tests a template project ships |
 | `all` | every package above | everything |
 
 ```bash

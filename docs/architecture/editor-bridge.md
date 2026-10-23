@@ -70,8 +70,8 @@ One JSON object per line in each direction:
 ```json
 {"protocol": "1", "contract_version": "1",
  "capabilities": {"contract_version": "1", "modes": ["fused", "interpreted", "stepped"],
-                  "optional_dependencies": {"visualise": false, "serve-starlette": true, "serve-sanic": false,
-                                            "notebook": true, "eval": false, "mcp": true, "prove": true},
+                  "optional_dependencies": {"serve-starlette": true, "serve-sanic": false,
+                                            "notebook": true, "mcp": true, "prove": true},
                   "source_mapping": true}}
 ```
 
