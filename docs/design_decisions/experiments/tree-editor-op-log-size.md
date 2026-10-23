@@ -43,4 +43,5 @@ The diff a save logs for edits that touch every rule (whole document 177.6 KB):
 | ids stamped on a document without them | 1 (the rule list replaced) | 177.5 KB |
 | every rule given a new id | 1042 (each removed, each added) | 254.8 KB |
 
-Only a save that re-keys every rule logs more than the whole document (1.4 times); the editors keep rule ids and stamp only missing ones.
+Only a save that re-keys every rule logs more than the whole document (1.4 times); the editors keep rule ids and
+stamp only missing ones.

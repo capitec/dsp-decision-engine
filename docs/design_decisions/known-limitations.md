@@ -143,8 +143,9 @@ Workaround: accept Arrow bodies only from trusted callers, or serve JSON.
 
 **The log keeps 5000 versions and 30 days per project** (`DSP_LIVE_LOG_KEEP_VERSIONS`, `DSP_LIVE_LOG_KEEP_DAYS`, the
 owner's defaults). A busy project can write 5000 live versions in about an hour, and an offline batch made on
-an older version is refused (it stays downloadable). The count also caps REST saves, each a whole document (about
-240 KB on 521 rules, so about 1.2 GB per heavily saved project).
+an older version is refused (it stays downloadable). The count also caps REST saves, each logged as its diff: 5000
+one-rule saves of 521 rules take about 5.5 MB, mostly the snapshot every 100 versions (68 KB as stored). A save that
+gives every rule a new id logs 1.4 times the document (255 KB of JSON).
 
 **Only part of the e2e suite is run with the flag on.** The smoke set, `test_sessions.py` and `test_live_*.py` pass
 with `DSP_LIVE_COLLAB=true` (REST-only stories skipped when live); the rest is run with the flag off, and some of it
