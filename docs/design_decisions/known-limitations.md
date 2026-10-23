@@ -141,8 +141,8 @@ Workaround: accept Arrow bodies only from trusted callers, or serve JSON.
 
 ## Tree editor live editing (`DSP_LIVE_COLLAB`)
 
-**The log keeps 5000 versions and 30 days per project** (`DSP_LIVE_LOG_KEEP_VERSIONS`, `DSP_LIVE_LOG_KEEP_DAYS`): an
-owner decision still open. A busy project can write 5000 live versions in about an hour, and an offline batch made on
+**The log keeps 5000 versions and 30 days per project** (`DSP_LIVE_LOG_KEEP_VERSIONS`, `DSP_LIVE_LOG_KEEP_DAYS`, the
+owner's defaults). A busy project can write 5000 live versions in about an hour, and an offline batch made on
 an older version is refused (it stays downloadable). The count also caps REST saves, each a whole document (about
 240 KB on 521 rules, so about 1.2 GB per heavily saved project).
 
