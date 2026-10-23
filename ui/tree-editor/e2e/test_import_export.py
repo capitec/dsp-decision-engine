@@ -9,7 +9,7 @@ from playwright.sync_api import Page, expect
 
 import node_ui
 from canonical import as_lines
-from flat_rules_ui import export as export_from_editor
+from flat_rules_ui import export as export_from_editor, wait_until_connected
 from platform_ui import import_project, open_projects
 from seed import create_project, export_document, get_project, list_projects
 from test_flat_rule_params import flat_document
@@ -83,6 +83,7 @@ def test_importing_the_same_file_twice_makes_two_independent_projects(signed_in:
     signed_in.goto("/projects")
     import_project(signed_in, "rules.json", content, name="Second copy")
     expect(signed_in).to_have_url(re.compile(r"/flat-rules/"))
+    wait_until_connected(signed_in)
 
     items = {p["name"]: p["id"] for p in list_projects(signed_in)["items"]}
     assert set(items) == {"First copy", "Second copy"}
@@ -137,6 +138,7 @@ def test_a_521_rule_document_exported_from_the_editor_keeps_every_rule(signed_in
     started = time.monotonic()
     signed_in.goto(f"/flat-rules/{project}")
     expect(signed_in.get_by_role("button", name="Add Rule")).to_be_visible(timeout=60_000)
+    wait_until_connected(signed_in)
 
     exported = export_from_editor(signed_in, tmp_path)
 

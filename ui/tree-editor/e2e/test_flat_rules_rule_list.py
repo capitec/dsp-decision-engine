@@ -6,7 +6,7 @@ import pytest
 from playwright.sync_api import Page, expect
 
 from flat_docs import APPROVE, OUTPUT3, SMALL, decisions_for, document, open_doc, run_frame
-from flat_rules_ui import rename_rule, rule_card, rule_names, save
+from flat_rules_ui import rename_rule, rule_card, rule_names, save, wait_until_connected
 from seed import create_project, export_document, get_project
 
 
@@ -174,6 +174,7 @@ def test_documents_of_many_rules_open_edit_and_save_within_a_bound(signed_in: Pa
     started = time.perf_counter()
     signed_in.goto(f"/flat-rules/{project}")
     expect(signed_in.get_by_test_id("rule-card")).to_have_count(count, timeout=60_000)
+    wait_until_connected(signed_in)
     opened = time.perf_counter() - started
     last = signed_in.get_by_test_id("rule-card").last
     last.scroll_into_view_if_needed()

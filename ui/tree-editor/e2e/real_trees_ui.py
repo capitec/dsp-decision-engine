@@ -25,13 +25,20 @@ def open_project(page: Page, project_id: str, flat: bool, timeout: float = 15_00
 def wait_until_loaded(page: Page, flat: bool, timeout: float = 15_000) -> None:
     """Wait for the editor's Add Rule or Add Node button."""
     expect(page.get_by_role("button", name="Add Rule" if flat else "Add Node")).to_be_visible(timeout=timeout)
+    if flat:
+        flat_rules_ui.wait_until_connected(page)
 
 
 def save(page: Page, flat: bool) -> dict:
-    """Save as it is (the tree editor only saves a change, so move a node first); returns the server's reply."""
+    """Save as it is; returns the server's reply. The tree editor, and a live flat-rule editor, send their form of the
+    document only with an edit, so this first moves a node, or renames a rule and back."""
     if not flat:
         tree_ui.drag(page, items(page, flat).first, 40, 40)
         expect(page.get_by_text("Unsaved changes")).to_be_visible()
+    elif flat_rules_ui.LIVE:
+        name = flat_rules_ui.rule_names(page)[0]
+        flat_rules_ui.rename_rule(page, f"{name} renamed")
+        flat_rules_ui.rename_rule(page, name)
     return flat_rules_ui.save(page)
 
 
