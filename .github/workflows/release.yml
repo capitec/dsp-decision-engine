@@ -203,7 +203,13 @@ jobs:
           if [ -n "$PREV" ]; then
             gh release download "$PREV" --pattern "docs-site.tar.gz" --dir /tmp/prev-docs 2>/dev/null || true
             if [ -f /tmp/prev-docs/docs-site.tar.gz ]; then
-              tar -xzf /tmp/prev-docs/docs-site.tar.gz -C _site
+              mkdir -p /tmp/prev-site
+              tar -xzf /tmp/prev-docs/docs-site.tar.gz -C /tmp/prev-site
+              # Only the earlier versions' folders: the root is this build, so pages it dropped don't linger there.
+              for v in $(jq -r '.[] | select(. != "latest")' /tmp/prev-site/versions.json); do
+                [ -d "/tmp/prev-site/$v" ] && cp -r "/tmp/prev-site/$v" _site/
+              done
+              cp /tmp/prev-site/versions.json _site/
               echo "Restored docs history from $PREV"
             fi
           fi
