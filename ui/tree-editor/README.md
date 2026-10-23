@@ -37,22 +37,21 @@ version is rebuilt by replaying at most 100 versions. An editor reconnecting fro
 gets the whole document.
 
 Edits made while disconnected (a closed socket, or no answer to a ping for about 10 seconds) go back on reconnect as
-one offline batch, after the editor has caught up. The server merges it whole only when none of its paths is equal to,
-inside or above a path someone else changed since the disconnect (unless both left the same value there; two reorders of the rules conflict only when both
-changed the order of the same rules differently) and the merged document has no validation error beyond those the
-stored document or the offline editor's own had (counted by type and message: one more copy of an existing error is
-new; the same error added by each side on its own is not). Otherwise it refuses the whole batch: the editor shows the
-stored document and a banner naming the rules (or nodes) that collided, with Download my version (the offline
-document, shaped like an Export). The merge is validated without holding the project's row lock and committed only if
-no other version came in meanwhile; the third attempt holds the lock throughout. A validator that does not answer
-within 30 s is replaced by a new process, and a batch it was checking is refused (still downloadable). The base
-document is rebuilt from the log (a new project logs its first version, and the migration that adds snapshots logs
-the current version of every project older than that), so a batch made on a version the log no longer keeps is
-refused and stays downloadable. A message is logged at most once per client: a resend is not applied again, and a
-batch names the
-earlier messages it contains so one applied while the editor reconnected is skipped, and one delivered late after
-the batch is not applied again. A batch is not kept across a
-page reload.
+one offline batch, after the editor has caught up. The server merges it whole only when none of its paths is equal
+to, inside or above a path someone else changed since the disconnect (unless both left the same value there; two
+reorders of the rules conflict only when both changed the order of the same rules differently) and the merged
+document has no validation error beyond those the stored document or the offline editor's own had (counted by type
+and message: one more copy of an existing error is new; the same error added by each side on its own is not).
+Otherwise it refuses the whole batch: the editor shows the stored document and a banner naming the rules (or nodes)
+that collided, with Download my version (the offline document, shaped like an Export). The merge is validated without
+holding the project's row lock and committed only if no other version came in meanwhile; the third attempt holds the
+lock throughout. A validator that does not answer within 30 s is replaced by a new process, and a batch it was
+checking is refused (still downloadable). The base document is rebuilt from the log (a new project logs its first
+version, and the migration that adds snapshots logs the current version of every project older than that), so a batch
+made on a version the log no longer keeps is refused and stays downloadable. A message is logged at most once per
+client: a resend is not applied again, and a batch names the earlier messages it contains so one applied while the
+editor reconnected is skipped, and one delivered late after the batch is not applied again. A batch is not kept
+across a page reload.
 
 The socket checks the session and access on every message and every 15 s. A live edit near the session's expiry
 renews it by the same rule as an HTTP request (a ping does not, so an idle open tab still expires), and the server
@@ -142,10 +141,13 @@ cd ../e2e && ./stack.sh up            # Postgres on 55432, backend and UI on htt
 stacks run side by side; temp files and browser profiles go to `E2E_TMPDIR` (`/var/tmp/dtmp-ui-e2e`), not `/tmp`.
 The team tests insert their teams with `psql` in the stack's container and skip without it.
 
-`E2E_NODES=2` starts a second backend on `E2E_PORT+1` (same Postgres, so sessions are shared), `DSP_LIVE_COLLAB=true`
-turns live editing on, and `./stack.sh restart` restarts the backends but keeps Postgres. `test_live_collab.py`, `test_live_offline.py` and
-`test_live_node_editor.py` run only on such a stack (`E2E_NODES=2 DSP_LIVE_COLLAB=true ./stack.sh up`); the rest of the suite expects live editing off
-(`test_live_ops_unavailable.py` runs either way).
+`E2E_NODES=2` starts a second backend on `E2E_PORT+1` (same Postgres, so sessions are shared),
+`DSP_LIVE_COLLAB=true` turns live editing on, and `./stack.sh restart` restarts the backends but keeps Postgres.
+`test_live_collab.py`, `test_live_offline.py` and `test_live_node_editor.py` run only on such a stack
+(`E2E_NODES=2 DSP_LIVE_COLLAB=true ./stack.sh up`); `test_live_ops_unavailable.py` runs either way. The smoke set
+and `test_sessions.py` pass with live editing on as well as off: a live Save waits for "Project Saved" instead of the
+REST reply, and a test of a REST-only story is skipped when live, naming the live test that covers it. The rest of
+the suite is run with live editing off.
 
 With docker compose, `docker compose --profile e2e run --rm e2e` runs the whole suite against the dev stack;
 `-e PYTEST_ADDOPTS="-m smoke"` picks a subset. The suite was run under podman with `stack.sh`; the compose route is
