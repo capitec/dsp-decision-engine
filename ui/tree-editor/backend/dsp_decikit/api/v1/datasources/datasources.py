@@ -13,6 +13,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import json
 import asyncio
+import logging
 
 from dsp_decikit.data_sources import DataSourceManager
 from dsp_decikit.data_sources.core import (
@@ -24,6 +25,7 @@ from dsp_decikit.data_sources.core import (
     TablePreviewResponseColumnar,
     TablePreviewDataColumnar,
     DataSourceCapabilities,
+    DataSourceError,
     DataSourceNotFoundError,
     TableNotFoundError,
 )
@@ -31,6 +33,17 @@ from dsp_decikit.settings import settings
 from dsp_decikit.auth.authorization import get_current_user_session
 from dsp_decikit.auth.models import SessionInfo
 from .routes import router
+
+logger = logging.getLogger(__name__)
+
+
+def _failed(what: str, e: Exception) -> str:
+    # A data source's own errors are written for the user (bad SQL, an unsupported file); anything else may carry
+    # hosts or connection strings, so its text goes to the server log only.
+    if isinstance(e, DataSourceError):
+        return f"{what}: {e}"
+    logger.exception(what)
+    return f"{what}: unexpected server error"
 
 
 class UploadResponse(BaseModel):
@@ -95,7 +108,7 @@ async def list_datasource_tables(
     except (DataSourceNotFoundError, TableNotFoundError) as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to list tables: {e}")
+        raise HTTPException(status_code=500, detail=_failed("Failed to list tables", e))
 
 
 @router.get("/{datasource_name}/tables/search", response_model=DataSourceSearchResponse)
@@ -115,7 +128,7 @@ async def search_datasource_tables(
     except (DataSourceNotFoundError, TableNotFoundError) as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to search tables: {e}")
+        raise HTTPException(status_code=500, detail=_failed("Failed to search tables", e))
 
 
 @router.get(
@@ -138,7 +151,7 @@ async def get_table_details(
     except (DataSourceNotFoundError, TableNotFoundError) as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get table details: {e}")
+        raise HTTPException(status_code=500, detail=_failed("Failed to get table details", e))
 
 
 @router.get(
@@ -175,7 +188,7 @@ async def preview_table_data(
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Failed to preview table data: {e}"
+            status_code=500, detail=_failed("Failed to preview table data", e)
         )
 
 
@@ -217,7 +230,7 @@ async def preview_table_data_columnar(
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Failed to preview table data: {e}"
+            status_code=500, detail=_failed("Failed to preview table data", e)
         )
 
 
@@ -267,7 +280,7 @@ async def preview_table_data_stream(
         except (DataSourceNotFoundError, TableNotFoundError) as e:
             yield f"data: {json.dumps({'type': 'error', 'error': str(e), 'error_type': 'not_found'})}\n\n"
         except Exception as e:
-            yield f"data: {json.dumps({'type': 'error', 'error': f'Failed to preview table data: {e}'})}\n\n"
+            yield f"data: {json.dumps({'type': 'error', 'error': _failed('Failed to preview table data', e)})}\n\n"
 
     return StreamingResponse(
         generate_preview_stream(),
@@ -316,7 +329,7 @@ async def upload_file_to_datasource(
     except HTTPException:
         raise
     except Exception as e:
-        return UploadResponse(success=False, message=f"Failed to upload file: {e}")
+        return UploadResponse(success=False, message=_failed("Failed to upload file", e))
 
 
 @router.post("/create-view", response_model=UploadResponse)
@@ -378,7 +391,7 @@ async def create_view_from_sql(
     except HTTPException:
         raise
     except Exception as e:
-        return UploadResponse(success=False, message=f"Failed to create view: {e}")
+        return UploadResponse(success=False, message=_failed("Failed to create view", e))
 
 
 @router.post(
@@ -434,7 +447,7 @@ async def preview_sql_query(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to preview query: {e}")
+        raise HTTPException(status_code=500, detail=_failed("Failed to preview query", e))
 
 
 # Multipart upload endpoints for large files
@@ -495,7 +508,7 @@ async def initiate_multipart_upload(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to initiate upload: {e}")
+        raise HTTPException(status_code=500, detail=_failed("Failed to initiate upload", e))
 
 
 @router.post("/{datasource_name}/upload/{upload_id}/chunk/{chunk_number}")
@@ -522,7 +535,7 @@ async def upload_chunk(
         return ChunkUploadResponse(
             chunk_number=chunk_number,
             success=False,
-            message=f"Failed to upload chunk: {e}",
+            message=_failed("Failed to upload chunk", e),
         )
 
 
@@ -552,5 +565,5 @@ async def complete_multipart_upload(
 
     except Exception as e:
         return CompleteUploadResponse(
-            success=False, message=f"Failed to complete upload: {e}"
+            success=False, message=_failed("Failed to complete upload", e)
         )
