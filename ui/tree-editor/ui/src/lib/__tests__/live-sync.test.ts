@@ -98,7 +98,7 @@ describe('LiveSync', () => {
     const { sync, hooks, socket, type } = setup()
     socket().receive({ type: 'validation', version: 1, errors: [] })
     type(doc('Invalid'))
-    let settled: boolean | undefined
+    let settled: string | undefined
     sync.settle().then((ok) => { settled = ok })
 
     const [sent] = socket().ops()

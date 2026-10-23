@@ -15,7 +15,7 @@ import { toast } from '@/hooks/use-toast';
 import { isStaleSave, staleSaveToast } from '@/lib/stale-save';
 import { apiErrorMessage, sameJson } from '@/lib/utils';
 import { subscribeToStoreActivity } from '@/lib/background-token-refresh';
-import type { LiveStatus } from '@/lib/live-sync';
+import type { LiveStatus, Settled } from '@/lib/live-sync';
 
 // Map decikit's validation_errors onto node highlighting and section flags
 const applyValidationErrors = (errors: ValidationError[], nodes: Array<{ id: string }>) => {
@@ -68,7 +68,7 @@ interface EditorStoreState {
   // (null when the project is saved over REST)
   loaded: ProjectDetailResponse | null;
   live: LiveStatus | null;
-  liveSettle: (() => Promise<boolean>) | null;
+  liveSettle: (() => Promise<Settled>) | null;
 
   // Actions
   setInputSchema: (schema: PolarsSchema | ((prev: PolarsSchema) => PolarsSchema)) => void;
@@ -327,13 +327,15 @@ const editorStore = create<EditorStoreState>()(
       if (state.liveSettle) {
         set({ saving: true });
         const settled = await state.liveSettle();
-        set({ saving: false, ...(settled && { isDirty: false }) });
+        set({ saving: false, ...(settled !== 'unsaved' && { isDirty: false }) });
         const errors = get().validationErrors;
-        toast(!settled
+        toast(settled === 'unsaved'
           ? { title: "Save Failed", description: "The server has not confirmed your edits yet; they are kept and will be sent when it answers.", variant: "destructive" }
-          : errors.length === 0
-            ? { title: "Project Saved", description: "Your changes have been saved successfully." }
-            : { title: "Saved with validation issues", description: applyValidationErrors(errors, get().nodes).message, duration: 10000 });
+          : settled === 'unvalidated'
+            ? { title: "Saved, not validated yet", description: "The server has your edits but has not checked them yet." }
+            : errors.length === 0
+              ? { title: "Project Saved", description: "Your changes have been saved successfully." }
+              : { title: "Saved with validation issues", description: applyValidationErrors(errors, get().nodes).message, duration: 10000 });
         return;
       }
 

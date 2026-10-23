@@ -21,6 +21,8 @@ import { apply, diff, type Json, type Op } from './live-ops'
 
 /** `ended`: the server closed live editing for good (signed out, or access removed). */
 export type LiveStatus = 'connecting' | 'live' | 'reconnecting' | 'ended'
+/** `unvalidated`: the server has every edit but sent no validation of them in time; `unsaved`: it lacks some. */
+export type Settled = 'saved' | 'unvalidated' | 'unsaved'
 /** `parts`: the earlier messages an offline batch contains, `[id, op count]` in order. */
 type Message = { id: string; base: number; ops: Op[]; offline?: boolean; parts?: Array<[string, number]> }
 type Socket = Pick<WebSocket, 'send' | 'close' | 'onopen' | 'onmessage' | 'onclose'>
@@ -134,16 +136,16 @@ export class LiveSync {
     return this.idle() && this.validated === this.version
   }
 
-  /** Push the edits now and wait until the server has them all and has validated the result; false after
+  /** Push the edits now and wait until the server has them all and has validated the result, at most
    * `timeoutMs`. */
-  settle(timeoutMs = 15000): Promise<boolean> {
+  settle(timeoutMs = 15000): Promise<Settled> {
     this.flush()
-    if (this.done()) return Promise.resolve(true)
+    if (this.done()) return Promise.resolve('saved')
     return new Promise((resolve) => {
-      const timeout = setTimeout(() => resolve(false), timeoutMs)
+      const timeout = setTimeout(() => resolve(this.idle() ? 'unvalidated' : 'unsaved'), timeoutMs)
       this.waiters.push(() => {
         clearTimeout(timeout)
-        resolve(true)
+        resolve('saved')
       })
     })
   }

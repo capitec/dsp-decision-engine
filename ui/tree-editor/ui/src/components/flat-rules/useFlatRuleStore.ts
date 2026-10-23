@@ -10,7 +10,7 @@ import { toast } from '@/hooks/use-toast';
 import { isStaleSave, staleSaveToast } from '@/lib/stale-save';
 import { apiErrorMessage, sameJson } from '@/lib/utils';
 import { collectParamRefs } from '@/utils/param-refs';
-import type { LiveStatus } from '@/lib/live-sync';
+import type { LiveStatus, Settled } from '@/lib/live-sync';
 
 interface FlatRuleState {
   // Core data
@@ -48,7 +48,7 @@ interface FlatRuleState {
 
   // Live editing: the connection, and Save's wait for the server (null when the project is saved over REST)
   live: LiveStatus | null;
-  liveSettle: (() => Promise<boolean>) | null;
+  liveSettle: (() => Promise<Settled>) | null;
   
   // Actions
   setTrees: (trees: PrioritizedTree[] | ((prev: PrioritizedTree[]) => PrioritizedTree[])) => void;
@@ -578,12 +578,14 @@ const store = create<FlatRuleState>()(
         const settled = await state.liveSettle();
         set({ saving: false });
         const errors = get().errorCount;
-        toast(!settled
+        toast(settled === 'unsaved'
           ? { title: "Save Failed", description: "The server has not confirmed your edits yet; they are kept and will be sent when it answers.", variant: "destructive" }
-          : errors === 0
-            ? { title: "Project Saved", description: "Your changes have been saved successfully." }
-            : { title: "Saved with validation issues", description: `${errors} issue(s) found. Affected rules are highlighted.`, duration: 10000 });
-        return settled;
+          : settled === 'unvalidated'
+            ? { title: "Saved, not validated yet", description: "The server has your edits but has not checked them yet." }
+            : errors === 0
+              ? { title: "Project Saved", description: "Your changes have been saved successfully." }
+              : { title: "Saved with validation issues", description: `${errors} issue(s) found. Affected rules are highlighted.`, duration: 10000 });
+        return settled !== 'unsaved';
       }
 
       try {
