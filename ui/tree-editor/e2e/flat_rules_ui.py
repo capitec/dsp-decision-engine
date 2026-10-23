@@ -95,7 +95,10 @@ def save(page: Page) -> dict:
     """Click Save; returns the server's reply (with `validation_errors`). In an editor editing live, Save waits until
     the server has every edit, and the reply is the project as stored then."""
     button = page.get_by_role("button", name="Save", exact=True)
-    if not page.get_by_test_id("live-status").count():
+    live = page.get_by_test_id("live-status").count()
+    assert LIVE or not live, "the editor is editing live on a stack with live editing off"
+    # On a live stack a browser without the wasm still saves over REST, so the page decides, not LIVE.
+    if not live:
         with page.expect_response(lambda r: r.request.method == "PUT" and "/api/v1/projects/" in r.url) as reply:
             button.click()
         assert reply.value.ok, reply.value.text()
