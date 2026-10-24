@@ -1,0 +1,16 @@
+{
+  "type": "effective_versions",
+  "family": "fraud.rule_set",
+  "output": "rule_set_version",
+  "versions": [
+    {
+      "version_id": "RS-2025.11",
+      "effective_from": "2025-11-01",
+      "effective_to": "2026-01-01"
+    },
+    {
+      "version_id": "RS-2026.01",
+      "effective_from": "2026-01-01"
+    }
+  ]
+}

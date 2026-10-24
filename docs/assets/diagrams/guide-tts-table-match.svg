@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 400" font-family="system-ui, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4b5563"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="900" height="400" fill="#ffffff"/>
+
+  <!-- record -->
+  <rect x="10" y="130" width="150" height="100" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="24" y="158" font-size="16" font-weight="600" fill="#14532d">record</text>
+  <text x="24" y="186" font-size="15" fill="#14532d">grade "B"</text>
+  <text x="24" y="210" font-size="15" fill="#14532d">amount 80000</text>
+  <path d="M160,180 L182,180" fill="none" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- table -->
+  <rect x="186" y="16" width="520" height="368" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="200" y="42" font-size="16" font-weight="600" fill="#1e3a8a">rows in order: grade eq AND amount between</text>
+  <text x="200" y="74" font-size="14" font-weight="600" fill="#1e3a8a">#</text>
+  <text x="222" y="74" font-size="14" font-weight="600" fill="#1e3a8a">grade</text>
+  <text x="275" y="74" font-size="14" font-weight="600" fill="#1e3a8a">amt_lo</text>
+  <text x="342" y="74" font-size="14" font-weight="600" fill="#1e3a8a">amt_hi</text>
+  <text x="409" y="74" font-size="14" font-weight="600" fill="#1e3a8a">rate</text>
+  <text x="459" y="74" font-size="14" font-weight="600" fill="#1e3a8a">tier</text>
+  <text x="520" y="74" font-size="14" font-weight="600" fill="#1e3a8a">for this record</text>
+  <line x1="200" y1="84" x2="692" y2="84" stroke="#2563eb" stroke-width="1"/>
+
+  <rect x="194" y="92" width="504" height="58" rx="6" fill="#ffffff" stroke="#93c5fd" stroke-width="1"/>
+  <text x="200" y="114" font-size="14" fill="#1e3a8a">0</text>
+  <text x="222" y="114" font-size="14" fill="#1e3a8a">A</text>
+  <text x="275" y="114" font-size="14" fill="#1e3a8a">None</text>
+  <text x="342" y="114" font-size="14" fill="#1e3a8a">50000</text>
+  <text x="409" y="114" font-size="14" fill="#1e3a8a">0.115</text>
+  <text x="459" y="114" font-size="14" fill="#1e3a8a">prime</text>
+  <text x="520" y="114" font-size="14" fill="#6b7280">grade differs</text>
+  <text x="200" y="138" font-size="14" fill="#1e3a8a">1</text>
+  <text x="222" y="138" font-size="14" fill="#1e3a8a">A</text>
+  <text x="275" y="138" font-size="14" fill="#1e3a8a">50000</text>
+  <text x="342" y="138" font-size="14" fill="#1e3a8a">None</text>
+  <text x="409" y="138" font-size="14" fill="#1e3a8a">0.105</text>
+  <text x="459" y="138" font-size="14" fill="#1e3a8a">prime</text>
+  <text x="520" y="138" font-size="14" fill="#6b7280">grade differs</text>
+
+  <rect x="194" y="158" width="504" height="60" rx="6" fill="#ffffff" stroke="#93c5fd" stroke-width="1"/>
+  <text x="200" y="180" font-size="14" fill="#1e3a8a">2</text>
+  <text x="222" y="180" font-size="14" fill="#1e3a8a">B</text>
+  <text x="275" y="180" font-size="14" fill="#1e3a8a">None</text>
+  <text x="342" y="180" font-size="14" fill="#1e3a8a">50000</text>
+  <text x="409" y="180" font-size="14" fill="#1e3a8a">0.165</text>
+  <text x="459" y="180" font-size="14" fill="#1e3a8a">near</text>
+  <text x="520" y="180" font-size="14" fill="#6b7280">above the band</text>
+  <rect x="196" y="188" width="500" height="26" rx="4" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="200" y="206" font-size="14" fill="#134e4a">3</text>
+  <text x="222" y="206" font-size="14" fill="#134e4a">B</text>
+  <text x="275" y="206" font-size="14" fill="#134e4a">50000</text>
+  <text x="342" y="206" font-size="14" fill="#134e4a">None</text>
+  <text x="409" y="206" font-size="14" fill="#134e4a">0.155</text>
+  <text x="459" y="206" font-size="14" fill="#134e4a">near</text>
+  <text x="520" y="206" font-size="14" font-weight="600" fill="#134e4a">first match</text>
+
+  <text x="200" y="250" font-size="14" fill="#1e3a8a">Rows sharing their eq values (one grade) form a ladder.</text>
+  <text x="200" y="272" font-size="14" fill="#1e3a8a">Its first row may leave amt_lo None, its last amt_hi None;</text>
+  <text x="200" y="294" font-size="14" fill="#1e3a8a">each upper must equal the next lower unless allow_gaps.</text>
+  <text x="200" y="330" font-size="14" fill="#1e3a8a">Grade "C" or a null input matches no row,</text>
+  <text x="200" y="352" font-size="14" fill="#1e3a8a">so its outputs take the default.</text>
+
+  <!-- outputs -->
+  <path d="M706,201 L726,201" fill="none" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+  <rect x="730" y="150" width="160" height="100" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="744" y="176" font-size="16" font-weight="600" fill="#14532d">outputs</text>
+  <text x="744" y="204" font-size="15" fill="#14532d">rate 0.155</text>
+  <text x="744" y="228" font-size="15" fill="#14532d">tier "near"</text>
+
+  <rect x="730" y="290" width="160" height="70" rx="10" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text x="744" y="316" font-size="16" font-weight="600" fill="#1f2937">default</text>
+  <text x="744" y="340" font-size="14" fill="#1f2937">None, "decline"</text>
+</svg>

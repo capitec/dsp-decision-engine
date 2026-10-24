@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 500" font-family="system-ui, sans-serif">
+  <defs>
+    <marker id="kd-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#374151"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1000" height="500" fill="#ffffff"/>
+
+  <!-- arguments -->
+  <text x="20" y="28" font-size="15" font-weight="600" fill="#14532d">Arguments (tuples)</text>
+  <rect x="20" y="44" width="215" height="44" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="32" y="64" font-size="14" fill="#14532d">n</text>
+  <text x="32" y="81" font-size="13" fill="#14532d">row count (int64)</text>
+  <rect x="20" y="100" width="215" height="44" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="32" y="120" font-size="14" fill="#14532d">cols</text>
+  <text x="32" y="137" font-size="13" fill="#14532d">one read-only array per input</text>
+  <rect x="20" y="156" width="215" height="44" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="32" y="176" font-size="14" fill="#14532d">valids</text>
+  <text x="32" y="193" font-size="13" fill="#14532d">bool mask per OPTIONAL input</text>
+  <rect x="20" y="212" width="215" height="44" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="32" y="232" font-size="14" fill="#14532d">params</text>
+  <text x="32" y="249" font-size="13" fill="#14532d">bundles and consts, flattened</text>
+  <rect x="20" y="268" width="215" height="44" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="32" y="288" font-size="14" fill="#14532d">flats</text>
+  <text x="32" y="305" font-size="13" fill="#14532d">lo, hi, field arrays per Columnar</text>
+  <rect x="20" y="324" width="215" height="44" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="32" y="344" font-size="14" fill="#14532d">sinks</text>
+  <text x="32" y="361" font-size="13" fill="#14532d">growable buffers (Sink)</text>
+
+  <!-- kernel -->
+  <rect x="275" y="18" width="445" height="465" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="292" y="44" font-size="14" font-weight="600" fill="#134e4a">njit(nogil=True): run(n, cols, valids, params,</text>
+  <text x="292" y="62" font-size="14" font-weight="600" fill="#134e4a">flats, sinks, outs)</text>
+  <text x="292" y="86" font-size="13" fill="#134e4a">for i in range(n): body(..., i)   (one intrinsic)</text>
+
+  <rect x="295" y="102" width="405" height="62" rx="8" fill="#ffffff" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="308" y="124" font-size="13" fill="#134e4a">load(source): COL cols[j][i], OPT value or None,</text>
+  <text x="308" y="143" font-size="13" fill="#134e4a">PAR params[p], RAG row slice, SINK, VAR, DEC</text>
+
+  <rect x="295" y="184" width="405" height="40" rx="8" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+  <text x="308" y="209" font-size="13" fill="#7c2d00">call 0: disposable_income(COL 0, COL 1)</text>
+  <rect x="295" y="244" width="405" height="40" rx="8" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+  <text x="308" y="269" font-size="13" fill="#7c2d00">call 1: affordability(RES 0.0, COL 2)</text>
+  <rect x="295" y="304" width="405" height="40" rx="8" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+  <text x="308" y="329" font-size="13" fill="#7c2d00">call 2: approved(RES 1.0, PAR 0)</text>
+  <line x1="497" y1="164" x2="497" y2="182" stroke="#374151" stroke-width="1.5" marker-end="url(#kd-arrow)"/>
+  <line x1="497" y1="224" x2="497" y2="242" stroke="#374151" stroke-width="1.5" marker-end="url(#kd-arrow)"/>
+  <line x1="497" y1="284" x2="497" y2="302" stroke="#374151" stroke-width="1.5" marker-end="url(#kd-arrow)"/>
+  <text x="512" y="238" font-size="12" fill="#134e4a">results stay SSA values</text>
+
+  <rect x="295" y="364" width="405" height="62" rx="8" fill="#ffffff" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="308" y="386" font-size="13" fill="#134e4a">store: outs[k][i] = value; a T | None output</text>
+  <text x="308" y="405" font-size="13" fill="#134e4a">also writes its validity into a mask after outs</text>
+  <line x1="497" y1="344" x2="497" y2="362" stroke="#374151" stroke-width="1.5" marker-end="url(#kd-arrow)"/>
+  <text x="292" y="456" font-size="13" fill="#134e4a">affordability (RES 1.0) is never stored: nothing</text>
+  <text x="292" y="474" font-size="13" fill="#134e4a">outside this kernel reads it.</text>
+
+  <!-- outputs -->
+  <text x="760" y="28" font-size="15" font-weight="600" fill="#14532d">outs (preallocated)</text>
+  <rect x="760" y="352" width="220" height="44" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="772" y="372" font-size="14" fill="#14532d">outs[0]: float64</text>
+  <text x="772" y="389" font-size="13" fill="#14532d">disposable_income</text>
+  <rect x="760" y="408" width="220" height="44" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="772" y="428" font-size="14" fill="#14532d">outs[1]: bool</text>
+  <text x="772" y="445" font-size="13" fill="#14532d">approved</text>
+  <rect x="760" y="44" width="220" height="80" rx="8" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="772" y="66" font-size="13" fill="#1f2937">Kernel.run writes each</text>
+  <text x="772" y="84" font-size="13" fill="#1f2937">array to values[v.id] and</text>
+  <text x="772" y="102" font-size="13" fill="#1f2937">each mask to valid[v.id];</text>
+  <text x="772" y="120" font-size="13" fill="#1f2937">the runner stores them.</text>
+  <line x1="870" y1="350" x2="870" y2="126" stroke="#374151" stroke-width="1.5" marker-end="url(#kd-arrow)"/>
+
+  <!-- arrows in/out -->
+  <line x1="235" y1="190" x2="293" y2="140" stroke="#374151" stroke-width="1.5" marker-end="url(#kd-arrow)"/>
+  <line x1="700" y1="395" x2="758" y2="374" stroke="#374151" stroke-width="1.5" marker-end="url(#kd-arrow)"/>
+  <line x1="700" y1="405" x2="758" y2="428" stroke="#374151" stroke-width="1.5" marker-end="url(#kd-arrow)"/>
+</svg>

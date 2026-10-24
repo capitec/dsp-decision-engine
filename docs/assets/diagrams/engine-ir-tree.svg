@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 470" font-family="system-ui, sans-serif">
+  <rect x="0" y="0" width="1000" height="470" fill="#ffffff"/>
+  <g stroke="#6b7280" stroke-width="1.5" fill="none">
+    <path d="M500 78 L165 132"/>
+    <path d="M500 78 L500 132"/>
+    <path d="M500 78 L835 132"/>
+    <path d="M500 214 L265 290"/>
+    <path d="M500 214 L510 290"/>
+    <path d="M500 214 L755 290"/>
+  </g>
+  <text x="258" y="262" font-size="13" fill="#4b5563">condition</text>
+  <text x="514" y="262" font-size="13" fill="#4b5563">arm 0 (True)</text>
+  <text x="700" y="272" font-size="13" fill="#4b5563">arm 1 (False)</text>
+
+  <!-- root -->
+  <rect x="370" y="18" width="260" height="60" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="500" y="42" font-size="14" font-weight="600" fill="#1e3a8a" text-anchor="middle">SequenceNode</text>
+  <text x="500" y="64" font-size="14" fill="#1e3a8a" text-anchor="middle">credit</text>
+
+  <!-- level 1 -->
+  <rect x="20" y="132" width="290" height="82" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="36" y="154" font-size="14" font-weight="600" fill="#1e3a8a">CallNode scalar</text>
+  <text x="36" y="174" font-size="13" fill="#1e3a8a">credit/disposable_income</text>
+  <text x="36" y="196" font-size="13" fill="#1e3a8a">net_income, expenses → disposable_income</text>
+
+  <rect x="355" y="132" width="290" height="82" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="371" y="154" font-size="14" font-weight="600" fill="#1e3a8a">BranchNode</text>
+  <text x="371" y="174" font-size="13" fill="#1e3a8a">credit/by_employment</text>
+  <text x="371" y="196" font-size="13" fill="#1e3a8a">modifies = ("limit",)</text>
+
+  <rect x="690" y="132" width="290" height="82" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="706" y="154" font-size="14" font-weight="600" fill="#1e3a8a">CallNode scalar</text>
+  <text x="706" y="174" font-size="13" fill="#1e3a8a">credit/affordable</text>
+  <text x="706" y="196" font-size="13" fill="#1e3a8a">disposable_income, instalment → affordable</text>
+
+  <!-- level 2 -->
+  <rect x="150" y="290" width="230" height="104" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="164" y="312" font-size="14" font-weight="600" fill="#1e3a8a">CallNode scalar</text>
+  <text x="164" y="332" font-size="13" fill="#1e3a8a">…/by_employment/salaried</text>
+  <text x="164" y="354" font-size="13" fill="#1e3a8a">employment_type → salaried</text>
+
+  <rect x="395" y="290" width="230" height="104" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="409" y="312" font-size="14" font-weight="600" fill="#1e3a8a">CallNode scalar</text>
+  <text x="409" y="332" font-size="13" fill="#1e3a8a">…/salaried_limit</text>
+  <text x="409" y="354" font-size="13" fill="#1e3a8a">disposable_income → limit</text>
+  <rect x="409" y="364" width="202" height="22" rx="8" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+  <text x="418" y="380" font-size="13" fill="#7c2d00">param multiple = 3.0</text>
+
+  <rect x="640" y="290" width="230" height="104" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="654" y="312" font-size="14" font-weight="600" fill="#1e3a8a">CallNode scalar</text>
+  <text x="654" y="332" font-size="13" fill="#1e3a8a">…/other_limit</text>
+  <text x="654" y="354" font-size="13" fill="#1e3a8a">disposable_income → limit</text>
+  <rect x="654" y="364" width="202" height="22" rx="8" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+  <text x="663" y="380" font-size="13" fill="#7c2d00">param multiple = 1.5</text>
+
+  <rect x="706" y="226" width="270" height="24" rx="8" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+  <text x="716" y="243" font-size="13" fill="#7c2d00">param min_ratio = 1.2, shared_key</text>
+
+  <text x="20" y="436" font-size="13" fill="#4b5563">Each box is one node; its Origin.path is the second line. "…" abbreviates credit/by_employment.</text>
+  <text x="20" y="456" font-size="13" fill="#4b5563">The nodes are what to_ir(credit) returns for the example on this page, read from iter_nodes.</text>
+</svg>

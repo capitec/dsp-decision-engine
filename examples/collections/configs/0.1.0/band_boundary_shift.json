@@ -1,0 +1,28 @@
+{
+  "type": "adjustment_stack",
+  "name": "band_boundary_shift",
+  "target": "collections_band_boundary",
+  "set_id": "AS-COLL-SCORE-2026.09",
+  "base_field": "band_edge_origin",
+  "adjusted_output": "band_edge_shift",
+  "adjustments": [
+    {
+      "adjustment_id": "ADJ-COLL-SCORE-004",
+      "kind": "band_boundary_shift",
+      "target": "collections_band_boundary",
+      "effect": {
+        "op": "add",
+        "value": 0.03
+      },
+      "scope": {},
+      "stack_position": 1,
+      "owner": "Collections Strategy",
+      "approval_reference": "CCF-2026-028",
+      "rationale": "Move the band 3/4 edge up by 0.03 of roll probability",
+      "effective_from": "2026-05-01",
+      "effective_to": "2026-11-01",
+      "review_date": "2026-10-01",
+      "tighten_only": false
+    }
+  ]
+}

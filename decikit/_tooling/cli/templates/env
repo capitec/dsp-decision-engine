@@ -1,0 +1,3 @@
+DECIKIT_API__PIPELINE={{name}}.pipeline:build
+DECIKIT_API__HANDLER={{name}}.inference:Handler
+DECIKIT_CONFIG__BASEPATH=configs

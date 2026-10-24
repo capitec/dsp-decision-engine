@@ -1,0 +1,177 @@
+{
+  "version": "2",
+  "name": "premium-sweep",
+  "description": "Raise the unsecured arm's premium and see how rates, payments and approvals move.",
+  "flow": {
+    "entry": "example_projects.experiments.loan_pipeline:build",
+    "decikit": ""
+  },
+  "revision": "HEAD",
+  "input": {
+    "path": "applications.parquet"
+  },
+  "scenarios": [
+    {
+      "name": "premium_0.06",
+      "revision": null,
+      "params": {
+        "loans": {
+          "pricing": {
+            "unsecured": {
+              "premium": 0.06
+            }
+          }
+        }
+      },
+      "overrides": {},
+      "at": null,
+      "row": null
+    },
+    {
+      "name": "premium_0.08",
+      "revision": null,
+      "params": {
+        "loans": {
+          "pricing": {
+            "unsecured": {
+              "premium": 0.08
+            }
+          }
+        }
+      },
+      "overrides": {},
+      "at": null,
+      "row": null
+    }
+  ],
+  "metrics": [
+    {
+      "type": "divergence",
+      "name": "",
+      "nodes": null,
+      "node_id": null,
+      "column": "approved",
+      "rtol": 1e-6,
+      "atol": 1e-9,
+      "samples": 5
+    },
+    {
+      "type": "histogram",
+      "name": "payment",
+      "nodes": null,
+      "node_id": null,
+      "column": "payment",
+      "bins": 20,
+      "range": [
+        0.0,
+        400.0
+      ],
+      "edges": null
+    },
+    {
+      "type": "histogram",
+      "name": "unsecured_rate",
+      "nodes": null,
+      "node_id": "03ed37e0af6b",
+      "column": "rate",
+      "bins": 20,
+      "range": [
+        0.1,
+        0.35
+      ],
+      "edges": null
+    },
+    {
+      "type": "branch_flows",
+      "name": "",
+      "nodes": "*",
+      "node_id": null,
+      "outcome": "approved"
+    }
+  ],
+  "plots": [
+    {
+      "type": "changes",
+      "metric": "divergence",
+      "name": ""
+    },
+    {
+      "type": "distribution",
+      "metric": "unsecured_rate",
+      "name": ""
+    },
+    {
+      "type": "distribution",
+      "metric": "payment",
+      "name": ""
+    },
+    {
+      "type": "sankey",
+      "metric": "branch_flows",
+      "name": "flows_premium_0.08",
+      "scenario": "premium_0.08"
+    }
+  ],
+  "batch_size": 5000,
+  "determinism": true,
+  "report": {
+    "title": "Unsecured premium sweep",
+    "blocks": [
+      {
+        "type": "overview"
+      },
+      {
+        "type": "text",
+        "markdown": "Raising the **unsecured premium** only reprices loans without collateral; this shows how far that moves their rates, everyone's payments, and who is approved."
+      },
+      {
+        "type": "section",
+        "title": "Approvals",
+        "blocks": [
+          {
+            "type": "row",
+            "blocks": [
+              {
+                "type": "chart",
+                "plot": "divergence"
+              },
+              {
+                "type": "table",
+                "metric": "divergence"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "section",
+        "title": "Rates and payments",
+        "blocks": [
+          {
+            "type": "row",
+            "blocks": [
+              {
+                "type": "chart",
+                "plot": "unsecured_rate"
+              },
+              {
+                "type": "chart",
+                "plot": "payment"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "section",
+        "title": "Who goes where",
+        "blocks": [
+          {
+            "type": "chart",
+            "plot": "flows_premium_0.08"
+          }
+        ]
+      }
+    ]
+  }
+}

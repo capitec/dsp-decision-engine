@@ -1,0 +1,18 @@
+[build-system]
+requires = ["maturin>=1.5,<2"]
+build-backend = "maturin"
+
+[project]
+name = "merge-core"
+version = "0.1.0"
+requires-python = ">=3.10"
+description = "Live-sync diff/apply/merge core for the tree editor"
+
+[tool.maturin]
+features = ["python"]
+python-source = "python"
+module-name = "merge_core._native"
+
+# Without this uv would rebuild only when pyproject.toml changes, not when the Rust sources do.
+[tool.uv]
+cache-keys = [{ file = "pyproject.toml" }, { file = "Cargo.toml" }, { file = "Cargo.lock" }, { file = "src/**/*.rs" }, { file = "python/**/*.py" }]

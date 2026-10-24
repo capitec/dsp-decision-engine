@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 400" font-family="system-ui, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4b5563"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1000" height="400" fill="#ffffff"/>
+
+  <!-- input rows -->
+  <text x="125" y="30" text-anchor="middle" font-size="16" font-weight="600" fill="#14532d">rows in</text>
+  <rect x="20" y="50" width="210" height="76" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="125" y="78" text-anchor="middle" font-size="15" fill="#14532d">row 0: age 30, score 700</text>
+  <text x="125" y="104" text-anchor="middle" font-size="15" fill="#14532d">income 1000, limit 250</text>
+  <rect x="20" y="152" width="210" height="76" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="125" y="180" text-anchor="middle" font-size="15" fill="#14532d">row 1: age 16, score 720</text>
+  <text x="125" y="206" text-anchor="middle" font-size="15" fill="#14532d">income 800, limit 500</text>
+  <rect x="20" y="254" width="210" height="76" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="125" y="282" text-anchor="middle" font-size="15" fill="#14532d">row 2: age 45, score 550</text>
+  <text x="125" y="308" text-anchor="middle" font-size="15" fill="#14532d">income 2000, limit 750</text>
+
+  <!-- condition -->
+  <rect x="270" y="140" width="170" height="100" rx="10" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+  <text x="355" y="170" text-anchor="middle" font-size="16" font-weight="600" fill="#7c2d00">condition</text>
+  <text x="355" y="194" text-anchor="middle" font-size="15" fill="#7c2d00">eligible(age,</text>
+  <text x="355" y="216" text-anchor="middle" font-size="15" fill="#7c2d00">bureau_score)</text>
+  <line x1="230" y1="88" x2="268" y2="160" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="230" y1="190" x2="266" y2="190" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="230" y1="292" x2="268" y2="222" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- arms -->
+  <rect x="500" y="40" width="250" height="120" rx="10" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+  <text x="625" y="68" text-anchor="middle" font-size="16" font-weight="600" fill="#7c2d00">arm 0: full_limit</text>
+  <text x="625" y="94" text-anchor="middle" font-size="15" fill="#7c2d00">runs on row 0 only</text>
+  <text x="625" y="118" text-anchor="middle" font-size="15" fill="#7c2d00">limit = income x multiple</text>
+  <text x="625" y="142" text-anchor="middle" font-size="15" fill="#7c2d00">= 3000</text>
+
+  <rect x="500" y="220" width="250" height="120" rx="10" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text x="625" y="248" text-anchor="middle" font-size="16" font-weight="600" fill="#1f2937">arm 1: no arm given</text>
+  <text x="625" y="274" text-anchor="middle" font-size="15" fill="#1f2937">rows 1 and 2 run nothing</text>
+  <text x="625" y="298" text-anchor="middle" font-size="15" fill="#1f2937">limit is not written,</text>
+  <text x="625" y="322" text-anchor="middle" font-size="15" fill="#1f2937">so the earlier value stands</text>
+
+  <line x1="440" y1="170" x2="496" y2="110" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="452" y="128" font-size="14" fill="#1f2937">true</text>
+  <line x1="440" y1="210" x2="496" y2="270" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="452" y="262" font-size="14" fill="#1f2937">false</text>
+
+  <!-- merge -->
+  <rect x="790" y="40" width="190" height="300" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="885" y="68" text-anchor="middle" font-size="16" font-weight="600" fill="#1e3a8a">merge</text>
+  <text x="885" y="92" text-anchor="middle" font-size="14" fill="#1e3a8a">modifies=["limit"]</text>
+  <text x="885" y="150" text-anchor="middle" font-size="15" fill="#1e3a8a">row 0: limit 3000</text>
+  <text x="885" y="190" text-anchor="middle" font-size="15" fill="#1e3a8a">row 1: limit 500</text>
+  <text x="885" y="230" text-anchor="middle" font-size="15" fill="#1e3a8a">row 2: limit 750</text>
+  <text x="885" y="290" text-anchor="middle" font-size="14" fill="#1e3a8a">anything else an arm</text>
+  <text x="885" y="312" text-anchor="middle" font-size="14" fill="#1e3a8a">writes stays inside</text>
+  <line x1="750" y1="100" x2="786" y2="140" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="750" y1="280" x2="786" y2="210" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+</svg>

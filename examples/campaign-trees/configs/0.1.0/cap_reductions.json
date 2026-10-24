@@ -1,0 +1,35 @@
+{
+  "type": "adjustment_stack",
+  "name": "cap_reduction",
+  "target": "tier_ceiling",
+  "set_id": "AS-CAMPAIGN23",
+  "adjusted_output": "advertised_tier_ceiling",
+  "unadjusted_output": "tier_ceiling_before_cap_overlay",
+  "scope_types": {
+    "campaign_id": "int",
+    "offer_tier_code": "int"
+  },
+  "adjustments": [
+    {
+      "adjustment_id": "ADJ-C23-CAP-001",
+      "kind": "cap_adjustment",
+      "target": "tier_ceiling",
+      "effect": {
+        "op": "multiply",
+        "value": 0.8
+      },
+      "scope": {
+        "campaign_id": 23,
+        "offer_tier_code": 1
+      },
+      "stack_position": 1,
+      "owner": "Credit Risk Policy",
+      "approval_reference": "CRC-2026-041",
+      "rationale": "Tier A funding constrained for the October cycle; 20% off while reviewed",
+      "effective_from": "2026-10-01",
+      "effective_to": "2026-11-01",
+      "review_date": "2026-10-25",
+      "tighten_only": true
+    }
+  ]
+}

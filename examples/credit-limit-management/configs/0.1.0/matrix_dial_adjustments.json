@@ -1,0 +1,28 @@
+{
+  "type": "adjustment_stack",
+  "name": "apply_matrix_multiplier_excess_adjustments",
+  "target": "matrix_multiplier_excess",
+  "set_id": "AS-07-2026.09",
+  "adjusted_output": "matrix_multiplier_excess_adjusted",
+  "unadjusted_output": "matrix_multiplier_excess_unadjusted",
+  "adjustments": [
+    {
+      "adjustment_id": "ADJ-07-DIAL-2026-03",
+      "kind": "cap_adjustment",
+      "target": "matrix_multiplier_excess",
+      "effect": {
+        "op": "multiply",
+        "value": 0.8
+      },
+      "scope": {},
+      "stack_position": 1,
+      "owner": "Credit Risk Policy",
+      "approval_reference": "CRC-2026-088",
+      "rationale": "Funding environment tightened; run the programme at 80% of the matrix this cycle",
+      "effective_from": "2026-09-01",
+      "effective_to": "2026-11-01",
+      "review_date": "2026-10-15",
+      "tighten_only": true
+    }
+  ]
+}

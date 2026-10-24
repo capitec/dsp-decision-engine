@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 430" font-family="system-ui, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4b5563"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="900" height="430" fill="#ffffff"/>
+
+  <!-- project tree -->
+  <rect x="10" y="16" width="330" height="400" rx="10" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="26" y="42" font-size="16" font-weight="600" fill="#1f2937">credit_risk/  (the package)</text>
+
+  <rect x="26" y="58" width="298" height="50" rx="8" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+  <text x="38" y="80" font-size="15" font-weight="600" fill="#7c2d00">pipeline.py</text>
+  <text x="38" y="99" font-size="13" fill="#7c2d00">steps, and build() returning the pipeline</text>
+
+  <rect x="26" y="116" width="298" height="50" rx="8" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="38" y="138" font-size="15" font-weight="600" fill="#4c1d95">inference.py</text>
+  <text x="38" y="157" font-size="13" fill="#4c1d95">Handler(RequestHandler), *_fn overrides</text>
+
+  <rect x="26" y="174" width="298" height="70" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="38" y="196" font-size="15" font-weight="600" fill="#14532d">configs/0.0.0/, 0.1.0/, ...</text>
+  <text x="38" y="215" font-size="13" fill="#14532d">params.json and step documents,</text>
+  <text x="38" y="233" font-size="13" fill="#14532d">one immutable folder per version</text>
+
+  <rect x="26" y="252" width="298" height="50" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="38" y="274" font-size="15" font-weight="600" fill="#14532d">sample_request.json</text>
+  <text x="38" y="293" font-size="13" fill="#14532d">one request: tests and warm-up</text>
+
+  <rect x="26" y="310" width="298" height="50" rx="8" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="38" y="332" font-size="15" font-weight="600" fill="#4c1d95">.env</text>
+  <text x="38" y="351" font-size="13" fill="#4c1d95">DECIKIT_* settings for build and serve</text>
+
+  <rect x="26" y="368" width="298" height="38" rx="8" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+  <text x="38" y="392" font-size="15" font-weight="600" fill="#7c2d00">tests/, conftest.py, README.md</text>
+
+  <!-- build -->
+  <rect x="400" y="40" width="210" height="150" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="416" y="66" font-size="16" font-weight="600" fill="#134e4a">decikit build</text>
+  <text x="416" y="92" font-size="14" fill="#134e4a">import build()</text>
+  <text x="416" y="114" font-size="14" fill="#134e4a">load latest version</text>
+  <text x="416" y="136" font-size="14" fill="#134e4a">validate params</text>
+  <text x="416" y="158" font-size="14" fill="#134e4a">warm every kernel</text>
+  <text x="416" y="180" font-size="14" fill="#134e4a">record the CPU target</text>
+
+  <!-- serve -->
+  <rect x="400" y="230" width="210" height="176" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="416" y="256" font-size="16" font-weight="600" fill="#4c1d95">decikit serve</text>
+  <text x="416" y="282" font-size="14" fill="#4c1d95">per worker:</text>
+  <text x="416" y="304" font-size="14" fill="#4c1d95">construct Handler</text>
+  <text x="416" y="326" font-size="14" fill="#4c1d95">stage() + activate()</text>
+  <text x="416" y="348" font-size="14" fill="#4c1d95">the latest version</text>
+  <text x="416" y="376" font-size="14" fill="#4c1d95">/ping answers 200</text>
+  <text x="416" y="396" font-size="14" fill="#4c1d95">once one is active</text>
+
+  <path d="M340,120 L396,120" fill="none" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+  <path d="M340,300 L396,300" fill="none" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+  <path d="M505,190 L505,226" fill="none" stroke="#4b5563" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#arr)"/>
+  <text x="514" y="214" font-size="13" fill="#1f2937">numba disk cache</text>
+
+  <!-- http -->
+  <rect x="670" y="230" width="220" height="176" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="686" y="256" font-size="16" font-weight="600" fill="#1e3a8a">HTTP</text>
+  <text x="686" y="284" font-size="14" fill="#1e3a8a">POST /invocations</text>
+  <text x="700" y="306" font-size="13" fill="#1e3a8a">JSON object: run(dict)</text>
+  <text x="700" y="326" font-size="13" fill="#1e3a8a">array, CSV, Parquet,</text>
+  <text x="700" y="346" font-size="13" fill="#1e3a8a">Arrow, JSONL: run()</text>
+  <text x="686" y="378" font-size="14" fill="#1e3a8a">GET /ping</text>
+  <path d="M610,320 L666,320" fill="none" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+</svg>

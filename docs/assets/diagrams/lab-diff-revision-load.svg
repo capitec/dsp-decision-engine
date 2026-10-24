@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 600" font-family="system-ui, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#374151"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1000" height="600" fill="#ffffff"/>
+
+  <!-- lanes -->
+  <rect x="15" y="15" width="440" height="570" rx="10" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="235" y="42" font-size="15" font-weight="600" fill="#1f2937" text-anchor="middle">parent process (live code imported)</text>
+  <rect x="545" y="15" width="440" height="570" rx="10" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="765" y="42" font-size="15" font-weight="600" fill="#1f2937" text-anchor="middle">worker: python -m decikit.lab.diff._worker</text>
+
+  <!-- parent steps -->
+  <rect x="40" y="62" width="390" height="50" rx="9" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="235" y="83" font-size="14" fill="#4c1d95" text-anchor="middle">resolve("HEAD^")</text>
+  <text x="235" y="102" font-size="13" fill="#4c1d95" text-anchor="middle">git rev-parse --verify --quiet HEAD^^{commit}</text>
+
+  <rect x="40" y="132" width="390" height="50" rx="9" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="235" y="153" font-size="14" fill="#4c1d95" text-anchor="middle">materialise(sha)</text>
+  <text x="235" y="172" font-size="13" fill="#4c1d95" text-anchor="middle">git worktree add --detach decikit-revision-*</text>
+
+  <rect x="40" y="202" width="390" height="50" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="235" y="223" font-size="14" fill="#14532d" text-anchor="middle">scratch dir decikit-diff-*</text>
+  <text x="235" y="242" font-size="13" fill="#14532d" text-anchor="middle">input.parquet (only for outputs)</text>
+
+  <rect x="40" y="272" width="390" height="62" rx="9" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="235" y="294" font-size="14" fill="#134e4a" text-anchor="middle">subprocess.run(sys.executable, ...)</text>
+  <text x="235" y="313" font-size="13" fill="#134e4a" text-anchor="middle">stdin: {"entry", "tree", "params", "out", "input"}</text>
+
+  <rect x="40" y="400" width="390" height="62" rx="9" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="235" y="422" font-size="14" fill="#1e3a8a" text-anchor="middle">read the last stdout line as JSON</text>
+  <text x="235" y="441" font-size="13" fill="#1e3a8a" text-anchor="middle">ok: unpickle snapshot, read output.parquet</text>
+
+  <rect x="40" y="482" width="390" height="40" rx="9" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="235" y="507" font-size="14" fill="#1e3a8a" text-anchor="middle">compare(a, b) or compare_frames(a, b)</text>
+
+  <rect x="40" y="535" width="390" height="38" rx="9" fill="#fee2e2" stroke="#dc2626" stroke-width="1.5"/>
+  <text x="235" y="559" font-size="13" fill="#7f1d1d" text-anchor="middle">finally: git worktree remove --force; rm scratch</text>
+
+  <line x1="235" y1="112" x2="235" y2="128" stroke="#374151" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="235" y1="182" x2="235" y2="198" stroke="#374151" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="235" y1="252" x2="235" y2="268" stroke="#374151" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="235" y1="462" x2="235" y2="478" stroke="#374151" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <!-- worker steps -->
+  <rect x="570" y="272" width="390" height="62" rx="9" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+  <text x="765" y="294" font-size="14" fill="#7c2d00" text-anchor="middle">import_flow(entry, tree)</text>
+  <text x="765" y="313" font-size="13" fill="#7c2d00" text-anchor="middle">tree on sys.path[0]; factory called if not a Step</text>
+
+  <rect x="570" y="352" width="390" height="40" rx="9" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="765" y="377" font-size="14" fill="#1e3a8a" text-anchor="middle">snapshot(step) to out/snapshot.pkl</text>
+
+  <rect x="570" y="410" width="390" height="52" rx="9" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="765" y="432" font-size="14" fill="#134e4a" text-anchor="middle">step.compile("interpreted").run(input, params)</text>
+  <text x="765" y="451" font-size="13" fill="#134e4a" text-anchor="middle">to out/output.parquet (only when input is set)</text>
+
+  <rect x="570" y="480" width="390" height="52" rx="9" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="765" y="502" font-size="14" fill="#4c1d95" text-anchor="middle">stdout: {"ok": true}</text>
+  <text x="765" y="521" font-size="13" fill="#4c1d95" text-anchor="middle">or {"ok": false, "error": "Type: message"}</text>
+
+  <line x1="765" y1="334" x2="765" y2="348" stroke="#374151" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="765" y1="392" x2="765" y2="406" stroke="#374151" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="765" y1="462" x2="765" y2="476" stroke="#374151" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <!-- cross process -->
+  <line x1="430" y1="303" x2="566" y2="303" stroke="#374151" stroke-width="1.5" marker-end="url(#a)"/>
+  <text x="498" y="295" font-size="13" fill="#1f2937" text-anchor="middle">JSON</text>
+  <path d="M570,506 L500,506 L500,431 L434,431" fill="none" stroke="#374151" stroke-width="1.5" marker-end="url(#a)"/>
+  <text x="498" y="470" font-size="13" fill="#1f2937" text-anchor="middle">files</text>
+
+  <!-- note -->
+  <rect x="570" y="62" width="390" height="190" rx="9" fill="#ffffff" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="588" y="88" font-size="14" fill="#1f2937" font-weight="600">Why a fresh process</text>
+  <text x="588" y="112" font-size="13" fill="#1f2937">The parent already imported lending.pipeline,</text>
+  <text x="588" y="132" font-size="13" fill="#1f2937">so importing it again returns the cached live</text>
+  <text x="588" y="152" font-size="13" fill="#1f2937">module. A new interpreter has no cache: every</text>
+  <text x="588" y="172" font-size="13" fill="#1f2937">module the entry imports comes from the</text>
+  <text x="588" y="192" font-size="13" fill="#1f2937">checkout. decikit itself still resolves from</text>
+  <text x="588" y="212" font-size="13" fill="#1f2937">the installed package, the same sys.executable.</text>
+</svg>

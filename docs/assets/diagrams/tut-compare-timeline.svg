@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 400" font-family="system-ui, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4b5563"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1000" height="400" fill="#ffffff"/>
+
+  <!-- timeline -->
+  <line x1="60" y1="120" x2="940" y2="120" stroke="#6b7280" stroke-width="2"/>
+  <g>
+    <circle cx="120" cy="120" r="12" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+    <text x="120" y="88" font-size="14" font-weight="600" fill="#1f2937" text-anchor="middle">lending v1</text>
+    <text x="120" y="155" font-size="13" fill="#1f2937" text-anchor="middle">5d52df8</text>
+
+    <circle cx="340" cy="120" r="12" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+    <text x="340" y="80" font-size="14" font-weight="600" fill="#7c2d00" text-anchor="middle">durable ids</text>
+    <text x="340" y="98" font-size="13" fill="#7c2d00" text-anchor="middle">tag v1</text>
+    <text x="340" y="155" font-size="13" fill="#1f2937" text-anchor="middle">c01f3e7</text>
+
+    <circle cx="580" cy="120" r="12" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+    <text x="580" y="80" font-size="14" font-weight="600" fill="#7c2d00" text-anchor="middle">policy change</text>
+    <text x="580" y="98" font-size="13" fill="#7c2d00" text-anchor="middle">tag v2</text>
+    <text x="580" y="155" font-size="13" fill="#1f2937" text-anchor="middle">021a771</text>
+
+    <circle cx="820" cy="120" r="12" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+    <text x="820" y="80" font-size="14" font-weight="600" fill="#1e3a8a" text-anchor="middle">table refactor</text>
+    <text x="820" y="98" font-size="13" fill="#1e3a8a" text-anchor="middle">HEAD</text>
+    <text x="820" y="155" font-size="13" fill="#1f2937" text-anchor="middle">8379bf5</text>
+  </g>
+
+  <!-- comparisons -->
+  <path d="M340,180 C380,215 540,215 580,180" stroke="#16a34a" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+  <rect x="330" y="215" width="260" height="70" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="460" y="240" font-size="14" font-weight="600" fill="#14532d" text-anchor="middle">diff.structure / diff.outputs</text>
+  <text x="460" y="262" font-size="13" fill="#14532d" text-anchor="middle">decikit diff v1 v2: 567 rows,</text>
+  <text x="460" y="278" font-size="13" fill="#14532d" text-anchor="middle">69 decisions change</text>
+
+  <path d="M580,180 C620,215 780,215 820,180" stroke="#2563eb" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+  <rect x="610" y="215" width="260" height="70" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="740" y="240" font-size="14" font-weight="600" fill="#1e3a8a" text-anchor="middle">diff.prove: tier smt, identical</text>
+  <text x="740" y="262" font-size="13" fill="#1e3a8a" text-anchor="middle">decikit diff v2 HEAD --data:</text>
+  <text x="740" y="278" font-size="13" fill="#1e3a8a" text-anchor="middle">0 of 2000 rows changed</text>
+
+  <path d="M330,353 C200,353 220,124 324,121" stroke="#7c3aed" stroke-width="1.5" fill="none" marker-end="url(#arr)" stroke-dasharray="6 4"/>
+  <path d="M770,353 C920,353 920,124 836,121" stroke="#7c3aed" stroke-width="1.5" fill="none" marker-end="url(#arr)" stroke-dasharray="6 4"/>
+  <rect x="330" y="320" width="440" height="66" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="550" y="346" font-size="14" font-weight="600" fill="#4c1d95" text-anchor="middle">experiment policy_v2: baseline at HEAD</text>
+  <text x="550" y="368" font-size="13" fill="#4c1d95" text-anchor="middle">scenarios: v1 (revision, subprocess) and ratio_0.45 (params)</text>
+</svg>

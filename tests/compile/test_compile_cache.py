@@ -1,0 +1,347 @@
+"""Compiled code is keyed by content: names and paths never recompile, edits recompile only their kernel."""
+from __future__ import annotations
+
+import json
+import os
+import pickle
+import platform
+import subprocess
+import sys
+
+import numba
+import numpy as np
+
+from decikit import flow
+from decikit._engine.compile import compile_plan, cpu_target, fingerprint, jit
+from decikit._engine.ir.decls import Input, Output
+from decikit._engine.ir.nodes import CallNode, SequenceNode
+from decikit._engine.ir.origin import Origin
+from decikit._engine.params import param
+from decikit._engine.wiring import resolve
+
+RATE = 0.1
+
+
+def disposable_income(net_income: float, expenses: float) -> float:
+    return net_income - expenses
+
+
+def affordability_ratio(disposable_income: float, instalment: float) -> float:
+    return disposable_income / instalment
+
+
+def cap_v1(affordability_ratio: float, cap: float = param(48.0)) -> float:
+    return min(affordability_ratio * 10.0, cap)
+
+
+def cap_v1_again(affordability_ratio: float, cap: float = param(48.0)) -> float:
+    return min(affordability_ratio * 10.0, cap)
+
+
+def cap_v2(affordability_ratio: float, cap: float = param(48.0)) -> float:
+    return min(affordability_ratio * 12.0, cap)
+
+
+def interest(x: float) -> float:
+    return x * RATE
+
+
+INPUTS = {"net_income": np.array([9200.0, 5000.0]), "expenses": np.array([3100.0, 900.0]),
+          "instalment": np.array([1200.0, 300.0])}
+
+
+def _kernels(plan):
+    return [u.fn for u in {id(u): u for u in compile_plan(plan).values()}.values()]
+
+
+def _pipeline(cap, outer="p", inner="afford"):
+    return flow(flow(disposable_income, affordability_ratio, name=inner), flow(cap, name="term"), name=outer)
+
+
+def test_renaming_a_parent_step_does_not_recompile(run):
+    first = resolve(_pipeline(cap_v1, outer="p", inner="afford"))
+    second = resolve(_pipeline(cap_v1, outer="pipeline", inner="affordability"))
+    assert _kernels(first) == _kernels(second)
+    run(first, INPUTS)
+    counts = [len(k.signatures) for k in _kernels(first)]
+    run(second, INPUTS)
+    assert [len(k.signatures) for k in _kernels(second)] == counts
+
+
+def test_moving_a_step_under_another_parent_does_not_recompile():
+    moved = flow(flow(flow(disposable_income, affordability_ratio, name="afford"), name="deeper"),
+                 flow(cap_v1, name="term"), name="p")
+    assert _kernels(resolve(_pipeline(cap_v1))) == _kernels(resolve(moved))
+
+
+def test_editing_one_step_recompiles_only_its_kernel():
+    afford, term = _kernels(resolve(_pipeline(cap_v1)))
+    afford2, term2 = _kernels(resolve(_pipeline(cap_v2)))
+    assert afford2 is afford
+    assert term2 is not term
+
+
+def test_a_redefined_step_with_the_same_body_reuses_its_compiled_code():
+    assert _kernels(resolve(_pipeline(cap_v1_again))) == _kernels(resolve(_pipeline(cap_v1)))
+    assert jit(cap_v1_again)[1] is jit(cap_v1)[1]
+
+
+def _const_plan(threshold):
+    def over(x: float, threshold: float) -> bool:
+        return x > threshold
+
+    node = CallNode(Origin("p/over", "tests"), "scalar", over, (Input("x", float),), (Output("over", bool),), (),
+                    consts=(("threshold", threshold),))
+    return resolve(SequenceNode(Origin("p", "tests"), (node,)))
+
+
+def test_changing_a_literal_const_does_not_recompile(run):
+    low, high = _const_plan(1.5), _const_plan(2.5)
+    (kernel,) = _kernels(low)
+    assert _kernels(high) == [kernel]
+    x = {"x": np.array([2.0, 3.0])}
+    assert run(low, x)[0]["over"].tolist() == [True, True]
+    count = len(kernel.signatures)
+    assert run(high, x)[0]["over"].tolist() == [False, True]
+    assert len(kernel.signatures) == count
+
+
+def test_a_retune_reuses_the_kernel_and_a_changed_param_type_specialises_it(run):
+    plan = resolve(_pipeline(cap_v1))
+    units = compile_plan(plan)
+    kernel = units[plan.calls[-1].id].fn
+    run(plan, INPUTS, units=units)
+    count = len(kernel.signatures)
+    run(plan, INPUTS, units=units, params={"p/term/cap_v1": {"cap": 20.0}})
+    assert len(kernel.signatures) == count
+    run(plan, INPUTS, units=units, params={"p/term/cap_v1": {"cap": 20}})
+    assert len(kernel.signatures) == count + 1
+
+
+def test_the_fingerprint_ignores_names_and_sees_constants():
+    def a(x: float) -> float:
+        return x * 49.39775
+
+    def b(x: float) -> float:
+        return x * 49.39775
+
+    def c(x: float) -> float:
+        return x * 49.29765
+
+    assert fingerprint(a) == fingerprint(b) != fingerprint(c)
+
+
+def test_the_fingerprint_sees_closure_values_and_globals(monkeypatch):
+    def make(k):
+        def rule(x: float) -> float:
+            return x * k
+
+        return rule
+
+    assert fingerprint(make(2.0)) == fingerprint(make(2.0)) != fingerprint(make(3.0))
+    before = fingerprint(interest)
+    monkeypatch.setattr(sys.modules[__name__], "RATE", 0.2)
+    assert fingerprint(interest) != before
+
+
+def make(data):
+    def rule(x: float) -> float:
+        return x * data[0]
+
+    return rule
+
+
+def test_the_fingerprint_sees_captured_arrays_and_frames_by_value():
+    import polars as pl
+
+    a = np.array([1.0, 2.0])
+    before = fingerprint(make(a))
+    assert fingerprint(make(a.copy())) == before != fingerprint(make(a.astype(np.float32)))
+    a[0] = 3.0                              # an in-place edit is a change
+    assert fingerprint(make(a)) != before
+    frame = pl.DataFrame({"id": [1, 2], "score": [700, 650]})
+    assert fingerprint(make(frame)) == fingerprint(make(frame.clone()))
+    assert fingerprint(make(frame)) != fingerprint(make(frame.with_columns(score=pl.Series([700, 600]))))
+    assert fingerprint(make(frame)) != fingerprint(make(frame.cast({"score": pl.Float64})))
+
+
+def test_equal_captured_arrays_share_compiled_code_and_a_changed_one_compiles_its_own():
+    _, compiled = jit(make(np.array([2.0])))
+    assert jit(make(np.array([2.0])))[1] is compiled
+    _, other = jit(make(np.array([5.0])))
+    assert (compiled(1.0), other(1.0)) == (2.0, 5.0)
+
+
+_SET_STEP = ("def tier(grade: str) -> bool:\n"
+             "    return grade in {'gold', 'silver', 'bronze', 'platinum', 'diamond', 'copper'}\n")
+_SET_CHILD = "import step\nfrom decikit._engine.compile import fingerprint\nprint(fingerprint(step.tier))\n"
+
+
+def test_the_fingerprint_is_stable_across_hash_seeds(tmp_path):
+    (tmp_path / "step.py").write_text(_SET_STEP)
+    (tmp_path / "child.py").write_text(_SET_CHILD)
+
+    def run(seed):
+        proc = subprocess.run([sys.executable, "child.py"], cwd=tmp_path, env=dict(os.environ, PYTHONHASHSEED=seed),
+                              capture_output=True, text=True, timeout=600, check=False)
+        assert proc.returncode == 0, proc.stderr
+        return proc.stdout.strip()
+
+    assert run("1") == run("2")
+
+
+def test_the_cpu_target_is_recorded():
+    triple, cpu, features = cpu_target()
+    assert triple.startswith(platform.machine()) and cpu and features
+
+
+_STEP = "def half(x: float) -> float:\n    return round(x * 0.5, 1)\n"
+_CHILD = """
+import json, sys
+import step
+import decikit._engine.compile.njit as njit
+njit.SALT = sys.argv[1]
+_, kernel = njit.jit(step.half)
+print(json.dumps([kernel(3.0), len(kernel.stats.cache_hits), len(kernel.stats.cache_misses)]))
+"""
+
+_HELPER = "from numba import njit\n\n@njit\ndef rate(amount: float) -> float:\n    return amount * {factor}\n"
+_STEP_WITH_HELPER = "from rates import rate\n\ndef fee(amount: float) -> float:\n    return rate(amount)\n"
+_CHILD_WITH_HELPER = """
+import json
+import step
+import decikit._engine.compile.njit as njit
+_, kernel = njit.jit(step.fee)
+print(json.dumps([kernel(100.0), len(kernel.stats.cache_hits), len(kernel.stats.cache_misses)]))
+"""
+
+
+def test_a_disk_cached_step_is_reused_only_under_the_same_compile_salt(tmp_path):
+    (tmp_path / "step.py").write_text(_STEP)  # once: numba's index is keyed by the file's mtime
+    (tmp_path / "child.py").write_text(_CHILD)
+    env = dict(os.environ, NUMBA_CACHE_DIR=str(tmp_path / "numba_cache"))
+
+    def run(salt):
+        proc = subprocess.run([sys.executable, "child.py", salt], cwd=tmp_path, env=env, capture_output=True,
+                              text=True, timeout=600, check=False)
+        assert proc.returncode == 0, proc.stderr
+        return json.loads(proc.stdout.splitlines()[-1])
+
+    assert run("a") == [1.5, 0, 1]
+    assert run("a") == [1.5, 1, 0]
+    assert run("b") == [1.5, 0, 1]
+    assert run("a") == [1.5, 1, 0]
+
+
+def test_a_changed_helper_invalidates_a_disk_cached_caller(tmp_path):
+    (tmp_path / "rates.py").write_text(_HELPER.format(factor="0.10"))
+    (tmp_path / "step.py").write_text(_STEP_WITH_HELPER)
+    (tmp_path / "child.py").write_text(_CHILD_WITH_HELPER)
+    env = dict(os.environ, NUMBA_CACHE_DIR=str(tmp_path / "numba_cache"))
+
+    def run():
+        proc = subprocess.run([sys.executable, "child.py"], cwd=tmp_path, env=env, capture_output=True,
+                              text=True, timeout=600, check=False)
+        assert proc.returncode == 0, proc.stderr
+        return json.loads(proc.stdout.splitlines()[-1])
+
+    assert run() == [10.0, 0, 1]
+    assert run() == [10.0, 1, 0]
+    (tmp_path / "rates.py").write_text(_HELPER.format(factor="0.20"))
+    assert run() == [20.0, 0, 1]
+
+
+_STEP_THROUGH_MODULE = "import rates\n\ndef fee(amount: float) -> float:\n    return rates.rate(amount)\n"
+
+
+def test_a_changed_function_called_through_a_module_invalidates_a_disk_cached_caller(tmp_path):
+    (tmp_path / "rates.py").write_text(_HELPER.format(factor="0.10"))
+    (tmp_path / "step.py").write_text(_STEP_THROUGH_MODULE)
+    (tmp_path / "child.py").write_text(_CHILD_WITH_HELPER)
+    env = dict(os.environ, NUMBA_CACHE_DIR=str(tmp_path / "numba_cache"))
+
+    def run():
+        proc = subprocess.run([sys.executable, "child.py"], cwd=tmp_path, env=env, capture_output=True,
+                              text=True, timeout=600, check=False)
+        assert proc.returncode == 0, proc.stderr
+        return json.loads(proc.stdout.splitlines()[-1])
+
+    assert run() == [10.0, 0, 1]
+    assert run() == [10.0, 1, 0]
+    (tmp_path / "rates.py").write_text(_HELPER.format(factor="0.20"))
+    assert run() == [20.0, 0, 1]
+
+
+def test_the_fingerprint_follows_module_attribute_calls_to_the_function(tmp_path, monkeypatch):
+    import importlib
+
+    (tmp_path / "helpermod.py").write_text("def f(x):\n    return x * 2.0\n")
+    (tmp_path / "stepmod.py").write_text("import helpermod\n\ndef s(x: float) -> float:\n    return helpermod.f(x)\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    stepmod = importlib.import_module("stepmod")
+    before = fingerprint(stepmod.s)
+    (tmp_path / "helpermod.py").write_text("def f(x):\n    return x * 30.0\n")
+    importlib.reload(sys.modules["helpermod"])
+    assert fingerprint(stepmod.s) != before
+    for name in ("stepmod", "helpermod"):
+        sys.modules.pop(name)
+
+
+def test_a_step_first_seen_without_a_file_still_gets_a_disk_cache(tmp_path):
+    # Dispatchers are shared by content: a notebook cell or an exec'd doc block must not leave
+    # the same code uncacheable for every later caller, or `decikit build` warms nothing.
+    import importlib.util
+
+    from numba.core.caching import NullCache
+
+    from decikit._engine.compile.njit import jit
+
+    src = "def spread(a: float, b: float) -> float:\n    return a - b + 3.0\n"
+    ns: dict = {}
+    # dont_inherit: this module's `from __future__ import annotations` would otherwise
+    # make the exec'd copy's annotations strings, and so a different content key.
+    exec(compile(src, "GUIDE.md", "exec", dont_inherit=True), ns)
+    key_exec, from_exec = jit(ns["spread"])
+    assert isinstance(from_exec._cache, NullCache)
+
+    path = tmp_path / "spread_module.py"
+    path.write_text(src)
+    spec = importlib.util.spec_from_file_location("spread_module", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    key_file, from_file = jit(module.spread)
+
+    assert key_file == key_exec and from_file is from_exec
+    assert not isinstance(from_file._cache, NullCache)
+
+
+_CHILD_MODES = """
+import json
+import polars as pl
+import step
+from decikit import Engine, flow
+
+out = [Engine.resolve(mode)().bind(flow(step.half, name="p")).run(pl.DataFrame({"x": [3.0]}))["half"].to_list()
+       for mode in ("stepped", "fused")]
+print(json.dumps(out))
+"""
+
+
+def test_an_unreadable_disk_cache_index_is_a_miss_and_is_rewritten(tmp_path):
+    # An index written by another decikit version can name a module that no longer exists.
+    (tmp_path / "step.py").write_text(_STEP)
+    (tmp_path / "child.py").write_text(_CHILD_MODES)
+    env = dict(os.environ, NUMBA_CACHE_DIR=str(tmp_path / "numba_cache"))
+
+    def run():
+        proc = subprocess.run([sys.executable, "child.py"], cwd=tmp_path, env=env, capture_output=True,
+                              text=True, timeout=600, check=False)
+        assert proc.returncode == 0, proc.stderr
+        assert json.loads(proc.stdout.splitlines()[-1]) == [[1.5], [1.5]]
+
+    run()
+    (index,) = (tmp_path / "numba_cache").rglob("step.half*.nbi")
+    stale = pickle.dumps(numba.__version__, protocol=-1) + b"cmodule_that_does_not_exist\nSpan\n."
+    index.write_bytes(stale)
+    run()
+    assert index.read_bytes() != stale

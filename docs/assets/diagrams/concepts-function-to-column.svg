@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 470" font-family="system-ui, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4b5563"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1000" height="470" fill="#ffffff"/>
+
+  <!-- the function -->
+  <rect x="30" y="20" width="940" height="90" rx="10" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+  <text x="50" y="44" font-size="14" fill="#7c2d00">a plain Python function</text>
+  <rect x="98" y="58" width="110" height="30" rx="6" fill="#ffffff" stroke="#f57c00" stroke-width="1.5"/>
+  <rect x="226" y="58" width="132" height="30" rx="6" fill="#ffffff" stroke="#16a34a" stroke-width="1.5"/>
+  <rect x="380" y="58" width="268" height="30" rx="6" fill="#ffffff" stroke="#16a34a" stroke-width="1.5"/>
+  <rect x="704" y="58" width="56" height="30" rx="6" fill="#ffffff" stroke="#2563eb" stroke-width="1.5"/>
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" fill="#1f2937">
+    <text x="58" y="79">def</text>
+    <text x="104" y="79">affordable</text>
+    <text x="212" y="79">(</text>
+    <text x="232" y="79">ratio: float</text>
+    <text x="364" y="79">,</text>
+    <text x="386" y="79">limit: float = param(0.4)</text>
+    <text x="654" y="79">) -&gt;</text>
+    <text x="712" y="79">bool</text>
+    <text x="764" y="79">:</text>
+  </g>
+
+  <!-- arrows to callouts -->
+  <line x1="153" y1="88" x2="135" y2="168" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="292" y1="88" x2="370" y2="168" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="514" y1="88" x2="610" y2="168" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="732" y1="88" x2="850" y2="168" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- callouts -->
+  <rect x="30" y="170" width="215" height="110" rx="10" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+  <text x="137" y="196" text-anchor="middle" font-size="16" font-weight="600" fill="#7c2d00">the name</text>
+  <text x="137" y="220" text-anchor="middle" font-size="14" fill="#7c2d00">is the step's path</text>
+  <text x="137" y="240" text-anchor="middle" font-size="14" fill="#7c2d00">(afford/affordable) and the</text>
+  <text x="137" y="260" text-anchor="middle" font-size="14" fill="#7c2d00">column it writes</text>
+
+  <rect x="265" y="170" width="215" height="110" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="372" y="196" text-anchor="middle" font-size="16" font-weight="600" fill="#14532d">a plain argument</text>
+  <text x="372" y="220" text-anchor="middle" font-size="14" fill="#14532d">request data: read per record</text>
+  <text x="372" y="240" text-anchor="middle" font-size="14" fill="#14532d">from the frame, the dict, or</text>
+  <text x="372" y="260" text-anchor="middle" font-size="14" fill="#14532d">an earlier step's output</text>
+
+  <rect x="500" y="170" width="235" height="110" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="617" y="196" text-anchor="middle" font-size="16" font-weight="600" fill="#14532d">a param() argument</text>
+  <text x="617" y="220" text-anchor="middle" font-size="14" fill="#14532d">policy: read from the params</text>
+  <text x="617" y="240" text-anchor="middle" font-size="14" fill="#14532d">document, the same for every</text>
+  <text x="617" y="260" text-anchor="middle" font-size="14" fill="#14532d">record; 0.4 is the default</text>
+
+  <rect x="755" y="170" width="215" height="110" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="862" y="196" text-anchor="middle" font-size="16" font-weight="600" fill="#1e3a8a">the annotations</text>
+  <text x="862" y="220" text-anchor="middle" font-size="14" fill="#1e3a8a">set each value's type:</text>
+  <text x="862" y="240" text-anchor="middle" font-size="14" fill="#1e3a8a">bool becomes a Boolean</text>
+  <text x="862" y="260" text-anchor="middle" font-size="14" fill="#1e3a8a">column, float a Float64</text>
+
+  <!-- frame in / out -->
+  <rect x="30" y="330" width="300" height="110" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="180" y="356" text-anchor="middle" font-size="16" font-weight="600" fill="#14532d">frame seen by the step</text>
+  <text x="180" y="382" text-anchor="middle" font-size="14" fill="#14532d">income · debt (input columns)</text>
+  <text x="180" y="402" text-anchor="middle" font-size="14" fill="#14532d">ratio (written by the ratio step)</text>
+  <text x="180" y="422" text-anchor="middle" font-size="14" fill="#14532d">limit = 0.4 (params document)</text>
+
+  <rect x="370" y="350" width="260" height="70" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="500" y="380" text-anchor="middle" font-size="16" font-weight="600" fill="#134e4a">affordable(ratio, limit)</text>
+  <text x="500" y="402" text-anchor="middle" font-size="14" fill="#134e4a">called once per record</text>
+
+  <rect x="670" y="330" width="300" height="110" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="820" y="356" text-anchor="middle" font-size="16" font-weight="600" fill="#14532d">output frame</text>
+  <text x="820" y="382" text-anchor="middle" font-size="14" fill="#14532d">income · debt · affordable</text>
+  <text x="820" y="402" text-anchor="middle" font-size="14" fill="#14532d">ratio is dropped: a later step</text>
+  <text x="820" y="422" text-anchor="middle" font-size="14" fill="#14532d">read it (keep it with .emit)</text>
+
+  <line x1="330" y1="385" x2="366" y2="385" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="630" y1="385" x2="666" y2="385" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+</svg>

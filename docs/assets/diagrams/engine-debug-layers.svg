@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 560" font-family="system-ui, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#374151"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1000" height="560" fill="#ffffff"/>
+
+  <!-- clients -->
+  <rect x="30" y="20" width="290" height="84" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="48" y="50" font-size="16" font-weight="600" fill="#4c1d95">Notebook or script</text>
+  <text x="48" y="74" font-size="13" fill="#4c1d95">calls Session methods directly:</text>
+  <text x="48" y="92" font-size="13" fill="#4c1d95">break_at, resume, set, reload, watch</text>
+
+  <rect x="355" y="20" width="290" height="84" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="373" y="50" font-size="16" font-weight="600" fill="#4c1d95">Editor bridge</text>
+  <text x="373" y="74" font-size="13" fill="#4c1d95">JSON lines over stdio, Controls</text>
+  <text x="373" y="92" font-size="13" fill="#4c1d95">(forces, value breakpoints)</text>
+
+  <rect x="680" y="20" width="290" height="84" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="698" y="50" font-size="16" font-weight="600" fill="#4c1d95">debug/wire.py</text>
+  <text x="698" y="74" font-size="13" fill="#4c1d95">COMMAND, EVENT, EVENT_LOG:</text>
+  <text x="698" y="92" font-size="13" fill="#4c1d95">pydantic TypeAdapters on "kind"</text>
+
+  <line x1="175" y1="104" x2="175" y2="150" stroke="#374151" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="500" y1="104" x2="500" y2="150" stroke="#374151" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="825" y1="104" x2="825" y2="150" stroke="#374151" stroke-width="1.5" marker-end="url(#a)"/>
+  <text x="512" y="134" font-size="13" fill="#374151">Session.apply(command)</text>
+
+  <!-- session -->
+  <rect x="30" y="152" width="940" height="150" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="48" y="180" font-size="16" font-weight="600" fill="#134e4a">Session (debug/session.py) with the Edits half (debug/edit.py)</text>
+  <rect x="48" y="196" width="210" height="90" rx="8" fill="#ffffff" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="62" y="220" font-size="14" font-weight="600" fill="#134e4a">moving</text>
+  <text x="62" y="242" font-size="13" fill="#134e4a">step, step_into, resume,</text>
+  <text x="62" y="260" font-size="13" fill="#134e4a">pause, rewind</text>
+  <text x="62" y="278" font-size="13" fill="#134e4a">all go through _go/_next</text>
+  <rect x="276" y="196" width="210" height="90" rx="8" fill="#ffffff" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="290" y="220" font-size="14" font-weight="600" fill="#134e4a">looking and changing</text>
+  <text x="290" y="242" font-size="13" fill="#134e4a">value, structure, output,</text>
+  <text x="290" y="260" font-size="13" fill="#134e4a">set (override@path),</text>
+  <text x="290" y="278" font-size="13" fill="#134e4a">breakpoints list</text>
+  <rect x="504" y="196" width="210" height="90" rx="8" fill="#ffffff" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="518" y="220" font-size="14" font-weight="600" fill="#134e4a">editing</text>
+  <text x="518" y="242" font-size="13" fill="#134e4a">replace, delete, reload,</text>
+  <text x="518" y="260" font-size="13" fill="#134e4a">watch; keys from hot.py,</text>
+  <text x="518" y="278" font-size="13" fill="#134e4a">swap, _apply, _carry_over</text>
+  <rect x="732" y="196" width="220" height="90" rx="8" fill="#ffffff" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="746" y="220" font-size="14" font-weight="600" fill="#134e4a">events: list[Event]</text>
+  <text x="746" y="242" font-size="13" fill="#134e4a">appended by _emit, never</text>
+  <text x="746" y="260" font-size="13" fill="#134e4a">removed; summaries only</text>
+  <text x="746" y="278" font-size="13" fill="#134e4a">(debug/events.py)</text>
+
+  <!-- runner -->
+  <line x1="300" y1="302" x2="300" y2="350" stroke="#374151" stroke-width="1.5" marker-end="url(#a)"/>
+  <text x="312" y="332" font-size="13" fill="#374151">next(iterator)</text>
+  <line x1="700" y1="350" x2="700" y2="302" stroke="#374151" stroke-width="1.5" marker-end="url(#a)"/>
+  <text x="712" y="332" font-size="13" fill="#374151">Checkpoint(origin, when, arm, iteration, rows)</text>
+
+  <rect x="30" y="352" width="940" height="84" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="48" y="382" font-size="16" font-weight="600" fill="#134e4a">A copy of the bound runner: copy.copy(executable.runner)</text>
+  <text x="48" y="406" font-size="13" fill="#134e4a">runner.iterate(plan, state, params) is a generator that yields before and after every node it reaches.</text>
+  <text x="48" y="424" font-size="13" fill="#134e4a">The copy gets the session's visit hook and, during a replay, a skip map. The shared executable never sees either.</text>
+
+  <!-- state -->
+  <line x1="500" y1="436" x2="500" y2="472" stroke="#374151" stroke-width="1.5" marker-end="url(#a)"/>
+  <rect x="30" y="474" width="455" height="70" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="48" y="502" font-size="16" font-weight="600" fill="#14532d">State (run/state.py)</text>
+  <text x="48" y="526" font-size="13" fill="#14532d">values and valid by version id, chains by name</text>
+  <rect x="515" y="474" width="455" height="70" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="533" y="502" font-size="16" font-weight="600" fill="#14532d">RunParams</text>
+  <text x="533" y="526" font-size="13" fill="#14532d">validated bundles; report feeds ParamsValidated</text>
+</svg>

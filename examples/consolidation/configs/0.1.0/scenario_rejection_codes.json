@@ -1,0 +1,85 @@
+{
+  "type": "reason_codes",
+  "name": "scenario_rejection_codes",
+  "version": "consolidation-rejections-2026.09",
+  "codes": [
+    {
+      "code": 1001,
+      "severity_rank": 21,
+      "description": "More accounts settled than the product permits",
+      "is_regulatory": true
+    },
+    {
+      "code": 1003,
+      "severity_rank": 23,
+      "description": "Instalment reduction below the product's minimum",
+      "is_regulatory": true
+    },
+    {
+      "code": 1004,
+      "severity_rank": 14,
+      "description": "Total cost of credit rises more than the anti-harm ceiling allows",
+      "is_regulatory": true
+    },
+    {
+      "code": 1005,
+      "severity_rank": 25,
+      "description": "Term extends too far beyond the settled accounts' longest remaining term",
+      "is_regulatory": true
+    },
+    {
+      "code": 1006,
+      "severity_rank": 26,
+      "description": "New rate is above the settled accounts' weighted average rate",
+      "is_regulatory": true
+    },
+    {
+      "code": 1008,
+      "severity_rank": 28,
+      "description": "New money above the permitted share of the settlement total or the absolute cap",
+      "is_regulatory": true
+    },
+    {
+      "code": 1009,
+      "severity_rank": 29,
+      "description": "Post-consolidation debt service ratio above the ceiling",
+      "is_regulatory": true
+    },
+    {
+      "code": 1010,
+      "severity_rank": 30,
+      "description": "Too little of the advance goes to external creditors",
+      "is_regulatory": true
+    },
+    {
+      "code": 1013,
+      "severity_rank": 33,
+      "description": "The client has reached the maximum consolidations in 24 months",
+      "is_regulatory": true
+    },
+    {
+      "code": 1014,
+      "severity_rank": 34,
+      "description": "Discretionary income after the new instalment is below the floor",
+      "is_regulatory": true
+    },
+    {
+      "code": 1101,
+      "severity_rank": 90,
+      "description": "The product's rate card has no cell for this amount, term and grade",
+      "is_regulatory": false
+    },
+    {
+      "code": 1102,
+      "severity_rank": 5,
+      "description": "The new instalment exceeds what the client can afford",
+      "is_regulatory": true
+    },
+    {
+      "code": 1103,
+      "severity_rank": 80,
+      "description": "The amount or limit is outside the product's limits",
+      "is_regulatory": false
+    }
+  ]
+}

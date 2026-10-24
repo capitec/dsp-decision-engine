@@ -38,7 +38,7 @@ Engagement starts with an Issue where conversations and debates can occur around
 ## 3. Vulnerabilities
 
 - ✅ **Do** refer to our [Security Policy](https://github.com/capitec/dsp-decision-engine/security/policy) for more information.
-- ✅ **Do** report vulnerabilities via this [link](https://github.com/capitec/ml-decision-engine/security/advisories/new).
+- ✅ **Do** report vulnerabilities via this [link](https://github.com/capitec/dsp-decision-engine/security/advisories/new).
 - ❌ **Do not** open a public Issue or Discussion for security vulnerabilities.
 
 ## 4. Development
@@ -74,19 +74,21 @@ configured to use the system certificate store (`system-certs = true` in
 <h3 id="directory-structure">📂 Directory Structure</h3>
 
 ```
-decider/                  Core library
-  cli/                    `decider` CLI (click)
-  config/                 Versioned config management
-  modules/                Module primitives (expression, join, sequential, union)
-  serving/                HTTP servers (Starlette, Sanic)
-  templates/              Scaffolding templates and scaffold.py renderer
-  magics/                 Jupyter %%module magic
-docs/examples/            Example notebooks
-projects/                 End-to-end project examples
+decikit/                  The package: pipelines, engine, steps, lab, serving, CLI and MCP tooling
 tests/                    pytest suite
+docs/                     Documentation site (zensical); docs/design_decisions/ holds the design history
+benchmarks/               Plain scripts: uv run python benchmarks/<name>.py
+ui/                       VS Code extension, flow view and tree editor (pnpm workspace)
+plugins/                  Claude Code plugin
+example_projects/         End-to-end example projects
+docker/                   Dockerfile
 pyproject.toml            Project metadata, dependencies, tool config
 uv.lock                   Locked dependency graph (committed)
 ```
+
+How `decikit/` is laid out inside, and which packages may import which, is in
+[docs/architecture/package-layout.md](docs/architecture/package-layout.md).
+`uv run pytest tests/test_conventions.py -q` enforces the file-size and import rules.
 
 <h3 id="naming-conventions">🏷 Naming Conventions</h3>
 

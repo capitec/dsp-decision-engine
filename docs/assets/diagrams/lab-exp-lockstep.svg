@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 412" font-family="system-ui, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#374151"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1000" height="412" fill="#ffffff"/>
+
+  <!-- column headers: batches -->
+  <text x="230" y="34" font-size="14" font-weight="600" fill="#14532d" text-anchor="middle">batch 0 · rows 0..4999</text>
+  <text x="430" y="34" font-size="14" font-weight="600" fill="#14532d" text-anchor="middle">batch 1 · rows 5000..9999</text>
+  <text x="630" y="34" font-size="14" font-weight="600" fill="#14532d" text-anchor="middle">batch 2</text>
+  <text x="830" y="34" font-size="14" font-weight="600" fill="#14532d" text-anchor="middle">batch 3</text>
+
+  <!-- row headers -->
+  <text x="20" y="80" font-size="14" fill="#1f2937">baseline</text>
+  <text x="20" y="98" font-size="12" fill="#6b7280">+ rerun (determinism)</text>
+  <text x="20" y="146" font-size="14" fill="#1f2937">premium_0.08</text>
+  <text x="20" y="206" font-size="14" fill="#1f2937">no_collateral</text>
+  <text x="20" y="266" font-size="14" fill="#1f2937">rate_shock</text>
+
+  <!-- cells: each column -->
+  <g font-size="13" text-anchor="middle">
+    <rect x="150" y="60" width="160" height="46" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+    <text x="230" y="80" fill="#134e4a">1 run, 2 rerun</text>
+    <text x="230" y="97" fill="#134e4a">output kept as baseline</text>
+    <rect x="150" y="124" width="160" height="40" rx="8" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+    <text x="230" y="149" fill="#7c2d00">3</text>
+    <rect x="150" y="184" width="160" height="40" rx="8" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+    <text x="230" y="209" fill="#7c2d00">4</text>
+    <rect x="150" y="244" width="160" height="40" rx="8" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+    <text x="230" y="269" fill="#7c2d00">5</text>
+
+    <rect x="350" y="60" width="160" height="46" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+    <text x="430" y="80" fill="#134e4a">7 run, 8 rerun</text>
+    <text x="430" y="97" fill="#134e4a">(identical so far)</text>
+    <rect x="350" y="124" width="160" height="40" rx="8" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+    <text x="430" y="149" fill="#7c2d00">9</text>
+    <rect x="350" y="184" width="160" height="40" rx="8" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+    <text x="430" y="209" fill="#7c2d00">10</text>
+    <rect x="350" y="244" width="160" height="40" rx="8" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+    <text x="430" y="269" fill="#7c2d00">11</text>
+
+    <rect x="550" y="60" width="160" height="46" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+    <text x="630" y="80" fill="#134e4a">13 run, 14 rerun</text>
+    <text x="630" y="97" fill="#134e4a">(identical so far)</text>
+    <rect x="550" y="124" width="160" height="40" rx="8" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+    <text x="630" y="149" fill="#7c2d00">15</text>
+    <rect x="550" y="184" width="160" height="40" rx="8" fill="#fee2e2" stroke="#dc2626" stroke-width="1.5"/>
+    <text x="630" y="201" fill="#7f1d1d">16 raises: scenario failed,</text>
+    <text x="630" y="217" fill="#7f1d1d">skipped from now on</text>
+    <rect x="550" y="244" width="160" height="40" rx="8" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+    <text x="630" y="269" fill="#7c2d00">17</text>
+
+    <rect x="750" y="60" width="160" height="46" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+    <text x="830" y="80" fill="#134e4a">19 run, 20 rerun</text>
+    <text x="830" y="97" fill="#134e4a">(identical so far)</text>
+    <rect x="750" y="124" width="160" height="40" rx="8" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+    <text x="830" y="149" fill="#7c2d00">21</text>
+    <rect x="750" y="184" width="160" height="40" rx="8" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <text x="830" y="209" fill="#1f2937">skipped</text>
+    <rect x="750" y="244" width="160" height="40" rx="8" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+    <text x="830" y="269" fill="#7c2d00">22</text>
+  </g>
+
+  <!-- progress row -->
+  <text x="20" y="326" font-size="14" fill="#1f2937">on_progress</text>
+  <g font-size="13" text-anchor="middle">
+    <rect x="150" y="306" width="160" height="34" rx="8" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+    <text x="230" y="328" fill="#4c1d95">6 · done=5000</text>
+    <rect x="350" y="306" width="160" height="34" rx="8" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+    <text x="430" y="328" fill="#4c1d95">12 · done=10000</text>
+    <rect x="550" y="306" width="160" height="34" rx="8" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+    <text x="630" y="328" fill="#4c1d95">18 · done=15000</text>
+    <rect x="750" y="306" width="160" height="34" rx="8" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+    <text x="830" y="328" fill="#4c1d95">23 · done=20000</text>
+  </g>
+
+  <line x1="310" y1="323" x2="346" y2="323" stroke="#374151" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="510" y1="323" x2="546" y2="323" stroke="#374151" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="710" y1="323" x2="746" y2="323" stroke="#374151" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <text x="20" y="378" font-size="13" fill="#1f2937">Numbers give the order of work. Each scenario cell ends with on_node_end (if anything selects nodes) and on_batch_end,</text>
+  <text x="20" y="396" font-size="13" fill="#1f2937">with Batch.baseline holding the baseline's output for the same rows. run.stop is checked after on_progress.</text>
+</svg>
