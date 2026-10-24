@@ -6,10 +6,20 @@ import pytest
 from playwright.sync_api import Page, expect
 
 from flat_docs import SMALL, open_doc
-from flat_rules_ui import export, fill_number, open_parameters, rename_rule, rule_card, rule_names, save, unary_rule
+from flat_rules_ui import (LIVE, export, fill_number, open_parameters, rename_rule, rule_card, rule_names, save,
+                           unary_rule)
 from seed import get_project
+from test_live_offline import Line
 
 UNSAVED = re.compile(r"unsaved|not saved", re.I)
+
+
+def open_unsynced(page: Page) -> None:
+    """Open SMALL; on a live stack its edits then never reach the server, as a live edit is saved within 150 ms."""
+    line = Line(page) if LIVE else None
+    open_doc(page, SMALL)
+    if line:
+        line.deaden()
 
 
 def dialog_types(page: Page) -> list[str]:
@@ -39,7 +49,7 @@ def test_back_after_an_unsaved_edit_asks_before_leaving(signed_in: Page):
 
 
 def test_closing_the_tab_after_an_unsaved_edit_asks_before_leaving(signed_in: Page):
-    open_doc(signed_in, SMALL)
+    open_unsynced(signed_in)
     rename_rule(signed_in, "Edited")
     with signed_in.expect_event("dialog") as dialog:
         signed_in.close(run_before_unload=True)
@@ -48,7 +58,7 @@ def test_closing_the_tab_after_an_unsaved_edit_asks_before_leaving(signed_in: Pa
 
 
 def test_reloading_after_an_unsaved_edit_shows_the_saved_state(signed_in: Page):
-    open_doc(signed_in, SMALL)
+    open_unsynced(signed_in)
     rename_rule(signed_in, "Edited")
     signed_in.reload()
 
