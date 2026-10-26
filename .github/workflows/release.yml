@@ -5,8 +5,13 @@ on:
     tags:
       - 'v[0-9]*'
 
+# Jobs that need more ask for it themselves.
+permissions:
+  contents: read
+
 env:
   DOCKER_IMAGE: sjnarmstrong/pydecider
+  TREE_EDITOR_IMAGE: sjnarmstrong/decider-tree-editor
 
 jobs:
   # ── 1. Resolve version from git tags (hatch-vcs) ──────────────────────────
@@ -31,7 +36,7 @@ jobs:
         id: get
         run: |
           uv sync --group dev
-          VERSION=$(uv run python -c "from importlib.metadata import version; print(version('decider'))")
+          VERSION=$(uv run python -c "from importlib.metadata import version; print(version('decikit'))")
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
   # ── 2a. Build wheel → PyPI ─────────────────────────────────────────────────
@@ -40,7 +45,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: release
-      url: https://pypi.org/p/decider
+      url: https://pypi.org/p/decikit
     permissions:
       id-token: write     # OIDC trusted publishing — no token secret needed
     steps:
@@ -113,6 +118,7 @@ jobs:
           context: .
           file: docker/Dockerfile
           push: true
+          build-args: VERSION=${{ needs.version.outputs.version }}
           tags: ${{ env.DOCKER_IMAGE }}:${{ needs.version.outputs.version }}
           cache-from: type=gha
           cache-to:   type=gha,mode=max
@@ -123,8 +129,47 @@ jobs:
           context: .
           file: docker/Dockerfile
           push: true
+          build-args: VERSION=${{ needs.version.outputs.version }}
           tags: ${{ env.DOCKER_IMAGE }}:latest
           cache-from: type=gha
+
+  # ── 2b'. Build and push the tree-editor image ─────────────────────────────
+  publish-tree-editor:
+    needs: [version, publish-pypi]
+    runs-on: ubuntu-latest
+    environment:
+      name: release
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download wheel artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push tree-editor image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ui/tree-editor/Dockerfile
+          push: true
+          tags: |
+            ${{ env.TREE_EDITOR_IMAGE }}:${{ needs.version.outputs.version }}
+            ${{ env.TREE_EDITOR_IMAGE }}:latest
+          cache-from: type=gha,scope=tree-editor
+          cache-to:   type=gha,mode=max,scope=tree-editor
 
   # ── 2c. Build and deploy versioned docs to GitHub Pages ───────────────────
   publish-docs:
@@ -151,7 +196,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install docs dependencies
-        run: uv sync --extra docs
+        run: uv sync --group docs
 
       - name: Restore docs from previous release
         env:
@@ -162,7 +207,13 @@ jobs:
           if [ -n "$PREV" ]; then
             gh release download "$PREV" --pattern "docs-site.tar.gz" --dir /tmp/prev-docs 2>/dev/null || true
             if [ -f /tmp/prev-docs/docs-site.tar.gz ]; then
-              tar -xzf /tmp/prev-docs/docs-site.tar.gz -C _site
+              mkdir -p /tmp/prev-site
+              tar -xzf /tmp/prev-docs/docs-site.tar.gz -C /tmp/prev-site
+              # Only the earlier versions' folders: the root is this build, so pages it dropped don't linger there.
+              for v in $(jq -r '.[] | select(. != "latest")' /tmp/prev-site/versions.json); do
+                [ -d "/tmp/prev-site/$v" ] && cp -r "/tmp/prev-site/$v" _site/
+              done
+              cp /tmp/prev-site/versions.json _site/
               echo "Restored docs history from $PREV"
             fi
           fi
@@ -171,10 +222,11 @@ jobs:
         env:
           VERSION: ${{ needs.version.outputs.version }}
         run: |
-          uv run python -m sphinx docs docs/_build/html -b html
+          uv run jupyter nbconvert --to markdown docs/notebooks/*.ipynb --output-dir docs/tutorials
+          uv run zensical build --strict
           mkdir -p _site/$VERSION
-          cp -r docs/_build/html/. _site/$VERSION/
-          cp -r docs/_build/html/. _site/
+          cp -r site/. _site/$VERSION/
+          cp -r site/. _site/
 
       - name: Write versions.json
         env:
@@ -211,7 +263,7 @@ jobs:
 
   # ── 3. Tag and create GitHub Release (after all three deploys succeed) ─────
   github-release:
-    needs: [version, publish-pypi, publish-docker, publish-docs]
+    needs: [version, publish-pypi, publish-docker, publish-tree-editor, publish-docs]
     runs-on: ubuntu-latest
     environment:
       name: release

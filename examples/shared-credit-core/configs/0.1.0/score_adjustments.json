@@ -1,0 +1,49 @@
+{
+  "type": "adjustment_stack",
+  "name": "apply_score_adjustments",
+  "target": "score",
+  "set_id": "AS-2026.09",
+  "base_field": "score_raw",
+  "adjustments": [
+    {
+      "adjustment_id": "ADJ-2026-001",
+      "kind": "score_shift",
+      "target": "score",
+      "effect": {
+        "op": "add",
+        "value": -18.0
+      },
+      "scope": {
+        "segment_code": 3
+      },
+      "stack_position": 1,
+      "owner": "Credit Risk Policy",
+      "approval_reference": "CRC-2026-014",
+      "rationale": "New-to-bank segment defaulting above model prediction for two quarters",
+      "effective_from": "2026-01-01",
+      "effective_to": null,
+      "review_date": "2026-12-31",
+      "tighten_only": true
+    },
+    {
+      "adjustment_id": "ADJ-2026-002",
+      "kind": "score_shift",
+      "target": "score",
+      "effect": {
+        "op": "add",
+        "value": -5.0
+      },
+      "scope": {
+        "channel_code": 4
+      },
+      "stack_position": 2,
+      "owner": "Credit Risk Policy",
+      "approval_reference": "CRC-2026-019",
+      "rationale": "Broker channel 4 showing early-life deterioration",
+      "effective_from": "2026-06-01",
+      "effective_to": "2027-06-01",
+      "review_date": "2027-01-01",
+      "tighten_only": true
+    }
+  ]
+}

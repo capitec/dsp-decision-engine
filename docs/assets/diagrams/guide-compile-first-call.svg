@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 430" font-family="system-ui, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4b5563"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1000" height="430" fill="#ffffff"/>
+
+  <!-- timeline axis -->
+  <line x1="30" y1="60" x2="970" y2="60" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="30" y="40" font-size="15" font-weight="600" fill="#1f2937">one process, over time</text>
+
+  <!-- bind -->
+  <rect x="30" y="80" width="150" height="110" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="105" y="108" text-anchor="middle" font-size="16" font-weight="600" fill="#1e3a8a">compile(mode)</text>
+  <text x="105" y="134" text-anchor="middle" font-size="14" fill="#1e3a8a">wire and check</text>
+  <text x="105" y="156" text-anchor="middle" font-size="14" fill="#1e3a8a">the plan; no</text>
+  <text x="105" y="178" text-anchor="middle" font-size="14" fill="#1e3a8a">numba work yet</text>
+
+  <!-- first call -->
+  <rect x="200" y="80" width="470" height="110" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="435" y="108" text-anchor="middle" font-size="16" font-weight="600" fill="#134e4a">first run(): compile</text>
+  <rect x="215" y="120" width="215" height="58" rx="8" fill="#ffffff" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="322" y="144" text-anchor="middle" font-size="14" fill="#134e4a">each step: njit, typed</text>
+  <text x="322" y="164" text-anchor="middle" font-size="14" fill="#134e4a">from the annotations</text>
+  <rect x="440" y="120" width="215" height="58" rx="8" fill="#ffffff" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="547" y="144" text-anchor="middle" font-size="14" fill="#134e4a">kernels assembled from</text>
+  <text x="547" y="164" text-anchor="middle" font-size="14" fill="#134e4a">the compiled steps</text>
+
+  <!-- later calls -->
+  <rect x="690" y="80" width="280" height="110" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="830" y="108" text-anchor="middle" font-size="16" font-weight="600" fill="#14532d">every later call</text>
+  <text x="830" y="134" text-anchor="middle" font-size="14" fill="#14532d">same kernels; params bundle</text>
+  <text x="830" y="156" text-anchor="middle" font-size="14" fill="#14532d">cached per document; new param</text>
+  <text x="830" y="178" text-anchor="middle" font-size="14" fill="#14532d">values never recompile</text>
+
+  <!-- caches -->
+  <rect x="200" y="240" width="215" height="160" rx="10" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="307" y="266" text-anchor="middle" font-size="15" font-weight="600" fill="#1f2937">disk: numba cache</text>
+  <text x="307" y="292" text-anchor="middle" font-size="14" fill="#1f2937">__pycache__/*.nbi, *.nbc</text>
+  <text x="307" y="314" text-anchor="middle" font-size="14" fill="#1f2937">next to your step's file;</text>
+  <text x="307" y="336" text-anchor="middle" font-size="14" fill="#1f2937">keyed by the function's</text>
+  <text x="307" y="358" text-anchor="middle" font-size="14" fill="#1f2937">content, CPU and decikit's</text>
+  <text x="307" y="380" text-anchor="middle" font-size="14" fill="#1f2937">compile semantics</text>
+  <line x1="322" y1="178" x2="310" y2="236" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <rect x="455" y="240" width="215" height="160" rx="10" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="562" y="266" text-anchor="middle" font-size="15" font-weight="600" fill="#1f2937">memory only</text>
+  <text x="562" y="292" text-anchor="middle" font-size="14" fill="#1f2937">fused and stepped kernels</text>
+  <text x="562" y="314" text-anchor="middle" font-size="14" fill="#1f2937">are built once per process</text>
+  <text x="562" y="336" text-anchor="middle" font-size="14" fill="#1f2937">and never written to disk,</text>
+  <text x="562" y="358" text-anchor="middle" font-size="14" fill="#1f2937">so every new process pays</text>
+  <text x="562" y="380" text-anchor="middle" font-size="14" fill="#1f2937">this part again</text>
+  <line x1="547" y1="178" x2="557" y2="236" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <rect x="710" y="240" width="260" height="160" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="840" y="266" text-anchor="middle" font-size="15" font-weight="600" fill="#4c1d95">keeping it off requests</text>
+  <text x="840" y="292" text-anchor="middle" font-size="14" fill="#4c1d95">decikit build scores</text>
+  <text x="840" y="314" text-anchor="middle" font-size="14" fill="#4c1d95">sample_request.json, which</text>
+  <text x="840" y="336" text-anchor="middle" font-size="14" fill="#4c1d95">fills the disk cache; a server</text>
+  <text x="840" y="358" text-anchor="middle" font-size="14" fill="#4c1d95">worker warms its kernels</text>
+  <text x="840" y="380" text-anchor="middle" font-size="14" fill="#4c1d95">before answering /ping</text>
+</svg>

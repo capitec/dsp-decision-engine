@@ -1,0 +1,67 @@
+{
+  "type": "reason_codes",
+  "name": "client_reason_codes",
+  "version": "consolidation-client-2026.09",
+  "codes": [
+    {
+      "code": 2001,
+      "severity_rank": 1,
+      "description": "The client is under debt review",
+      "is_regulatory": true
+    },
+    {
+      "code": 2002,
+      "severity_rank": 2,
+      "description": "The client is under administration or sequestration",
+      "is_regulatory": true
+    },
+    {
+      "code": 2003,
+      "severity_rank": 5,
+      "description": "No verified income at the decision date",
+      "is_regulatory": true
+    },
+    {
+      "code": 2004,
+      "severity_rank": 6,
+      "description": "No bureau view could be obtained",
+      "is_regulatory": true
+    },
+    {
+      "code": 2006,
+      "severity_rank": 15,
+      "description": "An active reckless lending allegation is on file",
+      "is_regulatory": true
+    },
+    {
+      "code": 2005,
+      "severity_rank": 20,
+      "description": "A consolidation concluded in the last 6 months",
+      "is_regulatory": true
+    },
+    {
+      "code": 2007,
+      "severity_rank": 25,
+      "description": "An account the client asked to settle cannot be settled",
+      "is_regulatory": false
+    },
+    {
+      "code": 2008,
+      "severity_rank": 40,
+      "description": "No scenario passed every intervention",
+      "is_regulatory": true
+    },
+    {
+      "code": 2010,
+      "severity_rank": 7,
+      "description": "Affordability could not be established on the evidence",
+      "is_regulatory": true
+    },
+    {
+      "code": 2009,
+      "severity_rank": 45,
+      "description": "The request is not affordable as made and consolidation does not apply",
+      "is_regulatory": true
+    }
+  ]
+}

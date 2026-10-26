@@ -1,0 +1,9 @@
+{
+  "applicants": {
+    "type": "file",
+    "path": "applicants.csv",
+    "key": [
+      "client_id"
+    ]
+  }
+}

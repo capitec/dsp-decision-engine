@@ -1,0 +1,905 @@
+{
+ "default_tree": {
+  "parameters_col": "parameters",
+  "parameters": {},
+  "output": {
+   "dtypes": [
+    [
+     "Action",
+     "string"
+    ],
+    [
+     "Description",
+     "string"
+    ]
+   ],
+   "type_defs": {},
+   "data": [
+    {
+     "Action": "Alert",
+     "Description": "A rule suggests that there is an alert"
+    },
+    {
+     "Action": "Block",
+     "Description": "This is more serious and must be blocked"
+    }
+   ],
+   "default": {
+    "Action": "Allow",
+    "Description": "Default Action"
+   }
+  },
+  "type": "ui-tree",
+  "metadata": null,
+  "edges": [],
+  "nodes": [
+   {
+    "id": "node-1",
+    "position": {
+     "x": 100.0,
+     "y": 100.0
+    },
+    "data": {
+     "meta": null,
+     "type": "leaf",
+     "result_idx": -1,
+     "id": null
+    }
+   }
+  ],
+  "subtrees": [],
+  "input_schema": null,
+  "formatVersion": 3
+ },
+ "default_flat": {
+  "parameters_col": "parameters",
+  "parameters": {},
+  "output": {
+   "dtypes": [],
+   "type_defs": {},
+   "data": [],
+   "default": null
+  },
+  "type": "prioritized_flat_rule",
+  "input_schema": null,
+  "rules": [],
+  "mode": "first_match",
+  "use_optimized_execution": false,
+  "output_fn": null,
+  "post_process_fn": null,
+  "format_prioritized_fn": null
+ },
+ "rich_v3": {
+  "parameters_col": "parameters",
+  "parameters": {
+   "hi": {
+    "type": "Float64",
+    "default_value": 0.7
+   },
+   "codes": {
+    "type": "Int64",
+    "default_value": 3
+   }
+  },
+  "output": {
+   "dtypes": [
+    [
+     "Action",
+     "string"
+    ],
+    [
+     "Severity",
+     "Int64"
+    ],
+    [
+     "Tier",
+     {
+      "type": "Custom",
+      "type_id": "tier"
+     }
+    ]
+   ],
+   "type_defs": {
+    "tier": {
+     "name": "tier",
+     "type": "categorical",
+     "definition": {
+      "categories": [
+       "gold",
+       "silver"
+      ]
+     }
+    }
+   },
+   "data": [
+    {
+     "Action": "Alert",
+     "Severity": 1,
+     "Tier": "gold"
+    },
+    {
+     "Action": "Block",
+     "Severity": 2,
+     "Tier": "silver"
+    }
+   ],
+   "default": {
+    "Action": "Allow",
+    "Severity": 0,
+    "Tier": "silver"
+   }
+  },
+  "type": "ui-tree",
+  "metadata": {
+   "name": "n",
+   "description": "d"
+  },
+  "edges": [
+   {
+    "id": "root->cmp",
+    "source": "root",
+    "target": "cmp",
+    "data": {
+     "sourceIndex": [
+      0
+     ]
+    }
+   },
+   {
+    "id": "root->rng",
+    "source": "root",
+    "target": "rng",
+    "data": {
+     "sourceIndex": [
+      1
+     ]
+    }
+   },
+   {
+    "id": "cmp->str",
+    "source": "cmp",
+    "target": "str",
+    "data": {
+     "sourceIndex": [
+      0
+     ]
+    }
+   },
+   {
+    "id": "cmp->isin",
+    "source": "cmp",
+    "target": "isin",
+    "data": {
+     "sourceIndex": [
+      1
+     ]
+    }
+   },
+   {
+    "id": "rng->btw",
+    "source": "rng",
+    "target": "btw",
+    "data": {
+     "sourceIndex": [
+      0
+     ]
+    }
+   },
+   {
+    "id": "rng->l1",
+    "source": "rng",
+    "target": "l1",
+    "data": {
+     "sourceIndex": [
+      1,
+      2
+     ]
+    }
+   },
+   {
+    "id": "str->l0",
+    "source": "str",
+    "target": "l0",
+    "data": {
+     "sourceIndex": [
+      0
+     ]
+    }
+   },
+   {
+    "id": "str->ld",
+    "source": "str",
+    "target": "ld",
+    "data": {
+     "sourceIndex": [
+      1
+     ]
+    }
+   },
+   {
+    "id": "isin->bool",
+    "source": "isin",
+    "target": "bool",
+    "data": {
+     "sourceIndex": [
+      0,
+      1,
+      2
+     ]
+    }
+   },
+   {
+    "id": "btw->l0",
+    "source": "btw",
+    "target": "l0",
+    "data": {
+     "sourceIndex": [
+      0
+     ]
+    }
+   },
+   {
+    "id": "bool->l1",
+    "source": "bool",
+    "target": "l1",
+    "data": {
+     "sourceIndex": [
+      0
+     ]
+    }
+   }
+  ],
+  "nodes": [
+   {
+    "id": "root",
+    "position": {
+     "x": 0.0,
+     "y": 10.5
+    },
+    "data": {
+     "meta": {
+      "position": {
+       "x": 1.0,
+       "y": 2.0
+      }
+     },
+     "type": "unary",
+     "id": null,
+     "condition": {
+      "type": "unary",
+      "feature": "x",
+      "threshold": {
+       "key": "hi"
+      },
+      "op": ">"
+     }
+    }
+   },
+   {
+    "id": "cmp",
+    "position": {
+     "x": 0.0,
+     "y": 10.5
+    },
+    "data": {
+     "meta": null,
+     "type": "composite",
+     "id": null,
+     "op": "and",
+     "conditions": [
+      {
+       "type": "unary",
+       "feature": "code",
+       "op": "isin",
+       "values": [
+        1,
+        2
+       ]
+      },
+      {
+       "type": "composite",
+       "id": "1ff4ca21-6eb7-480e-ac0d-015715cbca27",
+       "op": "not",
+       "conditions": [
+        {
+         "type": "unary",
+         "feature": "s",
+         "op": "string_match",
+         "patterns": [
+          "ab"
+         ],
+         "match_type": "starts_with",
+         "case_sensitive": false,
+         "trim_whitespace": true
+        }
+       ]
+      }
+     ]
+    }
+   },
+   {
+    "id": "rng",
+    "position": {
+     "x": 0.0,
+     "y": 10.5
+    },
+    "data": {
+     "meta": null,
+     "type": "cases",
+     "id": null,
+     "feature": {
+      "type": "computed",
+      "expression": "x * 2 - code"
+     },
+     "op": "ranges",
+     "end_logic": "upper_inclusive",
+     "strict": true,
+     "conditions": [
+      {
+       "min": null,
+       "max": 1.0
+      },
+      {
+       "min": 1.0,
+       "max": {
+        "key": "hi"
+       }
+      }
+     ]
+    }
+   },
+   {
+    "id": "str",
+    "position": {
+     "x": 0.0,
+     "y": 10.5
+    },
+    "data": {
+     "meta": null,
+     "type": "cases",
+     "id": null,
+     "feature": "s",
+     "op": "string_match",
+     "match_type": "contains",
+     "case_sensitive": true,
+     "trim_whitespace": false,
+     "conditions": [
+      {
+       "patterns": [
+        "a",
+        "b"
+       ]
+      }
+     ]
+    }
+   },
+   {
+    "id": "isin",
+    "position": {
+     "x": 0.0,
+     "y": 10.5
+    },
+    "data": {
+     "meta": null,
+     "type": "cases",
+     "id": null,
+     "feature": "code",
+     "op": "isin",
+     "conditions": [
+      {
+       "values": [
+        1
+       ]
+      },
+      {
+       "values": {
+        "key": "codes"
+       }
+      }
+     ]
+    }
+   },
+   {
+    "id": "btw",
+    "position": {
+     "x": 0.0,
+     "y": 10.5
+    },
+    "data": {
+     "meta": null,
+     "type": "unary",
+     "id": null,
+     "condition": {
+      "type": "unary",
+      "feature": "x",
+      "op": "between",
+      "min": 0.1,
+      "max": 0.9
+     }
+    }
+   },
+   {
+    "id": "bool",
+    "position": {
+     "x": 0.0,
+     "y": 10.5
+    },
+    "data": {
+     "meta": null,
+     "type": "unary",
+     "id": null,
+     "condition": {
+      "type": "unary",
+      "feature": "b",
+      "op": "is_true"
+     }
+    }
+   },
+   {
+    "id": "l0",
+    "position": {
+     "x": 0.0,
+     "y": 10.5
+    },
+    "data": {
+     "meta": null,
+     "type": "leaf",
+     "result_idx": 0,
+     "id": null
+    }
+   },
+   {
+    "id": "l1",
+    "position": {
+     "x": 0.0,
+     "y": 10.5
+    },
+    "data": {
+     "meta": null,
+     "type": "leaf",
+     "result_idx": 1,
+     "id": null
+    }
+   },
+   {
+    "id": "ld",
+    "position": {
+     "x": 0.0,
+     "y": 10.5
+    },
+    "data": {
+     "meta": null,
+     "type": "leaf",
+     "result_idx": -1,
+     "id": null
+    }
+   }
+  ],
+  "subtrees": [
+   {
+    "id": "root",
+    "name": "Main"
+   }
+  ],
+  "input_schema": [
+   [
+    "x",
+    "Float64"
+   ],
+   [
+    "s",
+    "String"
+   ]
+  ],
+  "formatVersion": 3
+ },
+ "rich_flat": {
+  "parameters_col": "parameters",
+  "parameters": {
+   "hi": {
+    "type": "Float64",
+    "default_value": 0.7
+   },
+   "codes": {
+    "type": "Int64",
+    "default_value": 3
+   }
+  },
+  "output": {
+   "dtypes": [
+    [
+     "Action",
+     "string"
+    ],
+    [
+     "Severity",
+     "Int64"
+    ],
+    [
+     "Tier",
+     {
+      "type": "Custom",
+      "type_id": "tier"
+     }
+    ]
+   ],
+   "type_defs": {
+    "tier": {
+     "name": "tier",
+     "type": "categorical",
+     "definition": {
+      "categories": [
+       "gold",
+       "silver"
+      ]
+     }
+    }
+   },
+   "data": [
+    {
+     "Action": "Alert",
+     "Severity": 1,
+     "Tier": "gold"
+    },
+    {
+     "Action": "Block",
+     "Severity": 2,
+     "Tier": "silver"
+    }
+   ],
+   "default": {
+    "Action": "Allow",
+    "Severity": 0,
+    "Tier": "silver"
+   }
+  },
+  "type": "prioritized_flat_rule",
+  "input_schema": [
+   [
+    "x",
+    "Float64"
+   ]
+  ],
+  "rules": [
+   {
+    "meta": {
+     "name": "R1",
+     "description": "first"
+    },
+    "rule": {
+     "then": {
+      "meta": null,
+      "type": "leaf",
+      "id": "36cfb859-68ce-40be-a0ba-9cbffea1d6ac",
+      "result_idx": 0
+     },
+     "otherwise": null,
+     "meta": null,
+     "type": "unary",
+     "id": "u1",
+     "condition": {
+      "type": "unary",
+      "feature": "x",
+      "threshold": {
+       "key": "hi"
+      },
+      "op": ">"
+     }
+    }
+   },
+   {
+    "meta": {
+     "name": "R2",
+     "description": null
+    },
+    "rule": {
+     "otherwise": 2,
+     "branches": [
+      {
+       "meta": null,
+       "type": "leaf",
+       "id": "14cd7e8d-dc86-4d66-a7a8-47164815c351",
+       "result_idx": 0
+      },
+      {
+       "then": {
+        "meta": null,
+        "type": "leaf",
+        "id": "c2344c38-7bf1-4957-9a72-e73d64f67793",
+        "result_idx": 1
+       },
+       "otherwise": {
+        "meta": null,
+        "type": "leaf",
+        "id": "889f1cd1-c54a-46d1-9669-5b1f97a58b25",
+        "result_idx": -1
+       },
+       "meta": null,
+       "type": "composite",
+       "id": "24ccd7a2-c617-426c-b96c-58fcc4dbd8da",
+       "op": "or",
+       "conditions": [
+        {
+         "type": "unary",
+         "feature": "x",
+         "threshold": {
+          "key": "hi"
+         },
+         "op": ">"
+        },
+        {
+         "type": "unary",
+         "feature": "x",
+         "threshold": 0.1,
+         "op": "<"
+        }
+       ]
+      },
+      {
+       "meta": null,
+       "type": "leaf",
+       "id": "b7710cb9-099f-4bbd-b80d-f03272d44fec",
+       "result_idx": -1
+      }
+     ],
+     "meta": null,
+     "type": "cases",
+     "id": "eefc62da-3a42-4572-8590-a8e2f239b458",
+     "feature": "x",
+     "op": "ranges",
+     "end_logic": "lower_inclusive",
+     "strict": false,
+     "conditions": [
+      {
+       "when": {
+        "min": null,
+        "max": 0.5
+       },
+       "then": 0
+      },
+      {
+       "when": {
+        "min": 0.5,
+        "max": {
+         "key": "hi"
+        }
+       },
+       "then": 1
+      }
+     ]
+    }
+   },
+   {
+    "meta": {
+     "name": "R3",
+     "description": null
+    },
+    "rule": {
+     "otherwise": 1,
+     "branches": [
+      {
+       "meta": null,
+       "type": "leaf",
+       "id": "8e66e5cf-d3bf-4337-8f93-3edea8de3e11",
+       "result_idx": 1
+      },
+      {
+       "meta": null,
+       "type": "leaf",
+       "id": "9293c233-c73c-4a29-b1aa-23113800ad3a",
+       "result_idx": -1
+      }
+     ],
+     "meta": null,
+     "type": "cases",
+     "id": "17842e4f-153a-4643-98fb-485c815dd483",
+     "feature": "s",
+     "op": "string_match",
+     "match_type": "exact",
+     "case_sensitive": true,
+     "trim_whitespace": false,
+     "conditions": [
+      {
+       "when": {
+        "patterns": [
+         "x"
+        ]
+       },
+       "then": 0
+      }
+     ]
+    }
+   }
+  ],
+  "mode": "first_match",
+  "use_optimized_execution": false,
+  "output_fn": null,
+  "post_process_fn": null,
+  "format_prioritized_fn": null
+ },
+ "upgraded_v1": {
+  "parameters_col": "variables",
+  "parameters": {},
+  "output": {
+   "dtypes": [
+    [
+     "action",
+     "String"
+    ]
+   ],
+   "type_defs": {},
+   "data": [
+    {
+     "action": "action1"
+    },
+    {
+     "action": "action2"
+    },
+    {
+     "action": "action3"
+    }
+   ],
+   "default": {
+    "action": "action0"
+   }
+  },
+  "type": "ui-tree",
+  "metadata": {
+   "name": "Multi Subtree",
+   "description": "Tree with multiple subtrees"
+  },
+  "edges": [
+   {
+    "id": "95d43186-3d55-4478-967e-e619c604a9c9",
+    "source": "root1",
+    "target": "leaf1_left",
+    "data": {
+     "sourceIndex": [
+      0
+     ]
+    }
+   },
+   {
+    "id": "aa268f20-b8a9-4dd5-836c-ed01989fe2d9",
+    "source": "root1",
+    "target": "leaf1_right",
+    "data": {
+     "sourceIndex": [
+      1
+     ]
+    }
+   },
+   {
+    "id": "846a1a7d-b8e2-4d38-bde0-96d562719056",
+    "source": "root2",
+    "target": "leaf2_left",
+    "data": {
+     "sourceIndex": [
+      0
+     ]
+    }
+   },
+   {
+    "id": "e4b61732-4acc-4ab1-b51a-28076017df1a",
+    "source": "root2",
+    "target": "leaf2_right",
+    "data": {
+     "sourceIndex": [
+      1
+     ]
+    }
+   }
+  ],
+  "nodes": [
+   {
+    "id": "root1",
+    "position": {
+     "x": 0.0,
+     "y": 0.0
+    },
+    "data": {
+     "meta": null,
+     "type": "unary",
+     "id": null,
+     "condition": {
+      "type": "unary",
+      "feature": "feature_0",
+      "threshold": 5.0,
+      "op": "<="
+     }
+    }
+   },
+   {
+    "id": "root2",
+    "position": {
+     "x": 200.0,
+     "y": 0.0
+    },
+    "data": {
+     "meta": null,
+     "type": "unary",
+     "id": null,
+     "condition": {
+      "type": "unary",
+      "feature": "feature_1",
+      "threshold": 10.0,
+      "op": "<="
+     }
+    }
+   },
+   {
+    "id": "leaf1_left",
+    "position": {
+     "x": -50.0,
+     "y": 100.0
+    },
+    "data": {
+     "meta": null,
+     "type": "leaf",
+     "result_idx": -1,
+     "id": null
+    }
+   },
+   {
+    "id": "leaf1_right",
+    "position": {
+     "x": 50.0,
+     "y": 100.0
+    },
+    "data": {
+     "meta": null,
+     "type": "leaf",
+     "result_idx": 0,
+     "id": null
+    }
+   },
+   {
+    "id": "leaf2_left",
+    "position": {
+     "x": 150.0,
+     "y": 100.0
+    },
+    "data": {
+     "meta": null,
+     "type": "leaf",
+     "result_idx": 1,
+     "id": null
+    }
+   },
+   {
+    "id": "leaf2_right",
+    "position": {
+     "x": 250.0,
+     "y": 100.0
+    },
+    "data": {
+     "meta": null,
+     "type": "leaf",
+     "result_idx": 2,
+     "id": null
+    }
+   }
+  ],
+  "subtrees": [
+   {
+    "id": "root2",
+    "name": "First Priority"
+   },
+   {
+    "id": "root1",
+    "name": "Second Priority"
+   }
+  ],
+  "input_schema": [
+   [
+    "feature_0",
+    "float32"
+   ],
+   [
+    "feature_1",
+    "float32"
+   ]
+  ],
+  "formatVersion": 3
+ }
+}

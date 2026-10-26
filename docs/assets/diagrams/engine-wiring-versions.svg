@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 540" font-family="system-ui, sans-serif">
+<rect x="0" y="0" width="1100" height="540" fill="#ffffff"/>
+<rect x="442" y="84" width="512" height="368" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="6 4"/>
+<text x="452" y="101" font-size="13" fill="#1e3a8a">branch scope: credit/by_employment</text>
+<text x="250" y="40" font-size="14" font-weight="600" fill="#1f2937" text-anchor="middle">input</text>
+<text x="250" y="62" font-size="13" fill="#1f2937" text-anchor="middle">columns</text>
+<text x="378" y="40" font-size="14" font-weight="600" fill="#1f2937" text-anchor="middle">#0</text>
+<text x="378" y="62" font-size="13" fill="#1f2937" text-anchor="middle">disposable_income</text>
+<line x1="378" y1="106" x2="378" y2="448" stroke="#9ca3af" stroke-width="1.5"/>
+<text x="506" y="40" font-size="14" font-weight="600" fill="#1f2937" text-anchor="middle">#1</text>
+<text x="506" y="62" font-size="13" fill="#1f2937" text-anchor="middle">salaried</text>
+<line x1="506" y1="106" x2="506" y2="448" stroke="#9ca3af" stroke-width="1.5"/>
+<text x="634" y="40" font-size="14" font-weight="600" fill="#1f2937" text-anchor="middle">#2</text>
+<text x="634" y="62" font-size="13" fill="#1f2937" text-anchor="middle">salaried_limit</text>
+<line x1="634" y1="106" x2="634" y2="448" stroke="#9ca3af" stroke-width="1.5"/>
+<text x="762" y="40" font-size="14" font-weight="600" fill="#1f2937" text-anchor="middle">#3</text>
+<text x="762" y="62" font-size="13" fill="#1f2937" text-anchor="middle">other_limit</text>
+<line x1="762" y1="106" x2="762" y2="448" stroke="#9ca3af" stroke-width="1.5"/>
+<text x="890" y="40" font-size="14" font-weight="600" fill="#1f2937" text-anchor="middle">merge</text>
+<text x="890" y="62" font-size="13" fill="#1f2937" text-anchor="middle">by_employment</text>
+<line x1="890" y1="106" x2="890" y2="448" stroke="#9ca3af" stroke-width="1.5"/>
+<text x="1018" y="40" font-size="14" font-weight="600" fill="#1f2937" text-anchor="middle">#4</text>
+<text x="1018" y="62" font-size="13" fill="#1f2937" text-anchor="middle">affordable</text>
+<line x1="1018" y1="106" x2="1018" y2="448" stroke="#9ca3af" stroke-width="1.5"/>
+<line x1="190" y1="120" x2="1090" y2="120" stroke="#e5e7eb" stroke-width="1.5"/>
+<text x="182" y="125" font-size="14" fill="#1f2937" text-anchor="end">net_income</text>
+<line x1="190" y1="164" x2="1090" y2="164" stroke="#e5e7eb" stroke-width="1.5"/>
+<text x="182" y="169" font-size="14" fill="#1f2937" text-anchor="end">expenses</text>
+<line x1="190" y1="208" x2="1090" y2="208" stroke="#e5e7eb" stroke-width="1.5"/>
+<text x="182" y="213" font-size="14" fill="#1f2937" text-anchor="end">disposable_income</text>
+<line x1="190" y1="252" x2="1090" y2="252" stroke="#e5e7eb" stroke-width="1.5"/>
+<text x="182" y="257" font-size="14" fill="#1f2937" text-anchor="end">employment_type</text>
+<line x1="190" y1="296" x2="1090" y2="296" stroke="#e5e7eb" stroke-width="1.5"/>
+<text x="182" y="301" font-size="14" fill="#1f2937" text-anchor="end">salaried</text>
+<line x1="190" y1="340" x2="1090" y2="340" stroke="#e5e7eb" stroke-width="1.5"/>
+<text x="182" y="345" font-size="14" fill="#1f2937" text-anchor="end">limit</text>
+<line x1="190" y1="384" x2="1090" y2="384" stroke="#e5e7eb" stroke-width="1.5"/>
+<text x="182" y="389" font-size="14" fill="#1f2937" text-anchor="end">instalment</text>
+<line x1="190" y1="428" x2="1090" y2="428" stroke="#e5e7eb" stroke-width="1.5"/>
+<text x="182" y="433" font-size="14" fill="#1f2937" text-anchor="end">affordable</text>
+<rect x="222.0" y="107" width="56" height="26" rx="9" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+<text x="250" y="125" font-size="14" fill="#1f2937" text-anchor="middle">v0</text>
+<rect x="222.0" y="151" width="56" height="26" rx="9" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+<text x="250" y="169" font-size="14" fill="#1f2937" text-anchor="middle">v1</text>
+<rect x="222.0" y="239" width="56" height="26" rx="9" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+<text x="250" y="257" font-size="14" fill="#1f2937" text-anchor="middle">v3</text>
+<rect x="222.0" y="371" width="56" height="26" rx="9" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+<text x="250" y="389" font-size="14" fill="#1f2937" text-anchor="middle">v8</text>
+<circle cx="378" cy="120" r="15" fill="#ffffff" stroke="#0d9488" stroke-width="1.5"/>
+<text x="378" y="125" font-size="13" fill="#134e4a" text-anchor="middle">v0</text>
+<circle cx="378" cy="164" r="15" fill="#ffffff" stroke="#0d9488" stroke-width="1.5"/>
+<text x="378" y="169" font-size="13" fill="#134e4a" text-anchor="middle">v1</text>
+<rect x="350.0" y="195" width="56" height="26" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+<text x="378" y="213" font-size="14" fill="#14532d" text-anchor="middle">v2</text>
+<circle cx="506" cy="252" r="15" fill="#ffffff" stroke="#0d9488" stroke-width="1.5"/>
+<text x="506" y="257" font-size="13" fill="#134e4a" text-anchor="middle">v3</text>
+<rect x="478.0" y="283" width="56" height="26" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+<text x="506" y="301" font-size="14" fill="#14532d" text-anchor="middle">v4</text>
+<circle cx="634" cy="208" r="15" fill="#ffffff" stroke="#0d9488" stroke-width="1.5"/>
+<text x="634" y="213" font-size="13" fill="#134e4a" text-anchor="middle">v2</text>
+<rect x="606.0" y="327" width="56" height="26" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+<text x="634" y="345" font-size="14" fill="#14532d" text-anchor="middle">v5</text>
+<circle cx="762" cy="208" r="15" fill="#ffffff" stroke="#0d9488" stroke-width="1.5"/>
+<text x="762" y="213" font-size="13" fill="#134e4a" text-anchor="middle">v2</text>
+<rect x="734.0" y="327" width="56" height="26" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+<text x="762" y="345" font-size="14" fill="#14532d" text-anchor="middle">v6</text>
+<rect x="835.0" y="327" width="110" height="26" rx="9" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+<text x="890" y="345" font-size="14" fill="#134e4a" text-anchor="middle">v7 ← v5 | v6</text>
+<circle cx="1018" cy="208" r="15" fill="#ffffff" stroke="#0d9488" stroke-width="1.5"/>
+<text x="1018" y="213" font-size="13" fill="#134e4a" text-anchor="middle">v2</text>
+<circle cx="1018" cy="384" r="15" fill="#ffffff" stroke="#0d9488" stroke-width="1.5"/>
+<text x="1018" y="389" font-size="13" fill="#134e4a" text-anchor="middle">v8</text>
+<rect x="990.0" y="415" width="56" height="26" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+<text x="1018" y="433" font-size="14" fill="#14532d" text-anchor="middle">v9</text>
+<rect x="20" y="472" width="56" height="22" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+<text x="86" y="488" font-size="13" fill="#1f2937">a version written by that call</text>
+<circle cx="330" cy="483" r="11" fill="#ffffff" stroke="#0d9488" stroke-width="1.5"/>
+<text x="350" y="488" font-size="13" fill="#1f2937">the version that call reads</text>
+<rect x="560" y="472" width="56" height="22" rx="8" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+<text x="626" y="488" font-size="13" fill="#1f2937">an input column (producer None)</text>
+<text x="20" y="518" font-size="13" fill="#1f2937">Plan.outputs: net_income v0, expenses v1, employment_type v3, instalment v8, limit v7, affordable v9</text>
+</svg>

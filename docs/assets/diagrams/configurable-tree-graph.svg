@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 480" font-family="system-ui, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4b5563"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1000" height="480" fill="#ffffff"/>
+
+  <!-- dti -->
+  <rect x="370" y="16" width="260" height="62" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="500" y="40" text-anchor="middle" font-size="15" font-weight="600" fill="#1e3a8a">dti (unary)</text>
+  <text x="500" y="62" text-anchor="middle" font-size="13" fill="#1e3a8a">dti &gt; max_dti (param, default 0.45)</text>
+
+  <!-- decline -->
+  <rect x="60" y="150" width="200" height="56" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="160" y="173" text-anchor="middle" font-size="15" font-weight="600" fill="#14532d">decline (leaf 0)</text>
+  <text x="160" y="194" text-anchor="middle" font-size="13" fill="#14532d">decision=decline, limit=0</text>
+
+  <!-- channel -->
+  <rect x="540" y="140" width="280" height="76" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="680" y="164" text-anchor="middle" font-size="15" font-weight="600" fill="#1e3a8a">channel (cases, string_match)</text>
+  <text x="680" y="186" text-anchor="middle" font-size="13" fill="#1e3a8a">case 0: "branch"</text>
+  <text x="680" y="204" text-anchor="middle" font-size="13" fill="#1e3a8a">case 1: "app" or "web"</text>
+
+  <!-- surplus -->
+  <rect x="330" y="280" width="300" height="62" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="480" y="304" text-anchor="middle" font-size="15" font-weight="600" fill="#1e3a8a">surplus (unary)</text>
+  <text x="480" y="326" text-anchor="middle" font-size="13" fill="#1e3a8a">computed "income - expenses" &gt;= 5000</text>
+
+  <!-- default -->
+  <rect x="780" y="280" width="200" height="62" rx="10" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text x="880" y="304" text-anchor="middle" font-size="15" font-weight="600" fill="#1f2937">default row</text>
+  <text x="880" y="326" text-anchor="middle" font-size="13" fill="#1f2937">decision=manual, limit null</text>
+
+  <!-- approve, refer -->
+  <rect x="200" y="404" width="210" height="56" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="305" y="427" text-anchor="middle" font-size="15" font-weight="600" fill="#14532d">approve (leaf 1)</text>
+  <text x="305" y="448" text-anchor="middle" font-size="13" fill="#14532d">decision=approve, 50000</text>
+  <rect x="550" y="404" width="210" height="56" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="655" y="427" text-anchor="middle" font-size="15" font-weight="600" fill="#14532d">refer (leaf 2)</text>
+  <text x="655" y="448" text-anchor="middle" font-size="13" fill="#14532d">decision=refer, limit null</text>
+
+  <!-- edges -->
+  <path d="M430,78 L200,148" fill="none" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="196" y="110" font-size="13" fill="#1f2937">branch 0: true</text>
+  <path d="M570,78 L650,138" fill="none" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="624" y="104" font-size="13" fill="#1f2937">branch 1: false or null (+1)</text>
+
+  <path d="M600,216 L470,278" fill="none" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="400" y="244" font-size="13" fill="#1f2937">branch 0 (+0)</text>
+  <path d="M660,216 L560,278" fill="none" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="620" y="258" font-size="13" fill="#1f2937">branch 1 (+0)</text>
+  <path d="M790,216 L860,278" fill="none" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arr)"/>
+  <text x="836" y="240" font-size="13" fill="#1f2937">otherwise: no edge (+4)</text>
+
+  <path d="M420,342 L330,402" fill="none" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="258" y="378" font-size="13" fill="#1f2937">branch 0 (+0)</text>
+  <path d="M540,342 L630,402" fill="none" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="596" y="378" font-size="13" fill="#1f2937">branch 1: false or null (+1)</text>
+</svg>

@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 330" font-family="system-ui, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4b5563"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1000" height="330" fill="#ffffff"/>
+  <rect x="20" y="30" width="200" height="80" rx="10" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+  <text x="120" y="62" font-size="15" font-weight="600" fill="#7c2d00" text-anchor="middle">run(df, trace=sink)</text>
+  <text x="120" y="86" font-size="14" fill="#7c2d00" text-anchor="middle">run(record, trace=sink)</text>
+
+  <rect x="270" y="30" width="200" height="80" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="370" y="58" font-size="15" font-weight="600" fill="#134e4a" text-anchor="middle">runner emits</text>
+  <text x="370" y="80" font-size="13" fill="#134e4a" text-anchor="middle">Python steps: one event per row</text>
+  <text x="370" y="98" font-size="13" fill="#134e4a" text-anchor="middle">kernels: one int64 per event</text>
+
+  <rect x="520" y="30" width="200" height="80" rx="10" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="620" y="58" font-size="15" font-weight="600" fill="#1f2937" text-anchor="middle">conservation</text>
+  <text x="620" y="80" font-size="13" fill="#1f2937" text-anchor="middle">written == declared?</text>
+  <text x="620" y="98" font-size="13" fill="#1f2937" text-anchor="middle">(exact kernels only)</text>
+
+  <rect x="770" y="30" width="210" height="80" rx="10" fill="#fee2e2" stroke="#dc2626" stroke-width="1.5"/>
+  <text x="875" y="58" font-size="15" font-weight="600" fill="#7f1d1d" text-anchor="middle">TraceLossError</text>
+  <text x="875" y="80" font-size="13" fill="#7f1d1d" text-anchor="middle">strict=True (default)</text>
+  <text x="875" y="98" font-size="13" fill="#7f1d1d" text-anchor="middle">strict=False: counted dropped</text>
+
+  <rect x="520" y="150" width="200" height="80" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="620" y="178" font-size="15" font-weight="600" fill="#134e4a" text-anchor="middle">decode and join</text>
+  <text x="620" y="200" font-size="13" fill="#134e4a" text-anchor="middle">step ref to durable Origin</text>
+  <text x="620" y="218" font-size="13" fill="#134e4a" text-anchor="middle">record index per event</text>
+
+  <rect x="270" y="150" width="200" height="80" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="370" y="178" font-size="15" font-weight="600" fill="#14532d" text-anchor="middle">sample_rate, max_events</text>
+  <text x="370" y="200" font-size="13" fill="#14532d" text-anchor="middle">what they leave out is</text>
+  <text x="370" y="218" font-size="13" fill="#14532d" text-anchor="middle">counted as dropped</text>
+
+  <rect x="20" y="150" width="200" height="80" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="120" y="182" font-size="15" font-weight="600" fill="#14532d" text-anchor="middle">sink.events()</text>
+  <text x="120" y="206" font-size="13" fill="#14532d" text-anchor="middle">sink.status()</text>
+
+  <rect x="270" y="260" width="200" height="56" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="370" y="284" font-size="15" font-weight="600" fill="#4c1d95" text-anchor="middle">adapter.accept(events)</text>
+  <text x="370" y="304" font-size="13" fill="#4c1d95" text-anchor="middle">redact, enqueue, export</text>
+
+  <rect x="520" y="260" width="200" height="56" rx="10" fill="#fee2e2" stroke="#dc2626" stroke-width="1.5"/>
+  <text x="620" y="284" font-size="15" font-weight="600" fill="#7f1d1d" text-anchor="middle">adapter raises</text>
+  <text x="620" y="304" font-size="13" fill="#7f1d1d" text-anchor="middle">counted failed; run goes on</text>
+
+  <path d="M220,70 L266,70" stroke="#4b5563" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+  <path d="M470,70 L516,70" stroke="#4b5563" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+  <path d="M720,70 L766,70" stroke="#4b5563" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+  <text x="743" y="62" font-size="13" fill="#1f2937" text-anchor="middle">short</text>
+  <path d="M620,110 L620,146" stroke="#4b5563" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+  <text x="634" y="134" font-size="13" fill="#1f2937">ok</text>
+  <path d="M520,190 L474,190" stroke="#4b5563" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+  <path d="M270,190 L224,190" stroke="#4b5563" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+  <path d="M370,230 L370,256" stroke="#4b5563" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+  <path d="M470,288 L516,288" stroke="#4b5563" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+</svg>

@@ -1,0 +1,259 @@
+from __future__ import annotations
+
+import subprocess
+import sys
+
+import polars as pl
+import pytest
+
+from decikit import flow
+from decikit.lab.experiments import Experiment, ExperimentDef, RunStatus, run, start
+from decikit.lab.experiments._experiments import ScenarioStatus
+from decikit.lab.diff._revisions import resolve
+from decikit.lab.experiments.callbacks import Callback
+from decikit.lab.experiments.metrics import Divergence, ValueCounts
+from decikit.lab.experiments import JobStatus
+
+LIMIT_03 = {"demo": {"approved": {"limit": 0.3}}}
+
+
+class Record(Callback):
+    def __init__(self):
+        self.batches, self.done = [], []
+
+    def on_batch_end(self, batch):
+        self.batches.append((batch.scenario, batch.index, batch.offset, batch.output.height))
+
+    def on_progress(self, run, done):
+        self.done.append(done)
+
+
+def test_baseline_and_a_variant_run_with_a_manifest(pipeline, frame):
+    result = (Experiment("demo-drift", pipeline, frame)
+              .scenario("limit_0.3", params=LIMIT_03)
+              .metric(Divergence(column="tier"))
+              .run())
+
+    assert result.status is RunStatus.COMPLETED
+    assert not result.nondeterministic
+    assert [(s.name, s.status, s.records) for s in result.scenarios] == [
+        ("baseline", ScenarioStatus.COMPLETED, 4), ("limit_0.3", ScenarioStatus.COMPLETED, 4)]
+    assert result.summaries["divergence"]["limit_0.3"].changed == 1
+    assert result.manifest.kind == "experiment_run"
+    assert result.manifest.input.row_count == 4
+    assert result.manifest.revision.authored == "HEAD"
+    assert result.preflight.ok
+    assert result.cost.rows == 4
+
+
+def test_every_scenario_runs_each_batch_before_the_next_batch_starts(pipeline, frame):
+    record = Record()
+    Experiment("x", pipeline, frame, batch_size=3).scenario("limit_0.3", params=LIMIT_03).callback(record).run()
+
+    assert record.batches == [("baseline", 0, 0, 3), ("limit_0.3", 0, 0, 3),
+                              ("baseline", 1, 3, 1), ("limit_0.3", 1, 3, 1)]
+    assert record.done == [3, 4]
+
+
+def test_a_lazy_frame_gives_the_same_summaries_as_an_eager_one(pipeline, frame):
+    def summaries(f):
+        exp = Experiment("x", pipeline, f, batch_size=3).scenario("limit_0.3", params=LIMIT_03)
+        return exp.metric(Divergence(column="tier")).run().summaries
+
+    assert summaries(frame.lazy()) == summaries(frame)
+
+
+def test_a_failed_scenario_leaves_the_run_partial_not_completed(pipeline, frame):
+    result = (Experiment("x", pipeline, frame)
+              .scenario("bad_cast", at="demo/ratio", overrides={"ratio": "not-a-float"})
+              .metric(Divergence(column="tier"))
+              .run())
+
+    assert result.status is RunStatus.PARTIAL
+    assert result.scenarios[1].status is ScenarioStatus.FAILED
+    assert "doesn't cast" in result.scenarios[1].error
+    assert list(result.summaries["divergence"]) == ["baseline"]
+
+
+def test_a_failing_baseline_fails_the_run(frame):
+    def broken(income: float) -> float:
+        raise ZeroDivisionError("boom")
+
+    result = Experiment("x", flow(broken, name="demo"), frame).run()
+    assert result.status is RunStatus.FAILED
+    assert "boom" in result.scenarios[0].error
+
+
+def test_a_nondeterministic_flow_is_non_reproducible(frame):
+    counter = {"n": 0}
+
+    def drift(income: float, debt: float) -> float:
+        counter["n"] += 1
+        return debt / income + counter["n"] * 1e-12
+
+    result = Experiment("impure", flow(drift, name="demo"), frame).run()
+    assert result.status is RunStatus.NON_REPRODUCIBLE
+    assert result.nondeterministic
+
+
+def test_an_override_at_a_step_is_what_later_steps_read(pipeline, frame):
+    result = (Experiment("x", pipeline, frame)
+              .scenario("force_ratio", at="demo/ratio", overrides={"ratio": 0.1})
+              .metric(ValueCounts(column="approved", nodes="demo/approved"))
+              .run())
+    assert result.summaries["value_counts"]["force_ratio"].counts == {"True": 4}
+
+
+def test_a_row_override_changes_only_that_record_even_in_a_later_batch(pipeline, frame):
+    result = (Experiment("x", pipeline, frame, batch_size=2)
+              .scenario("poor", overrides={"income": 100.0}, row=1)
+              .metric(Divergence(column="tier"))
+              .run())
+    poor = result.summaries["divergence"]["poor"]
+    assert (poor.changed, poor.first) == (1, 1)
+
+
+def test_cancelling_a_started_run_stops_it_after_the_batch(pipeline, frame):
+    class CancelAfterFirst(Callback):
+        def on_batch_end(self, batch):
+            handle.cancel()
+
+    record = Record()
+    handle = Experiment("x", pipeline, frame, batch_size=1).callback(CancelAfterFirst(), record).start()
+    result = handle.result()
+
+    assert result.status is RunStatus.CANCELLED
+    assert record.done == [1]
+    assert handle.status is JobStatus.CANCELLED
+
+
+def test_a_started_run_reports_status_and_progress_and_returns_its_result(pipeline, frame):
+    handle = Experiment("x", pipeline, frame, batch_size=2).start()
+    result = handle.result()
+
+    assert result.status is RunStatus.COMPLETED
+    assert handle.status is JobStatus.SUCCEEDED
+    assert handle.progress == 1.0
+
+
+def test_a_started_run_that_raises_fails_and_result_re_raises(pipeline, frame):
+    exp = Experiment("x", pipeline, frame).scenario("bad", overrides={"nope": 1})
+    handle = exp.start()
+
+    with pytest.raises(ValueError, match="nope"):
+        handle.result()
+    assert handle.status is JobStatus.FAILED
+
+
+def test_out_dir_gets_each_scenarios_output_batches_and_the_result(pipeline, frame, tmp_path):
+    result = (Experiment("x", pipeline, frame, batch_size=3)
+              .scenario("limit_0.3", params=LIMIT_03)
+              .run(out_dir=str(tmp_path)))
+
+    assert pl.scan_parquet(tmp_path / "limit_0.3" / "*.parquet").collect().height == 4
+    assert result.scenarios[1].output_ref.location == str(tmp_path / "limit_0.3")
+    saved = (tmp_path / "result.json").read_text()
+    assert result.model_validate_json(saved).status is RunStatus.COMPLETED
+
+
+def test_a_plain_python_caller_runs_a_json_definition_end_to_end(tmp_path, monkeypatch):
+    (tmp_path / "credit.py").write_text(
+        "from decikit import flow, param\n"
+        "def ratio(income, debt):\n"
+        "    return debt / income if income > 0 else 1.0\n"
+        "def approved(ratio, limit=param(0.4)):\n"
+        "    return ratio <= limit\n"
+        "pipeline = flow(ratio, approved, name='credit')\n"
+    )
+    pl.DataFrame({"income": [1000.0, 1000.0], "debt": [200.0, 350.0]}).write_parquet(tmp_path / "loans.parquet")
+    (tmp_path / "experiment.json").write_text(ExperimentDef(
+        name="drift",
+        flow={"entry": "credit:pipeline"},
+        input={"path": str(tmp_path / "loans.parquet")},
+        scenarios=[{"name": "limit_0.3", "params": {"credit": {"approved": {"limit": 0.3}}}}],
+        metrics=[{"type": "divergence", "column": "approved"}],
+    ).model_dump_json())
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    result = run(ExperimentDef.model_validate_json((tmp_path / "experiment.json").read_text()))
+
+    assert result.status is RunStatus.COMPLETED
+    assert result.manifest.input.dataset == "loans.parquet"
+    assert result.summaries["divergence"]["limit_0.3"].changed == 1
+
+
+def test_run_given_a_path_reads_the_input_relative_to_the_definition_file(tmp_path, monkeypatch):
+    (tmp_path / "credit.py").write_text(
+        "from decikit import flow\n"
+        "def ratio(income, debt):\n"
+        "    return debt / income if income > 0 else 1.0\n"
+        "pipeline = flow(ratio, name='credit')\n"
+    )
+    pl.DataFrame({"income": [1000.0, 1000.0], "debt": [200.0, 350.0]}).write_parquet(tmp_path / "loans.parquet")
+    (tmp_path / "experiment.json").write_text(ExperimentDef(
+        name="drift", flow={"entry": "credit:pipeline"}, input={"path": "loans.parquet"},
+    ).model_dump_json())
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.chdir(elsewhere)
+
+    for given in (tmp_path / "experiment.json", str(tmp_path / "experiment.json")):
+        assert run(given).status is RunStatus.COMPLETED
+
+
+def test_resolve_turns_head_symbols_into_a_sha():
+    sha = resolve("HEAD^")
+    assert sha and len(sha) == 40 and all(c in "0123456789abcdef" for c in sha)
+
+
+def test_a_revision_scenario_runs_the_checked_out_code_even_with_the_live_module_imported(tmp_path, monkeypatch):
+    # Building the experiment imports the live module under the same name the revision's checkout
+    # would load it by. The second commit adds a flat $50 fee to `ratio`.
+    source = (
+        "from decikit import flow, param\n"
+        "def ratio(income: float, debt: float) -> float:\n"
+        "    return (debt + {fee}) / income if income > 0 else 1.0\n"
+        "def approved(ratio: float, limit: float = param(0.35)) -> bool:\n"
+        "    return ratio <= limit\n"
+        "def build():\n"
+        "    return flow(ratio, approved, name='credit')\n"
+    )
+    git = ["git", "-c", "user.name=t", "-c", "user.email=t@t"]
+    subprocess.run(git + ["init", "-q"], cwd=tmp_path, check=True)
+    for fee in ("0.0", "50.0"):
+        (tmp_path / "credit_rev.py").write_text(source.format(fee=fee))
+        subprocess.run(git + ["add", "."], cwd=tmp_path, check=True)
+        subprocess.run(git + ["commit", "-q", "-m", f"fee {fee}"], cwd=tmp_path, check=True)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.delitem(sys.modules, "credit_rev", raising=False)
+    import credit_rev as live
+
+    frame = pl.DataFrame({"income": [1000.0, 2000.0, 1500.0, 800.0], "debt": [350.0, 900.0, 700.0, 300.0]})
+    exp = Experiment("version-drift", live.build(), frame, batch_size=3)
+    exp.def_.flow.entry = "credit_rev:build"
+    result = (exp
+              .scenario("previous", revision="HEAD^")
+              .metric(Divergence(column="approved"), Divergence(name="ratio", column="ratio", nodes="credit/ratio"))
+              .run())
+
+    assert result.status is RunStatus.COMPLETED, result.scenarios
+    assert result.scenarios[1].revision.resolved == resolve("HEAD^")
+    assert result.summaries["divergence"]["previous"].changed == 1  # the fee pushes one record over the limit
+    assert result.summaries["ratio"]["previous"].changed == 4       # and changes every ratio
+
+
+def test_start_runs_a_definition_file_in_the_background(tmp_path, monkeypatch):
+    (tmp_path / "credit_bg.py").write_text(
+        "from decikit import flow\n"
+        "def ratio(income, debt):\n"
+        "    return debt / income if income > 0 else 1.0\n"
+        "pipeline = flow(ratio, name='credit')\n"
+    )
+    pl.DataFrame({"income": [1000.0], "debt": [200.0]}).write_parquet(tmp_path / "loans.parquet")
+    (tmp_path / "experiment.json").write_text(ExperimentDef(
+        name="bg", flow={"entry": "credit_bg:pipeline"}, input={"path": "loans.parquet"}).model_dump_json())
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    assert start(tmp_path / "experiment.json").result().status is RunStatus.COMPLETED

@@ -1,0 +1,29 @@
+{
+  "type": "adjustment_stack",
+  "name": "apply_probability_of_default_for_grading_adjustments",
+  "target": "probability_of_default_for_grading",
+  "set_id": "AS-03-2026.09",
+  "base_field": "probability_of_default",
+  "adjustments": [
+    {
+      "adjustment_id": "ADJ-03-004",
+      "kind": "odds_multiplier",
+      "target": "probability_of_default_for_grading",
+      "effect": {
+        "op": "multiply",
+        "value": 1.12
+      },
+      "scope": {
+        "product_code": 10
+      },
+      "stack_position": 4,
+      "owner": "Credit Risk Policy",
+      "approval_reference": "CRC-2026-042",
+      "rationale": "The top of the acceptable risk range tightened",
+      "effective_from": "2026-01-01",
+      "effective_to": null,
+      "review_date": "2026-12-31",
+      "tighten_only": true
+    }
+  ]
+}

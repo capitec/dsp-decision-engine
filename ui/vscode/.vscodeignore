@@ -1,0 +1,12 @@
+src/**
+test/**
+webview/**
+examples/**
+.vscode/**
+.vscode-test/**
+.nvmrc
+*.ts
+tsconfig.json
+.gitignore
+*.vsix
+**/*.map

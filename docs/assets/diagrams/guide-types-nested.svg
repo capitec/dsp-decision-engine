@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 440" font-family="system-ui, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4b5563"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1000" height="440" fill="#ffffff"/>
+
+  <!-- the column -->
+  <rect x="30" y="20" width="330" height="190" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="50" y="48" font-size="16" font-weight="600" fill="#14532d">items column: list[struct]</text>
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14" fill="#14532d">
+    <text x="50" y="84">row 0  [{price 2.0, qty 3},</text>
+    <text x="50" y="106">        {price 5.0, qty 1}]</text>
+    <text x="50" y="140">row 1  []</text>
+    <text x="50" y="174">row 2  [{price 4.0, qty 2}]</text>
+  </g>
+
+  <!-- columnar -->
+  <rect x="420" y="20" width="550" height="190" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="440" y="48" font-size="16" font-weight="600" fill="#134e4a">Columnar[Item]: one flat array per field</text>
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14" fill="#134e4a">
+    <text x="440" y="84">price  [2.0, 5.0, 4.0]</text>
+    <text x="440" y="108">qty    [3,   1,   2  ]</text>
+  </g>
+  <rect x="500" y="122" width="96" height="30" rx="6" fill="#ffffff" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="548" y="142" text-anchor="middle" font-size="14" fill="#134e4a">row 0: 0..2</text>
+  <rect x="612" y="122" width="96" height="30" rx="6" fill="#ffffff" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="660" y="142" text-anchor="middle" font-size="14" fill="#134e4a">row 1: 2..2</text>
+  <rect x="724" y="122" width="96" height="30" rx="6" fill="#ffffff" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="772" y="142" text-anchor="middle" font-size="14" fill="#134e4a">row 2: 2..3</text>
+  <text x="440" y="180" font-size="14" fill="#134e4a">the step sees items.price[j], items.qty[j] for its row's slice;</text>
+  <text x="440" y="200" font-size="14" fill="#134e4a">for j in range(len(items.price)) walks the items</text>
+  <line x1="360" y1="115" x2="416" y2="115" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- struct -->
+  <rect x="30" y="250" width="330" height="170" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="50" y="278" font-size="16" font-weight="600" fill="#14532d">applicant column: struct</text>
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14" fill="#14532d">
+    <text x="50" y="314">row 0  {income 1000.0, age 30}</text>
+    <text x="50" y="344">row 1  {income 500.0, age 16}</text>
+  </g>
+
+  <rect x="420" y="250" width="550" height="170" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="440" y="278" font-size="16" font-weight="600" fill="#134e4a">Struct[Item]: one record per row</text>
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14" fill="#134e4a">
+    <text x="440" y="314">applicant["income"]  applicant["age"]</text>
+  </g>
+  <text x="440" y="350" font-size="14" fill="#134e4a">read by field name inside the kernel</text>
+  <rect x="440" y="366" width="510" height="40" rx="8" fill="#fee2e2" stroke="#dc2626" stroke-width="1.5"/>
+  <text x="695" y="391" text-anchor="middle" font-size="14" fill="#7f1d1d">a field that is itself a list or struct: TypeError when bound</text>
+  <line x1="360" y1="330" x2="416" y2="330" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+</svg>

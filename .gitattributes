@@ -2,4 +2,4 @@
 * text=auto
 
 # Mark generated version file so it survives `git archive --export-subst`
-decider/_version.py export-subst
+decikit/_version.py export-subst

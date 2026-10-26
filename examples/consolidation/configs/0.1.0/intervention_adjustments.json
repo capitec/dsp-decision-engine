@@ -1,0 +1,27 @@
+{
+  "type": "overlay_set",
+  "name": "intervention_adjustments",
+  "set_id": "AS-CON-INT-2026.09",
+  "adjustments": [
+    {
+      "adjustment_id": "ADJ-CON-INT-2026-001",
+      "kind": "cap_adjustment",
+      "target": "anti_harm",
+      "effect": {
+        "op": "multiply",
+        "value": 0.8
+      },
+      "scope": {
+        "product_code": 11
+      },
+      "stack_position": 1,
+      "owner": "Credit Risk Policy",
+      "approval_reference": "CRC-2026-044",
+      "rationale": "Anti-harm ceiling tightened on product 11 pending the ombud review",
+      "effective_from": "2026-01-01",
+      "effective_to": null,
+      "review_date": "2026-12-31",
+      "tighten_only": true
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 600" font-family="system-ui, sans-serif">
+  <rect x="0" y="0" width="1000" height="600" fill="#ffffff"/>
+  <!-- bands behind groups -->
+  <rect x="20" y="52" width="960" height="330" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <rect x="20" y="392" width="960" height="122" rx="10" fill="#fff1e0" stroke="#f57c00" stroke-width="1.5"/>
+  <rect x="20" y="524" width="960" height="62" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14">
+    <text x="40" y="36" fill="#1f2937" font-weight="600">credit_limit/</text>
+    <text x="40" y="78" fill="#14532d">├── configs/</text>
+    <text x="40" y="106" fill="#14532d">│   ├── 0.0.0/</text>
+    <text x="40" y="134" fill="#14532d">│   │   ├── band.json</text>
+    <text x="40" y="162" fill="#14532d">│   │   └── params.json</text>
+    <text x="40" y="190" fill="#14532d">│   ├── 0.1.0/  …</text>
+    <text x="40" y="218" fill="#14532d">│   ├── 0.1.1/</text>
+    <text x="40" y="246" fill="#14532d">│   │   ├── band.json</text>
+    <text x="40" y="274" fill="#14532d">│   │   ├── credit/notes.json</text>
+    <text x="40" y="302" fill="#14532d">│   │   └── params.json</text>
+    <text x="40" y="330" fill="#7f1d1d">│   └── .64g1dze8/</text>
+    <text x="40" y="364" fill="#14532d">├── datasets/</text>
+    <text x="40" y="418" fill="#7c2d00">├── pipeline.py</text>
+    <text x="40" y="446" fill="#7c2d00">├── flows/ (optional)</text>
+    <text x="40" y="474" fill="#7c2d00">├── sample_request.json</text>
+    <text x="40" y="502" fill="#7c2d00">├── tests/</text>
+    <text x="40" y="550" fill="#4c1d95">├── inference.py</text>
+    <text x="40" y="576" fill="#4c1d95">└── .env</text>
+  </g>
+
+  <g font-size="14">
+    <text x="420" y="36" fill="#1f2937">project root: the nearest ancestor that holds configs/</text>
+    <text x="420" y="78" fill="#14532d">JsonFileStore(basepath="configs"), one directory per version</text>
+    <text x="420" y="106" fill="#14532d">Version(0, 0, 0): the first create_version()</text>
+    <text x="420" y="134" fill="#14532d">key "band": a ConfigurableStep document for build(band)</text>
+    <text x="420" y="162" fill="#14532d">key "params": the params document every request runs with</text>
+    <text x="420" y="190" fill="#14532d">a minor bump: create_version(config)</text>
+    <text x="420" y="218" fill="#14532d">a patch bump: create_version(config, bump=VersionPart.PATCH)</text>
+    <text x="420" y="274" fill="#14532d">key "credit.notes": a dotted key is a subdirectory</text>
+    <text x="420" y="330" fill="#7f1d1d">a write in progress or one that failed: versions() skips it</text>
+    <text x="420" y="364" fill="#14532d">named datasets for the debugger and experiments (not versioned)</text>
+    <text x="420" y="418" fill="#7c2d00">structure: steps, wiring, def build(band)</text>
+    <text x="420" y="446" fill="#7c2d00">structure as YAML, still code: reviewed and deployed with it</text>
+    <text x="420" y="474" fill="#7c2d00">one request; decikit build warms the kernels with it</text>
+    <text x="420" y="502" fill="#7c2d00">score requests through the handler</text>
+    <text x="420" y="550" fill="#4c1d95">Handler(RequestHandler): request hooks</text>
+    <text x="420" y="576" fill="#4c1d95">DECIKIT_API__PIPELINE, DECIKIT_CONFIG__BASEPATH, ...</text>
+  </g>
+</svg>

@@ -1,0 +1,5 @@
+pytest-playwright
+polars
+# `decikit serve` for the serve tests (the serve-starlette extra)
+starlette
+uvicorn

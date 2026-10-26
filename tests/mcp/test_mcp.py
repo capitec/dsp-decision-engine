@@ -1,0 +1,228 @@
+from __future__ import annotations
+
+import asyncio
+import json
+
+import pytest
+from fastmcp.exceptions import ToolError
+
+from decikit.lab.data import read
+from decikit.lab.experiments import Experiment
+from decikit.steps._entry import import_flow
+from decikit.lab.experiments.metrics import Divergence
+from decikit._tooling.mcp import Policy, build_server
+from decikit._tooling.mcp._policy import REDACTED
+
+PIPELINE_SRC = '''\
+from decikit import flow, param, step
+
+
+def ratio(income: float, debt: float) -> float:
+    return debt / income
+
+
+def approved(ratio: float, limit: float = param(0.4)) -> bool:
+    return ratio <= limit
+
+
+@step(output="tier", id="0123abcdef45")
+def tier(approved: bool) -> float:
+    return 1.0 if approved else 0.0
+
+
+PIPELINE = flow(ratio, approved, tier, name="credit", id="abcdef012345")
+'''
+
+DATA = '{"income": 1000.0, "debt": 200.0}\n{"income": 500.0, "debt": 400.0}\n'
+
+
+@pytest.fixture()
+def workspace(tmp_path, monkeypatch):
+    pkg = tmp_path / "mypkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "pipeline.py").write_text(PIPELINE_SRC)
+    data = tmp_path / "data.json"
+    data.write_text(DATA)
+    monkeypatch.syspath_prepend(str(tmp_path))
+    return {"entry": "mypkg.pipeline:PIPELINE", "data": str(data), "root": str(tmp_path)}
+
+
+def _call(mcp, tool, **args):
+    r = asyncio.run(mcp.call_tool(tool, args))
+    assert not r.is_error, f"{tool}: {r}"
+    return r.structured_content
+
+
+def _tools(mcp):
+    return {t.name: t for t in asyncio.run(mcp.list_tools())}
+
+
+def test_server_exposes_the_headless_read_tools():
+    tools = _tools(build_server(Policy()))
+    assert {
+        "discover_flows", "describe_flow", "inspect_step", "lineage", "source_context",
+        "run_summary", "check_report", "checks_list", "experiment_definition", "experiment_results",
+        "raw_record", "raw_trace",
+    } <= set(tools)
+    assert not {"highlight", "reveal_source", "editor_selection"} & set(tools)
+
+
+def test_describe_flow_returns_stable_identities(workspace):
+    mcp = build_server(Policy())
+    desc = _call(mcp, "describe_flow", entry=workspace["entry"])
+    assert desc["flow"]["flow_id"] == "abcdef012345"
+    step_ids = {n["step_id"] for n in desc["nodes"]}
+    assert "0123abcdef45" in step_ids
+    assert all(n["flow_id"] == "abcdef012345" for n in desc["nodes"])
+
+
+def test_describe_flow_restricts_to_a_subgraph(workspace):
+    mcp = build_server(Policy())
+    desc = _call(mcp, "describe_flow", entry=workspace["entry"], subgraph="credit/approved")
+    assert {n["path"] for n in desc["nodes"]} == {"credit/approved"}
+
+
+def test_inspect_step_returns_identity_source_and_edges(workspace):
+    mcp = build_server(Policy())
+    out = _call(mcp, "inspect_step", entry=workspace["entry"], path="credit/tier")
+    assert out["step"]["step_id"] == "0123abcdef45"
+    assert out["step"]["flow_id"] == "abcdef012345"
+    assert out["step"]["source"]
+    assert any(e["kind"] == "data" for e in out["edges_in"])
+
+
+def test_lineage_reports_slots_writers_and_readers(workspace):
+    mcp = build_server(Policy())
+    out = _call(mcp, "lineage", entry=workspace["entry"], name="ratio")
+    assert "credit/ratio" in out["writers"]
+    assert "credit/approved" in out["readers"]
+
+
+def test_discover_flows_finds_the_pipeline(workspace):
+    mcp = build_server(Policy())
+    flows = _call(mcp, "discover_flows", root=workspace["root"])["flows"]
+    entries = [f["entry"] for f in flows if "entry" in f]
+    assert workspace["entry"] in entries
+
+
+def test_discover_flows_finds_a_project_under_a_hidden_directory(tmp_path):
+    root = tmp_path / ".hidden" / "proj"
+    root.mkdir(parents=True)
+    (root / "pipeline.py").write_text(PIPELINE_SRC)
+    flows = _call(build_server(Policy()), "discover_flows", root=str(root))["flows"]
+    assert "PIPELINE" in [f.get("name") for f in flows]
+
+
+BUILD_SRC = '''\
+from decikit import flow, param
+
+
+def approved(score: float, limit: float = param(0.4)) -> bool:
+    return score <= limit
+
+
+def build(band):
+    return flow(band, approved, name="credit")
+'''
+
+BAND = {"type": "decision_table", "name": "band", "columns": {"lo": "Float64", "hi": "Float64", "band": "String"},
+        "rows": [{"lo": None, "hi": 0.5, "band": "low"}, {"lo": 0.5, "hi": None, "band": "high"}],
+        "expression": {"type": "between", "variable": "score", "lower_bound_column": "lo", "upper_bound_column": "hi"},
+        "outputs": ["band"], "default": ["low"]}
+
+
+def test_an_entry_taking_config_documents_is_built_from_the_latest_version(tmp_path, monkeypatch):
+    version = tmp_path / "lending_entry" / "configs" / "0.0.1"
+    version.mkdir(parents=True)
+    (tmp_path / "lending_entry" / "__init__.py").write_text("")
+    (tmp_path / "lending_entry" / "pipeline.py").write_text(BUILD_SRC)
+    (version / "band.json").write_text(json.dumps(BAND))
+    (version / "params.json").write_text(json.dumps({"credit": {"approved": {"limit": 0.9}}}))
+    data = tmp_path / "data.json"
+    data.write_text('{"score": 0.6}\n')
+    monkeypatch.syspath_prepend(str(tmp_path))
+    mcp = build_server(Policy())
+
+    paths = {n["path"] for n in _call(mcp, "describe_flow", entry="lending_entry.pipeline:build")["nodes"]}
+    assert {"credit/band", "credit/approved"} <= paths
+    summary = _call(mcp, "run_summary", entry="lending_entry.pipeline:build", data=str(data))
+    assert summary["outputs"]["band"] == [{"value": "high", "count": 1}]
+    assert summary["outputs"]["approved"] == [{"value": True, "count": 1}]   # the version's limit, not 0.4
+
+
+def test_run_summary_returns_tallies_not_per_record_values(workspace):
+    mcp = build_server(Policy())
+    summary = _call(mcp, "run_summary", entry=workspace["entry"], data=workspace["data"])
+    assert summary["rows"] == 2
+    assert {"value": 1.0, "count": 1} in summary["outputs"]["tier"]
+
+
+def test_check_report_returns_the_standard_checks(workspace):
+    mcp = build_server(Policy())
+    report = _call(mcp, "check_report", entry=workspace["entry"])
+    assert report["flow"]["name"] == "credit"
+    assert report["findings"]  # missing durable ids on ratio/approved
+    assert report["ok"] is True and "skipped" in report
+
+
+def test_check_report_takes_a_config_file(workspace, tmp_path):
+    config = tmp_path / "checks.yaml"
+    config.write_text("extends: null\nchecks: [{type: durable_ids, severity: error}]\n")
+    report = _call(build_server(Policy()), "check_report", entry=workspace["entry"], config=str(config))
+    assert {f["code"] for f in report["findings"]} == {"DCD401"} and report["ok"] is False
+
+
+def test_checks_list_lists_the_catalogue():
+    rows = _call(build_server(Policy()), "checks_list")["result"]
+    assert {"DCD001", "DCD401", "DCD505"} <= {r["code"] for r in rows}
+
+
+def test_mutating_tools_are_confirmation_gated():
+    tools = _tools(build_server(Policy()))
+    for name in ("run_flow", "run_experiment", "start_debug", "generate_ids"):
+        assert getattr(tools[name].annotations, "destructive_hint", None) is True, name
+    for name in ("describe_flow", "run_summary", "check_report"):
+        assert getattr(tools[name].annotations, "destructive_hint", None) is not True, name
+
+
+def test_raw_tools_are_redacted_by_default(workspace):
+    mcp = build_server(Policy(raw=False))
+    assert _call(mcp, "raw_record", entry=workspace["entry"], data=workspace["data"], record=0)["redacted"] == REDACTED
+    assert _call(mcp, "raw_trace", entry=workspace["entry"], data=workspace["data"], record=0)["redacted"] == REDACTED
+
+
+def test_raw_tools_return_data_when_enabled(workspace):
+    mcp = build_server(Policy(raw=True))
+    record = _call(mcp, "raw_record", entry=workspace["entry"], data=workspace["data"], record=0)
+    assert record["values"]["credit/ratio"]["ratio"] == 0.2
+    assert record["values"]["credit/tier"]["tier"] == 1.0
+    trace = _call(mcp, "raw_trace", entry=workspace["entry"], data=workspace["data"], record=0)
+    assert trace["events"]
+    assert any(e["kind"] == "STEP" and e["path"] == "credit/tier" for e in trace["events"])
+
+
+def test_run_flow_is_gated_but_executes(workspace):
+    mcp = build_server(Policy())
+    out = _call(mcp, "run_flow", entry=workspace["entry"], data=workspace["data"])
+    assert out["ran"] is True
+    assert out["rows"] == 2
+
+
+def test_an_error_surfaces_as_a_tool_error():
+    mcp = build_server(Policy())
+    with pytest.raises(ToolError):
+        asyncio.run(mcp.call_tool("describe_flow", {"entry": "no.such:module"}))
+
+
+def test_experiment_definition_and_results_read_files(workspace, tmp_path):
+    mcp = build_server(Policy())
+    exp = (Experiment("drift", import_flow(workspace["entry"]), read(workspace["data"]))
+           .metric(Divergence(column="tier")))
+    result = exp.run()
+    result_path = tmp_path / "result.json"
+    result_path.write_text(result.model_dump_json())
+    assert _call(mcp, "experiment_results", path=str(result_path))["status"] == "completed"
+
+    def_path = exp.save(tmp_path / "experiment.json")
+    assert _call(mcp, "experiment_definition", path=str(def_path))["name"] == "drift"

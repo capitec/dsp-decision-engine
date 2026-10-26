@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 570" font-family="system-ui, sans-serif">
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#ffffff" stroke="#2563eb" stroke-width="1.2"/></marker></defs>
+<rect x="0" y="0" width="1000" height="570" fill="#ffffff"/>
+<rect x="8" y="132" width="984" height="420" rx="10" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+<text x="24" y="156" font-size="14" fill="#1f2937">subclasses of IRNode: frozen, slotted dataclasses with eq=False</text>
+<path d="M500 132 L500 98" stroke="#2563eb" stroke-width="1.5" fill="none" marker-end="url(#a)"/>
+<rect x="380" y="16" width="240" height="80" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+<text x="394" y="40" font-size="15" font-weight="600" fill="#1e3a8a">IRNode (abstract)</text>
+<line x1="380" y1="50" x2="620" y2="50" stroke="#2563eb" stroke-width="1.5"/>
+<text x="394" y="70" font-size="13" fill="#1e3a8a">origin: Origin</text>
+<text x="394" y="90" font-size="13" fill="#1e3a8a">children() → tuple of IRNode</text>
+<rect x="20" y="170" width="300" height="180" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+<text x="34" y="194" font-size="15" font-weight="600" fill="#1e3a8a">CallNode</text>
+<line x1="20" y1="204" x2="320" y2="204" stroke="#2563eb" stroke-width="1.5"/>
+<text x="34" y="224" font-size="13" fill="#1e3a8a">kind: scalar, row or frame</text>
+<text x="34" y="244" font-size="13" fill="#1e3a8a">fn, reference: Callable</text>
+<text x="34" y="264" font-size="13" fill="#1e3a8a">inputs: tuple of Input, or None</text>
+<text x="34" y="284" font-size="13" fill="#1e3a8a">outputs: tuple of Output, or None</text>
+<text x="34" y="304" font-size="13" fill="#1e3a8a">params: tuple of ParamDecl</text>
+<text x="34" y="324" font-size="13" fill="#1e3a8a">consts: tuple of (arg, value)</text>
+<text x="34" y="344" font-size="13" fill="#1e3a8a">nogil: bool</text>
+<rect x="350" y="170" width="300" height="100" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+<text x="364" y="194" font-size="15" font-weight="600" fill="#1e3a8a">SequenceNode</text>
+<line x1="350" y1="204" x2="650" y2="204" stroke="#2563eb" stroke-width="1.5"/>
+<text x="364" y="224" font-size="13" fill="#1e3a8a">children_: tuple of IRNode</text>
+<text x="364" y="244" font-size="13" fill="#1e3a8a">emits, drops: name or name@path</text>
+<text x="364" y="264" font-size="13" fill="#1e3a8a">inputs: declared input names</text>
+<rect x="680" y="170" width="300" height="100" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+<text x="694" y="194" font-size="15" font-weight="600" fill="#1e3a8a">BranchNode</text>
+<line x1="680" y1="204" x2="980" y2="204" stroke="#2563eb" stroke-width="1.5"/>
+<text x="694" y="224" font-size="13" fill="#1e3a8a">condition: CallNode</text>
+<text x="694" y="244" font-size="13" fill="#1e3a8a">arms: tuple of IRNode</text>
+<text x="694" y="264" font-size="13" fill="#1e3a8a">modifies: tuple of names</text>
+<rect x="350" y="350" width="300" height="120" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+<text x="364" y="374" font-size="15" font-weight="600" fill="#1e3a8a">LoopNode</text>
+<line x1="350" y1="384" x2="650" y2="384" stroke="#2563eb" stroke-width="1.5"/>
+<text x="364" y="404" font-size="13" fill="#1e3a8a">condition: CallNode</text>
+<text x="364" y="424" font-size="13" fill="#1e3a8a">body: IRNode</text>
+<text x="364" y="444" font-size="13" fill="#1e3a8a">carries: tuple of names</text>
+<text x="364" y="464" font-size="13" fill="#1e3a8a">max_iterations: int</text>
+<rect x="680" y="350" width="300" height="120" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+<text x="694" y="374" font-size="15" font-weight="600" fill="#1e3a8a">ScatterGatherNode</text>
+<line x1="680" y1="384" x2="980" y2="384" stroke="#2563eb" stroke-width="1.5"/>
+<text x="694" y="404" font-size="13" fill="#1e3a8a">column, output: names</text>
+<text x="694" y="424" font-size="13" fill="#1e3a8a">each: IRNode</text>
+<text x="694" y="444" font-size="13" fill="#1e3a8a">accumulate: CallNode or None</text>
+<text x="694" y="464" font-size="13" fill="#1e3a8a">params, hoist: hoisted child params</text>
+<rect x="20" y="390" width="300" height="100" rx="10" fill="#fee2e2" stroke="#dc2626" stroke-width="1.5"/>
+<text x="34" y="414" font-size="15" font-weight="600" fill="#7f1d1d">FiniteStateMachineNode</text>
+<line x1="20" y1="424" x2="320" y2="424" stroke="#dc2626" stroke-width="1.5"/>
+<text x="34" y="444" font-size="13" fill="#7f1d1d">transition_function: CallNode</text>
+<text x="34" y="464" font-size="13" fill="#7f1d1d">child_sequences: tuple of IRNode</text>
+<text x="34" y="484" font-size="13" fill="#7f1d1d">declared, never built or resolved</text>
+</svg>

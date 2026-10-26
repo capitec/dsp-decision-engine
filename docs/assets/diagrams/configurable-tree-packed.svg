@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 470" font-family="system-ui, sans-serif">
+  <rect x="0" y="0" width="1000" height="470" fill="#ffffff"/>
+
+  <text x="20" y="24" font-size="15" font-weight="600" fill="#1f2937">ints: one int64 array, 119 values (its address is consts[0])</text>
+
+  <!-- row 1 -->
+  <rect x="20" y="36" width="330" height="92" rx="8" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="185" y="58" text-anchor="middle" font-size="14" font-weight="600" fill="#1e3a8a">PROG: program rows [0, 80)</text>
+  <text x="185" y="80" text-anchor="middle" font-size="13" fill="#1e3a8a">8 rows of 10: kind, feature, op,</text>
+  <text x="185" y="98" text-anchor="middle" font-size="13" fill="#1e3a8a">threshold, then, else, unknown,</text>
+  <text x="185" y="116" text-anchor="middle" font-size="13" fill="#1e3a8a">w_then, w_else, w_unknown</text>
+
+  <rect x="360" y="36" width="140" height="92" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="430" y="58" text-anchor="middle" font-size="14" font-weight="600" fill="#14532d">THR_I at 80</text>
+  <text x="430" y="80" text-anchor="middle" font-size="13" fill="#14532d">int thresholds:</text>
+  <text x="430" y="98" text-anchor="middle" font-size="13" fill="#14532d">none here</text>
+
+  <rect x="510" y="36" width="140" height="92" rx="8" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="580" y="58" text-anchor="middle" font-size="14" font-weight="600" fill="#1e3a8a">ROOTS [80, 82)</text>
+  <text x="580" y="80" text-anchor="middle" font-size="13" fill="#1e3a8a">root row: 7</text>
+  <text x="580" y="98" text-anchor="middle" font-size="13" fill="#1e3a8a">path base: 0</text>
+
+  <rect x="660" y="36" width="180" height="92" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="750" y="58" text-anchor="middle" font-size="14" font-weight="600" fill="#134e4a">EXPR_CODE [82, 88)</text>
+  <text x="750" y="80" text-anchor="middle" font-size="13" fill="#134e4a">(NAME, 2) income</text>
+  <text x="750" y="98" text-anchor="middle" font-size="13" fill="#134e4a">(NAME, 1) expenses</text>
+  <text x="750" y="116" text-anchor="middle" font-size="13" fill="#134e4a">(SUB, 0)</text>
+
+  <rect x="850" y="36" width="130" height="92" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="915" y="58" text-anchor="middle" font-size="14" font-weight="600" fill="#134e4a">EXPR_STARTS</text>
+  <text x="915" y="80" text-anchor="middle" font-size="13" fill="#134e4a">[88, 90)</text>
+  <text x="915" y="98" text-anchor="middle" font-size="13" fill="#134e4a">0, 3</text>
+
+  <!-- row 2 -->
+  <rect x="20" y="140" width="150" height="80" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="95" y="162" text-anchor="middle" font-size="14" font-weight="600" fill="#134e4a">PAT_STARTS</text>
+  <text x="95" y="182" text-anchor="middle" font-size="13" fill="#134e4a">[90, 94)</text>
+  <text x="95" y="202" text-anchor="middle" font-size="13" fill="#134e4a">0, 3, 6, 12</text>
+
+  <rect x="180" y="140" width="150" height="80" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="255" y="162" text-anchor="middle" font-size="14" font-weight="600" fill="#134e4a">PAT_GROUPS</text>
+  <text x="255" y="182" text-anchor="middle" font-size="13" fill="#134e4a">[94, 97)</text>
+  <text x="255" y="202" text-anchor="middle" font-size="13" fill="#134e4a">0, 2, 3</text>
+
+  <rect x="340" y="140" width="125" height="80" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="402" y="162" text-anchor="middle" font-size="14" font-weight="600" fill="#14532d">decision</text>
+  <text x="402" y="182" text-anchor="middle" font-size="13" fill="#14532d">[97, 101)</text>
+  <text x="402" y="202" text-anchor="middle" font-size="13" fill="#14532d">0, 1, 2, 3</text>
+
+  <rect x="475" y="140" width="125" height="80" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="537" y="162" text-anchor="middle" font-size="14" font-weight="600" fill="#14532d">limit</text>
+  <text x="537" y="182" text-anchor="middle" font-size="13" fill="#14532d">[101, 105)</text>
+  <text x="537" y="202" text-anchor="middle" font-size="13" fill="#14532d">0, 50000, 0, 0</text>
+
+  <rect x="610" y="140" width="120" height="80" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="670" y="162" text-anchor="middle" font-size="14" font-weight="600" fill="#14532d">limit valid</text>
+  <text x="670" y="182" text-anchor="middle" font-size="13" fill="#14532d">[105, 109)</text>
+  <text x="670" y="202" text-anchor="middle" font-size="13" fill="#14532d">0, 1, 1, 0</text>
+
+  <rect x="740" y="140" width="110" height="80" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="795" y="162" text-anchor="middle" font-size="14" font-weight="600" fill="#14532d">leaf</text>
+  <text x="795" y="182" text-anchor="middle" font-size="13" fill="#14532d">[109, 113)</text>
+  <text x="795" y="202" text-anchor="middle" font-size="13" fill="#14532d">0, 1, 2, -1</text>
+
+  <rect x="860" y="140" width="120" height="80" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="920" y="162" text-anchor="middle" font-size="14" font-weight="600" fill="#14532d">path</text>
+  <text x="920" y="182" text-anchor="middle" font-size="13" fill="#14532d">[113, 119)</text>
+  <text x="920" y="202" text-anchor="middle" font-size="13" fill="#14532d">0, 1, 2, 1, 2, 3</text>
+
+  <!-- floats and chars -->
+  <text x="20" y="258" font-size="15" font-weight="600" fill="#1f2937">floats: float64, consts[1]</text>
+  <rect x="20" y="268" width="220" height="56" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="130" y="291" text-anchor="middle" font-size="14" font-weight="600" fill="#14532d">THR_F [0, 1)</text>
+  <text x="130" y="311" text-anchor="middle" font-size="13" fill="#14532d">5000.0</text>
+  <rect x="250" y="268" width="200" height="56" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="350" y="291" text-anchor="middle" font-size="14" font-weight="600" fill="#134e4a">EXPR_CONSTS at 1</text>
+  <text x="350" y="311" text-anchor="middle" font-size="13" fill="#134e4a">none: no literals</text>
+
+  <text x="500" y="258" font-size="15" font-weight="600" fill="#1f2937">chars: uint8, consts[2]</text>
+  <rect x="500" y="268" width="110" height="56" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="555" y="291" text-anchor="middle" font-size="14" font-weight="600" fill="#134e4a">app</text>
+  <text x="555" y="311" text-anchor="middle" font-size="13" fill="#134e4a">bytes 0 to 3</text>
+  <rect x="620" y="268" width="110" height="56" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="675" y="291" text-anchor="middle" font-size="14" font-weight="600" fill="#134e4a">web</text>
+  <text x="675" y="311" text-anchor="middle" font-size="13" fill="#134e4a">bytes 3 to 6</text>
+  <rect x="740" y="268" width="140" height="56" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="810" y="291" text-anchor="middle" font-size="14" font-weight="600" fill="#134e4a">branch</text>
+  <text x="810" y="311" text-anchor="middle" font-size="13" fill="#134e4a">bytes 6 to 12</text>
+  <text x="890" y="291" font-size="13" fill="#1f2937">group 0: app, web</text>
+  <text x="890" y="311" font-size="13" fill="#1f2937">group 1: branch</text>
+
+  <!-- layout -->
+  <text x="20" y="362" font-size="15" font-weight="600" fill="#1f2937">layout: consts[3], where each part starts</text>
+  <rect x="20" y="372" width="960" height="80" rx="8" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="500" y="400" text-anchor="middle" font-size="14" fill="#1f2937">(PROG 0, THR_I 80, ROOTS 80, N_ROOTS 1, EXPR_CODE 82, EXPR_STARTS 88,</text>
+  <text x="500" y="424" text-anchor="middle" font-size="14" fill="#1f2937">PAT_STARTS 90, PAT_GROUPS 94, THR_F 0, EXPR_CONSTS 1, EXPR_DEPTH 2)</text>
+  <text x="500" y="444" text-anchor="middle" font-size="13" fill="#1f2937">consts[4], the output specs: (-1, 97, 4, 0), (-1, 101, 4, 0, 105), (-1, 109, 4, 0), (-1, 113)</text>
+</svg>

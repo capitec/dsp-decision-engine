@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 440" font-family="system-ui, sans-serif">
+  <rect x="0" y="0" width="1000" height="440" fill="#ffffff"/>
+
+  <text x="20" y="26" font-size="15" font-weight="600" fill="#1f2937">"max(income - expenses, 0) / income" with slots expenses 0, income 1; consts [0.0]; depth 2</text>
+
+  <!-- header -->
+  <g font-size="14" font-weight="600" fill="#1f2937">
+    <text x="40" y="60">pc</text>
+    <text x="90" y="60">row (opcode, arg)</text>
+    <text x="300" y="60">meaning</text>
+    <text x="620" y="60">stack after the row (income 12000, expenses 4000)</text>
+  </g>
+
+  <g font-size="14">
+    <!-- row 0 -->
+    <rect x="20" y="72" width="560" height="40" rx="8" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+    <text x="40" y="97" fill="#1e3a8a">0</text>
+    <text x="90" y="97" fill="#1e3a8a">(NAME, 1)</text>
+    <text x="300" y="97" fill="#1e3a8a">push names[1], income</text>
+    <rect x="620" y="72" width="110" height="40" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+    <text x="675" y="97" text-anchor="middle" fill="#14532d">12000</text>
+
+    <!-- row 1 -->
+    <rect x="20" y="120" width="560" height="40" rx="8" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+    <text x="40" y="145" fill="#1e3a8a">1</text>
+    <text x="90" y="145" fill="#1e3a8a">(NAME, 0)</text>
+    <text x="300" y="145" fill="#1e3a8a">push names[0], expenses</text>
+    <rect x="620" y="120" width="110" height="40" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+    <text x="675" y="145" text-anchor="middle" fill="#14532d">12000</text>
+    <rect x="736" y="120" width="110" height="40" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+    <text x="791" y="145" text-anchor="middle" fill="#14532d">4000</text>
+
+    <!-- row 2 -->
+    <rect x="20" y="168" width="560" height="40" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+    <text x="40" y="193" fill="#134e4a">2</text>
+    <text x="90" y="193" fill="#134e4a">(SUB, 0)</text>
+    <text x="300" y="193" fill="#134e4a">pop two, push a - b</text>
+    <rect x="620" y="168" width="110" height="40" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+    <text x="675" y="193" text-anchor="middle" fill="#14532d">8000</text>
+
+    <!-- row 3 -->
+    <rect x="20" y="216" width="560" height="40" rx="8" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+    <text x="40" y="241" fill="#1e3a8a">3</text>
+    <text x="90" y="241" fill="#1e3a8a">(PUSH, 0)</text>
+    <text x="300" y="241" fill="#1e3a8a">push consts[0], the literal 0</text>
+    <rect x="620" y="216" width="110" height="40" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+    <text x="675" y="241" text-anchor="middle" fill="#14532d">8000</text>
+    <rect x="736" y="216" width="110" height="40" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+    <text x="791" y="241" text-anchor="middle" fill="#14532d">0.0</text>
+
+    <!-- row 4 -->
+    <rect x="20" y="264" width="560" height="40" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+    <text x="40" y="289" fill="#134e4a">4</text>
+    <text x="90" y="289" fill="#134e4a">(MAX, 0)</text>
+    <text x="300" y="289" fill="#134e4a">pop two, push max(a, b)</text>
+    <rect x="620" y="264" width="110" height="40" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+    <text x="675" y="289" text-anchor="middle" fill="#14532d">8000</text>
+
+    <!-- row 5 -->
+    <rect x="20" y="312" width="560" height="40" rx="8" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+    <text x="40" y="337" fill="#1e3a8a">5</text>
+    <text x="90" y="337" fill="#1e3a8a">(NAME, 1)</text>
+    <text x="300" y="337" fill="#1e3a8a">push names[1], income</text>
+    <rect x="620" y="312" width="110" height="40" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+    <text x="675" y="337" text-anchor="middle" fill="#14532d">8000</text>
+    <rect x="736" y="312" width="110" height="40" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+    <text x="791" y="337" text-anchor="middle" fill="#14532d">12000</text>
+
+    <!-- row 6 -->
+    <rect x="20" y="360" width="560" height="40" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+    <text x="40" y="385" fill="#134e4a">6</text>
+    <text x="90" y="385" fill="#134e4a">(DIV, 0)</text>
+    <text x="300" y="385" fill="#134e4a">pop two, push a / b</text>
+    <rect x="620" y="360" width="140" height="40" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+    <text x="690" y="385" text-anchor="middle" fill="#14532d">0.6666...</text>
+    <text x="780" y="385" font-size="14" fill="#1f2937">= stack[0], the result</text>
+  </g>
+  <text x="20" y="428" font-size="13" fill="#1f2937">Each row is two int64 values in the code array; evaluate(code, start, end, consts, names, depth) reads them by address.</text>
+</svg>

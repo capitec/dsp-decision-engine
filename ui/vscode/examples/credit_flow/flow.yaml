@@ -1,0 +1,19 @@
+# A flow file: the structure lives here, the steps in components/.
+flow: credit
+components: components
+steps:
+  - flow: screen            # flows/screen.yaml
+  - step: card              # a scorecard document in configs/
+  - branch: affordable
+    when: eligible
+    modifies: [limit]
+    then:
+      - step: full_limit
+    else:
+      - step: no_limit
+  - loop: payoff
+    while: {expr: "balance > 0"}
+    carries: [balance]
+    max: 10
+    steps:
+      - step: pay

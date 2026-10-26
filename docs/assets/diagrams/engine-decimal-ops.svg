@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 400" font-family="system-ui, sans-serif">
+  <defs>
+    <marker id="dm-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#374151"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1000" height="400" fill="#ffffff"/>
+
+  <text x="20" y="28" font-size="15" font-weight="600" fill="#1f2937">In a kernel a Decimal is an int64; its scale lives in the type, decimal[s]</text>
+
+  <!-- operands -->
+  <rect x="20" y="48" width="290" height="62" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="34" y="72" font-size="14" fill="#14532d">Currency("1000.50"): decimal[4]</text>
+  <text x="34" y="96" font-size="14" fill="#14532d">raw 10005000</text>
+  <rect x="20" y="126" width="290" height="62" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="34" y="150" font-size="14" fill="#14532d">Decimal("0.0175"): decimal[4]</text>
+  <text x="34" y="174" font-size="14" fill="#14532d">raw 175</text>
+
+  <!-- multiply path -->
+  <text x="360" y="62" font-size="14" font-weight="600" fill="#134e4a">a * b</text>
+  <rect x="360" y="74" width="190" height="56" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="372" y="96" font-size="13" fill="#134e4a">exact 128-bit product</text>
+  <text x="372" y="116" font-size="13" fill="#134e4a">(_mul64): 1750875000</text>
+  <rect x="580" y="74" width="190" height="56" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="592" y="96" font-size="13" fill="#134e4a">divide by 10**min(4, 4)</text>
+  <text x="592" y="116" font-size="13" fill="#134e4a">(_divlu): 175087 rem 5000</text>
+  <rect x="800" y="74" width="180" height="56" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="812" y="96" font-size="13" fill="#134e4a">tie, 7 is odd: round up</text>
+  <text x="812" y="116" font-size="13" fill="#134e4a">raw 175088 = 17.5088</text>
+  <line x1="310" y1="110" x2="358" y2="102" stroke="#374151" stroke-width="1.5" marker-end="url(#dm-arrow)"/>
+  <line x1="550" y1="102" x2="578" y2="102" stroke="#374151" stroke-width="1.5" marker-end="url(#dm-arrow)"/>
+  <line x1="770" y1="102" x2="798" y2="102" stroke="#374151" stroke-width="1.5" marker-end="url(#dm-arrow)"/>
+
+  <!-- add path -->
+  <rect x="20" y="222" width="290" height="62" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="34" y="246" font-size="14" fill="#14532d">Decimal("2.50"): decimal[2]</text>
+  <text x="34" y="270" font-size="14" fill="#14532d">raw 250</text>
+  <text x="360" y="232" font-size="14" font-weight="600" fill="#134e4a">a + 0.0175</text>
+  <rect x="360" y="244" width="190" height="56" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="372" y="266" font-size="13" fill="#134e4a">scale up to the larger</text>
+  <text x="372" y="286" font-size="13" fill="#134e4a">scale: 250 * 100</text>
+  <rect x="580" y="244" width="190" height="56" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="592" y="266" font-size="13" fill="#134e4a">int64 add: 25000 + 175</text>
+  <text x="592" y="286" font-size="13" fill="#134e4a">exact, wraps on overflow</text>
+  <rect x="800" y="244" width="180" height="56" rx="8" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="812" y="266" font-size="13" fill="#134e4a">decimal[4]</text>
+  <text x="812" y="286" font-size="13" fill="#134e4a">raw 25175 = 2.5175</text>
+  <line x1="310" y1="262" x2="358" y2="270" stroke="#374151" stroke-width="1.5" marker-end="url(#dm-arrow)"/>
+  <line x1="550" y1="272" x2="578" y2="272" stroke="#374151" stroke-width="1.5" marker-end="url(#dm-arrow)"/>
+  <line x1="770" y1="272" x2="798" y2="272" stroke="#374151" stroke-width="1.5" marker-end="url(#dm-arrow)"/>
+
+  <rect x="20" y="320" width="960" height="62" rx="8" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="34" y="344" font-size="13" fill="#1f2937">Columns, params bundles and stored outputs stay plain int64. The DEC source tag types them as decimal[s] at the</text>
+  <text x="34" y="364" font-size="13" fill="#1f2937">kernel's edge, and store_as turns a returned decimal back into the int64 at the output's declared scale.</text>
+</svg>
